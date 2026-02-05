@@ -19,6 +19,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FlashOff
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
@@ -215,6 +217,8 @@ fun ScannerScreen(
 
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
     var scanStatus by remember { mutableStateOf("Scanning...") }
+    var isFlashOn by remember { mutableStateOf(false) }
+    var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -255,12 +259,13 @@ fun ScannerScreen(
 
                     try {
                         cameraProvider.unbindAll()
-                        cameraProvider.bindToLifecycle(
+                        val camera = cameraProvider.bindToLifecycle(
                             lifecycleOwner,
                             CameraSelector.DEFAULT_BACK_CAMERA,
                             preview,
                             imageAnalyzer
                         )
+                        cameraControl = camera.cameraControl
                     } catch (exc: Exception) {
                         Log.e("Scanner", "Use case binding failed", exc)
                     }
@@ -314,14 +319,36 @@ fun ScannerScreen(
         }
 
         // Settings / Disconnect
-        IconButton(
-            onClick = onDisconnect,
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(16.dp)
-                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(Icons.Default.Settings, contentDescription = "Disconnect", tint = Color.White)
+            // Flashlight Toggle
+            IconButton(
+                onClick = {
+                    isFlashOn = !isFlashOn
+                    cameraControl?.enableTorch(isFlashOn)
+                },
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+            ) {
+                Icon(
+                    imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                    contentDescription = "Toggle Flash",
+                    tint = if (isFlashOn) Color.Yellow else Color.White
+                )
+            }
+
+            // Disconnect
+            IconButton(
+                onClick = onDisconnect,
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = "Disconnect", tint = Color.White)
+            }
         }
     }
 }
