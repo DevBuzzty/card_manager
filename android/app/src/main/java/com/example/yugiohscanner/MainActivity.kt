@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.view.ScaleGestureDetector
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -228,6 +229,23 @@ fun ScannerScreen(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
                 )
+
+                // Zoom Logic
+                val scaleGestureDetector = ScaleGestureDetector(ctx, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    override fun onScale(detector: ScaleGestureDetector): Boolean {
+                        cameraControl?.let { control ->
+                             val currentZoomRatio = control.zoomState.value?.zoomRatio ?: 1f
+                             val delta = detector.scaleFactor
+                             control.setZoomRatio(currentZoomRatio * delta)
+                        }
+                        return true
+                    }
+                })
+
+                previewView.setOnTouchListener { _, event ->
+                    scaleGestureDetector.onTouchEvent(event)
+                    true
+                }
 
                 val executor = Executors.newSingleThreadExecutor()
 
