@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
 import CollectionList from './components/CollectionList';
+import Portfolio from './components/Portfolio';
 
 function App() {
   const [activeTab, setActiveTab] = useState('staging');
@@ -57,6 +58,9 @@ function App() {
             )}
             {activeTab === 'collection' && (
             <CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />
+            )}
+            {activeTab === 'portfolio' && (
+            <Portfolio />
             )}
         </div>
       </main>

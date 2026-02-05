@@ -168,11 +168,19 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                                 loading="lazy"
                                 onLoad={(e) => e.target.previousSibling && (e.target.previousSibling.style.display = 'none')}
                             />
+                            {card.quantity > 1 && (
+                                <div className="absolute top-2 right-2 bg-green-500 text-black text-xs font-bold px-2 py-0.5 rounded shadow-lg">
+                                    x{card.quantity}
+                                </div>
+                            )}
                         </div>
                         {/* Overlay info always visible on mobile, hover on desktop? No, let's keep it simple. */}
                         <div className="p-3">
                             <h3 className="font-bold text-gray-200 text-sm leading-tight truncate" title={card.name}>{card.name}</h3>
-                            <p className="text-[10px] text-gray-500 font-mono mt-1">{card.id}</p>
+                            <div className="flex justify-between items-center mt-1">
+                                <p className="text-[10px] text-gray-500 font-mono">{card.id}</p>
+                                {card.price && <p className="text-[10px] text-space-violet font-medium">${card.price.toFixed(2)}</p>}
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -197,10 +205,19 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                                 className="hover:bg-gray-800/50 cursor-pointer transition-colors"
                             >
                                 <td className="px-6 py-4 font-medium text-white flex items-center gap-3">
-                                    <div className="w-8 h-12 bg-black rounded overflow-hidden flex-shrink-0">
+                                    <div className="w-8 h-12 bg-black rounded overflow-hidden flex-shrink-0 relative">
                                          <img src={card.image_url} className="w-full h-full object-cover" alt="" />
+                                         {card.quantity > 1 && (
+                                            <div className="absolute top-0 right-0 bg-green-500 text-black text-[8px] font-bold px-1 rounded-bl">x{card.quantity}</div>
+                                         )}
                                     </div>
-                                    {card.name}
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            {card.name}
+                                            {card.rarity && <span className="text-[10px] text-gray-500 border border-gray-700 px-1 rounded">{card.rarity}</span>}
+                                        </div>
+                                        {card.set_code && <div className="text-[10px] text-gray-500">{card.set_code}</div>}
+                                    </div>
                                 </td>
                                 <td className="px-6 py-4">{card.type}</td>
                                 <td className="px-6 py-4 text-right">
@@ -210,7 +227,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                                 <td className="px-6 py-4 text-center">
                                     {card.level != null ? <span className="text-yellow-500">★ {card.level}</span> : '-'}
                                 </td>
-                                <td className="px-6 py-4 text-right font-mono">{card.id}</td>
+                                <td className="px-6 py-4 text-right">
+                                    <div className="font-mono">{card.id}</div>
+                                    {card.price && <div className="text-space-violet text-xs font-bold">${card.price.toFixed(2)}</div>}
+                                </td>
                             </tr>
                         ))}
                     </tbody>

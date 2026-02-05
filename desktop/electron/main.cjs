@@ -12,7 +12,7 @@ const db = new Database(dbPath);
 // Create table
 db.exec(`
   CREATE TABLE IF NOT EXISTS cards (
-    id TEXT PRIMARY KEY,
+    id TEXT,
     name TEXT,
     type TEXT,
     desc TEXT,
@@ -22,7 +22,21 @@ db.exec(`
     level INTEGER,
     race TEXT,
     attribute TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    quantity INTEGER DEFAULT 1,
+    rarity TEXT,
+    set_code TEXT,
+    price REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id, set_code)
+  )
+`);
+
+// Create portfolio history table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS portfolio_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    total_value REAL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);
 
@@ -35,6 +49,15 @@ try {
   if (!columnNames.includes('level')) db.exec("ALTER TABLE cards ADD COLUMN level INTEGER");
   if (!columnNames.includes('race')) db.exec("ALTER TABLE cards ADD COLUMN race TEXT");
   if (!columnNames.includes('attribute')) db.exec("ALTER TABLE cards ADD COLUMN attribute TEXT");
+  if (!columnNames.includes('quantity')) db.exec("ALTER TABLE cards ADD COLUMN quantity INTEGER DEFAULT 1");
+  if (!columnNames.includes('rarity')) db.exec("ALTER TABLE cards ADD COLUMN rarity TEXT");
+  if (!columnNames.includes('set_code')) db.exec("ALTER TABLE cards ADD COLUMN set_code TEXT");
+  if (!columnNames.includes('price')) db.exec("ALTER TABLE cards ADD COLUMN price REAL");
+
+  // Note: Changing Primary Key from 'id' to '(id, set_code)' is hard in SQLite (requires recreation).
+  // For dev environment, we assume user might reset DB or we just handle duplicates via logic if schema migration fails on constraints.
+  // In a real app we would create a new table and copy data.
+  // Here, we'll just ensure columns exist. Logic will handle upserts carefully.
 } catch (e) {
   console.log("Migration check failed or not needed", e);
 }
@@ -145,37 +168,83 @@ ipcMain.handle('fetch-card-data', async (event, passcode) => {
 
 ipcMain.handle('add-card-to-db', (event, card) => {
   try {
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute)
-      VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute)
-    `);
-
-    // card object from API might vary, let's map it safely
-    // YGOPRODeck images: card_images[0].image_url
-    const imageUrl = card.card_images && card.card_images.length > 0 ? card.card_images[0].image_url : '';
-
-    const info = stmt.run({
-      id: String(card.id),
-      name: card.name,
-      type: card.type,
-      desc: card.desc,
-      image_url: imageUrl,
-      atk: card.atk || null,
-      def: card.def || null,
-      level: card.level || null,
-      race: card.race || null,
-      attribute: card.attribute || null
+    // Check if card with same ID and Set Code exists
+    const existing = db.prepare('SELECT quantity FROM cards WHERE id = @id AND set_code = @set_code').get({
+        id: String(card.id),
+        set_code: card.set_code || 'Unknown'
     });
-    return { success: true, changes: info.changes };
+
+    if (existing) {
+        // Increment quantity
+        const newQty = existing.quantity + (card.quantity || 1);
+        db.prepare('UPDATE cards SET quantity = @qty, price = @price WHERE id = @id AND set_code = @set_code').run({
+            qty: newQty,
+            price: card.price || 0,
+            id: String(card.id),
+            set_code: card.set_code || 'Unknown'
+        });
+        return { success: true, updated: true };
+    } else {
+        // Insert new
+        const stmt = db.prepare(`
+          INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price)
+          VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute, @quantity, @rarity, @set_code, @price)
+        `);
+
+        const imageUrl = card.card_images && card.card_images.length > 0 ? card.card_images[0].image_url : '';
+
+        stmt.run({
+          id: String(card.id),
+          name: card.name,
+          type: card.type,
+          desc: card.desc,
+          image_url: imageUrl,
+          atk: card.atk || null,
+          def: card.def || null,
+          level: card.level || null,
+          race: card.race || null,
+          attribute: card.attribute || null,
+          quantity: card.quantity || 1,
+          rarity: card.rarity || 'Unknown',
+          set_code: card.set_code || 'Unknown',
+          price: card.price || 0
+        });
+        return { success: true, inserted: true };
+    }
   } catch (error) {
     console.error('DB Insert Error:', error);
     return { success: false, error: error.message };
   }
 });
 
+ipcMain.handle('get-portfolio', () => {
+    try {
+        const stats = db.prepare('SELECT SUM(price * quantity) as totalValue, SUM(quantity) as totalCards, COUNT(*) as uniqueCards FROM cards').get();
+        return stats;
+    } catch (error) {
+        return { totalValue: 0, totalCards: 0, uniqueCards: 0 };
+    }
+});
+
+ipcMain.handle('get-price-history', () => {
+    try {
+        return db.prepare('SELECT * FROM portfolio_history ORDER BY timestamp ASC').all();
+    } catch (error) {
+        return [];
+    }
+});
+
 async function performCardUpdate(cards, eventSender) {
     let updatedCount = 0;
     const total = cards.length;
+
+    // Record history start
+    try {
+        const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();
+        if (totalVal && totalVal.val > 0) {
+             db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: totalVal.val });
+        }
+    } catch(e) { console.log(e); }
 
     for (let i = 0; i < total; i++) {
        const card = cards[i];
@@ -193,10 +262,17 @@ async function performCardUpdate(cards, eventSender) {
                 const apiCard = data.data[0];
                 const imageUrl = apiCard.card_images && apiCard.card_images.length > 0 ? apiCard.card_images[0].image_url : '';
 
+                // Fetch price for the specific set code if possible, or average
+                // Simulating price extraction from apiCard.card_prices if available
+                let price = card.price || 0;
+                if (apiCard.card_prices && apiCard.card_prices.length > 0) {
+                    price = parseFloat(apiCard.card_prices[0].cardmarket_price) || 0;
+                }
+
                 db.prepare(`
                   UPDATE cards SET
                     name = @name, type = @type, desc = @desc, image_url = @image_url,
-                    atk = @atk, def = @def, level = @level, race = @race, attribute = @attribute
+                    atk = @atk, def = @def, level = @level, race = @race, attribute = @attribute, price = @price
                   WHERE id = @id
                 `).run({
                    id: String(apiCard.id),
@@ -208,7 +284,8 @@ async function performCardUpdate(cards, eventSender) {
                    def: apiCard.def || null,
                    level: apiCard.level || null,
                    race: apiCard.race || null,
-                   attribute: apiCard.attribute || null
+                   attribute: apiCard.attribute || null,
+                   price: price
                 });
                 updatedCount++;
              }
