@@ -13,4 +13,5 @@ contextBridge.exposeInMainWorld('api', {
   getIpAddress: () => ipcRenderer.invoke('get-ip-address'),
   importCsv: () => ipcRenderer.invoke('import-csv'),
   updateAllCards: () => ipcRenderer.invoke('update-all-cards'),
+  checkCardExists: (passcode) => ipcRenderer.invoke('check-card-exists', passcode),
 });

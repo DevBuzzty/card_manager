@@ -11,7 +11,9 @@ export default function StagingArea({ scannedCards, setScannedCards }) {
         try {
             const data = await window.api.fetchCardData(passcode);
             if (data && !data.error) {
-                setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loaded', data } : c));
+                // Check if already in DB
+                const exists = await window.api.checkCardExists(passcode);
+                setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loaded', data, inCollection: exists } : c));
             } else {
                 // If not found or error, remove the card entirely
                 setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
@@ -140,7 +142,14 @@ export default function StagingArea({ scannedCards, setScannedCards }) {
                         {card.status === 'loading' && <div className="h-5 w-40 bg-gray-800 rounded animate-pulse mb-2"></div>}
                         {card.status === 'loaded' ? (
                             <>
-                                <h3 className="font-bold text-lg text-space-white truncate">{card.data.name}</h3>
+                                <div className="flex items-center gap-2">
+                                    <h3 className="font-bold text-lg text-space-white truncate">{card.data.name}</h3>
+                                    {card.inCollection && (
+                                        <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-[10px] font-bold uppercase rounded border border-yellow-500/30">
+                                            Owned
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="flex items-center text-xs space-x-2 mt-0.5">
                                     <span className="text-space-violet font-mono bg-purple-900/30 px-1.5 py-0.5 rounded">{card.passcode}</span>
                                     <span className="text-gray-400 truncate">{card.data.type}</span>

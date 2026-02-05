@@ -231,6 +231,17 @@ ipcMain.handle('get-collection', () => {
   }
 });
 
+ipcMain.handle('check-card-exists', (event, passcode) => {
+  try {
+    const stmt = db.prepare('SELECT COUNT(*) as count FROM cards WHERE id = ?');
+    const result = stmt.get(passcode);
+    return result.count > 0;
+  } catch (error) {
+    console.error('DB Check Error:', error);
+    return false;
+  }
+});
+
 ipcMain.handle('import-csv', async () => {
   try {
     const result = await dialog.showOpenDialog(mainWindow, {
