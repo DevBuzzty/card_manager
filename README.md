@@ -34,6 +34,14 @@ The desktop app acts as the server. It displays scanned cards in a "Staging Area
     ```
     This will launch the React dev server and the Electron window.
 
+### Build Executable (.exe)
+To create a standalone executable (e.g., for Windows):
+1.  Run the build command:
+    ```bash
+    npm run dist
+    ```
+2.  The output files (Installer and `.exe`) will be located in the `desktop/dist-electron` folder.
+
 ### Features
 *   **Staging Area**: Shows real-time feeds of cards scanned by the phone.
 *   **Collection**: View your saved cards.

@@ -1,7 +1,9 @@
 {
-  "name": "desktop",
+  "name": "yugioh-card-manager",
   "private": true,
   "version": "0.1.0",
+  "description": "Yu-Gi-Oh! Card Manager & Scanner Companion",
+  "author": "Yu-Gi-Oh! Dev",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -9,7 +11,29 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\""
+    "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "dist": "vite build && electron-builder"
+  },
+  "build": {
+    "appId": "com.yugioh.cardmanager",
+    "productName": "Yu-Gi-Oh! Card Manager",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
@@ -29,6 +53,7 @@
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^40.1.0",
+    "electron-builder": "^26.7.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
