@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld('api', {
   getCollection: () => ipcRenderer.invoke('get-collection'),
   getIpAddress: () => ipcRenderer.invoke('get-ip-address'),
   importCsv: () => ipcRenderer.invoke('import-csv'),
+  updateAllCards: () => ipcRenderer.invoke('update-all-cards'),
 });

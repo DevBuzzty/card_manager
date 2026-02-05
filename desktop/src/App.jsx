@@ -14,9 +14,11 @@ function App() {
         console.log('Received scan:', data);
         // Add to beginning of list with a unique temp ID
         setScannedCards(prev => {
-            // Avoid duplicates if same card scanned rapidly?
-            // User might want to add multiple copies. Let's allow it but maybe debounce in Android.
-            // Here just add it.
+            // Check for duplicates in current staging
+            if (prev.some(c => c.passcode === data.passcode)) {
+                return prev;
+            }
+
             return [{
                 tempId: Date.now() + Math.random(),
                 passcode: data.passcode,

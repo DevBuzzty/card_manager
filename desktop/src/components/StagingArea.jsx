@@ -13,10 +13,12 @@ export default function StagingArea({ scannedCards, setScannedCards }) {
             if (data && !data.error) {
                 setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loaded', data } : c));
             } else {
-                setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'error', error: data?.error || 'Not found' } : c));
+                // If not found or error, remove the card entirely
+                setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
             }
         } catch (e) { // eslint-disable-line no-unused-vars
-             setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'error', error: 'Fetch failed' } : c));
+             // If error, remove the card entirely
+             setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
         }
     } else {
         // Mock for browser dev without Electron

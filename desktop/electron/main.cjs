@@ -17,9 +17,27 @@ db.exec(`
     type TEXT,
     desc TEXT,
     image_url TEXT,
+    atk INTEGER,
+    def INTEGER,
+    level INTEGER,
+    race TEXT,
+    attribute TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )
 `);
+
+// Migration: Add new columns if they don't exist
+try {
+  const columns = db.prepare("PRAGMA table_info(cards)").all();
+  const columnNames = columns.map(c => c.name);
+  if (!columnNames.includes('atk')) db.exec("ALTER TABLE cards ADD COLUMN atk INTEGER");
+  if (!columnNames.includes('def')) db.exec("ALTER TABLE cards ADD COLUMN def INTEGER");
+  if (!columnNames.includes('level')) db.exec("ALTER TABLE cards ADD COLUMN level INTEGER");
+  if (!columnNames.includes('race')) db.exec("ALTER TABLE cards ADD COLUMN race TEXT");
+  if (!columnNames.includes('attribute')) db.exec("ALTER TABLE cards ADD COLUMN attribute TEXT");
+} catch (e) {
+  console.log("Migration check failed or not needed", e);
+}
 
 let mainWindow;
 let io;
@@ -128,8 +146,8 @@ ipcMain.handle('fetch-card-data', async (event, passcode) => {
 ipcMain.handle('add-card-to-db', (event, card) => {
   try {
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO cards (id, name, type, desc, image_url)
-      VALUES (@id, @name, @type, @desc, @image_url)
+      INSERT OR REPLACE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute)
+      VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute)
     `);
 
     // card object from API might vary, let's map it safely
@@ -141,11 +159,64 @@ ipcMain.handle('add-card-to-db', (event, card) => {
       name: card.name,
       type: card.type,
       desc: card.desc,
-      image_url: imageUrl
+      image_url: imageUrl,
+      atk: card.atk || null,
+      def: card.def || null,
+      level: card.level || null,
+      race: card.race || null,
+      attribute: card.attribute || null
     });
     return { success: true, changes: info.changes };
   } catch (error) {
     console.error('DB Insert Error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-all-cards', async () => {
+  try {
+    const cards = db.prepare('SELECT id FROM cards').all();
+    let updatedCount = 0;
+
+    // This could take a while. In a real app we'd send progress events.
+    for (const card of cards) {
+       try {
+          const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${card.id}`);
+          if (response.ok) {
+             const data = await response.json();
+             if (data.data && data.data.length > 0) {
+                const apiCard = data.data[0];
+                const imageUrl = apiCard.card_images && apiCard.card_images.length > 0 ? apiCard.card_images[0].image_url : '';
+
+                db.prepare(`
+                  UPDATE cards SET
+                    name = @name, type = @type, desc = @desc, image_url = @image_url,
+                    atk = @atk, def = @def, level = @level, race = @race, attribute = @attribute
+                  WHERE id = @id
+                `).run({
+                   id: String(apiCard.id),
+                   name: apiCard.name,
+                   type: apiCard.type,
+                   desc: apiCard.desc,
+                   image_url: imageUrl,
+                   atk: apiCard.atk || null,
+                   def: apiCard.def || null,
+                   level: apiCard.level || null,
+                   race: apiCard.race || null,
+                   attribute: apiCard.attribute || null
+                });
+                updatedCount++;
+             }
+          }
+       } catch (err) {
+          console.error(`Failed to update card ${card.id}`, err);
+       }
+       // Respect API rate limits slightly
+       await new Promise(r => setTimeout(r, 100));
+    }
+    return { success: true, updatedCount };
+  } catch (error) {
+    console.error('Update All Error:', error);
     return { success: false, error: error.message };
   }
 });
