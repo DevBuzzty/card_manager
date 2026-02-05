@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { Check, X, Loader2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 
-export default function StagingArea({ scannedCards, setScannedCards }) {
+export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
 
   const fetchCard = useCallback(async (tempId, passcode) => {
     // Set loading immediately to prevent double fetch
@@ -101,7 +101,8 @@ export default function StagingArea({ scannedCards, setScannedCards }) {
                             const loadedCards = scannedCards.filter(c => c.status === 'loaded');
                             loadedCards.forEach(c => handleAdd(c.tempId));
                         }}
-                        className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors text-sm shadow-[0_0_10px_rgba(157,0,255,0.3)]"
+                        disabled={isUpdating}
+                        className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors text-sm shadow-[0_0_10px_rgba(157,0,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Check className="w-4 h-4 mr-2" />
                         Add All
@@ -173,7 +174,8 @@ export default function StagingArea({ scannedCards, setScannedCards }) {
                         {card.status === 'loaded' && (
                              <button
                                 onClick={() => handleAdd(card.tempId)}
-                                className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium text-sm shadow-[0_0_15px_rgba(157,0,255,0.3)] hover:shadow-[0_0_20px_rgba(157,0,255,0.5)]"
+                                disabled={isUpdating}
+                                className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium text-sm shadow-[0_0_15px_rgba(157,0,255,0.3)] hover:shadow-[0_0_20px_rgba(157,0,255,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
                              >
                                 <Check className="w-4 h-4 mr-2" />
                                 Add

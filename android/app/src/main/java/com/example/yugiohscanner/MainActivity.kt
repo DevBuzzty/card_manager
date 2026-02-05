@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.ViewGroup
 import android.widget.Toast
@@ -20,6 +22,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CenterFocusStrong
+import androidx.compose.material.icons.filled.CenterFocusWeak
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Settings
@@ -219,6 +223,7 @@ fun ScannerScreen(
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
     var scanStatus by remember { mutableStateOf("Scanning...") }
     var isFlashOn by remember { mutableStateOf(false) }
+    var isFocusLocked by remember { mutableStateOf(false) }
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -242,8 +247,20 @@ fun ScannerScreen(
                     }
                 })
 
+                // Tap-to-Focus Logic
+                val gestureDetector = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
+                    override fun onSingleTapUp(e: MotionEvent): Boolean {
+                        val meteringPoint = previewView.meteringPointFactory.createPoint(e.x, e.y)
+                        val action = FocusMeteringAction.Builder(meteringPoint).build()
+                        cameraControl?.startFocusAndMetering(action)
+                        isFocusLocked = true // User manually focused
+                        return true
+                    }
+                })
+
                 previewView.setOnTouchListener { _, event ->
                     scaleGestureDetector.onTouchEvent(event)
+                    gestureDetector.onTouchEvent(event)
                     true
                 }
 
@@ -343,6 +360,32 @@ fun ScannerScreen(
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Auto Focus Reset
+            IconButton(
+                onClick = {
+                    if (isFocusLocked) {
+                        cameraControl?.cancelFocusAndMetering()
+                        isFocusLocked = false
+                        Toast.makeText(context, "Continuous Auto Focus", Toast.LENGTH_SHORT).show()
+                    } else {
+                         // Optional: Lock focus at current center if already auto
+                         // For now, simpler to just treat this button as "Reset to Auto"
+                         // But if user wants to toggle, we could lock.
+                         // Let's implement as "Reset to Auto" primarily.
+                         cameraControl?.cancelFocusAndMetering()
+                         Toast.makeText(context, "Refocusing...", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+            ) {
+                Icon(
+                    imageVector = if (isFocusLocked) Icons.Default.CenterFocusStrong else Icons.Default.CenterFocusWeak,
+                    contentDescription = "Reset Focus",
+                    tint = if (isFocusLocked) Color.Red else Color.White
+                )
+            }
+
             // Flashlight Toggle
             IconButton(
                 onClick = {

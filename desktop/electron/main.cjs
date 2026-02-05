@@ -173,13 +173,18 @@ ipcMain.handle('add-card-to-db', (event, card) => {
   }
 });
 
-ipcMain.handle('update-all-cards', async () => {
-  try {
-    const cards = db.prepare('SELECT id FROM cards').all();
+async function performCardUpdate(cards, eventSender) {
     let updatedCount = 0;
+    const total = cards.length;
 
-    // This could take a while. In a real app we'd send progress events.
-    for (const card of cards) {
+    for (let i = 0; i < total; i++) {
+       const card = cards[i];
+
+       // Report progress
+       if (eventSender) {
+           eventSender.send('update-progress', { current: i + 1, total });
+       }
+
        try {
           const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${card.id}`);
           if (response.ok) {
@@ -214,9 +219,33 @@ ipcMain.handle('update-all-cards', async () => {
        // Respect API rate limits slightly
        await new Promise(r => setTimeout(r, 100));
     }
+    return updatedCount;
+}
+
+ipcMain.handle('update-all-cards', async (event) => {
+  try {
+    const cards = db.prepare('SELECT id FROM cards').all();
+    // Run in background basically, but await here so frontend knows when started/done loop
+    // Actually for long running, we should just return "started" and send events.
+    // But request was "keep it running".
+    // We will await it, but frontend will handle async.
+    const updatedCount = await performCardUpdate(cards, event.sender);
     return { success: true, updatedCount };
   } catch (error) {
     console.error('Update All Error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-missing-cards', async (event) => {
+  try {
+    // Select cards that are missing key details (like ATK/DEF/Level) or just generic "where atk is null"
+    // Assuming 'type' is always present, but let's check for nulls in new columns
+    const cards = db.prepare('SELECT id FROM cards WHERE atk IS NULL AND def IS NULL AND level IS NULL').all();
+    const updatedCount = await performCardUpdate(cards, event.sender);
+    return { success: true, updatedCount };
+  } catch (error) {
+    console.error('Update Missing Error:', error);
     return { success: false, error: error.message };
   }
 });

@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Search, RefreshCw, LayoutGrid, List as ListIcon, ArrowUpDown } from 'lucide-react';
+import { Search, RefreshCw, LayoutGrid, List as ListIcon, ArrowUpDown, Database } from 'lucide-react';
 import CardDetailModal from './CardDetailModal';
 
-export default function CollectionList() {
+export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [cards, setCards] = useState([]);
   const [filter, setFilter] = useState('');
   const [selectedCard, setSelectedCard] = useState(null);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [localUpdating, setLocalUpdating] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
   const [sortType, setSortType] = useState('newest'); // 'newest', 'name', 'atk', 'def', 'level'
+
+  const updating = isUpdating || localUpdating;
 
   const loadCollection = async () => {
     if (window.api) {
@@ -25,16 +27,26 @@ export default function CollectionList() {
 
   useEffect(() => {
     loadCollection();
-  }, []);
+  }, [updating]); // Reload when update finishes
 
-  const handleUpdateAll = async () => {
-    if (!window.api || isUpdating) return;
+  const handleUpdate = async (mode) => {
+    if (!window.api || updating) return;
 
-    if (!confirm("Update details for all cards? This might take a while.")) return;
+    const message = mode === 'all'
+        ? "Update details for all cards? This might take a while."
+        : "Fetch missing details for incomplete cards?";
 
-    setIsUpdating(true);
+    if (!confirm(message)) return;
+
+    setLocalUpdating(true);
+    // Initialize progress display
+    setUpdateProgress({ current: 0, total: 0 });
+
     try {
-        const result = await window.api.updateAllCards();
+        const result = mode === 'all'
+            ? await window.api.updateAllCards()
+            : await window.api.updateMissingCards();
+
         if (result.success) {
             alert(`Updated ${result.updatedCount} cards.`);
             loadCollection();
@@ -45,7 +57,8 @@ export default function CollectionList() {
         console.error(e);
         alert("Update failed.");
     } finally {
-        setIsUpdating(false);
+        setLocalUpdating(false);
+        setUpdateProgress(null);
     }
   };
 
@@ -70,14 +83,25 @@ export default function CollectionList() {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
             <div className="flex items-center gap-4">
                 <h2 className="text-2xl font-bold text-space-white">My Collection</h2>
-                <button
-                    onClick={handleUpdateAll}
-                    disabled={isUpdating}
-                    className="p-2 bg-gray-800 hover:bg-space-violet text-gray-400 hover:text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Update all card details from API"
-                >
-                    <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => handleUpdate('missing')}
+                        disabled={updating}
+                        className="flex items-center px-3 py-1.5 bg-gray-800 hover:bg-space-violet text-gray-400 hover:text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium border border-gray-700"
+                        title="Fetch missing details only"
+                    >
+                        <Database className="w-3 h-3 mr-2" />
+                        Fetch Missing
+                    </button>
+                    <button
+                        onClick={() => handleUpdate('all')}
+                        disabled={updating}
+                        className="p-2 bg-gray-800 hover:bg-space-violet text-gray-400 hover:text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Update all card details from API"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
             </div>
 
             <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">

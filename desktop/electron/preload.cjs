@@ -13,5 +13,11 @@ contextBridge.exposeInMainWorld('api', {
   getIpAddress: () => ipcRenderer.invoke('get-ip-address'),
   importCsv: () => ipcRenderer.invoke('import-csv'),
   updateAllCards: () => ipcRenderer.invoke('update-all-cards'),
+  updateMissingCards: () => ipcRenderer.invoke('update-missing-cards'),
   checkCardExists: (passcode) => ipcRenderer.invoke('check-card-exists', passcode),
+  onUpdateProgress: (callback) => {
+    const subscription = (_event, value) => callback(value);
+    ipcRenderer.on('update-progress', subscription);
+    return () => ipcRenderer.removeListener('update-progress', subscription);
+  },
 });
