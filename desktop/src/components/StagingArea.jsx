@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { Check, X, Loader2, AlertCircle } from 'lucide-react';
+import { Check, X, Loader2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 
 export default function StagingArea({ scannedCards, setScannedCards }) {
 
@@ -58,12 +58,60 @@ export default function StagingArea({ scannedCards, setScannedCards }) {
       setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
   };
 
+  const handleImportCsv = async () => {
+    if (window.api) {
+        try {
+            const result = await window.api.importCsv();
+            if (result && !result.canceled && result.cards) {
+                // Add to staging
+                setScannedCards(prev => [
+                    ...result.cards.map(c => ({
+                        tempId: Date.now() + Math.random(), // Unique temp ID
+                        passcode: c.passcode,
+                        status: 'pending',
+                        data: null
+                    })),
+                    ...prev
+                ]);
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error importing CSV");
+        }
+    } else {
+        alert("CSV Import is only available in the desktop app.");
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
-        <h2 className="text-2xl font-bold mb-6 text-space-white flex items-center">
-            Incoming Scans
-            <span className="ml-3 text-sm font-normal text-gray-500 bg-gray-900 px-2 py-1 rounded-full">{scannedCards.length}</span>
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-space-white flex items-center">
+                Incoming Scans
+                <span className="ml-3 text-sm font-normal text-gray-500 bg-gray-900 px-2 py-1 rounded-full">{scannedCards.length}</span>
+            </h2>
+            <div className="flex space-x-2">
+                {scannedCards.some(c => c.status === 'loaded') && (
+                     <button
+                        onClick={() => {
+                            const loadedCards = scannedCards.filter(c => c.status === 'loaded');
+                            loadedCards.forEach(c => handleAdd(c.tempId));
+                        }}
+                        className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors text-sm shadow-[0_0_10px_rgba(157,0,255,0.3)]"
+                    >
+                        <Check className="w-4 h-4 mr-2" />
+                        Add All
+                    </button>
+                )}
+                <button
+                    onClick={handleImportCsv}
+                    className="flex items-center px-4 py-2 bg-[#2d2d2d] hover:bg-[#3d3d3d] text-white rounded-lg transition-colors text-sm border border-gray-700"
+                >
+                    <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
+                    Import CSV
+                </button>
+            </div>
+        </div>
 
         {scannedCards.length === 0 && (
             <div className="flex flex-col items-center justify-center h-64 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl bg-gray-900/50">

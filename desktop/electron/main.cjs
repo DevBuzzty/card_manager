@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const Database = require('better-sqlite3');
 const os = require('os');
@@ -156,5 +157,45 @@ ipcMain.handle('get-collection', () => {
   } catch (error) {
     console.error('DB Select Error:', error);
     return [];
+  }
+});
+
+ipcMain.handle('import-csv', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name: 'CSV Files', extensions: ['csv'] }]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true };
+    }
+
+    const filePath = result.filePaths[0];
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.split(/\r?\n/);
+
+    // Format: German Name;Passcode;English Name
+    // Skip header (row 0)
+    const cards = [];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const parts = line.split(';');
+      if (parts.length >= 2) {
+        // Passcode is index 1
+        const passcode = parts[1].trim();
+        // Simple validation: must be digits
+        if (/^\d+$/.test(passcode)) {
+            cards.push({ passcode });
+        }
+      }
+    }
+
+    return { canceled: false, cards };
+  } catch (error) {
+    console.error('CSV Import Error:', error);
+    return { error: error.message };
   }
 });
