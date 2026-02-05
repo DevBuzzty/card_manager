@@ -225,6 +225,7 @@ fun ScannerScreen(
     var isFlashOn by remember { mutableStateOf(false) }
     var isFocusLocked by remember { mutableStateOf(false) }
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
+    var cameraInfo by remember { mutableStateOf<CameraInfo?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -239,7 +240,7 @@ fun ScannerScreen(
                 val scaleGestureDetector = ScaleGestureDetector(ctx, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     override fun onScale(detector: ScaleGestureDetector): Boolean {
                         cameraControl?.let { control ->
-                             val currentZoomRatio = control.zoomState.value?.zoomRatio ?: 1f
+                             val currentZoomRatio = cameraInfo?.zoomState?.value?.zoomRatio ?: 1f
                              val delta = detector.scaleFactor
                              control.setZoomRatio(currentZoomRatio * delta)
                         }
@@ -301,6 +302,7 @@ fun ScannerScreen(
                             imageAnalyzer
                         )
                         cameraControl = camera.cameraControl
+                        cameraInfo = camera.cameraInfo
                     } catch (exc: Exception) {
                         Log.e("Scanner", "Use case binding failed", exc)
                     }
