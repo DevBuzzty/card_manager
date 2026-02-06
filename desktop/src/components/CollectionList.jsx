@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react';
-import { Search, RefreshCw, LayoutGrid, List as ListIcon, ArrowUpDown, Database } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Search, RefreshCw, LayoutGrid, List as ListIcon, Database } from 'lucide-react';
 import CardDetailModal from './CardDetailModal';
 import CustomSelect from './CustomSelect';
 
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
-  const [cards, setCards] = useState([]);
+  const [rawCards, setRawCards] = useState([]);
   const [filter, setFilter] = useState('');
   const [selectedCard, setSelectedCard] = useState(null);
   const [localUpdating, setLocalUpdating] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
-  const [sortType, setSortType] = useState('newest'); // 'newest', 'name', 'atk', 'def', 'level'
+  const [sortType, setSortType] = useState('newest'); // 'newest', 'name', 'price', 'atk', 'def', 'level'
   const [filterType, setFilterType] = useState('All');
 
   const updating = isUpdating || localUpdating;
@@ -17,19 +17,20 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const loadCollection = async () => {
     if (window.api) {
       const result = await window.api.getCollection();
-      setCards(result);
+      setRawCards(result);
     } else {
         // Mock
-        setCards([
-            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/46986414.jpg', atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard in terms of attack and defense.' },
-            { id: '89631139', name: 'Blue-Eyes White Dragon', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/89631139.jpg', atk: 3000, def: 2500, level: 8, race: 'Dragon', attribute: 'LIGHT', desc: 'This legendary dragon is a powerful engine of destruction.' }
+        setRawCards([
+            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/46986414.jpg', atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 1, price: 5.50, set_code: 'LOB-005', rarity: 'Ultra Rare' },
+            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/46986414.jpg', atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 3, price: 1.20, set_code: 'SDY-006', rarity: 'Common' },
+            { id: '89631139', name: 'Blue-Eyes White Dragon', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/89631139.jpg', atk: 3000, def: 2500, level: 8, race: 'Dragon', attribute: 'LIGHT', desc: 'This legendary dragon...', quantity: 1, price: 50.00, set_code: 'LOB-001', rarity: 'Ultra Rare' }
         ]);
     }
   };
 
   useEffect(() => {
     loadCollection();
-  }, [updating]); // Reload when update finishes
+  }, [updating]);
 
   const handleUpdate = async (mode) => {
     if (!window.api || updating) return;
@@ -41,7 +42,6 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     if (!confirm(message)) return;
 
     setLocalUpdating(true);
-    // Initialize progress display
     setUpdateProgress({ current: 0, total: 0 });
 
     try {
@@ -64,24 +64,53 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     }
   };
 
-  const filteredCards = cards.filter(c => {
-    const matchesSearch = (c.name && c.name.toLowerCase().includes(filter.toLowerCase())) ||
-                          (c.id && String(c.id).includes(filter));
-    const matchesType = filterType === 'All' || (c.type && c.type.includes(filterType));
-    return matchesSearch && matchesType;
-  }).sort((a, b) => {
-      switch (sortType) {
-          case 'name': return (a.name || '').localeCompare(b.name || '');
-          case 'price': return (Number(b.price) || 0) - (Number(a.price) || 0);
-          case 'atk': return (b.atk || 0) - (a.atk || 0);
-          case 'def': return (b.def || 0) - (a.def || 0);
-          case 'level': return (b.level || 0) - (a.level || 0);
-          case 'newest':
-          default:
-               // Assuming array is already sorted by date desc from backend, but explicit is better if date available
-               return 0;
-      }
-  });
+  // Group cards by ID
+  const groupedCards = useMemo(() => {
+      const groups = {};
+      rawCards.forEach(card => {
+          if (!groups[card.id]) {
+              groups[card.id] = {
+                  ...card, // Inherit base props
+                  quantity: 0,
+                  totalValue: 0,
+                  variants: [],
+                  // Keep highest price for sorting
+                  maxPrice: 0,
+                  // Keep latest created_at for sorting
+                  newestDate: new Date(0)
+              };
+          }
+          const g = groups[card.id];
+          g.quantity += (card.quantity || 1);
+          g.totalValue += (card.price || 0) * (card.quantity || 1);
+          g.variants.push(card);
+
+          if ((card.price || 0) > g.maxPrice) g.maxPrice = card.price || 0;
+
+          const cDate = new Date(card.created_at);
+          if (cDate > g.newestDate) g.newestDate = cDate;
+      });
+      return Object.values(groups);
+  }, [rawCards]);
+
+  const filteredAndSortedCards = useMemo(() => {
+      return groupedCards.filter(c => {
+        const matchesSearch = (c.name && c.name.toLowerCase().includes(filter.toLowerCase())) ||
+                              (c.id && String(c.id).includes(filter));
+        const matchesType = filterType === 'All' || (c.type && c.type.includes(filterType));
+        return matchesSearch && matchesType;
+      }).sort((a, b) => {
+          switch (sortType) {
+              case 'name': return (a.name || '').localeCompare(b.name || '');
+              case 'price': return b.maxPrice - a.maxPrice;
+              case 'atk': return (b.atk || 0) - (a.atk || 0);
+              case 'def': return (b.def || 0) - (a.def || 0);
+              case 'level': return (b.level || 0) - (a.level || 0);
+              case 'newest': return b.newestDate - a.newestDate;
+              default: return 0;
+          }
+      });
+  }, [groupedCards, filter, filterType, sortType]);
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -178,14 +207,14 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
         {viewMode === 'grid' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 sm:gap-6">
-                {filteredCards.map(card => (
+                {filteredAndSortedCards.map(card => (
                     <div
                         key={card.id}
                         onClick={() => setSelectedCard(card)}
                         className="group relative bg-[#1E1E1E] rounded-xl overflow-hidden shadow-black shadow-lg hover:shadow-[0_0_20px_rgba(157,0,255,0.2)] transition-all duration-300 hover:-translate-y-1 border border-gray-800 hover:border-space-violet/50 cursor-pointer"
                     >
                         <div className="aspect-[246/357] overflow-hidden relative">
-                            {/* Placeholder or Image */}
+                            {/* Placeholder */}
                             <div className="absolute inset-0 bg-gray-800 animate-pulse"></div>
                             <img
                                 src={card.image_url}
@@ -199,13 +228,21 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                                     x{card.quantity}
                                 </div>
                             )}
+                            <div className="absolute bottom-2 left-2 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded backdrop-blur-sm border border-white/10">
+                                {card.variants.length} Var
+                            </div>
                         </div>
-                        {/* Overlay info always visible on mobile, hover on desktop? No, let's keep it simple. */}
                         <div className="p-3">
                             <h3 className="font-bold text-gray-200 text-sm leading-tight truncate" title={card.name}>{card.name}</h3>
                             <div className="flex justify-between items-center mt-1">
                                 <p className="text-[10px] text-gray-500 font-mono">{card.id}</p>
-                                {card.price && <p className="text-[10px] text-space-violet font-medium">${card.price.toFixed(2)}</p>}
+                                {/* Show range or max price */}
+                                <p className="text-[10px] text-space-violet font-medium">
+                                    {card.variants.length > 1 ? 'from ' : ''}
+                                    ${(card.variants.length > 1
+                                        ? Math.min(...card.variants.map(v => v.price || 0))
+                                        : (card.price || 0)).toFixed(2)}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -224,7 +261,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800">
-                        {filteredCards.map(card => (
+                        {filteredAndSortedCards.map(card => (
                             <tr
                                 key={card.id}
                                 onClick={() => setSelectedCard(card)}
@@ -240,9 +277,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                                     <div>
                                         <div className="flex items-center gap-2">
                                             {card.name}
-                                            {card.rarity && <span className="text-[10px] text-gray-500 border border-gray-700 px-1 rounded">{card.rarity}</span>}
                                         </div>
-                                        {card.set_code && <div className="text-[10px] text-gray-500">{card.set_code}</div>}
+                                        <div className="text-[10px] text-gray-500">{card.variants.length} Variants Owned</div>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4">{card.type}</td>
@@ -255,7 +291,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="font-mono">{card.id}</div>
-                                    {card.price && <div className="text-space-violet text-xs font-bold">${card.price.toFixed(2)}</div>}
+                                    <div className="text-space-violet text-xs font-bold">Total: ${card.totalValue.toFixed(2)}</div>
                                 </td>
                             </tr>
                         ))}
@@ -264,14 +300,20 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
             </div>
         )}
 
-        {filteredCards.length === 0 && (
+        {filteredAndSortedCards.length === 0 && (
             <div className="text-center py-20 text-gray-600">
                 <p>No cards found.</p>
             </div>
         )}
 
         {selectedCard && (
-            <CardDetailModal card={selectedCard} onClose={() => setSelectedCard(null)} />
+            <CardDetailModal
+                card={selectedCard}
+                onClose={() => {
+                    setSelectedCard(null);
+                    loadCollection(); // Reload to reflect changes made in modal
+                }}
+            />
         )}
     </div>
   );

@@ -40,6 +40,14 @@ db.exec(`
   )
 `);
 
+// Create settings table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )
+`);
+
 // Migration: Add new columns if they don't exist
 try {
   const columns = db.prepare("PRAGMA table_info(cards)").all();
@@ -87,7 +95,8 @@ try {
           // Copy data. Note: cards_temp might have duplicate IDs if we were sloppy before, but shouldn't if unique constraint existed on ID.
           // However, existing data might have null set_code. We default it.
           db.exec(`
-            INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, created_at)
+            INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
+                   COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, created_at)
             SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
                    COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, created_at
             FROM cards_temp
@@ -115,9 +124,7 @@ function createWindow() {
     },
   });
 
-  const isDev = !app.isPackaged; // Simple check, or check env var
-  // In this environment, we will run with 'npm run electron:dev' which sets an env var usually,
-  // or we just assume localhost:5173 for dev.
+  const isDev = !app.isPackaged;
 
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
@@ -144,7 +151,7 @@ function getLocalIpAddress() {
 function startSocketServer() {
   io = new Server(4000, {
     cors: {
-      origin: "*", // Allow Android app to connect
+      origin: "*",
       methods: ["GET", "POST"]
     }
   });
@@ -186,6 +193,45 @@ ipcMain.handle('get-ip-address', () => {
   return getLocalIpAddress();
 });
 
+// Settings Handlers
+ipcMain.handle('get-settings', () => {
+    try {
+        const rows = db.prepare('SELECT * FROM settings').all();
+        // Convert to object
+        const settings = {};
+        rows.forEach(row => settings[row.key] = row.value);
+        return settings;
+    } catch (e) {
+        return {};
+    }
+});
+
+ipcMain.handle('save-setting', (event, { key, value }) => {
+    try {
+        db.prepare('INSERT INTO settings (key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value = @value').run({ key, value });
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('get-db-path', () => {
+    return dbPath;
+});
+
+ipcMain.handle('delete-database', async () => {
+    try {
+        db.close();
+        if (fs.existsSync(dbPath)) {
+            fs.unlinkSync(dbPath);
+        }
+        app.relaunch();
+        app.exit(0);
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 ipcMain.handle('fetch-card-data', async (event, passcode) => {
   try {
     const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${passcode}`);
@@ -193,7 +239,6 @@ ipcMain.handle('fetch-card-data', async (event, passcode) => {
       throw new Error('Card not found');
     }
     const data = await response.json();
-    // The API returns { data: [ ... ] }
     if (data.data && data.data.length > 0) {
       return data.data[0];
     }
@@ -204,7 +249,6 @@ ipcMain.handle('fetch-card-data', async (event, passcode) => {
   }
 });
 
-// Deck Handlers
 ipcMain.handle('get-decks', () => {
     return db.prepare('SELECT * FROM decks ORDER BY created_at DESC').all();
 });
@@ -221,7 +265,6 @@ ipcMain.handle('delete-deck', (event, id) => {
 });
 
 ipcMain.handle('save-deck', (event, { deckId, cards }) => {
-    // cards: { id, type, quantity }
     const deleteStmt = db.prepare('DELETE FROM deck_cards WHERE deck_id = ?');
     const insertStmt = db.prepare('INSERT INTO deck_cards (deck_id, card_id, type, quantity) VALUES (@deckId, @cardId, @type, @quantity)');
 
@@ -251,7 +294,7 @@ ipcMain.handle('get-deck-details', (event, deckId) => {
         FROM deck_cards dc
         LEFT JOIN cards c ON dc.card_id = c.id
         WHERE dc.deck_id = ?
-        GROUP BY dc.card_id, dc.type -- avoid duplicates if multiple printings in DB, pick one for display
+        GROUP BY dc.card_id, dc.type
     `).all(deckId);
     return cards;
 });
@@ -289,14 +332,12 @@ ipcMain.handle('import-deck-ydk', async () => {
 
 ipcMain.handle('add-card-to-db', (event, card) => {
   try {
-    // Check if card with same ID and Set Code exists
     const existing = db.prepare('SELECT quantity FROM cards WHERE id = @id AND set_code = @set_code').get({
         id: String(card.id),
         set_code: card.set_code || 'Unknown'
     });
 
     if (existing) {
-        // Increment quantity
         const newQty = existing.quantity + (card.quantity || 1);
         db.prepare('UPDATE cards SET quantity = @qty, price = @price WHERE id = @id AND set_code = @set_code').run({
             qty: newQty,
@@ -306,7 +347,6 @@ ipcMain.handle('add-card-to-db', (event, card) => {
         });
         return { success: true, updated: true };
     } else {
-        // Insert new
         const stmt = db.prepare(`
           INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price)
           VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute, @quantity, @rarity, @set_code, @price)
@@ -356,10 +396,7 @@ ipcMain.handle('get-price-history', () => {
 });
 
 ipcMain.handle('update-card-meta', (event, data) => {
-    // data: { passcode, old_set_code, new_set_code, rarity, quantity, price }
     try {
-        // We identify the card by passcode AND old_set_code.
-        // Update to new_set_code, rarity, quantity, price
         const stmt = db.prepare(`
             UPDATE cards
             SET set_code = @new_set_code, rarity = @rarity, quantity = @quantity, price = @price
@@ -375,7 +412,6 @@ ipcMain.handle('update-card-meta', (event, data) => {
             price: data.price || 0
         });
 
-        // Trigger portfolio recalculation immediately
         const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();
         if (totalVal) {
              db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: totalVal.val || 0 });
@@ -392,7 +428,25 @@ async function performCardUpdate(cards, eventSender) {
     let updatedCount = 0;
     const total = cards.length;
 
-    // Record history start
+    // Get pricing source setting
+    let priceSource = 'cardmarket'; // default
+    try {
+        const row = db.prepare("SELECT value FROM settings WHERE key = 'price_source'").get();
+        if (row && row.value) priceSource = row.value;
+    } catch (e) {
+        console.log("Error reading price source settings:", e);
+    }
+
+    // mapping for API fields
+    const sourceMap = {
+        'cardmarket': 'cardmarket_price',
+        'tcgplayer': 'tcgplayer_price',
+        'ebay': 'ebay_price',
+        'amazon': 'amazon_price',
+        'coolstuffinc': 'coolstuffinc_price'
+    };
+    const apiField = sourceMap[priceSource] || 'cardmarket_price';
+
     try {
         const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();
         if (totalVal && totalVal.val > 0) {
@@ -403,7 +457,6 @@ async function performCardUpdate(cards, eventSender) {
     for (let i = 0; i < total; i++) {
        const card = cards[i];
 
-       // Report progress
        if (eventSender) {
            eventSender.send('update-progress', { current: i + 1, total });
        }
@@ -416,11 +469,9 @@ async function performCardUpdate(cards, eventSender) {
                 const apiCard = data.data[0];
                 const imageUrl = apiCard.card_images && apiCard.card_images.length > 0 ? apiCard.card_images[0].image_url : '';
 
-                // Fetch price for the specific set code if possible, or average
-                // Simulating price extraction from apiCard.card_prices if available
                 let price = card.price || 0;
                 if (apiCard.card_prices && apiCard.card_prices.length > 0) {
-                    price = parseFloat(apiCard.card_prices[0].cardmarket_price) || 0;
+                    price = parseFloat(apiCard.card_prices[0][apiField]) || 0;
                 }
 
                 db.prepare(`
@@ -447,11 +498,9 @@ async function performCardUpdate(cards, eventSender) {
        } catch (err) {
           console.error(`Failed to update card ${card.id}`, err);
        }
-       // Respect API rate limits slightly
        await new Promise(r => setTimeout(r, 100));
     }
 
-    // Ensure 100% is sent
     if (eventSender) {
         eventSender.send('update-progress', { current: total, total });
     }
@@ -462,10 +511,6 @@ async function performCardUpdate(cards, eventSender) {
 ipcMain.handle('update-all-cards', async (event) => {
   try {
     const cards = db.prepare('SELECT id FROM cards').all();
-    // Run in background basically, but await here so frontend knows when started/done loop
-    // Actually for long running, we should just return "started" and send events.
-    // But request was "keep it running".
-    // We will await it, but frontend will handle async.
     const updatedCount = await performCardUpdate(cards, event.sender);
     return { success: true, updatedCount };
   } catch (error) {
@@ -476,8 +521,6 @@ ipcMain.handle('update-all-cards', async (event) => {
 
 ipcMain.handle('update-missing-cards', async (event) => {
   try {
-    // Select cards that are missing key details (like ATK/DEF/Level) or just generic "where atk is null"
-    // Assuming 'type' is always present, but let's check for nulls in new columns
     const cards = db.prepare('SELECT id FROM cards WHERE atk IS NULL AND def IS NULL AND level IS NULL').all();
     const updatedCount = await performCardUpdate(cards, event.sender);
     return { success: true, updatedCount };
@@ -523,8 +566,6 @@ ipcMain.handle('import-csv', async () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split(/\r?\n/);
 
-    // Format: German Name;Passcode;English Name
-    // Skip header (row 0)
     const cards = [];
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -532,9 +573,7 @@ ipcMain.handle('import-csv', async () => {
 
       const parts = line.split(';');
       if (parts.length >= 2) {
-        // Passcode is index 1
         const passcode = parts[1].trim();
-        // Simple validation: must be digits
         if (/^\d+$/.test(passcode)) {
             cards.push({ passcode });
         }
