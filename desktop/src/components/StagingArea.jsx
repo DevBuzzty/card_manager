@@ -14,8 +14,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             const data = await window.api.fetchCardData(passcode);
             if (data && !data.error) {
                 // Check if already in DB
-                const exists = await window.api.checkCardExists(passcode);
-                setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loaded', data, inCollection: exists } : c));
+                const result = await window.api.checkCardExists(passcode);
+                setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loaded', data, inCollection: result.exists, ownedQuantity: result.quantity } : c));
                 playScanSound(); // Play sound on successful fetch
             } else {
                 // If not found or error, remove the card entirely
@@ -179,7 +179,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     )}
                                     {card.inCollection && (
                                         <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-[10px] font-bold uppercase rounded border border-yellow-500/30">
-                                            Owned
+                                            Owned: x{card.ownedQuantity}
                                         </span>
                                     )}
                                 </div>

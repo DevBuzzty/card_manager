@@ -461,12 +461,12 @@ ipcMain.handle('get-collection', () => {
 
 ipcMain.handle('check-card-exists', (event, passcode) => {
   try {
-    const stmt = db.prepare('SELECT COUNT(*) as count FROM cards WHERE id = ?');
+    const stmt = db.prepare('SELECT SUM(quantity) as count FROM cards WHERE id = ?');
     const result = stmt.get(passcode);
-    return result.count > 0;
+    return { exists: (result.count || 0) > 0, quantity: result.count || 0 };
   } catch (error) {
     console.error('DB Check Error:', error);
-    return false;
+    return { exists: false, quantity: 0 };
   }
 });
 
