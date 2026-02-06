@@ -22,8 +22,9 @@ export default function GeminiAssistant() {
   }, [messages]);
 
   const saveKey = (key) => {
-      localStorage.setItem('gemini_api_key', key);
-      setApiKey(key);
+      if (!key.trim()) return;
+      localStorage.setItem('gemini_api_key', key.trim());
+      setApiKey(key.trim());
       setShowSettings(false);
   };
 
@@ -105,7 +106,13 @@ export default function GeminiAssistant() {
                 <div className="p-2 bg-space-violet/20 rounded-lg text-space-violet">
                     <Bot className="w-6 h-6" />
                 </div>
-                <h3 className="font-bold text-white">AI Assistant</h3>
+                <div>
+                    <h3 className="font-bold text-white">AI Assistant</h3>
+                    <div className="flex items-center mt-1">
+                        <div className={`w-2 h-2 rounded-full mr-2 ${apiKey ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className="text-xs text-gray-500">{apiKey ? 'Connected' : 'No API Key'}</span>
+                    </div>
+                </div>
             </div>
             <button onClick={() => setShowSettings(true)} className="p-2 text-gray-400 hover:text-white transition-colors">
                 <Settings className="w-5 h-5" />
@@ -173,13 +180,25 @@ export default function GeminiAssistant() {
                         placeholder="Paste API Key here..."
                         className="w-full bg-black/40 border border-gray-600 rounded-lg px-4 py-3 text-white mb-6 focus:border-space-violet outline-none"
                         defaultValue={apiKey}
+                        id="apiKeyInput"
                         onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveKey(e.target.value);
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                saveKey(e.target.value);
+                            }
                         }}
                     />
                     <div className="flex justify-end gap-3">
                         <button onClick={() => setShowSettings(false)} className="px-4 py-2 text-gray-400 hover:text-white">Cancel</button>
-                        <button onClick={(e) => saveKey(e.target.previousSibling.value)} className="px-6 py-2 bg-space-violet text-white rounded-lg font-medium">Save Key</button>
+                        <button
+                            onClick={() => {
+                                const inputVal = document.getElementById('apiKeyInput').value;
+                                saveKey(inputVal);
+                            }}
+                            className="px-6 py-2 bg-space-violet text-white rounded-lg font-medium"
+                        >
+                            Save Key
+                        </button>
                     </div>
                 </div>
             </div>
