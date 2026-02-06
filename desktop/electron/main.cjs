@@ -44,6 +44,7 @@ db.exec(`
 try {
   const columns = db.prepare("PRAGMA table_info(cards)").all();
   const columnNames = columns.map(c => c.name);
+  // Basic column additions
   if (!columnNames.includes('atk')) db.exec("ALTER TABLE cards ADD COLUMN atk INTEGER");
   if (!columnNames.includes('def')) db.exec("ALTER TABLE cards ADD COLUMN def INTEGER");
   if (!columnNames.includes('level')) db.exec("ALTER TABLE cards ADD COLUMN level INTEGER");
@@ -54,10 +55,47 @@ try {
   if (!columnNames.includes('set_code')) db.exec("ALTER TABLE cards ADD COLUMN set_code TEXT");
   if (!columnNames.includes('price')) db.exec("ALTER TABLE cards ADD COLUMN price REAL");
 
-  // Note: Changing Primary Key from 'id' to '(id, set_code)' is hard in SQLite (requires recreation).
-  // For dev environment, we assume user might reset DB or we just handle duplicates via logic if schema migration fails on constraints.
-  // In a real app we would create a new table and copy data.
-  // Here, we'll just ensure columns exist. Logic will handle upserts carefully.
+  // PRIMARY KEY Migration
+  // Check if current PK is just 'id' (legacy) or 'id, set_code'
+  // table_info pk column: 1 for PK, 2 for composite PK part
+  const pkColumns = columns.filter(c => c.pk > 0);
+  // If only 1 PK column (id) but we want composite, we migrate
+  if (pkColumns.length === 1 && pkColumns[0].name === 'id') {
+      console.log("Migrating cards table to composite PRIMARY KEY...");
+      db.transaction(() => {
+          db.exec("ALTER TABLE cards RENAME TO cards_temp");
+          db.exec(`
+            CREATE TABLE cards (
+                id TEXT,
+                name TEXT,
+                type TEXT,
+                desc TEXT,
+                image_url TEXT,
+                atk INTEGER,
+                def INTEGER,
+                level INTEGER,
+                race TEXT,
+                attribute TEXT,
+                quantity INTEGER DEFAULT 1,
+                rarity TEXT,
+                set_code TEXT,
+                price REAL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (id, set_code)
+            )
+          `);
+          // Copy data. Note: cards_temp might have duplicate IDs if we were sloppy before, but shouldn't if unique constraint existed on ID.
+          // However, existing data might have null set_code. We default it.
+          db.exec(`
+            INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, created_at)
+            SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
+                   COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, created_at
+            FROM cards_temp
+          `);
+          db.exec("DROP TABLE cards_temp");
+      })();
+      console.log("Migration complete.");
+  }
 } catch (e) {
   console.log("Migration check failed or not needed", e);
 }
