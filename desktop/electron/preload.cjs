@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   checkCardExists: (passcode) => ipcRenderer.invoke('check-card-exists', passcode),
   getPortfolio: () => ipcRenderer.invoke('get-portfolio'),
   getPriceHistory: () => ipcRenderer.invoke('get-price-history'),
+  updateCardMeta: (data) => ipcRenderer.invoke('update-card-meta', data),
   onUpdateProgress: (callback) => {
     const subscription = (_event, value) => callback(value);
     ipcRenderer.on('update-progress', subscription);

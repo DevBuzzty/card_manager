@@ -45,14 +45,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   const handleAdd = async (tempId) => {
     const card = scannedCards.find(c => c.tempId === tempId);
     if (card && card.status === 'loaded') {
-       // Prepare data with selected rarity/set
+       // Use default data (user selects rarity later in collection)
        const cardData = { ...card.data, quantity: card.quantity || 1 };
-
-       if (card.selectedSet) {
-           cardData.set_code = card.selectedSet.set_code;
-           cardData.rarity = card.selectedSet.set_rarity;
-           cardData.price = parseFloat(card.selectedSet.set_price) || 0;
-       }
 
        if (window.api) {
             const result = await window.api.addCardToDb(cardData);
@@ -65,16 +59,6 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
        }
     }
-  };
-
-  const handleSetChange = (tempId, setCode) => {
-      setScannedCards(prev => prev.map(c => {
-          if (c.tempId === tempId && c.data.card_sets) {
-              const selected = c.data.card_sets.find(s => s.set_code === setCode);
-              return { ...c, selectedSet: selected };
-          }
-          return c;
-      }));
   };
 
   const handleDiscard = (tempId) => {
@@ -175,24 +159,10 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                         </span>
                                     )}
                                 </div>
-                                <div className="flex items-center text-xs space-x-2 mt-0.5 mb-2">
+                                <div className="flex items-center text-xs space-x-2 mt-0.5">
                                     <span className="text-space-violet font-mono bg-purple-900/30 px-1.5 py-0.5 rounded">{card.passcode}</span>
                                     <span className="text-gray-400 truncate">{card.data.type}</span>
                                 </div>
-                                {card.data.card_sets && (
-                                    <select
-                                        className="w-full bg-black/30 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:border-space-violet outline-none"
-                                        onChange={(e) => handleSetChange(card.tempId, e.target.value)}
-                                        value={card.selectedSet?.set_code || ''}
-                                    >
-                                        <option value="">Select Rarity / Set...</option>
-                                        {card.data.card_sets.map(set => (
-                                            <option key={set.set_code} value={set.set_code}>
-                                                {set.set_code} - {set.set_rarity} (${set.set_price})
-                                            </option>
-                                        ))}
-                                    </select>
-                                )}
                             </>
                         ) : (
                              <p className="text-space-white font-mono">{card.passcode}</p>

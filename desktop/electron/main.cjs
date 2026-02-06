@@ -234,6 +234,39 @@ ipcMain.handle('get-price-history', () => {
     }
 });
 
+ipcMain.handle('update-card-meta', (event, data) => {
+    // data: { passcode, old_set_code, new_set_code, rarity, quantity, price }
+    try {
+        // We identify the card by passcode AND old_set_code.
+        // Update to new_set_code, rarity, quantity, price
+        const stmt = db.prepare(`
+            UPDATE cards
+            SET set_code = @new_set_code, rarity = @rarity, quantity = @quantity, price = @price
+            WHERE id = @passcode AND set_code = @old_set_code
+        `);
+
+        const result = stmt.run({
+            passcode: String(data.passcode),
+            old_set_code: data.old_set_code || 'Unknown',
+            new_set_code: data.new_set_code || 'Unknown',
+            rarity: data.rarity || 'Unknown',
+            quantity: data.quantity || 1,
+            price: data.price || 0
+        });
+
+        // Trigger portfolio recalculation immediately
+        const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();
+        if (totalVal) {
+             db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: totalVal.val || 0 });
+        }
+
+        return { success: true, changes: result.changes };
+    } catch (error) {
+        console.error("Update Meta Error:", error);
+        return { success: false, error: error.message };
+    }
+});
+
 async function performCardUpdate(cards, eventSender) {
     let updatedCount = 0;
     const total = cards.length;

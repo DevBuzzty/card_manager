@@ -1,7 +1,62 @@
-import { X } from 'lucide-react';
+import { X, Minus, Plus } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function CardDetailModal({ card, onClose }) {
+  const [quantity, setQuantity] = useState(card ? card.quantity || 1 : 1);
+  const [selectedSetCode, setSelectedSetCode] = useState(card ? card.set_code || '' : '');
+  const [cardSets, setCardSets] = useState([]);
+
+  useEffect(() => {
+      if (!card) return;
+      // Fetch full card data (sets) if missing, using API via main process ideally
+      // But since we store most data, we might need to fetch `card_sets` freshly if not stored in DB deeply enough
+      // For now, let's assume `card.card_sets` might be available if we stored the full object or we fetch it now.
+      // We'll use a simple fetch here or IPC if we want to be strict.
+      // Let's use the existing fetchCardData IPC for consistency to get sets.
+      if (window.api) {
+          window.api.fetchCardData(card.id).then(data => {
+              if (data && data.card_sets) {
+                  setCardSets(data.card_sets);
+              }
+          });
+      }
+  }, [card]);
+
   if (!card) return null;
+
+  const handleUpdate = async (newQty, newSetCode) => {
+      // Optimistic update
+      if (newQty < 1) newQty = 1; // Minimum 1 for now? Or allow 0 to delete? Let's say 1. 0 should be a delete button logic.
+
+      setQuantity(newQty);
+      setSelectedSetCode(newSetCode);
+
+      // Find price for new set
+      let newPrice = card.price;
+      const setInfo = cardSets.find(s => s.set_code === newSetCode);
+      if (setInfo) {
+          newPrice = parseFloat(setInfo.set_price) || 0;
+      }
+
+      if (window.api) {
+          await window.api.updateCardMeta({
+              id: card.id,
+              set_code: newSetCode, // Key for update if we treat (id, set_code) as PK, but we might be updating the *row*
+              // Wait, if PK is (id, set_code), changing set_code is an INSERT/DELETE or complex update.
+              // To simplify: we update the CURRENT row's quantity/set_code/rarity.
+              // However, main.cjs `update-card-meta` needs to handle this.
+              // Let's pass old_set_code to identify row if needed, or just update by ID if we assume 1 entry per ID for now (simplification).
+              // Re-reading requirements: "update that one card".
+              // We will send:
+              passcode: card.id,
+              old_set_code: card.set_code, // to identify which entry to update
+              new_set_code: newSetCode,
+              rarity: setInfo ? setInfo.set_rarity : (card.rarity || 'Unknown'),
+              quantity: newQty,
+              price: newPrice
+          });
+      }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
@@ -40,6 +95,47 @@ export default function CardDetailModal({ card, onClose }) {
                 <button onClick={onClose} className="p-2 bg-gray-800 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-full transition-colors">
                     <X className="w-6 h-6" />
                 </button>
+            </div>
+
+            <div className="bg-[#2a2a2a] p-4 rounded-xl border border-gray-700 mb-6 space-y-4">
+                <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold uppercase text-gray-400">Inventory Management</span>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    {/* Quantity Control */}
+                    <div className="flex items-center bg-black/40 rounded-lg border border-gray-600 p-1">
+                        <button
+                            onClick={() => handleUpdate(quantity - 1, selectedSetCode)}
+                            className="p-2 hover:bg-gray-700 rounded text-gray-300 transition-colors"
+                        >
+                            <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="w-12 text-center font-mono font-bold text-lg">{quantity}</span>
+                        <button
+                            onClick={() => handleUpdate(quantity + 1, selectedSetCode)}
+                            className="p-2 hover:bg-gray-700 rounded text-gray-300 transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {/* Rarity Selector */}
+                    <div className="flex-1">
+                        <select
+                            className="w-full bg-black/40 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-space-violet outline-none"
+                            value={selectedSetCode}
+                            onChange={(e) => handleUpdate(quantity, e.target.value)}
+                        >
+                            <option value="">Select Set / Rarity...</option>
+                            {cardSets.map(set => (
+                                <option key={set.set_code} value={set.set_code}>
+                                    {set.set_code} - {set.set_rarity} (${set.set_price})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-8">

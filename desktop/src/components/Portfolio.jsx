@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Coins, Layers } from 'lucide-react';
+import { TrendingUp, Coins, Layers, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Portfolio() {
   const [stats, setStats] = useState({ totalValue: 0, totalCards: 0, uniqueCards: 0 });
   const [history, setHistory] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
+  const loadData = () => {
     if (window.api) {
         window.api.getPortfolio().then(setStats);
         window.api.getPriceHistory().then(data => {
-            // Format timestamp slightly
             const formatted = data.map(d => ({
                 ...d,
                 date: new Date(d.timestamp).toLocaleDateString()
@@ -18,11 +18,38 @@ export default function Portfolio() {
             setHistory(formatted);
         });
     }
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
+
+  const handleRefreshPrices = async () => {
+      if (isRefreshing || !window.api) return;
+      setIsRefreshing(true);
+      try {
+          await window.api.updateAllCards(); // This updates prices and history
+          loadData();
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setIsRefreshing(false);
+      }
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
-        <h2 className="text-3xl font-bold text-space-white mb-6">Portfolio Dashboard</h2>
+        <div className="flex items-center justify-between mb-6">
+            <h2 className="text-3xl font-bold text-space-white">Portfolio Dashboard</h2>
+            <button
+                onClick={handleRefreshPrices}
+                disabled={isRefreshing}
+                className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors shadow-lg disabled:opacity-50"
+            >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Refresh Market Values
+            </button>
+        </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
