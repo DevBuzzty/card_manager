@@ -47,6 +47,16 @@ To create a standalone executable (e.g., for Windows):
 *   **Collection**: View your saved cards.
 *   **Socket Server**: Runs on port `4000` to listen for mobile connections.
 *   **Database**: Stores cards locally in `userData/cards.db`.
+*   **Portfolio**: Track the value of your collection with realtime charts and history.
+*   **Deck Builder**: Build and manage decks (import .ydk supported).
+*   **AI Assistant**: Interact with your collection using natural language.
+
+### AI Assistant Setup
+To use the AI Assistant features:
+1.  Go to [Google AI Studio](https://aistudio.google.com/app/apikey) and get a free Gemini API Key.
+2.  In the Desktop App, click on the **AI Assistant** tab.
+3.  Click the **Settings (Gear)** icon in the top right.
+4.  Paste your API Key and click **Save**.
 
 ---
 

@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Coins, Layers, RefreshCw, ArrowUp, ArrowDown } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import CustomSelect from './CustomSelect';
 
 export default function Portfolio() {
   const [stats, setStats] = useState({ totalValue: 0, totalCards: 0, uniqueCards: 0 });
   const [history, setHistory] = useState([]);
   const [cards, setCards] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [sortType, setSortType] = useState('priceDesc');
 
   const loadData = () => {
     if (window.api) {
         window.api.getPortfolio().then(setStats);
         window.api.getCollection().then(data => {
-            // Sort by price descending by default
-            setCards(data.sort((a, b) => (b.price || 0) - (a.price || 0)));
+            setCards(data);
         });
         window.api.getPriceHistory().then(data => {
             const formatted = data.map(d => ({
@@ -46,14 +47,28 @@ export default function Portfolio() {
     <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex items-center justify-between mb-6">
             <h2 className="text-3xl font-bold text-space-white">Portfolio Dashboard</h2>
-            <button
-                onClick={handleRefreshPrices}
-                disabled={isRefreshing}
-                className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors shadow-lg disabled:opacity-50"
-            >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh Market Values
-            </button>
+            <div className="flex gap-2">
+                <CustomSelect
+                    value={sortType}
+                    onChange={setSortType}
+                    placeholder="Sort By"
+                    className="min-w-[180px]"
+                    options={[
+                        { value: 'priceDesc', label: 'Price (High to Low)' },
+                        { value: 'priceAsc', label: 'Price (Low to High)' },
+                        { value: 'nameAsc', label: 'Name (A-Z)' },
+                        { value: 'qtyDesc', label: 'Quantity (High)' },
+                    ]}
+                />
+                <button
+                    onClick={handleRefreshPrices}
+                    disabled={isRefreshing}
+                    className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors shadow-lg disabled:opacity-50"
+                >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    Refresh Market Values
+                </button>
+            </div>
         </div>
 
         {/* Stats Cards */}
@@ -134,7 +149,15 @@ export default function Portfolio() {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800">
-                    {cards.map(card => {
+                    {cards.sort((a, b) => {
+                        switch (sortType) {
+                            case 'priceDesc': return (b.price || 0) - (a.price || 0);
+                            case 'priceAsc': return (a.price || 0) - (b.price || 0);
+                            case 'nameAsc': return (a.name || '').localeCompare(b.name || '');
+                            case 'qtyDesc': return (b.quantity || 0) - (a.quantity || 0);
+                            default: return 0;
+                        }
+                    }).map(card => {
                         const total = (card.price || 0) * (card.quantity || 1);
                         // Mock fluctuation for now since we just started tracking
                         const fluctuation = Math.random() * 10 - 5;

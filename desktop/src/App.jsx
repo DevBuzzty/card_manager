@@ -4,6 +4,8 @@ import StagingArea from './components/StagingArea';
 import CollectionList from './components/CollectionList';
 import Portfolio from './components/Portfolio';
 import DeckBuilder from './components/DeckBuilder';
+import MissingData from './components/MissingData';
+import GeminiAssistant from './components/GeminiAssistant';
 
 function App() {
   const [activeTab, setActiveTab] = useState('staging');
@@ -71,6 +73,12 @@ function App() {
             )}
             {activeTab === 'deckbuilder' && (
             <DeckBuilder />
+            )}
+            {activeTab === 'missing' && (
+            <MissingData />
+            )}
+            {activeTab === 'ai' && (
+            <GeminiAssistant />
             )}
         </div>
       </main>

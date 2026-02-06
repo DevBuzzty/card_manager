@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react';
-import { Check, X, Loader2, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus } from 'lucide-react';
 import { playScanSound } from '../utils/sound';
+import CustomSelect from './CustomSelect';
 
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
 
@@ -47,8 +48,20 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   const handleAdd = async (tempId) => {
     const card = scannedCards.find(c => c.tempId === tempId);
     if (card && card.status === 'loaded') {
-       // Use default data (user selects rarity later in collection)
+       // Prepare data
        const cardData = { ...card.data, quantity: card.quantity || 1 };
+
+       if (card.selectedSet) {
+           cardData.set_code = card.selectedSet.set_code;
+           cardData.rarity = card.selectedSet.set_rarity;
+           cardData.price = parseFloat(card.selectedSet.set_price) || 0;
+       } else if (card.data.card_sets && card.data.card_sets.length > 0) {
+           // Default to first set if not selected
+           const first = card.data.card_sets[0];
+           cardData.set_code = first.set_code;
+           cardData.rarity = first.set_rarity;
+           cardData.price = parseFloat(first.set_price) || 0;
+       }
 
        if (window.api) {
             const result = await window.api.addCardToDb(cardData);
@@ -65,6 +78,15 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
 
   const handleDiscard = (tempId) => {
       setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
+  };
+
+  const handleUpdateCard = (tempId, updates) => {
+      setScannedCards(prev => prev.map(c => {
+          if (c.tempId === tempId) {
+              return { ...c, ...updates };
+          }
+          return c;
+      }));
   };
 
   const handleImportCsv = async () => {
@@ -161,9 +183,47 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                         </span>
                                     )}
                                 </div>
-                                <div className="flex items-center text-xs space-x-2 mt-0.5">
+                                <div className="flex items-center text-xs space-x-2 mt-0.5 mb-2">
                                     <span className="text-space-violet font-mono bg-purple-900/30 px-1.5 py-0.5 rounded">{card.passcode}</span>
                                     <span className="text-gray-400 truncate">{card.data.type}</span>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    {/* Quantity */}
+                                    <div className="flex items-center bg-black/40 rounded-lg border border-gray-700 p-0.5">
+                                        <button
+                                            onClick={() => handleUpdateCard(card.tempId, { quantity: Math.max(1, (card.quantity || 1) - 1) })}
+                                            className="p-1 hover:bg-gray-700 rounded text-gray-400"
+                                        >
+                                            <Minus className="w-3 h-3" />
+                                        </button>
+                                        <span className="w-6 text-center text-xs font-mono">{card.quantity || 1}</span>
+                                        <button
+                                            onClick={() => handleUpdateCard(card.tempId, { quantity: (card.quantity || 1) + 1 })}
+                                            className="p-1 hover:bg-gray-700 rounded text-gray-400"
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                        </button>
+                                    </div>
+
+                                    {/* Rarity */}
+                                    {card.data.card_sets && (
+                                        <div className="flex-1">
+                                            <CustomSelect
+                                                value={card.selectedSet?.set_code || ''}
+                                                onChange={(val) => {
+                                                    const selected = card.data.card_sets.find(s => s.set_code === val);
+                                                    handleUpdateCard(card.tempId, { selectedSet: selected });
+                                                }}
+                                                placeholder={card.data.card_sets[0] ? `${card.data.card_sets[0].set_rarity} (Default)` : "Select Rarity"}
+                                                options={card.data.card_sets.map(set => ({
+                                                    value: set.set_code,
+                                                    label: `${set.set_code} - ${set.set_rarity}`
+                                                }))}
+                                                className="w-full"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         ) : (
