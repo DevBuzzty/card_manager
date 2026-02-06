@@ -329,6 +329,12 @@ async function performCardUpdate(cards, eventSender) {
        // Respect API rate limits slightly
        await new Promise(r => setTimeout(r, 100));
     }
+
+    // Ensure 100% is sent
+    if (eventSender) {
+        eventSender.send('update-progress', { current: total, total });
+    }
+
     return updatedCount;
 }
 

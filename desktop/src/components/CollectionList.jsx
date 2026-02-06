@@ -9,6 +9,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [localUpdating, setLocalUpdating] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
   const [sortType, setSortType] = useState('newest'); // 'newest', 'name', 'atk', 'def', 'level'
+  const [filterType, setFilterType] = useState('All');
 
   const updating = isUpdating || localUpdating;
 
@@ -62,10 +63,12 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     }
   };
 
-  const filteredCards = cards.filter(c =>
-    (c.name && c.name.toLowerCase().includes(filter.toLowerCase())) ||
-    (c.id && String(c.id).includes(filter))
-  ).sort((a, b) => {
+  const filteredCards = cards.filter(c => {
+    const matchesSearch = (c.name && c.name.toLowerCase().includes(filter.toLowerCase())) ||
+                          (c.id && String(c.id).includes(filter));
+    const matchesType = filterType === 'All' || (c.type && c.type.includes(filterType));
+    return matchesSearch && matchesType;
+  }).sort((a, b) => {
       switch (sortType) {
           case 'name': return (a.name || '').localeCompare(b.name || '');
           case 'atk': return (b.atk || 0) - (a.atk || 0);
@@ -120,6 +123,26 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                      >
                          <ListIcon className="w-4 h-4" />
                      </button>
+                </div>
+
+                <div className="flex items-center bg-[#1a1a1a] rounded-lg border border-gray-800 px-3">
+                    <span className="text-xs text-gray-500 font-bold mr-2 uppercase tracking-wide">Type</span>
+                    <select
+                        value={filterType}
+                        onChange={(e) => setFilterType(e.target.value)}
+                        className="bg-transparent border-none text-sm text-gray-300 focus:ring-0 focus:outline-none py-2 pr-2 cursor-pointer"
+                    >
+                        <option value="All">All Types</option>
+                        <option value="Monster">Monster</option>
+                        <option value="Spell">Spell</option>
+                        <option value="Trap">Trap</option>
+                        <option value="Fusion">Fusion</option>
+                        <option value="Synchro">Synchro</option>
+                        <option value="XYZ">XYZ</option>
+                        <option value="Link">Link</option>
+                        <option value="Ritual">Ritual</option>
+                        <option value="Pendulum">Pendulum</option>
+                    </select>
                 </div>
 
                 <div className="flex items-center bg-[#1a1a1a] rounded-lg border border-gray-800 px-3">

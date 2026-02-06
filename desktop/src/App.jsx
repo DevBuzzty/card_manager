@@ -33,6 +33,12 @@ function App() {
       // Listen for progress
       const removeProgressListener = window.api.onUpdateProgress((data) => {
           setUpdateProgress(data);
+          // Auto-clear when done
+          if (data && data.current >= data.total) {
+              setTimeout(() => {
+                  setUpdateProgress(null);
+              }, 1000);
+          }
       });
 
       return () => {
