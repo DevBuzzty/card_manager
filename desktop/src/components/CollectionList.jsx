@@ -72,6 +72,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   }).sort((a, b) => {
       switch (sortType) {
           case 'name': return (a.name || '').localeCompare(b.name || '');
+          case 'price': return (Number(b.price) || 0) - (Number(a.price) || 0);
           case 'atk': return (b.atk || 0) - (a.atk || 0);
           case 'def': return (b.def || 0) - (a.def || 0);
           case 'level': return (b.level || 0) - (a.level || 0);
