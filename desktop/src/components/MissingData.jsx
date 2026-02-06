@@ -11,11 +11,15 @@ export default function MissingData() {
           if (window.api) {
               const allCards = await window.api.getCollection();
               // Filter for cards with missing critical data
-              // Assuming 'price' of 0 might be missing, or 'rarity' Unknown
-              const missing = allCards.filter(c =>
-                  c.atk === null || c.def === null || c.level === null ||
-                  !c.rarity || c.rarity === 'Unknown' || c.set_code === 'Unknown'
-              );
+          // Ignore stats for Spell/Trap
+          const missing = allCards.filter(c => {
+              const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');
+              if (isMonster) {
+                  return c.atk === null || c.def === null || c.level === null;
+              }
+              // For spells/traps, check if other critical info is missing (e.g. image)
+              return !c.image_url;
+          });
               setCards(missing);
           }
       };
@@ -53,9 +57,10 @@ export default function MissingData() {
                     <tbody className="divide-y divide-gray-800">
                         {cards.map(card => {
                             const missingFields = [];
-                            if (card.atk == null) missingFields.push('Stats');
-                            if (!card.rarity || card.rarity === 'Unknown') missingFields.push('Rarity');
-                            if (!card.set_code || card.set_code === 'Unknown') missingFields.push('Set');
+                            const isMonster = card.type && !card.type.includes('Spell') && !card.type.includes('Trap');
+
+                            if (isMonster && (card.atk == null || card.def == null)) missingFields.push('Stats');
+                            if (!card.image_url) missingFields.push('Image');
 
                             return (
                                 <tr key={`${card.id}-${card.set_code}`} className="hover:bg-gray-800/50 transition-colors">
