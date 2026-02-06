@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
 import CollectionList from './components/CollectionList';
 import Portfolio from './components/Portfolio';
+import DeckBuilder from './components/DeckBuilder';
 
 function App() {
   const [activeTab, setActiveTab] = useState('staging');
@@ -67,6 +68,9 @@ function App() {
             )}
             {activeTab === 'portfolio' && (
             <Portfolio />
+            )}
+            {activeTab === 'deckbuilder' && (
+            <DeckBuilder />
             )}
         </div>
       </main>

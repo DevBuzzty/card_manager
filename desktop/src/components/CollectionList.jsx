@@ -154,6 +154,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                         options={[
                             { value: "newest", label: "Newest Added" },
                             { value: "name", label: "Name (A-Z)" },
+                            { value: "price", label: "Price (High to Low)" },
                             { value: "atk", label: "ATK (High to Low)" },
                             { value: "def", label: "DEF (High to Low)" },
                             { value: "level", label: "Level (High to Low)" },

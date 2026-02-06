@@ -23,4 +23,12 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('update-progress', subscription);
     return () => ipcRenderer.removeListener('update-progress', subscription);
   },
+
+  // Deck Builder
+  getDecks: () => ipcRenderer.invoke('get-decks'),
+  createDeck: (name) => ipcRenderer.invoke('create-deck', name),
+  deleteDeck: (id) => ipcRenderer.invoke('delete-deck', id),
+  saveDeck: (deckId, cards) => ipcRenderer.invoke('save-deck', { deckId, cards }),
+  getDeckDetails: (deckId) => ipcRenderer.invoke('get-deck-details', deckId),
+  importDeckYdk: () => ipcRenderer.invoke('import-deck-ydk'),
 });

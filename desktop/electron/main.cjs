@@ -166,6 +166,89 @@ ipcMain.handle('fetch-card-data', async (event, passcode) => {
   }
 });
 
+// Deck Handlers
+ipcMain.handle('get-decks', () => {
+    return db.prepare('SELECT * FROM decks ORDER BY created_at DESC').all();
+});
+
+ipcMain.handle('create-deck', (event, name) => {
+    const info = db.prepare('INSERT INTO decks (name) VALUES (?)').run(name);
+    return { id: info.lastInsertRowid, name };
+});
+
+ipcMain.handle('delete-deck', (event, id) => {
+    db.prepare('DELETE FROM deck_cards WHERE deck_id = ?').run(id);
+    db.prepare('DELETE FROM decks WHERE id = ?').run(id);
+    return true;
+});
+
+ipcMain.handle('save-deck', (event, { deckId, cards }) => {
+    // cards: { id, type, quantity }
+    const deleteStmt = db.prepare('DELETE FROM deck_cards WHERE deck_id = ?');
+    const insertStmt = db.prepare('INSERT INTO deck_cards (deck_id, card_id, type, quantity) VALUES (@deckId, @cardId, @type, @quantity)');
+
+    const transaction = db.transaction((cards) => {
+        deleteStmt.run(deckId);
+        for (const card of cards) {
+            insertStmt.run({
+                deckId,
+                cardId: card.id,
+                type: card.type || 'main',
+                quantity: card.quantity
+            });
+        }
+    });
+
+    try {
+        transaction(cards);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('get-deck-details', (event, deckId) => {
+    const cards = db.prepare(`
+        SELECT dc.*, c.name, c.image_url, c.type as card_type
+        FROM deck_cards dc
+        LEFT JOIN cards c ON dc.card_id = c.id
+        WHERE dc.deck_id = ?
+        GROUP BY dc.card_id, dc.type -- avoid duplicates if multiple printings in DB, pick one for display
+    `).all(deckId);
+    return cards;
+});
+
+ipcMain.handle('import-deck-ydk', async () => {
+    try {
+        const result = await dialog.showOpenDialog(mainWindow, {
+            properties: ['openFile'],
+            filters: [{ name: 'YDK Deck', extensions: ['ydk'] }]
+        });
+
+        if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+
+        const content = fs.readFileSync(result.filePaths[0], 'utf-8');
+        const lines = content.split(/\r?\n/);
+
+        let currentSection = 'main';
+        const deck = [];
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed === '#main') currentSection = 'main';
+            else if (trimmed === '#extra') currentSection = 'extra';
+            else if (trimmed === '!side') currentSection = 'side';
+            else if (/^\d+$/.test(trimmed)) {
+                deck.push({ id: trimmed, type: currentSection, quantity: 1 });
+            }
+        }
+
+        return { canceled: false, deck, name: path.basename(result.filePaths[0], '.ydk') };
+    } catch (e) {
+        return { error: e.message };
+    }
+});
+
 ipcMain.handle('add-card-to-db', (event, card) => {
   try {
     // Check if card with same ID and Set Code exists
