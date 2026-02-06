@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, RefreshCw, LayoutGrid, List as ListIcon, ArrowUpDown, Database } from 'lucide-react';
 import CardDetailModal from './CardDetailModal';
+import CustomSelect from './CustomSelect';
 
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [cards, setCards] = useState([]);
@@ -125,39 +126,39 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                      </button>
                 </div>
 
-                <div className="flex items-center bg-[#1a1a1a] rounded-lg border border-gray-800 px-3">
-                    <span className="text-xs text-gray-500 font-bold mr-2 uppercase tracking-wide">Type</span>
-                    <select
+                <div className="flex items-center gap-2">
+                    <CustomSelect
                         value={filterType}
-                        onChange={(e) => setFilterType(e.target.value)}
-                        className="bg-transparent border-none text-sm text-gray-300 focus:ring-0 focus:outline-none py-2 pr-2 cursor-pointer"
-                    >
-                        <option value="All">All Types</option>
-                        <option value="Monster">Monster</option>
-                        <option value="Spell">Spell</option>
-                        <option value="Trap">Trap</option>
-                        <option value="Fusion">Fusion</option>
-                        <option value="Synchro">Synchro</option>
-                        <option value="XYZ">XYZ</option>
-                        <option value="Link">Link</option>
-                        <option value="Ritual">Ritual</option>
-                        <option value="Pendulum">Pendulum</option>
-                    </select>
-                </div>
+                        onChange={setFilterType}
+                        placeholder="Filter Type"
+                        className="min-w-[140px]"
+                        options={[
+                            { value: "All", label: "All Types" },
+                            { value: "Monster", label: "Monster" },
+                            { value: "Spell", label: "Spell" },
+                            { value: "Trap", label: "Trap" },
+                            { value: "Fusion", label: "Fusion" },
+                            { value: "Synchro", label: "Synchro" },
+                            { value: "XYZ", label: "XYZ" },
+                            { value: "Link", label: "Link" },
+                            { value: "Ritual", label: "Ritual" },
+                            { value: "Pendulum", label: "Pendulum" },
+                        ]}
+                    />
 
-                <div className="flex items-center bg-[#1a1a1a] rounded-lg border border-gray-800 px-3">
-                    <ArrowUpDown className="w-4 h-4 text-gray-500 mr-2" />
-                    <select
+                    <CustomSelect
                         value={sortType}
-                        onChange={(e) => setSortType(e.target.value)}
-                        className="bg-transparent border-none text-sm text-gray-300 focus:ring-0 focus:outline-none py-2 pr-2 cursor-pointer"
-                    >
-                        <option value="newest">Newest Added</option>
-                        <option value="name">Name (A-Z)</option>
-                        <option value="atk">ATK (High to Low)</option>
-                        <option value="def">DEF (High to Low)</option>
-                        <option value="level">Level/Rank (High to Low)</option>
-                    </select>
+                        onChange={setSortType}
+                        placeholder="Sort By"
+                        className="min-w-[160px]"
+                        options={[
+                            { value: "newest", label: "Newest Added" },
+                            { value: "name", label: "Name (A-Z)" },
+                            { value: "atk", label: "ATK (High to Low)" },
+                            { value: "def", label: "DEF (High to Low)" },
+                            { value: "level", label: "Level (High to Low)" },
+                        ]}
+                    />
                 </div>
 
                 <div className="relative group w-full md:w-auto">

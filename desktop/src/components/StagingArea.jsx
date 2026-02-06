@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { Check, X, Loader2, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { playScanSound } from '../utils/sound';
 
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
 
@@ -14,6 +15,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 // Check if already in DB
                 const exists = await window.api.checkCardExists(passcode);
                 setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loaded', data, inCollection: exists } : c));
+                playScanSound(); // Play sound on successful fetch
             } else {
                 // If not found or error, remove the card entirely
                 setScannedCards(prev => prev.filter(c => c.tempId !== tempId));

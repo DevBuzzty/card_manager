@@ -1,5 +1,6 @@
 import { X, Minus, Plus } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import CustomSelect from './CustomSelect';
 
 export default function CardDetailModal({ card, onClose }) {
   const [quantity, setQuantity] = useState(card ? card.quantity || 1 : 1);
@@ -122,18 +123,15 @@ export default function CardDetailModal({ card, onClose }) {
 
                     {/* Rarity Selector */}
                     <div className="flex-1">
-                        <select
-                            className="w-full bg-black/40 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:border-space-violet outline-none"
+                        <CustomSelect
                             value={selectedSetCode}
-                            onChange={(e) => handleUpdate(quantity, e.target.value)}
-                        >
-                            <option value="">Select Set / Rarity...</option>
-                            {cardSets.map(set => (
-                                <option key={set.set_code} value={set.set_code}>
-                                    {set.set_code} - {set.set_rarity} (${set.set_price})
-                                </option>
-                            ))}
-                        </select>
+                            onChange={(val) => handleUpdate(quantity, val)}
+                            placeholder="Select Set / Rarity..."
+                            options={cardSets.map(set => ({
+                                value: set.set_code,
+                                label: `${set.set_code} - ${set.set_rarity} ($${set.set_price})`
+                            }))}
+                        />
                     </div>
                 </div>
             </div>
