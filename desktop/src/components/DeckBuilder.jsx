@@ -1,6 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Plus, Trash2, Save, Upload, FileUp, AlertTriangle } from 'lucide-react';
 import CustomSelect from './CustomSelect';
+
+// Sub-component for a card row in deck list moved outside to prevent re-definition and unnecessary remounts
+const DeckCardRow = memo(({ card, type, onRemove, ownedQty }) => {
+    const missing = card.quantity > ownedQty;
+
+    return (
+        <div
+          onClick={() => onRemove(card.card_id, type)}
+          className="flex items-center justify-between p-2 hover:bg-red-500/10 rounded cursor-pointer group border-b border-gray-800"
+        >
+            <div className="flex items-center gap-2 overflow-hidden">
+                <span className="font-bold text-gray-400 w-4">{card.quantity}</span>
+                <div className="w-8 h-8 bg-black rounded overflow-hidden flex-shrink-0">
+                    <img src={card.image_url} alt="" className="w-full h-full object-cover" />
+                </div>
+                <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
+            </div>
+            {missing && (
+                <div className="flex items-center text-xs text-red-500" title={`You own ${ownedQty}, need ${card.quantity}`}>
+                    <AlertTriangle className="w-3 h-3 mr-1" />
+                    {ownedQty}/{card.quantity}
+                </div>
+            )}
+        </div>
+    );
+});
 
 export default function DeckBuilder() {
   const [decks, setDecks] = useState([]);
@@ -20,20 +46,20 @@ export default function DeckBuilder() {
     }
   }, []);
 
-  const handleCreateDeck = async () => {
+  const handleCreateDeck = useCallback(async () => {
       const name = prompt("Enter deck name:");
       if (!name) return;
       if (window.api) {
           const newDeck = await window.api.createDeck(name);
-          setDecks([newDeck, ...decks]);
+          setDecks(prev => [newDeck, ...prev]);
           setActiveDeck(newDeck);
           setMainDeck([]);
           setExtraDeck([]);
           setSideDeck([]);
       }
-  };
+  }, []);
 
-  const handleLoadDeck = async (deck) => {
+  const handleLoadDeck = useCallback(async (deck) => {
       if (window.api) {
           const details = await window.api.getDeckDetails(deck.id);
           setActiveDeck(deck);
@@ -48,18 +74,18 @@ export default function DeckBuilder() {
           setExtraDeck(extra);
           setSideDeck(side);
       }
-  };
+  }, []);
 
-  const handleDeleteDeck = async (id) => {
+  const handleDeleteDeck = useCallback(async (id) => {
       if (!confirm("Delete this deck?")) return;
       if (window.api) {
           await window.api.deleteDeck(id);
-          setDecks(decks.filter(d => d.id !== id));
-          if (activeDeck && activeDeck.id === id) setActiveDeck(null);
+          setDecks(prev => prev.filter(d => d.id !== id));
+          setActiveDeck(prev => (prev && prev.id === id ? null : prev));
       }
-  };
+  }, []);
 
-  const handleSaveDeck = async () => {
+  const handleSaveDeck = useCallback(async () => {
       if (!activeDeck || !window.api) return;
       const allCards = [
           ...mainDeck.map(c => ({ id: c.card_id, type: 'main', quantity: c.quantity })),
@@ -68,21 +94,26 @@ export default function DeckBuilder() {
       ];
       await window.api.saveDeck(activeDeck.id, allCards);
       alert("Deck saved!");
-  };
+  }, [activeDeck, mainDeck, extraDeck, sideDeck]);
 
-  const handleImportYdk = async () => {
+  // Memoize collection for fast lookup
+  const collectionMap = useMemo(() => {
+      return new Map(collection.map(c => [c.id, c]));
+  }, [collection]);
+
+  const handleImportYdk = useCallback(async () => {
       if (window.api) {
           const result = await window.api.importDeckYdk();
           if (result && !result.canceled && result.deck) {
               const newDeck = await window.api.createDeck(result.name || "Imported Deck");
-              setDecks([newDeck, ...decks]);
+              setDecks(prev => [newDeck, ...prev]);
               setActiveDeck(newDeck);
 
               // Sort into buckets
               const main = [], extra = [], side = [];
               result.deck.forEach(c => {
                   // Find details in collection to show images immediately if owned, else placeholder
-                  const cardInfo = collection.find(col => col.id === c.id) || { id: c.id, name: 'Unknown / Not Owned', image_url: `https://images.ygoprodeck.com/images/cards/${c.id}.jpg` };
+                  const cardInfo = collectionMap.get(c.id) || { id: c.id, name: 'Unknown / Not Owned', image_url: `https://images.ygoprodeck.com/images/cards/${c.id}.jpg` };
                   const deckCard = { ...cardInfo, card_id: c.id, quantity: 1 };
 
                   if (c.type === 'extra') extra.push(deckCard);
@@ -98,66 +129,44 @@ export default function DeckBuilder() {
               await window.api.saveDeck(newDeck.id, allCards);
           }
       }
-  };
+  }, [collectionMap]);
 
-  const addToDeck = (card) => {
+  const addToDeck = useCallback((card) => {
       if (!activeDeck) return;
       // Determine destination based on type
       const isExtra = card.type && (card.type.includes('Fusion') || card.type.includes('Synchro') || card.type.includes('XYZ') || card.type.includes('Link'));
-      const targetDeck = isExtra ? extraDeck : mainDeck;
       const setTarget = isExtra ? setExtraDeck : setMainDeck;
 
-      // Check limit (3 copies)
-      const existing = targetDeck.find(c => c.card_id === card.id);
-      if (existing) {
-          if (existing.quantity >= 3) return;
-          setTarget(prev => prev.map(c => c.card_id === card.id ? { ...c, quantity: c.quantity + 1 } : c));
-      } else {
-          setTarget(prev => [...prev, { ...card, card_id: card.id, quantity: 1 }]);
-      }
-  };
+      setTarget(prev => {
+          const existing = prev.find(c => c.card_id === card.id);
+          if (existing) {
+              if (existing.quantity >= 3) return prev;
+              return prev.map(c => c.card_id === card.id ? { ...c, quantity: c.quantity + 1 } : c);
+          }
+          return [...prev, { ...card, card_id: card.id, quantity: 1 }];
+      });
+  }, [activeDeck]);
 
-  const removeFromDeck = (cardId, deckType) => {
+  const removeFromDeck = useCallback((cardId, deckType) => {
       const setter = deckType === 'main' ? setMainDeck : (deckType === 'extra' ? setExtraDeck : setSideDeck);
       setter(prev => {
           const existing = prev.find(c => c.card_id === cardId);
+          if (!existing) return prev;
           if (existing.quantity > 1) {
               return prev.map(c => c.card_id === cardId ? { ...c, quantity: c.quantity - 1 } : c);
           }
           return prev.filter(c => c.card_id !== cardId);
       });
-  };
+  }, []);
 
-  const filteredCollection = collection.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
+  const filteredCollection = useMemo(() => {
+    const search = filter.toLowerCase();
+    return collection.filter(c => c.name.toLowerCase().includes(search));
+  }, [collection, filter]);
 
-  // Sub-component for a card row in deck list
-  const DeckCardRow = ({ card, type }) => {
-      // Check ownership
-      const owned = collection.find(c => c.id === card.card_id);
-      const ownedQty = owned ? owned.quantity : 0;
-      const missing = card.quantity > ownedQty;
-
-      return (
-          <div
-            onClick={() => removeFromDeck(card.card_id, type)}
-            className="flex items-center justify-between p-2 hover:bg-red-500/10 rounded cursor-pointer group border-b border-gray-800"
-          >
-              <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="font-bold text-gray-400 w-4">{card.quantity}</span>
-                  <div className="w-8 h-8 bg-black rounded overflow-hidden flex-shrink-0">
-                      <img src={card.image_url} alt="" className="w-full h-full object-cover" />
-                  </div>
-                  <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
-              </div>
-              {missing && (
-                  <div className="flex items-center text-xs text-red-500" title={`You own ${ownedQty}, need ${card.quantity}`}>
-                      <AlertTriangle className="w-3 h-3 mr-1" />
-                      {ownedQty}/{card.quantity}
-                  </div>
-              )}
-          </div>
-      );
-  };
+  const mainCount = useMemo(() => mainDeck.reduce((a,c) => a+c.quantity, 0), [mainDeck]);
+  const extraCount = useMemo(() => extraDeck.reduce((a,c) => a+c.quantity, 0), [extraDeck]);
+  const sideCount = useMemo(() => sideDeck.reduce((a,c) => a+c.quantity, 0), [sideDeck]);
 
   return (
     <div className="flex h-full gap-6">
@@ -232,11 +241,19 @@ export default function DeckBuilder() {
                         <div>
                             <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
                                 <h3 className="text-sm font-bold uppercase text-gray-400">Main Deck</h3>
-                                <span className="text-xs text-gray-500">{mainDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
+                                <span className="text-xs text-gray-500">{mainCount} cards</span>
                             </div>
                             <div className="space-y-1">
                                 {mainDeck.length === 0 && <p className="text-gray-600 text-sm italic">Drag or click cards to add.</p>}
-                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" />)}
+                                {mainDeck.map(c => (
+                                    <DeckCardRow
+                                        key={c.card_id}
+                                        card={c}
+                                        type="main"
+                                        onRemove={removeFromDeck}
+                                        ownedQty={collectionMap.get(c.card_id)?.quantity || 0}
+                                    />
+                                ))}
                             </div>
                         </div>
 
@@ -244,10 +261,18 @@ export default function DeckBuilder() {
                         <div>
                             <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
                                 <h3 className="text-sm font-bold uppercase text-gray-400">Extra Deck</h3>
-                                <span className="text-xs text-gray-500">{extraDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
+                                <span className="text-xs text-gray-500">{extraCount} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" />)}
+                                {extraDeck.map(c => (
+                                    <DeckCardRow
+                                        key={c.card_id}
+                                        card={c}
+                                        type="extra"
+                                        onRemove={removeFromDeck}
+                                        ownedQty={collectionMap.get(c.card_id)?.quantity || 0}
+                                    />
+                                ))}
                             </div>
                         </div>
 
@@ -255,10 +280,18 @@ export default function DeckBuilder() {
                         <div>
                             <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
                                 <h3 className="text-sm font-bold uppercase text-gray-400">Side Deck</h3>
-                                <span className="text-xs text-gray-500">{sideDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
+                                <span className="text-xs text-gray-500">{sideCount} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" />)}
+                                {sideDeck.map(c => (
+                                    <DeckCardRow
+                                        key={c.card_id}
+                                        card={c}
+                                        type="side"
+                                        onRemove={removeFromDeck}
+                                        ownedQty={collectionMap.get(c.card_id)?.quantity || 0}
+                                    />
+                                ))}
                             </div>
                         </div>
                     </div>
