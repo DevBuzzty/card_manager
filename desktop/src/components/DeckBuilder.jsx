@@ -130,7 +130,10 @@ export default function DeckBuilder() {
   };
 
   const addToDeck = (card) => {
-      if (!activeDeck) return;
+      if (!activeDeck) {
+          alert("Please select or create a deck first.");
+          return;
+      }
       // Determine destination based on type
       const isExtra = card.type && (card.type.includes('Fusion') || card.type.includes('Synchro') || card.type.includes('XYZ') || card.type.includes('Link'));
       const targetDeck = isExtra ? extraDeck : mainDeck;

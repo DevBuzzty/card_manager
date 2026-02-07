@@ -31,4 +31,10 @@ contextBridge.exposeInMainWorld('api', {
   saveDeck: (deckId, cards) => ipcRenderer.invoke('save-deck', { deckId, cards }),
   getDeckDetails: (deckId) => ipcRenderer.invoke('get-deck-details', deckId),
   importDeckYdk: () => ipcRenderer.invoke('import-deck-ydk'),
+
+  // Wishlist
+  getWishlist: () => ipcRenderer.invoke('get-wishlist'),
+  addToWishlist: (card) => ipcRenderer.invoke('add-to-wishlist', card),
+  removeFromWishlist: (id) => ipcRenderer.invoke('remove-from-wishlist', id),
+  searchOnline: (query) => ipcRenderer.invoke('search-online', query),
 });

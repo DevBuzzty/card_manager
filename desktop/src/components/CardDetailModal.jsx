@@ -45,20 +45,29 @@ export default function CardDetailModal({ card, onClose }) {
       if (!selectedNewSet) return;
 
       setIsAdding(true);
-      const setInfo = availableSets.find(s => s.set_code === selectedNewSet);
+
+      let setInfo;
+      try {
+          setInfo = availableSets.find(s => `${s.set_code}|${s.set_rarity}` === selectedNewSet);
+          if (!setInfo) throw new Error("Set not found");
+      } catch (e) {
+          console.error("Failed to parse selected set", e);
+          setIsAdding(false);
+          return;
+      }
 
       const newVariant = {
           ...card,
-          set_code: setInfo ? setInfo.set_code : selectedNewSet,
-          rarity: setInfo ? setInfo.set_rarity : 'Unknown',
-          price: setInfo ? (parseFloat(setInfo.set_price) || 0) : 0,
+          set_code: setInfo.set_code,
+          rarity: setInfo.set_rarity,
+          price: (parseFloat(setInfo.set_price) || 0),
           quantity: 1
       };
 
       const result = await window.api.addCardToDb(newVariant);
 
       if (result.success) {
-          const existingIndex = localVariants.findIndex(v => v.set_code === newVariant.set_code);
+          const existingIndex = localVariants.findIndex(v => v.set_code === newVariant.set_code && v.rarity === newVariant.rarity);
           if (existingIndex >= 0) {
               setLocalVariants(prev => prev.map((v, i) =>
                   i === existingIndex ? { ...v, quantity: v.quantity + 1 } : v
@@ -164,9 +173,9 @@ export default function CardDetailModal({ card, onClose }) {
                                 onChange={setSelectedNewSet}
                                 placeholder="Select Set..."
                                 options={availableSets
-                                    .filter(s => !localVariants.some(v => v.set_code === s.set_code))
+                                    .filter(s => !localVariants.some(v => v.set_code === s.set_code && v.rarity === s.set_rarity))
                                     .map(set => ({
-                                        value: set.set_code,
+                                        value: `${set.set_code}|${set.set_rarity}`,
                                         label: `${set.set_code} - ${set.set_rarity} ($${set.set_price})`
                                     }))}
                             />

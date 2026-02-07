@@ -65,6 +65,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
@@ -264,6 +265,10 @@ fun ConfigScreen(
             value = ipAddress,
             onValueChange = onIpChange,
             label = { Text("IP Address") },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+            ),
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -593,7 +598,7 @@ fun ScannerScreen(
 
 class CardAnalyzer(private val onCodeDetected: (String) -> Unit) : ImageAnalysis.Analyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    private val pattern = Pattern.compile("""\b\d{8}\b""")
+    private val pattern = Pattern.compile("\\b\\d{8}\\b")
 
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {

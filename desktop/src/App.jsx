@@ -5,11 +5,12 @@ import CollectionList from './components/CollectionList';
 import Portfolio from './components/Portfolio';
 import DeckBuilder from './components/DeckBuilder';
 import MissingData from './components/MissingData';
-import GeminiAssistant from './components/GeminiAssistant';
+import Wishlist from './components/Wishlist';
 import Settings from './components/Settings';
+import Dashboard from './components/Dashboard';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('staging');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [scannedCards, setScannedCards] = useState([]);
   const [updateProgress, setUpdateProgress] = useState(null); // { current, total } or null
 
@@ -63,6 +64,9 @@ function App() {
             </div>
         )}
         <div className="flex-1 overflow-auto">
+            {activeTab === 'dashboard' && (
+            <Dashboard setActiveTab={setActiveTab} />
+            )}
             {activeTab === 'staging' && (
             <StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />
             )}
@@ -78,8 +82,8 @@ function App() {
             {activeTab === 'missing' && (
             <MissingData />
             )}
-            {activeTab === 'ai' && (
-            <GeminiAssistant />
+            {activeTab === 'wishlist' && (
+            <Wishlist />
             )}
             {activeTab === 'settings' && (
             <Settings />

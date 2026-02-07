@@ -1,4 +1,4 @@
-import { Layers, Library, Wifi, TrendingUp, BookOpen, AlertTriangle, Bot, Settings } from 'lucide-react';
+import { Layers, Library, Wifi, TrendingUp, BookOpen, AlertTriangle, Settings, Heart, LayoutDashboard } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import clsx from 'clsx';
 
@@ -37,12 +37,13 @@ export default function Sidebar({ activeTab, setActiveTab }) {
       </div>
 
       <nav className="flex-1">
+        <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="staging" icon={Layers} label="Staging Area" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="collection" icon={Library} label="My Collection" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="portfolio" icon={TrendingUp} label="Portfolio" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="deckbuilder" icon={BookOpen} label="Deck Builder" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="missing" icon={AlertTriangle} label="Missing Data" activeTab={activeTab} setActiveTab={setActiveTab} />
-        <NavItem id="ai" icon={Bot} label="AI Assistant" activeTab={activeTab} setActiveTab={setActiveTab} />
+        <NavItem id="wishlist" icon={Heart} label="Wishlist" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="settings" icon={Settings} label="Settings" activeTab={activeTab} setActiveTab={setActiveTab} />
       </nav>
 

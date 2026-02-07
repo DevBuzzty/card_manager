@@ -48,6 +48,39 @@ db.exec(`
   )
 `);
 
+// Create Decks table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS decks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+// Create Deck Cards table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS deck_cards (
+    deck_id INTEGER,
+    card_id TEXT,
+    type TEXT,
+    quantity INTEGER,
+    PRIMARY KEY (deck_id, card_id, type),
+    FOREIGN KEY(deck_id) REFERENCES decks(id)
+  )
+`);
+
+// Create Wishlist table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS wishlist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    card_id TEXT,
+    name TEXT,
+    image_url TEXT,
+    price REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
 // Migration: Add new columns if they don't exist
 try {
   const columns = db.prepare("PRAGMA table_info(cards)").all();
@@ -388,6 +421,46 @@ ipcMain.handle('import-deck-ydk', async () => {
         return { canceled: false, deck, name: path.basename(result.filePaths[0], '.ydk') };
     } catch (e) {
         return { error: e.message };
+    }
+});
+
+// Wishlist Handlers
+ipcMain.handle('get-wishlist', () => {
+    return db.prepare('SELECT * FROM wishlist ORDER BY created_at DESC').all();
+});
+
+ipcMain.handle('add-to-wishlist', (event, card) => {
+    try {
+        const exists = db.prepare('SELECT id FROM wishlist WHERE card_id = ?').get(String(card.id));
+        if (exists) return { success: false, message: 'Already in wishlist' };
+
+        db.prepare('INSERT INTO wishlist (card_id, name, image_url, price) VALUES (@id, @name, @image_url, @price)').run({
+            id: String(card.id),
+            name: card.name,
+            image_url: card.image_url,
+            price: card.price || 0
+        });
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('remove-from-wishlist', (event, id) => {
+    db.prepare('DELETE FROM wishlist WHERE id = ?').run(id);
+    return true;
+});
+
+ipcMain.handle('search-online', async (event, query) => {
+    try {
+        if (!query || query.length < 3) return [];
+        const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`);
+        if (!response.ok) return [];
+        const data = await response.json();
+        return data.data || [];
+    } catch (e) {
+        console.error("Online Search Error:", e);
+        return [];
     }
 });
 

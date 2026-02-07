@@ -147,7 +147,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
 
         {scannedCards.length === 0 && (
             <div className="flex flex-col items-center justify-center h-64 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl bg-gray-900/50">
-                <p className="text-lg font-medium">Ready to Receive</p>
+                <p className="text-lg font-medium">Ready to Scan</p>
                 <p className="text-sm mt-2 opacity-60">Scanned cards from the app will appear here.</p>
             </div>
         )}
