@@ -221,7 +221,7 @@ ipcMain.handle('delete-database', async () => {
     try {
         db.close();
         if (fs.existsSync(dbPath)) {
-            fs.unlinkSync(dbPath);
+            await fs.promises.unlink(dbPath);
         }
         app.relaunch();
         app.exit(0);
@@ -306,7 +306,7 @@ ipcMain.handle('import-deck-ydk', async () => {
 
         if (result.canceled || result.filePaths.length === 0) return { canceled: true };
 
-        const content = fs.readFileSync(result.filePaths[0], 'utf-8');
+        const content = await fs.promises.readFile(result.filePaths[0], 'utf-8');
         const lines = content.split(/\r?\n/);
 
         let currentSection = 'main';
@@ -613,7 +613,7 @@ ipcMain.handle('import-csv', async () => {
     }
 
     const filePath = result.filePaths[0];
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = await fs.promises.readFile(filePath, 'utf-8');
     const lines = content.split(/\r?\n/);
 
     const cards = [];
