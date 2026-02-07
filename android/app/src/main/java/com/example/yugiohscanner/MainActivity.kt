@@ -266,7 +266,7 @@ fun ConfigScreen(
             label = { Text("IP Address") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.outlinedTextFieldColors(
+            colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 cursorColor = MaterialTheme.colorScheme.primary
             )
@@ -553,7 +553,7 @@ fun ScannerScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterCenterVertically
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Scan History", style = MaterialTheme.typography.headlineSmall, color = Color.White)
                         IconButton(onClick = { showHistory = false }) {
