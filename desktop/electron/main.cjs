@@ -529,47 +529,25 @@ ipcMain.handle('update-all-cards', async (event) => {
 
 ipcMain.handle('update-missing-cards', async (event) => {
   try {
-    // We want to target cards where data is truly missing.
-    // However, since we now map Link Rating to Level, we should check for NULLs again.
-    // Also, 0 is now preserved.
-    // Query: Any card with NULL atk, or (NULL def AND not link), or NULL level
-    // But verifying "not link" in SQL without TYPE being reliable (maybe null too) is hard.
-    // Simpler: Just select cards where ANY of these is NULL. performCardUpdate handles logic.
-    const cards = db.prepare('SELECT id, type FROM cards WHERE atk IS NULL OR def IS NULL OR level IS NULL').all();
-
-    // Filter out Link monsters who have DEF as NULL (which is valid)
-    const validMissing = cards.filter(c => {
-         // If it's a Link monster, DEF being NULL is fine.
-         // But ATK and LEVEL (Link Rating) should be there.
-         if (c.type && c.type.includes('Link')) {
-             // For Link: missing if ATK is null OR Level is null (since we map linkval to level now)
-             // If DB has NULL level for Link, it's missing (needs update).
-             // If DB has NULL def for Link, it's NOT missing.
-             // We can't check column values here easily without fetching them.
-             // The SQL 'WHERE atk IS NULL OR def IS NULL OR level IS NULL' returns it if ANY is null.
-             // If DEF is NULL (valid for Link), it returns it.
-             // We want to update it IF it needs update.
-             // If we already updated it, DEF is still NULL. We don't want to re-update forever.
-
-             // We need to fetch the row to check specifically.
-             // Optimization: Update the SQL.
-             return true; // We'll let performCardUpdate run. It's safe to re-run.
-         }
-         return true;
-    });
-
-    // Actually, to avoid infinite loops of "Fetch Missing", we should refine the SQL or logic.
-    // If I select WHERE def IS NULL, and it's a Link monster, I will always select it.
-    // performCardUpdate will set def=NULL.
-    // Next time, I select it again.
-
-    // FIX: Refine SQL.
-    // We only care if ATK is missing, OR (Level is missing), OR (Def is missing AND Type NOT LIKE '%Link%')
+    // Select cards that are missing essential data.
+    // We exclude valid NULLs:
+    // - Spells/Traps/Skills don't have ATK/DEF/Level.
+    // - Link Monsters don't have DEF.
+    // - 0 is a valid value for ATK/DEF, so we check specifically for NULL.
     const cardsToUpdate = db.prepare(`
         SELECT id FROM cards
-        WHERE atk IS NULL
-           OR level IS NULL
-           OR (def IS NULL AND (type IS NULL OR type NOT LIKE '%Link%'))
+        WHERE type IS NULL
+           OR name IS NULL
+           OR desc IS NULL
+           OR (image_url IS NULL OR image_url = '')
+           OR (
+             (type LIKE '%Monster%' OR type LIKE '%Token%')
+             AND (
+               atk IS NULL
+               OR level IS NULL
+               OR (def IS NULL AND type NOT LIKE '%Link%')
+             )
+           )
     `).all();
 
     const updatedCount = await performCardUpdate(cardsToUpdate, event.sender);
