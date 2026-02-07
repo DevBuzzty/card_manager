@@ -16,7 +16,6 @@ function App() {
     if (window.api) {
       // Listen for scans
       const removeScanListener = window.api.onCardScanned((data) => {
-        console.log('Received scan:', data);
         // Add to beginning of list with a unique temp ID
         setScannedCards(prev => {
             // Check for duplicates in current staging

@@ -101,7 +101,7 @@ try {
       console.log("Migration complete.");
   }
 } catch (e) {
-  console.log("Migration check failed or not needed", e);
+  console.error("Migration check failed or not needed:", e);
 }
 
 let mainWindow;
@@ -152,17 +152,10 @@ function startSocketServer() {
   });
 
   io.on('connection', (socket) => {
-    console.log('New client connected:', socket.id);
-
     socket.on('card_scanned', (data) => {
-      console.log('Card scanned event:', data);
       if (mainWindow) {
         mainWindow.webContents.send('card-scanned', data);
       }
-    });
-
-    socket.on('disconnect', () => {
-      console.log('Client disconnected');
     });
   });
 
@@ -437,7 +430,7 @@ async function performCardUpdate(cards, eventSender) {
         const row = db.prepare("SELECT value FROM settings WHERE key = 'price_source'").get();
         if (row && row.value) priceSource = row.value;
     } catch (e) {
-        console.log("Error reading price source settings:", e);
+        console.error("Error reading price source settings:", e);
     }
 
     const sourceMap = {
@@ -454,7 +447,7 @@ async function performCardUpdate(cards, eventSender) {
         if (totalVal && totalVal.val > 0) {
              db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: totalVal.val });
         }
-    } catch(e) { console.log(e); }
+    } catch(e) { console.error("Failed to update portfolio history:", e); }
 
     for (let i = 0; i < total; i++) {
        const card = cards[i];
