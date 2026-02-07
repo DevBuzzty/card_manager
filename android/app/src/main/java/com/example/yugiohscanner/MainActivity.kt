@@ -101,6 +101,7 @@ fun MainScreen() {
 
     val connectSocket = { ip: String ->
         try {
+            socket?.disconnect()
             val newSocket = IO.socket("http://$ip:4000")
             newSocket.on(Socket.EVENT_CONNECT) {
                 isConnected = true
@@ -120,6 +121,12 @@ fun MainScreen() {
         socket?.disconnect()
         socket = null
         isConnected = false
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            socket?.disconnect()
+        }
     }
 
     if (isConnected && hasCameraPermission) {
@@ -227,6 +234,35 @@ fun ScannerScreen(
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var cameraInfo by remember { mutableStateOf<CameraInfo?>(null) }
 
+    // Resource Management
+    val executor = remember { Executors.newSingleThreadExecutor() }
+    val currentOnCodeDetected = rememberUpdatedState { code: String ->
+        if (code != lastScannedCode) {
+            lastScannedCode = code
+            scanStatus = "Detected: $code"
+
+            // Emit to socket
+            val data = JSONObject()
+            data.put("passcode", code)
+            socket?.emit("card_scanned", data)
+        }
+    }
+    val analyzer = remember { CardAnalyzer { code -> currentOnCodeDetected.value(code) } }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            executor.shutdown()
+            analyzer.close()
+            if (cameraProviderFuture.isDone) {
+                try {
+                    cameraProviderFuture.get().unbindAll()
+                } catch (e: Exception) {
+                    Log.e("Scanner", "Error unbinding camera", e)
+                }
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
@@ -265,8 +301,6 @@ fun ScannerScreen(
                     true
                 }
 
-                val executor = Executors.newSingleThreadExecutor()
-
                 cameraProviderFuture.addListener({
                     val cameraProvider = cameraProviderFuture.get()
                     val preview = Preview.Builder().build().also {
@@ -277,20 +311,7 @@ fun ScannerScreen(
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also {
-                            it.setAnalyzer(executor, CardAnalyzer { code ->
-                                if (code != lastScannedCode) {
-                                    lastScannedCode = code
-                                    scanStatus = "Detected: $code"
-
-                                    // Emit to socket
-                                    val data = JSONObject()
-                                    data.put("passcode", code)
-                                    socket?.emit("card_scanned", data)
-
-                                    // Reset after delay (handled by UI logic mostly,
-                                    // but here we just prevent rapid fire of same code immediately)
-                                }
-                            })
+                            it.setAnalyzer(executor, analyzer)
                         }
 
                     try {
@@ -418,6 +439,10 @@ fun ScannerScreen(
 
 class CardAnalyzer(private val onCodeDetected: (String) -> Unit) : ImageAnalysis.Analyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+
+    fun close() {
+        recognizer.close()
+    }
 
     // Yu-Gi-Oh codes are 8 digits.
     // Regex matches 8 digits exactly, surrounded by word boundaries.
