@@ -9,8 +9,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Needed for cleartext traffic if local server doesn't use HTTPS -->
-    <uses-permission android:name="android.permission.CleartextTraffic" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:allowBackup="true"

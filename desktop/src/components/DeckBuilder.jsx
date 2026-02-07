@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Upload, FileUp, AlertTriangle } from 'lucide-react';
-import CustomSelect from './CustomSelect';
+import { Plus, Trash2, Save, Upload, FileUp, AlertTriangle, Download, BarChart2, PieChart as PieChartIcon } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 
 export default function DeckBuilder() {
   const [decks, setDecks] = useState([]);
   const [activeDeck, setActiveDeck] = useState(null); // { id, name, cards: [] }
   const [collection, setCollection] = useState([]);
   const [filter, setFilter] = useState('');
+  const [showStats, setShowStats] = useState(false);
 
   // Deck State
   const [mainDeck, setMainDeck] = useState([]);
@@ -100,6 +101,27 @@ export default function DeckBuilder() {
       }
   };
 
+  const handleExportYdk = async () => {
+      if (!activeDeck || !window.api) return;
+
+      let content = '#created by YuGiOhCardManager\n#main\n';
+      mainDeck.forEach(c => {
+          for(let i=0; i<c.quantity; i++) content += `${c.card_id}\n`;
+      });
+      content += '#extra\n';
+      extraDeck.forEach(c => {
+          for(let i=0; i<c.quantity; i++) content += `${c.card_id}\n`;
+      });
+      content += '!side\n';
+      sideDeck.forEach(c => {
+          for(let i=0; i<c.quantity; i++) content += `${c.card_id}\n`;
+      });
+
+      const res = await window.api.exportDeckYdk({ name: activeDeck.name, content });
+      if (res.success) alert("Deck exported!");
+      else if (!res.canceled) alert("Export failed: " + res.error);
+  };
+
   const addToDeck = (card) => {
       if (!activeDeck) return;
       // Determine destination based on type
@@ -155,6 +177,62 @@ export default function DeckBuilder() {
                       {ownedQty}/{card.quantity}
                   </div>
               )}
+          </div>
+      );
+  };
+
+  // Stats Components
+  const DeckStats = () => {
+      const allCards = [...mainDeck, ...extraDeck, ...sideDeck];
+      // Type breakdown (Monster, Spell, Trap) - Main Deck Only usually matters for ratios
+      let monsters = 0, spells = 0, traps = 0;
+      mainDeck.forEach(c => {
+          if (c.type && c.type.includes('Monster')) monsters += c.quantity;
+          else if (c.type && c.type.includes('Spell')) spells += c.quantity;
+          else if (c.type && c.type.includes('Trap')) traps += c.quantity;
+      });
+
+      const typeData = [
+          { name: 'Monster', value: monsters, color: '#A68349' }, // Orange/Brown
+          { name: 'Spell', value: spells, color: '#1D9E74' },   // Green
+          { name: 'Trap', value: traps, color: '#BC5A84' }     // Pink
+      ].filter(d => d.value > 0);
+
+      // Attribute breakdown (All cards)
+      const attrCounts = {};
+      allCards.forEach(c => {
+          if (c.attribute) {
+              attrCounts[c.attribute] = (attrCounts[c.attribute] || 0) + c.quantity;
+          }
+      });
+      const attrData = Object.keys(attrCounts).map(k => ({ name: k, value: attrCounts[k] }));
+
+      return (
+          <div className="grid grid-cols-2 gap-4 h-64 mb-4">
+              <div className="bg-black/30 p-4 rounded-xl border border-gray-800">
+                  <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Card Types (Main)</h4>
+                  <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                          <Pie data={typeData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={60}>
+                              {typeData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                              ))}
+                          </Pie>
+                          <RechartsTooltip contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
+                      </PieChart>
+                  </ResponsiveContainer>
+              </div>
+              <div className="bg-black/30 p-4 rounded-xl border border-gray-800">
+                  <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Attributes</h4>
+                   <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={attrData}>
+                          <XAxis dataKey="name" stroke="#666" fontSize={10} />
+                          <YAxis stroke="#666" fontSize={10} />
+                          <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
+                          <Bar dataKey="value" fill="#9D00FF" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                  </ResponsiveContainer>
+              </div>
           </div>
       );
   };
@@ -219,18 +297,35 @@ export default function DeckBuilder() {
         <div className="flex-1 bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800 flex flex-col">
             {activeDeck ? (
                 <>
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-2xl font-bold text-white">{activeDeck.name}</h2>
-                        <button onClick={handleSaveDeck} className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors">
-                            <Save className="w-4 h-4 mr-2" />
-                            Save Deck
-                        </button>
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-2xl font-bold text-white">{activeDeck.name}</h2>
+                            <button
+                                onClick={() => setShowStats(!showStats)}
+                                className={`p-1.5 rounded-lg transition-colors ${showStats ? 'bg-space-violet text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                                title="Toggle Stats"
+                            >
+                                {showStats ? <PieChartIcon className="w-4 h-4" /> : <BarChart2 className="w-4 h-4" />}
+                            </button>
+                        </div>
+                        <div className="flex gap-2">
+                             <button onClick={handleExportYdk} className="flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors text-sm font-medium border border-gray-700">
+                                <Download className="w-4 h-4 mr-2" />
+                                Export YDK
+                            </button>
+                            <button onClick={handleSaveDeck} className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium shadow-lg shadow-space-violet/20">
+                                <Save className="w-4 h-4 mr-2" />
+                                Save Deck
+                            </button>
+                        </div>
                     </div>
+
+                    {showStats && <DeckStats />}
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pr-2">
                         {/* Main Deck */}
                         <div>
-                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
+                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1 sticky top-0 bg-[#1E1E1E] z-10">
                                 <h3 className="text-sm font-bold uppercase text-gray-400">Main Deck</h3>
                                 <span className="text-xs text-gray-500">{mainDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
@@ -242,7 +337,7 @@ export default function DeckBuilder() {
 
                         {/* Extra Deck */}
                         <div>
-                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
+                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1 sticky top-0 bg-[#1E1E1E] z-10">
                                 <h3 className="text-sm font-bold uppercase text-gray-400">Extra Deck</h3>
                                 <span className="text-xs text-gray-500">{extraDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
@@ -253,7 +348,7 @@ export default function DeckBuilder() {
 
                         {/* Side Deck */}
                         <div>
-                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1">
+                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1 sticky top-0 bg-[#1E1E1E] z-10">
                                 <h3 className="text-sm font-bold uppercase text-gray-400">Side Deck</h3>
                                 <span className="text-xs text-gray-500">{sideDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>

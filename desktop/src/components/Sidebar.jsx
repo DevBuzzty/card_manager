@@ -1,4 +1,4 @@
-import { Layers, Library, Wifi, TrendingUp, BookOpen, AlertTriangle, Bot } from 'lucide-react';
+import { Layers, Library, Wifi, TrendingUp, BookOpen, AlertTriangle, Bot, Settings } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import clsx from 'clsx';
 
@@ -43,6 +43,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         <NavItem id="deckbuilder" icon={BookOpen} label="Deck Builder" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="missing" icon={AlertTriangle} label="Missing Data" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="ai" icon={Bot} label="AI Assistant" activeTab={activeTab} setActiveTab={setActiveTab} />
+        <NavItem id="settings" icon={Settings} label="Settings" activeTab={activeTab} setActiveTab={setActiveTab} />
       </nav>
 
       <div className="mt-auto p-4 bg-black/40 rounded-xl border border-gray-800/50 backdrop-blur-sm">

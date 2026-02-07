@@ -3,7 +3,13 @@ package com.example.yugiohscanner
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -14,22 +20,62 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.*
+import androidx.annotation.OptIn
+import androidx.camera.core.CameraControl
+import androidx.camera.core.CameraInfo
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
+import androidx.camera.core.FocusMeteringAction
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.CenterFocusWeak
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,9 +89,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import io.socket.client.IO
 import io.socket.client.Socket
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.regex.Pattern
@@ -80,6 +124,42 @@ fun MainScreen() {
     var ipAddress by remember { mutableStateOf(prefs.getString("ip_address", "192.168.1.X") ?: "") }
     var isConnected by remember { mutableStateOf(false) }
     var socket by remember { mutableStateOf<Socket?>(null) }
+
+    // History State
+    val scanHistory = remember { mutableStateListOf<String>() }
+
+    // Load History
+    LaunchedEffect(Unit) {
+        val historyJson = prefs.getString("scan_history", "[]")
+        try {
+            val jsonArray = JSONArray(historyJson)
+            for (i in 0 until jsonArray.length()) {
+                scanHistory.add(jsonArray.getString(i))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Save History Helper
+    fun saveHistory() {
+        val jsonArray = JSONArray()
+        scanHistory.take(50).forEach { jsonArray.put(it) } // Limit to last 50
+        prefs.edit().putString("scan_history", jsonArray.toString()).apply()
+    }
+
+    fun addScanToHistory(code: String) {
+        // Avoid duplicates at the very top
+        if (scanHistory.isEmpty() || scanHistory.first() != code) {
+            scanHistory.add(0, code)
+            saveHistory()
+        }
+    }
+
+    fun clearHistory() {
+        scanHistory.clear()
+        saveHistory()
+    }
 
     // Permission handling
     var hasCameraPermission by remember {
@@ -125,7 +205,10 @@ fun MainScreen() {
     if (isConnected && hasCameraPermission) {
         ScannerScreen(
             socket = socket,
-            onDisconnect = disconnectSocket
+            onDisconnect = disconnectSocket,
+            scanHistory = scanHistory,
+            onAddHistory = ::addScanToHistory,
+            onClearHistory = ::clearHistory
         )
     } else {
         ConfigScreen(
@@ -214,7 +297,10 @@ fun ConfigScreen(
 @Composable
 fun ScannerScreen(
     socket: Socket?,
-    onDisconnect: () -> Unit
+    onDisconnect: () -> Unit,
+    scanHistory: List<String>,
+    onAddHistory: (String) -> Unit,
+    onClearHistory: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -224,8 +310,41 @@ fun ScannerScreen(
     var scanStatus by remember { mutableStateOf("Scanning...") }
     var isFlashOn by remember { mutableStateOf(false) }
     var isFocusLocked by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var cameraInfo by remember { mutableStateOf<CameraInfo?>(null) }
+
+    // Feedback Helpers
+    val triggerFeedback = remember {
+        {
+            // Vibration
+            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                vibratorManager.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            }
+
+            if (vibrator.hasVibrator()) {
+                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
+                 } else {
+                    @Suppress("DEPRECATION")
+                    vibrator.vibrate(100)
+                 }
+            }
+
+            // Sound
+            try {
+                val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+                toneGen.startTone(ToneGenerator.TONE_PROP_BEEP)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -282,13 +401,16 @@ fun ScannerScreen(
                                     lastScannedCode = code
                                     scanStatus = "Detected: $code"
 
+                                    // Trigger Feedback
+                                    triggerFeedback()
+
+                                    // Add to History
+                                    onAddHistory(code)
+
                                     // Emit to socket
                                     val data = JSONObject()
                                     data.put("passcode", code)
                                     socket?.emit("card_scanned", data)
-
-                                    // Reset after delay (handled by UI logic mostly,
-                                    // but here we just prevent rapid fire of same code immediately)
                                 }
                             })
                         }
@@ -355,13 +477,22 @@ fun ScannerScreen(
             }
         }
 
-        // Settings / Disconnect
+        // Top Controls Row
         Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+             // History Toggle
+            IconButton(
+                onClick = { showHistory = true },
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+            ) {
+                Icon(Icons.Default.History, contentDescription = "History", tint = Color.White)
+            }
+
             // Auto Focus Reset
             IconButton(
                 onClick = {
@@ -370,10 +501,6 @@ fun ScannerScreen(
                         isFocusLocked = false
                         Toast.makeText(context, "Continuous Auto Focus", Toast.LENGTH_SHORT).show()
                     } else {
-                         // Optional: Lock focus at current center if already auto
-                         // For now, simpler to just treat this button as "Reset to Auto"
-                         // But if user wants to toggle, we could lock.
-                         // Let's implement as "Reset to Auto" primarily.
                          cameraControl?.cancelFocusAndMetering()
                          Toast.makeText(context, "Refocusing...", Toast.LENGTH_SHORT).show()
                     }
@@ -413,17 +540,66 @@ fun ScannerScreen(
                 Icon(Icons.Default.Settings, contentDescription = "Disconnect", tint = Color.White)
             }
         }
+
+        // History Overlay
+        if (showHistory) {
+             Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.9f))
+                    .padding(16.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterCenterVertically
+                    ) {
+                        Text("Scan History", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                        IconButton(onClick = { showHistory = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                        }
+                    }
+
+                    if (scanHistory.isNotEmpty()) {
+                        Button(
+                            onClick = onClearHistory,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.6f))
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text("Clear History")
+                        }
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(scanHistory) { code ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.Gray.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(code, color = Color.White, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 class CardAnalyzer(private val onCodeDetected: (String) -> Unit) : ImageAnalysis.Analyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-
-    // Yu-Gi-Oh codes are 8 digits.
-    // Regex matches 8 digits exactly, surrounded by word boundaries.
     private val pattern = Pattern.compile("\\b\\d{8}\\b")
 
-    @androidx.annotation.OptIn(ExperimentalGetImage::class)
+    @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
         val mediaImage = imageProxy.image
         if (mediaImage != null) {
@@ -437,7 +613,7 @@ class CardAnalyzer(private val onCodeDetected: (String) -> Unit) : ImageAnalysis
                         if (matcher.find()) {
                             val code = matcher.group()
                             onCodeDetected(code)
-                            break // Found one, that's enough for this frame
+                            break
                         }
                     }
                 }

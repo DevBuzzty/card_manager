@@ -191,6 +191,69 @@ ipcMain.handle('get-ip-address', () => {
   return getLocalIpAddress();
 });
 
+ipcMain.handle('export-deck-ydk', async (event, { name, content }) => {
+    try {
+        const result = await dialog.showSaveDialog(mainWindow, {
+            title: 'Export Deck',
+            defaultPath: `${name}.ydk`,
+            filters: [{ name: 'YDK Deck', extensions: ['ydk'] }]
+        });
+
+        if (result.canceled || !result.filePath) return { canceled: true };
+
+        fs.writeFileSync(result.filePath, content, 'utf-8');
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+// Backup & Restore
+ipcMain.handle('backup-database', async () => {
+    try {
+        const result = await dialog.showSaveDialog(mainWindow, {
+            title: 'Backup Database',
+            defaultPath: `cards_backup_${new Date().toISOString().slice(0,10)}.db`,
+            filters: [{ name: 'SQLite Database', extensions: ['db'] }]
+        });
+
+        if (result.canceled || !result.filePath) return { canceled: true };
+
+        // Flush WAL if needed? better-sqlite3 handles this usually.
+        // Copy the file
+        fs.copyFileSync(dbPath, result.filePath);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('restore-database', async () => {
+    try {
+        const result = await dialog.showOpenDialog(mainWindow, {
+            title: 'Restore Database',
+            properties: ['openFile'],
+            filters: [{ name: 'SQLite Database', extensions: ['db'] }]
+        });
+
+        if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+
+        const backupPath = result.filePaths[0];
+
+        // Close current connection
+        db.close();
+
+        // Copy backup to userData
+        fs.copyFileSync(backupPath, dbPath);
+
+        // Restart app to reload DB
+        app.relaunch();
+        app.exit(0);
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 // Settings Handlers
 ipcMain.handle('get-settings', () => {
     try {
