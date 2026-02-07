@@ -265,11 +265,7 @@ fun ConfigScreen(
             onValueChange = onIpChange,
             label = { Text("IP Address") },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                cursorColor = MaterialTheme.colorScheme.primary
-            )
+            modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -597,7 +593,7 @@ fun ScannerScreen(
 
 class CardAnalyzer(private val onCodeDetected: (String) -> Unit) : ImageAnalysis.Analyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    private val pattern = Pattern.compile("\\b\\d{8}\\b")
+    private val pattern = Pattern.compile("""\b\d{8}\b""")
 
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
