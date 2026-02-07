@@ -3,13 +3,8 @@ package com.example.yugiohscanner
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.media.AudioManager
-import android.media.ToneGenerator
 import android.os.Build
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -316,36 +311,8 @@ fun ScannerScreen(
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var cameraInfo by remember { mutableStateOf<CameraInfo?>(null) }
 
-    // Feedback Helpers
-    val triggerFeedback = remember {
-        {
-            // Vibration
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-                vibratorManager.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-            }
-
-            if (vibrator.hasVibrator()) {
-                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE))
-                 } else {
-                    @Suppress("DEPRECATION")
-                    vibrator.vibrate(100)
-                 }
-            }
-
-            // Sound
-            try {
-                val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
-                toneGen.startTone(ToneGenerator.TONE_PROP_BEEP)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
+    // Feedback Helper (Empty as per requirement)
+    val triggerFeedback = remember { {} }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(

@@ -20,3 +20,4 @@ Port 5173 is in use, trying another one...
 10:27:14 PM [vite] (client) hmr update /src/components/Sidebar.jsx, /src/index.css
 10:27:20 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
 10:27:26 PM [vite] (client) hmr update /src/components/StagingArea.jsx, /src/index.css
+11:01:27 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
