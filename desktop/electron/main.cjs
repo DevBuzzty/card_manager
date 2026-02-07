@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Server } = require('socket.io');
@@ -197,7 +197,17 @@ ipcMain.handle('get-settings', () => {
         const rows = db.prepare('SELECT * FROM settings').all();
         // Convert to object
         const settings = {};
-        rows.forEach(row => settings[row.key] = row.value);
+        rows.forEach(row => {
+            let val = row.value;
+            if (row.key === 'gemini_api_key' && val && safeStorage.isEncryptionAvailable()) {
+                try {
+                    val = safeStorage.decryptString(Buffer.from(val, 'hex'));
+                } catch (e) {
+                    console.error("Failed to decrypt gemini_api_key", e);
+                }
+            }
+            settings[row.key] = val;
+        });
         return settings;
     } catch (e) {
         return {};
@@ -206,7 +216,11 @@ ipcMain.handle('get-settings', () => {
 
 ipcMain.handle('save-setting', (event, { key, value }) => {
     try {
-        db.prepare('INSERT INTO settings (key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value = @value').run({ key, value });
+        let valToSave = value;
+        if (key === 'gemini_api_key' && value && safeStorage.isEncryptionAvailable()) {
+            valToSave = safeStorage.encryptString(value).toString('hex');
+        }
+        db.prepare('INSERT INTO settings (key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value = @value').run({ key, value: valToSave });
         return { success: true };
     } catch (e) {
         return { success: false, error: e.message };

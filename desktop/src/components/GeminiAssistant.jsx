@@ -12,18 +12,35 @@ export default function GeminiAssistant() {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) setApiKey(savedKey);
-    else setShowSettings(true);
+    const loadSettings = async () => {
+        if (!window.api) return;
+        const settings = await window.api.getSettings();
+        if (settings.gemini_api_key) {
+            setApiKey(settings.gemini_api_key);
+        } else {
+            // Migration from insecure localStorage
+            const legacyKey = localStorage.getItem('gemini_api_key');
+            if (legacyKey) {
+                await window.api.saveSetting('gemini_api_key', legacyKey);
+                setApiKey(legacyKey);
+                localStorage.removeItem('gemini_api_key');
+            } else {
+                setShowSettings(true);
+            }
+        }
+    };
+    loadSettings();
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const saveKey = (key) => {
+  const saveKey = async (key) => {
       if (!key.trim()) return;
-      localStorage.setItem('gemini_api_key', key.trim());
+      if (window.api) {
+          await window.api.saveSetting('gemini_api_key', key.trim());
+      }
       setApiKey(key.trim());
       setShowSettings(false);
   };
@@ -174,7 +191,7 @@ export default function GeminiAssistant() {
                     </div>
                     <p className="text-gray-400 text-sm mb-6">
                         To use the AI Assistant, you need a Google Gemini API Key.
-                        The key is stored locally on your device.
+                        The key is stored securely on your device using system-level encryption.
                     </p>
                     <input
                         type="password"
