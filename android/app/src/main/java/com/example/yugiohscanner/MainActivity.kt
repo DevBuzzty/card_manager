@@ -78,6 +78,7 @@ fun MainScreen() {
     val prefs = remember { context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE) }
 
     var ipAddress by remember { mutableStateOf(prefs.getString("ip_address", "192.168.1.X") ?: "") }
+    var scannerToken by remember { mutableStateOf(prefs.getString("scanner_token", "") ?: "") }
     var isConnected by remember { mutableStateOf(false) }
     var socket by remember { mutableStateOf<Socket?>(null) }
 
@@ -99,12 +100,20 @@ fun MainScreen() {
         }
     }
 
-    val connectSocket = { ip: String ->
+    val connectSocket = { ip: String, token: String ->
         try {
-            val newSocket = IO.socket("http://$ip:4000")
+            val options = IO.Options()
+            // Pass authentication token via query parameter for compatibility
+            options.query = "token=$token"
+
+            val newSocket = IO.socket("http://$ip:4000", options)
             newSocket.on(Socket.EVENT_CONNECT) {
                 isConnected = true
-                prefs.edit().putString("ip_address", ip).apply()
+                prefs.edit().apply {
+                    putString("ip_address", ip)
+                    putString("scanner_token", token)
+                    apply()
+                }
             }
             newSocket.on(Socket.EVENT_DISCONNECT) {
                 isConnected = false
@@ -131,7 +140,9 @@ fun MainScreen() {
         ConfigScreen(
             ipAddress = ipAddress,
             onIpChange = { ipAddress = it },
-            onConnect = { connectSocket(ipAddress) },
+            scannerToken = scannerToken,
+            onTokenChange = { scannerToken = it },
+            onConnect = { connectSocket(ipAddress, scannerToken) },
             isPermissionGranted = hasCameraPermission,
             onRequestPermission = { launcher.launch(Manifest.permission.CAMERA) }
         )
@@ -143,6 +154,8 @@ fun MainScreen() {
 fun ConfigScreen(
     ipAddress: String,
     onIpChange: (String) -> Unit,
+    scannerToken: String,
+    onTokenChange: (String) -> Unit,
     onConnect: () -> Unit,
     isPermissionGranted: Boolean,
     onRequestPermission: () -> Unit
@@ -181,6 +194,20 @@ fun ConfigScreen(
             value = ipAddress,
             onValueChange = onIpChange,
             label = { Text("IP Address") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                cursorColor = MaterialTheme.colorScheme.primary
+            )
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = scannerToken,
+            onValueChange = onTokenChange,
+            label = { Text("Authentication Token") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = TextFieldDefaults.outlinedTextFieldColors(

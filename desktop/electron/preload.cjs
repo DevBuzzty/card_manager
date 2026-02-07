@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
   getPortfolio: () => ipcRenderer.invoke('get-portfolio'),
   getPriceHistory: () => ipcRenderer.invoke('get-price-history'),
   updateCardMeta: (data) => ipcRenderer.invoke('update-card-meta', data),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSetting: (key, value) => ipcRenderer.invoke('save-setting', { key, value }),
   onUpdateProgress: (callback) => {
     const subscription = (_event, value) => callback(value);
     ipcRenderer.on('update-progress', subscription);

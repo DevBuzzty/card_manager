@@ -2,6 +2,12 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Server } = require('socket.io');
+const {
+  SOCKET_PORT,
+  ALLOWED_ORIGINS,
+  WINDOW_CONFIG,
+  ALLOWED_SETTING_KEYS
+} = require('./constants.cjs');
 const Database = require('better-sqlite3');
 const os = require('os');
 
@@ -47,6 +53,19 @@ db.exec(`
     value TEXT
   )
 `);
+
+// Initialize scanner token if it doesn't exist
+try {
+  const existingToken = db.prepare("SELECT value FROM settings WHERE key = 'scanner_auth_token'").get();
+  if (!existingToken) {
+    const crypto = require('crypto');
+    const defaultToken = crypto.randomBytes(8).toString('hex');
+    db.prepare("INSERT INTO settings (key, value) VALUES ('scanner_auth_token', ?)").run(defaultToken);
+    console.log("Initialized scanner_auth_token in database.");
+  }
+} catch (e) {
+  console.log("Error initializing scanner token:", e);
+}
 
 // Migration: Add new columns if they don't exist
 try {
@@ -109,9 +128,7 @@ let io;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    backgroundColor: '#121212',
+    ...WINDOW_CONFIG,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -144,11 +161,43 @@ function getLocalIpAddress() {
 }
 
 function startSocketServer() {
-  io = new Server(4000, {
+  io = new Server(SOCKET_PORT, {
     cors: {
-      origin: "*",
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like native mobile apps)
+        if (!origin) return callback(null, true);
+
+        if (ALLOWED_ORIGINS.includes(origin)) {
+          callback(null, true);
+        } else {
+          console.error(`CORS blocked request from origin: ${origin}`);
+          callback(new Error('Not allowed by CORS'));
+        }
+      },
       methods: ["GET", "POST"]
+    },
+    allowEIO3: true // Support for older Socket.io clients (like the 2.x Android client)
+  });
+
+  // Authentication Middleware
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+
+    // Retrieve latest token from database for verification
+    let expectedToken = null;
+    try {
+        const row = db.prepare("SELECT value FROM settings WHERE key = 'scanner_auth_token'").get();
+        if (row) expectedToken = row.value;
+    } catch (e) {
+        console.error("Failed to retrieve scanner_auth_token from DB:", e);
     }
+
+    if (token && token === expectedToken) {
+      return next();
+    }
+
+    console.error(`Authentication failed for socket: ${socket.id}. Provided: ${token}, Expected: ${expectedToken}`);
+    return next(new Error('authentication error'));
   });
 
   io.on('connection', (socket) => {
@@ -206,6 +255,9 @@ ipcMain.handle('get-settings', () => {
 
 ipcMain.handle('save-setting', (event, { key, value }) => {
     try {
+        if (!ALLOWED_SETTING_KEYS.includes(key)) {
+            throw new Error(`Unauthorized setting key: ${key}`);
+        }
         db.prepare('INSERT INTO settings (key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value = @value').run({ key, value });
         return { success: true };
     } catch (e) {

@@ -22,10 +22,16 @@ const NavItem = ({ id, icon, label, activeTab, setActiveTab }) => {
 
 export default function Sidebar({ activeTab, setActiveTab }) {
   const [ipAddress, setIpAddress] = useState('Loading...');
+  const [scannerToken, setScannerToken] = useState('••••••••');
 
   useEffect(() => {
     if(window.api) {
         window.api.getIpAddress().then(setIpAddress);
+        window.api.getSettings().then(settings => {
+            if (settings.scanner_auth_token) {
+                setScannerToken(settings.scanner_auth_token);
+            }
+        });
     }
   }, []);
 
@@ -50,11 +56,19 @@ export default function Sidebar({ activeTab, setActiveTab }) {
           <Wifi className="w-4 h-4 mr-2" />
           <span className="text-xs font-bold uppercase tracking-wider">Scanner Link</span>
         </div>
-        <div className="text-sm text-gray-300">
-            <span className="block text-xs text-gray-500 mb-1">Connect Mobile App to:</span>
-            <code className="block bg-black/50 px-2 py-1.5 rounded border border-gray-800 text-center font-mono text-purple-300 select-all cursor-pointer hover:bg-black/70 transition-colors" title="Click to copy" onClick={() => navigator.clipboard.writeText(ipAddress)}>
-              {ipAddress}
-            </code>
+        <div className="text-sm text-gray-300 space-y-3">
+            <div>
+                <span className="block text-[10px] text-gray-500 mb-1 uppercase tracking-tighter">Desktop IP Address</span>
+                <code className="block bg-black/50 px-2 py-1.5 rounded border border-gray-800 text-center font-mono text-purple-300 select-all cursor-pointer hover:bg-black/70 transition-colors" title="Click to copy" onClick={() => navigator.clipboard.writeText(ipAddress)}>
+                {ipAddress}
+                </code>
+            </div>
+            <div>
+                <span className="block text-[10px] text-gray-500 mb-1 uppercase tracking-tighter">Authentication Token</span>
+                <code className="block bg-black/50 px-2 py-1.5 rounded border border-gray-800 text-center font-mono text-green-400 select-all cursor-pointer hover:bg-black/70 transition-colors" title="Click to copy" onClick={() => navigator.clipboard.writeText(scannerToken)}>
+                {scannerToken}
+                </code>
+            </div>
         </div>
       </div>
     </div>
