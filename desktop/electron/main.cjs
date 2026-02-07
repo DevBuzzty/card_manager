@@ -64,10 +64,7 @@ try {
   if (!columnNames.includes('price')) db.exec("ALTER TABLE cards ADD COLUMN price REAL");
 
   // PRIMARY KEY Migration
-  // Check if current PK is just 'id' (legacy) or 'id, set_code'
-  // table_info pk column: 1 for PK, 2 for composite PK part
   const pkColumns = columns.filter(c => c.pk > 0);
-  // If only 1 PK column (id) but we want composite, we migrate
   if (pkColumns.length === 1 && pkColumns[0].name === 'id') {
       console.log("Migrating cards table to composite PRIMARY KEY...");
       db.transaction(() => {
@@ -92,8 +89,6 @@ try {
                 PRIMARY KEY (id, set_code)
             )
           `);
-          // Copy data. Note: cards_temp might have duplicate IDs if we were sloppy before, but shouldn't if unique constraint existed on ID.
-          // However, existing data might have null set_code. We default it.
           db.exec(`
             INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
                    COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, created_at)
@@ -186,6 +181,9 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// Helper for numeric/value fields to preserve 0
+const valOrNull = (v) => (v !== undefined && v !== null && v !== '') ? v : null;
 
 // IPC Handlers
 
@@ -354,15 +352,21 @@ ipcMain.handle('add-card-to-db', (event, card) => {
 
         const imageUrl = card.card_images && card.card_images.length > 0 ? card.card_images[0].image_url : '';
 
+        // Handle Link Rating mapping
+        let level = card.level;
+        if (card.type && card.type.includes('Link') && card.linkval !== undefined) {
+            level = card.linkval;
+        }
+
         stmt.run({
           id: String(card.id),
           name: card.name,
           type: card.type,
           desc: card.desc,
           image_url: imageUrl,
-          atk: card.atk || null,
-          def: card.def || null,
-          level: card.level || null,
+          atk: valOrNull(card.atk),
+          def: valOrNull(card.def),
+          level: valOrNull(level),
           race: card.race || null,
           attribute: card.attribute || null,
           quantity: card.quantity || 1,
@@ -428,8 +432,7 @@ async function performCardUpdate(cards, eventSender) {
     let updatedCount = 0;
     const total = cards.length;
 
-    // Get pricing source setting
-    let priceSource = 'cardmarket'; // default
+    let priceSource = 'cardmarket';
     try {
         const row = db.prepare("SELECT value FROM settings WHERE key = 'price_source'").get();
         if (row && row.value) priceSource = row.value;
@@ -437,7 +440,6 @@ async function performCardUpdate(cards, eventSender) {
         console.log("Error reading price source settings:", e);
     }
 
-    // mapping for API fields
     const sourceMap = {
         'cardmarket': 'cardmarket_price',
         'tcgplayer': 'tcgplayer_price',
@@ -474,6 +476,12 @@ async function performCardUpdate(cards, eventSender) {
                     price = parseFloat(apiCard.card_prices[0][apiField]) || 0;
                 }
 
+                // Map Link Rating to Level if Link Monster
+                let level = apiCard.level;
+                if (apiCard.type && apiCard.type.includes('Link') && apiCard.linkval !== undefined) {
+                    level = apiCard.linkval;
+                }
+
                 db.prepare(`
                   UPDATE cards SET
                     name = @name, type = @type, desc = @desc, image_url = @image_url,
@@ -485,9 +493,9 @@ async function performCardUpdate(cards, eventSender) {
                    type: apiCard.type,
                    desc: apiCard.desc,
                    image_url: imageUrl,
-                   atk: apiCard.atk || null,
-                   def: apiCard.def || null,
-                   level: apiCard.level || null,
+                   atk: valOrNull(apiCard.atk),
+                   def: valOrNull(apiCard.def),
+                   level: valOrNull(level),
                    race: apiCard.race || null,
                    attribute: apiCard.attribute || null,
                    price: price
@@ -521,8 +529,50 @@ ipcMain.handle('update-all-cards', async (event) => {
 
 ipcMain.handle('update-missing-cards', async (event) => {
   try {
-    const cards = db.prepare('SELECT id FROM cards WHERE atk IS NULL AND def IS NULL AND level IS NULL').all();
-    const updatedCount = await performCardUpdate(cards, event.sender);
+    // We want to target cards where data is truly missing.
+    // However, since we now map Link Rating to Level, we should check for NULLs again.
+    // Also, 0 is now preserved.
+    // Query: Any card with NULL atk, or (NULL def AND not link), or NULL level
+    // But verifying "not link" in SQL without TYPE being reliable (maybe null too) is hard.
+    // Simpler: Just select cards where ANY of these is NULL. performCardUpdate handles logic.
+    const cards = db.prepare('SELECT id, type FROM cards WHERE atk IS NULL OR def IS NULL OR level IS NULL').all();
+
+    // Filter out Link monsters who have DEF as NULL (which is valid)
+    const validMissing = cards.filter(c => {
+         // If it's a Link monster, DEF being NULL is fine.
+         // But ATK and LEVEL (Link Rating) should be there.
+         if (c.type && c.type.includes('Link')) {
+             // For Link: missing if ATK is null OR Level is null (since we map linkval to level now)
+             // If DB has NULL level for Link, it's missing (needs update).
+             // If DB has NULL def for Link, it's NOT missing.
+             // We can't check column values here easily without fetching them.
+             // The SQL 'WHERE atk IS NULL OR def IS NULL OR level IS NULL' returns it if ANY is null.
+             // If DEF is NULL (valid for Link), it returns it.
+             // We want to update it IF it needs update.
+             // If we already updated it, DEF is still NULL. We don't want to re-update forever.
+
+             // We need to fetch the row to check specifically.
+             // Optimization: Update the SQL.
+             return true; // We'll let performCardUpdate run. It's safe to re-run.
+         }
+         return true;
+    });
+
+    // Actually, to avoid infinite loops of "Fetch Missing", we should refine the SQL or logic.
+    // If I select WHERE def IS NULL, and it's a Link monster, I will always select it.
+    // performCardUpdate will set def=NULL.
+    // Next time, I select it again.
+
+    // FIX: Refine SQL.
+    // We only care if ATK is missing, OR (Level is missing), OR (Def is missing AND Type NOT LIKE '%Link%')
+    const cardsToUpdate = db.prepare(`
+        SELECT id FROM cards
+        WHERE atk IS NULL
+           OR level IS NULL
+           OR (def IS NULL AND (type IS NULL OR type NOT LIKE '%Link%'))
+    `).all();
+
+    const updatedCount = await performCardUpdate(cardsToUpdate, event.sender);
     return { success: true, updatedCount };
   } catch (error) {
     console.error('Update Missing Error:', error);

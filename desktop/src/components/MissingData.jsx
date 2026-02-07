@@ -11,15 +11,49 @@ export default function MissingData() {
           if (window.api) {
               const allCards = await window.api.getCollection();
               // Filter for cards with missing critical data
-          // Ignore stats for Spell/Trap
-          const missing = allCards.filter(c => {
-              const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');
-              if (isMonster) {
-                  return c.atk === null || c.def === null || c.level === null;
-              }
-              // For spells/traps, check if other critical info is missing (e.g. image)
-              return !c.image_url;
-          });
+              const missing = allCards.filter(c => {
+                  const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');
+                  const isLink = c.type && c.type.includes('Link');
+
+                  if (isMonster) {
+                      // ATK is always required
+                      if (c.atk === null) return true;
+
+                      // DEF required unless Link
+                      if (!isLink && c.def === null) return true;
+
+                      // Level (or Rank/Link Rating) is required
+                      // We now map Link Rating to 'level' in backend, so level should be present.
+                      if (c.level === null) return true;
+
+                      return false;
+                  }
+
+                  // For spells/traps, check if other critical info is missing (e.g. image)
+                  return !c.image_url;
+              });
+              setCards(missing);
+          } else {
+              // Dev Mock
+              const mockCards = [
+                  { id: '1', name: 'Valid Link', type: 'Link Monster', atk: 1000, def: null, level: 2, image_url: 'http://foo' },
+                  { id: '2', name: 'Valid Zero ATK', type: 'Normal Monster', atk: 0, def: 2000, level: 4, image_url: 'http://foo' },
+                  { id: '3', name: 'Missing Image', type: 'Spell Card', image_url: '' },
+                  { id: '4', name: 'Missing ATK', type: 'Normal Monster', atk: null, def: 1000, level: 4, image_url: 'http://foo' },
+                  { id: '5', name: 'Missing Link Rating', type: 'Link Monster', atk: 1500, def: null, level: null, image_url: 'http://foo' },
+              ];
+               const missing = mockCards.filter(c => {
+                  const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');
+                  const isLink = c.type && c.type.includes('Link');
+
+                  if (isMonster) {
+                      if (c.atk === null) return true;
+                      if (!isLink && c.def === null) return true;
+                      if (c.level === null) return true;
+                      return false;
+                  }
+                  return !c.image_url;
+              });
               setCards(missing);
           }
       };
@@ -58,15 +92,24 @@ export default function MissingData() {
                         {cards.map(card => {
                             const missingFields = [];
                             const isMonster = card.type && !card.type.includes('Spell') && !card.type.includes('Trap');
+                            const isLink = card.type && card.type.includes('Link');
 
-                            if (isMonster && (card.atk == null || card.def == null)) missingFields.push('Stats');
+                            if (isMonster) {
+                                if (card.atk == null) missingFields.push('ATK');
+                                if (!isLink && card.def == null) missingFields.push('DEF');
+                                if (card.level == null) missingFields.push(isLink ? 'Link Rating' : 'Level/Rank');
+                            }
                             if (!card.image_url) missingFields.push('Image');
 
                             return (
                                 <tr key={`${card.id}-${card.set_code}`} className="hover:bg-gray-800/50 transition-colors">
                                     <td className="px-6 py-4 text-white font-medium flex items-center gap-3">
-                                        <div className="w-8 h-12 bg-black rounded overflow-hidden flex-shrink-0">
-                                            <img src={card.image_url} className="w-full h-full object-cover" alt="" />
+                                        <div className="w-8 h-12 bg-black rounded overflow-hidden flex-shrink-0 relative">
+                                            {card.image_url ? (
+                                                <img src={card.image_url} className="w-full h-full object-cover" alt="" />
+                                            ) : (
+                                                <div className="w-full h-full bg-gray-800 flex items-center justify-center text-xs text-gray-600">?</div>
+                                            )}
                                         </div>
                                         <div>
                                             <div>{card.name}</div>

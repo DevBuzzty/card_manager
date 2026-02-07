@@ -23,11 +23,7 @@ export default function CardDetailModal({ card, onClose }) {
 
   const handleUpdateQuantity = async (variant, delta) => {
       const newQty = (variant.quantity || 0) + delta;
-      if (newQty < 0) return; // Prevent negatives
-
-      // If newQty is 0, we effectively delete it (or keep it as 0).
-      // Let's keep it as 0 for now so user can add back, or maybe confirm delete.
-      // For UX, if 0, maybe show trash icon or just 0.
+      if (newQty < 0) return;
 
       const result = await window.api.updateCardMeta({
           passcode: card.id,
@@ -51,9 +47,8 @@ export default function CardDetailModal({ card, onClose }) {
       setIsAdding(true);
       const setInfo = availableSets.find(s => s.set_code === selectedNewSet);
 
-      // Default to "Unknown" stats if not found (shouldn't happen if selected from list)
       const newVariant = {
-          ...card, // Inherit base stats
+          ...card,
           set_code: setInfo ? setInfo.set_code : selectedNewSet,
           rarity: setInfo ? setInfo.set_rarity : 'Unknown',
           price: setInfo ? (parseFloat(setInfo.set_price) || 0) : 0,
@@ -63,10 +58,8 @@ export default function CardDetailModal({ card, onClose }) {
       const result = await window.api.addCardToDb(newVariant);
 
       if (result.success) {
-          // Update local state
           const existingIndex = localVariants.findIndex(v => v.set_code === newVariant.set_code);
           if (existingIndex >= 0) {
-              // Should have updated quantity in backend, update frontend
               setLocalVariants(prev => prev.map((v, i) =>
                   i === existingIndex ? { ...v, quantity: v.quantity + 1 } : v
               ));
@@ -77,6 +70,10 @@ export default function CardDetailModal({ card, onClose }) {
       }
       setIsAdding(false);
   };
+
+  const isLink = card.type && card.type.includes('Link');
+  const isXYZ = card.type && card.type.includes('XYZ');
+  const levelLabel = isLink ? 'Link Rating' : (isXYZ ? 'Rank' : 'Level');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
@@ -167,7 +164,7 @@ export default function CardDetailModal({ card, onClose }) {
                                 onChange={setSelectedNewSet}
                                 placeholder="Select Set..."
                                 options={availableSets
-                                    .filter(s => !localVariants.some(v => v.set_code === s.set_code)) // Filter out already owned? Optional. Let's keep all.
+                                    .filter(s => !localVariants.some(v => v.set_code === s.set_code))
                                     .map(set => ({
                                         value: set.set_code,
                                         label: `${set.set_code} - ${set.set_rarity} ($${set.set_price})`
@@ -186,11 +183,11 @@ export default function CardDetailModal({ card, onClose }) {
             </div>
 
             <div className="grid grid-cols-2 gap-4 mb-8">
-                {/* Level / Rank */}
+                {/* Level / Rank / Link Rating */}
                 {card.level != null && (
                     <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                        <span className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Level / Rank</span>
-                        <span className="text-xl font-bold text-yellow-500">★ {card.level}</span>
+                        <span className="text-xs text-gray-500 uppercase tracking-wider block mb-1">{levelLabel}</span>
+                        <span className="text-xl font-bold text-yellow-500">{isLink ? `LINK-${card.level}` : `★ ${card.level}`}</span>
                     </div>
                 )}
 
@@ -202,8 +199,8 @@ export default function CardDetailModal({ card, onClose }) {
                     </div>
                 )}
 
-                 {/* DEF */}
-                 {card.def != null && (
+                 {/* DEF (Hide if Link) */}
+                 {!isLink && card.def != null && (
                     <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
                         <span className="text-xs text-gray-500 uppercase tracking-wider block mb-1">DEF</span>
                         <span className="text-xl font-bold text-blue-400">{card.def}</span>
