@@ -456,6 +456,13 @@ async function performCardUpdate(cards, eventSender) {
         }
     } catch(e) { console.log(e); }
 
+    const updateStmt = db.prepare(`
+        UPDATE cards SET
+          name = @name, type = @type, desc = @desc, image_url = @image_url,
+          atk = @atk, def = @def, level = @level, race = @race, attribute = @attribute, price = @price
+        WHERE id = @id
+    `);
+
     for (let i = 0; i < total; i++) {
        const card = cards[i];
 
@@ -482,12 +489,7 @@ async function performCardUpdate(cards, eventSender) {
                     level = apiCard.linkval;
                 }
 
-                db.prepare(`
-                  UPDATE cards SET
-                    name = @name, type = @type, desc = @desc, image_url = @image_url,
-                    atk = @atk, def = @def, level = @level, race = @race, attribute = @attribute, price = @price
-                  WHERE id = @id
-                `).run({
+                updateStmt.run({
                    id: String(apiCard.id),
                    name: apiCard.name,
                    type: apiCard.type,
