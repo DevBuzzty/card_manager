@@ -9,6 +9,10 @@ export default function DeckBuilder() {
   const [filter, setFilter] = useState('');
   const [showStats, setShowStats] = useState(false);
 
+  // Deck Creation State
+  const [isCreating, setIsCreating] = useState(false);
+  const [newDeckName, setNewDeckName] = useState('');
+
   // Deck State
   const [mainDeck, setMainDeck] = useState([]);
   const [extraDeck, setExtraDeck] = useState([]);
@@ -21,16 +25,19 @@ export default function DeckBuilder() {
     }
   }, []);
 
-  const handleCreateDeck = async () => {
-      const name = prompt("Enter deck name:");
-      if (!name) return;
+  const handleCreateDeck = async (e) => {
+      e.preventDefault();
+      if (!newDeckName.trim()) return;
+
       if (window.api) {
-          const newDeck = await window.api.createDeck(name);
+          const newDeck = await window.api.createDeck(newDeckName);
           setDecks([newDeck, ...decks]);
           setActiveDeck(newDeck);
           setMainDeck([]);
           setExtraDeck([]);
           setSideDeck([]);
+          setIsCreating(false);
+          setNewDeckName('');
       }
   };
 
@@ -248,11 +255,41 @@ export default function DeckBuilder() {
                         <button onClick={handleImportYdk} className="p-1.5 bg-gray-800 hover:text-white text-gray-400 rounded transition-colors" title="Import .ydk">
                             <Upload className="w-4 h-4" />
                         </button>
-                        <button onClick={handleCreateDeck} className="p-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded transition-colors" title="New Deck">
+                        <button onClick={() => setIsCreating(true)} className="p-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded transition-colors" title="New Deck">
                             <Plus className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
+
+                {isCreating && (
+                    <form onSubmit={handleCreateDeck} className="mb-4 bg-black/40 p-3 rounded-lg border border-space-violet/50 animate-in fade-in slide-in-from-top-2">
+                        <input
+                            autoFocus
+                            type="text"
+                            placeholder="Deck Name..."
+                            className="w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm mb-2 focus:border-space-violet focus:outline-none"
+                            value={newDeckName}
+                            onChange={e => setNewDeckName(e.target.value)}
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsCreating(false)}
+                                className="text-xs text-gray-400 hover:text-white px-2 py-1"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={!newDeckName.trim()}
+                                className="text-xs bg-space-violet hover:bg-space-violet-dark text-white px-3 py-1 rounded disabled:opacity-50"
+                            >
+                                Create
+                            </button>
+                        </div>
+                    </form>
+                )}
+
                 <div className="flex-1 overflow-y-auto custom-scrollbar space-y-1">
                     {decks.map(deck => (
                         <div
