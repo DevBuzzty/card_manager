@@ -4,6 +4,16 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 const Database = require('better-sqlite3');
 const os = require('os');
+const {
+    PORT,
+    DEFAULT_IP,
+    WINDOW_WIDTH,
+    WINDOW_HEIGHT,
+    BACKGROUND_COLOR,
+    ALLOWED_SETTING_KEYS,
+    DEFAULT_PRICE_SOURCE,
+    PRICE_SOURCE_MAP
+} = require('./constants.cjs');
 
 // Database Setup
 const dbPath = path.join(app.getPath('userData'), 'cards.db');
@@ -109,9 +119,9 @@ let io;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    backgroundColor: '#121212',
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+    backgroundColor: BACKGROUND_COLOR,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -140,11 +150,11 @@ function getLocalIpAddress() {
       }
     }
   }
-  return '127.0.0.1';
+  return DEFAULT_IP;
 }
 
 function startSocketServer() {
-  io = new Server(4000, {
+  io = new Server(PORT, {
     cors: {
       origin: "*",
       methods: ["GET", "POST"]
@@ -166,7 +176,7 @@ function startSocketServer() {
     });
   });
 
-  console.log('Socket.io server running on port 4000');
+  console.log(`Socket.io server running on port ${PORT}`);
 }
 
 app.whenReady().then(() => {
@@ -205,6 +215,9 @@ ipcMain.handle('get-settings', () => {
 });
 
 ipcMain.handle('save-setting', (event, { key, value }) => {
+    if (!ALLOWED_SETTING_KEYS.includes(key)) {
+        return { success: false, error: 'Unauthorized setting key' };
+    }
     try {
         db.prepare('INSERT INTO settings (key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value = @value').run({ key, value });
         return { success: true };
@@ -432,7 +445,7 @@ async function performCardUpdate(cards, eventSender) {
     let updatedCount = 0;
     const total = cards.length;
 
-    let priceSource = 'cardmarket';
+    let priceSource = DEFAULT_PRICE_SOURCE;
     try {
         const row = db.prepare("SELECT value FROM settings WHERE key = 'price_source'").get();
         if (row && row.value) priceSource = row.value;
@@ -440,14 +453,7 @@ async function performCardUpdate(cards, eventSender) {
         console.log("Error reading price source settings:", e);
     }
 
-    const sourceMap = {
-        'cardmarket': 'cardmarket_price',
-        'tcgplayer': 'tcgplayer_price',
-        'ebay': 'ebay_price',
-        'amazon': 'amazon_price',
-        'coolstuffinc': 'coolstuffinc_price'
-    };
-    const apiField = sourceMap[priceSource] || 'cardmarket_price';
+    const apiField = PRICE_SOURCE_MAP[priceSource] || PRICE_SOURCE_MAP[DEFAULT_PRICE_SOURCE];
 
     try {
         const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();

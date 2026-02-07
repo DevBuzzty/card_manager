@@ -12,18 +12,26 @@ export default function GeminiAssistant() {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) setApiKey(savedKey);
-    else setShowSettings(true);
+    if (window.api) {
+        window.api.getSettings().then(settings => {
+            if (settings.gemini_api_key) {
+                setApiKey(settings.gemini_api_key);
+            } else {
+                setShowSettings(true);
+            }
+        });
+    }
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const saveKey = (key) => {
+  const saveKey = async (key) => {
       if (!key.trim()) return;
-      localStorage.setItem('gemini_api_key', key.trim());
+      if (window.api) {
+          await window.api.saveSetting('gemini_api_key', key.trim());
+      }
       setApiKey(key.trim());
       setShowSettings(false);
   };
