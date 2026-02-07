@@ -115,13 +115,13 @@ export default function CardDetailModal({ card, onClose }) {
             </div>
 
             {/* Inventory / Variants Section */}
-            <div className="bg-[#2a2a2a] p-4 rounded-xl border border-gray-700 mb-6 flex-grow overflow-auto">
+            <div className="bg-[#2a2a2a] p-4 rounded-xl border border-gray-700 mb-6 flex-grow flex-shrink-0 overflow-auto">
                 <div className="flex items-center justify-between mb-4">
                     <span className="text-sm font-bold uppercase text-gray-400">Inventory Variants</span>
                     <span className="text-xs text-gray-500">Total Owned: {localVariants.reduce((sum, v) => sum + v.quantity, 0)}</span>
                 </div>
 
-                <div className="space-y-3 mb-4 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                     {localVariants.length === 0 && <p className="text-gray-500 text-sm italic">No variants owned.</p>}
                     {localVariants.map((variant, idx) => (
                         <div key={idx} className="flex items-center justify-between bg-black/40 p-2 rounded-lg border border-gray-800">
@@ -214,9 +214,9 @@ export default function CardDetailModal({ card, onClose }) {
                 </div>
             </div>
 
-            <div className="prose prose-invert max-w-none">
+            <div className="prose prose-invert max-w-none flex-shrink-0">
                 <h3 className="text-lg font-semibold text-gray-300 mb-2">Description</h3>
-                <p className="text-gray-400 leading-relaxed whitespace-pre-wrap font-serif text-lg bg-black/20 p-4 rounded-lg border border-gray-800">
+                <p className="text-gray-400 leading-relaxed whitespace-pre-wrap font-serif text-lg bg-black/20 p-4 rounded-lg border border-gray-800 max-h-[200px] overflow-y-auto custom-scrollbar">
                     {card.desc}
                 </p>
             </div>
