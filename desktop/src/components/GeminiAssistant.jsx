@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Bot, Settings, Key } from 'lucide-react';
+import { GEMINI_API_BASE_URL, GEMINI_MODEL_ENDPOINT } from '../constants/api';
 
 export default function GeminiAssistant() {
   const [messages, setMessages] = useState([
@@ -57,7 +58,7 @@ export default function GeminiAssistant() {
           `;
 
           // Using the stable endpoint for gemini-pro
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`, {
+          const response = await fetch(`${GEMINI_API_BASE_URL}/${GEMINI_MODEL_ENDPOINT}?key=${apiKey}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

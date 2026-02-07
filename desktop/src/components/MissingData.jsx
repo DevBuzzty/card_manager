@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertCircle, Edit2 } from 'lucide-react';
 import CardDetailModal from './CardDetailModal';
+import { getCardImageUrl } from '../constants/api';
 
 export default function MissingData() {
   const [cards, setCards] = useState([]);
@@ -36,11 +37,11 @@ export default function MissingData() {
           } else {
               // Dev Mock
               const mockCards = [
-                  { id: '1', name: 'Valid Link', type: 'Link Monster', atk: 1000, def: null, level: 2, image_url: 'http://foo' },
-                  { id: '2', name: 'Valid Zero ATK', type: 'Normal Monster', atk: 0, def: 2000, level: 4, image_url: 'http://foo' },
+                  { id: '1', name: 'Valid Link', type: 'Link Monster', atk: 1000, def: null, level: 2, image_url: getCardImageUrl('1') },
+                  { id: '2', name: 'Valid Zero ATK', type: 'Normal Monster', atk: 0, def: 2000, level: 4, image_url: getCardImageUrl('2') },
                   { id: '3', name: 'Missing Image', type: 'Spell Card', image_url: '' },
-                  { id: '4', name: 'Missing ATK', type: 'Normal Monster', atk: null, def: 1000, level: 4, image_url: 'http://foo' },
-                  { id: '5', name: 'Missing Link Rating', type: 'Link Monster', atk: 1500, def: null, level: null, image_url: 'http://foo' },
+                  { id: '4', name: 'Missing ATK', type: 'Normal Monster', atk: null, def: 1000, level: 4, image_url: getCardImageUrl('4') },
+                  { id: '5', name: 'Missing Link Rating', type: 'Link Monster', atk: 1500, def: null, level: null, image_url: getCardImageUrl('5') },
               ];
                const missing = mockCards.filter(c => {
                   const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');

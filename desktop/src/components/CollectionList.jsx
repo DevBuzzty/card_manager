@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { Search, RefreshCw, LayoutGrid, List as ListIcon, Database } from 'lucide-react';
 import CardDetailModal from './CardDetailModal';
 import CustomSelect from './CustomSelect';
+import { getCardImageUrl } from '../constants/api';
 
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [rawCards, setRawCards] = useState([]);
@@ -21,9 +22,9 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     } else {
         // Mock
         setRawCards([
-            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/46986414.jpg', atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 1, price: 5.50, set_code: 'LOB-005', rarity: 'Ultra Rare' },
-            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/46986414.jpg', atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 3, price: 1.20, set_code: 'SDY-006', rarity: 'Common' },
-            { id: '89631139', name: 'Blue-Eyes White Dragon', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/89631139.jpg', atk: 3000, def: 2500, level: 8, race: 'Dragon', attribute: 'LIGHT', desc: 'This legendary dragon...', quantity: 1, price: 50.00, set_code: 'LOB-001', rarity: 'Ultra Rare' }
+            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: getCardImageUrl('46986414'), atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 1, price: 5.50, set_code: 'LOB-005', rarity: 'Ultra Rare' },
+            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: getCardImageUrl('46986414'), atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 3, price: 1.20, set_code: 'SDY-006', rarity: 'Common' },
+            { id: '89631139', name: 'Blue-Eyes White Dragon', type: 'Normal Monster', image_url: getCardImageUrl('89631139'), atk: 3000, def: 2500, level: 8, race: 'Dragon', attribute: 'LIGHT', desc: 'This legendary dragon...', quantity: 1, price: 50.00, set_code: 'LOB-001', rarity: 'Ultra Rare' }
         ]);
     }
   };

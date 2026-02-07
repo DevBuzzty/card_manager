@@ -4,6 +4,15 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 const Database = require('better-sqlite3');
 const os = require('os');
+const {
+    YGOPRODECK_API_URL,
+    SOCKET_PORT,
+    DEFAULT_IP,
+    WINDOW_WIDTH,
+    WINDOW_HEIGHT,
+    WINDOW_BG_COLOR,
+    ALLOWED_SETTING_KEYS
+} = require('./constants.cjs');
 
 // Database Setup
 const dbPath = path.join(app.getPath('userData'), 'cards.db');
@@ -109,9 +118,9 @@ let io;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    backgroundColor: '#121212',
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+    backgroundColor: WINDOW_BG_COLOR,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -140,11 +149,11 @@ function getLocalIpAddress() {
       }
     }
   }
-  return '127.0.0.1';
+  return DEFAULT_IP;
 }
 
 function startSocketServer() {
-  io = new Server(4000, {
+  io = new Server(SOCKET_PORT, {
     cors: {
       origin: "*",
       methods: ["GET", "POST"]
@@ -166,7 +175,7 @@ function startSocketServer() {
     });
   });
 
-  console.log('Socket.io server running on port 4000');
+  console.log(`Socket.io server running on port ${SOCKET_PORT}`);
 }
 
 app.whenReady().then(() => {
@@ -206,6 +215,9 @@ ipcMain.handle('get-settings', () => {
 
 ipcMain.handle('save-setting', (event, { key, value }) => {
     try {
+        if (!ALLOWED_SETTING_KEYS.includes(key)) {
+            return { success: false, error: 'Invalid setting key' };
+        }
         db.prepare('INSERT INTO settings (key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value = @value').run({ key, value });
         return { success: true };
     } catch (e) {
@@ -232,7 +244,7 @@ ipcMain.handle('delete-database', async () => {
 
 ipcMain.handle('fetch-card-data', async (event, passcode) => {
   try {
-    const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${passcode}`);
+    const response = await fetch(`${YGOPRODECK_API_URL}?id=${passcode}`);
     if (!response.ok) {
       throw new Error('Card not found');
     }
@@ -464,7 +476,7 @@ async function performCardUpdate(cards, eventSender) {
        }
 
        try {
-          const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${card.id}`);
+          const response = await fetch(`${YGOPRODECK_API_URL}?id=${card.id}`);
           if (response.ok) {
              const data = await response.json();
              if (data.data && data.data.length > 0) {

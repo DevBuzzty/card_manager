@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus } from 'lucide-react';
 import { playScanSound } from '../utils/sound';
 import CustomSelect from './CustomSelect';
+import { getCardImageUrl } from '../constants/api';
 
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
 
@@ -31,7 +32,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
              setScannedCards(prev => prev.map(c => c.tempId === tempId ? {
                  ...c,
                  status: 'loaded',
-                 data: { name: 'Blue-Eyes White Dragon', type: 'Normal Monster', race: 'Dragon', card_images: [{ image_url: 'https://images.ygoprodeck.com/images/cards/89631139.jpg' }] }
+                 data: { name: 'Blue-Eyes White Dragon', type: 'Normal Monster', race: 'Dragon', card_images: [{ image_url: getCardImageUrl('89631139') }] }
              } : c));
         }, 1000);
     }

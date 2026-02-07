@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, Upload, FileUp, AlertTriangle } from 'lucide-react';
 import CustomSelect from './CustomSelect';
+import { getCardImageUrl } from '../constants/api';
 
 export default function DeckBuilder() {
   const [decks, setDecks] = useState([]);
@@ -82,7 +83,7 @@ export default function DeckBuilder() {
               const main = [], extra = [], side = [];
               result.deck.forEach(c => {
                   // Find details in collection to show images immediately if owned, else placeholder
-                  const cardInfo = collection.find(col => col.id === c.id) || { id: c.id, name: 'Unknown / Not Owned', image_url: `https://images.ygoprodeck.com/images/cards/${c.id}.jpg` };
+                  const cardInfo = collection.find(col => col.id === c.id) || { id: c.id, name: 'Unknown / Not Owned', image_url: getCardImageUrl(c.id) };
                   const deckCard = { ...cardInfo, card_id: c.id, quantity: 1 };
 
                   if (c.type === 'extra') extra.push(deckCard);
