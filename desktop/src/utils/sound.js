@@ -1,29 +1,27 @@
-// Simple chime sound using Web Audio API
-export function playScanSound() {
+// Utility to play a "success" sound effect
+export const playScanSound = () => {
     try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         if (!AudioContext) return;
 
         const ctx = new AudioContext();
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
 
-        oscillator.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
 
-        // Pleasant high pitch chime
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(800, ctx.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.15);
+        // High-tech blip sound
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
 
-        // Soft attack and release
-        gainNode.gain.setValueAtTime(0, ctx.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.05); // Volume up
-        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5); // Fade out
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
 
-        oscillator.start(ctx.currentTime);
-        oscillator.stop(ctx.currentTime + 0.5);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
     } catch (e) {
         console.error("Audio play failed", e);
     }
-}
+};
