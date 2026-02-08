@@ -3,9 +3,12 @@ import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus, HelpCircl
 import { playScanSound } from '../utils/sound';
 import CustomSelect from './CustomSelect';
 import RarityGuide from './RarityGuide';
+import CardSearchModal from './CardSearchModal';
+import { Search } from 'lucide-react';
 
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
   const [showRarityGuide, setShowRarityGuide] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   const fetchCard = useCallback(async (tempId, passcode) => {
     // Set loading immediately to prevent double fetch
@@ -165,16 +168,62 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 </button>
                 <button
                     onClick={() => setShowRarityGuide(true)}
-                    className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors text-sm shadow-[0_0_10px_rgba(157,0,255,0.3)] hover:shadow-[0_0_20px_rgba(157,0,255,0.5)]"
+                    className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg transition-colors text-sm border border-gray-700"
                 >
                     <HelpCircle className="w-4 h-4 mr-2" />
-                    Rarity Guide
+                    Guide
+                </button>
+                <button
+                    onClick={() => setShowSearch(true)}
+                    className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors text-sm shadow-[0_0_10px_rgba(157,0,255,0.3)] hover:shadow-[0_0_20px_rgba(157,0,255,0.5)]"
+                >
+                    <Search className="w-4 h-4 mr-2" />
+                    Search
                 </button>
             </div>
         </div>
 
         {showRarityGuide && (
             <RarityGuide onClose={() => setShowRarityGuide(false)} />
+        )}
+
+        {showSearch && (
+            <CardSearchModal
+                onClose={() => setShowSearch(false)}
+                onSelect={(card) => {
+                    // Manually inject into scanned list
+                    setScannedCards(prev => [{
+                        tempId: Date.now() + Math.random(),
+                        passcode: String(card.id),
+                        status: 'loaded', // Already have data from search
+                        data: card, // Search result object matches DB structure roughly
+                        quantity: 1,
+                        isManualEntry: true // Default to manual entry so they can set rarity easily?
+                                            // Actually, search result might have set info if detailed.
+                                            // But usually 'fname' endpoint returns minimal data.
+                                            // Let's assume minimal and trigger a fetch?
+                                            // No, passing 'loaded' avoids refetch.
+                                            // Let's pass 'pending' to force a full fetch with sets?
+                                            // YES. Better to get full details including sets.
+                        // status: 'pending' // Override above
+                    }, ...prev]);
+                    // Actually, if we set 'pending', it will refetch in useEffect.
+                    // Let's update the object passed to setScannedCards
+
+                    /*
+                       We want to use the ID to fetch full details (prices, sets).
+                       The search result has 'id'.
+                    */
+                   setScannedCards(prev => [{
+                       tempId: Date.now() + Math.random(),
+                       passcode: String(card.id),
+                       status: 'pending',
+                       data: null
+                   }, ...prev]);
+
+                   setShowSearch(false);
+                }}
+            />
         )}
 
         {scannedCards.length === 0 && (
