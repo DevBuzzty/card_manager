@@ -8,14 +8,10 @@ export default function Portfolio() {
     const [topAssets, setTopAssets] = useState([]);
     const [timeframe, setTimeframe] = useState('ALL');
     const [allocation, setAllocation] = useState([]);
-
-    useEffect(() => {
-        if (window.api) {
-            loadData();
-        }
-    }, []);
+    const [isLive, setIsLive] = useState(false);
 
     const loadData = async () => {
+        if (!window.api) return;
         const hist = await window.api.getPriceHistory();
         const portfolio = await window.api.getPortfolio();
         const collection = await window.api.getCollection();
@@ -55,6 +51,29 @@ export default function Portfolio() {
         setAllocation(allocData);
     };
 
+    useEffect(() => {
+        if (window.api) {
+            // Use setTimeout to avoid synchronous state update warning
+            setTimeout(() => loadData(), 0);
+
+            // Listen for real-time price updates
+            const cleanup = window.api.onPriceUpdate && window.api.onPriceUpdate((data) => {
+                console.log("Price Update Received:", data);
+                setIsLive(true);
+                // We could selectively update state, but reloading ensures consistency for now
+                // Optimization: just update stats and history if needed, but loadData is fast enough locally
+                setTimeout(() => loadData(), 0);
+
+                // Pulse effect timeout
+                setTimeout(() => setIsLive(false), 2000);
+            });
+
+            return () => {
+                if (cleanup) cleanup();
+            }
+        }
+    }, []);
+
     const filteredHistory = useMemo(() => {
         if (timeframe === 'ALL') return history;
         const now = new Date();
@@ -81,8 +100,15 @@ export default function Portfolio() {
             {/* Header / Main Value */}
             <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                 <div>
-                    <span className="text-gray-500 text-sm uppercase font-bold tracking-widest">Total Portfolio Value</span>
-                    <h1 className="text-6xl font-bold text-white mt-2 tracking-tight">
+                    <div className="flex items-center gap-3">
+                         <span className="text-gray-500 text-sm uppercase font-bold tracking-widest">Total Portfolio Value</span>
+                         {isLive && (
+                             <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-500 text-[10px] uppercase font-bold tracking-wider animate-pulse border border-red-500/50">
+                                 Live Update
+                             </span>
+                         )}
+                    </div>
+                    <h1 className={`text-6xl font-bold text-white mt-2 tracking-tight transition-colors duration-500 ${isLive ? 'text-green-400' : ''}`}>
                         ${stats.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </h1>
                     <div className={`flex items-center mt-2 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>

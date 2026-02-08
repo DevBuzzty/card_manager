@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('update-progress', subscription);
     return () => ipcRenderer.removeListener('update-progress', subscription);
   },
+  onPriceUpdate: (callback) => {
+    const subscription = (_event, value) => callback(value);
+    ipcRenderer.on('price-update', subscription);
+    return () => ipcRenderer.removeListener('price-update', subscription);
+  },
 
   // Deck Builder
   getDecks: () => ipcRenderer.invoke('get-decks'),

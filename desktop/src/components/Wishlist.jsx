@@ -8,16 +8,16 @@ export default function Wishlist() {
     const [isSearching, setIsSearching] = useState(false);
     const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        loadWishlist();
-    }, []);
-
     const loadWishlist = async () => {
         if (window.api) {
             const list = await window.api.getWishlist();
             setWishlist(list);
         }
     };
+
+    useEffect(() => {
+        setTimeout(() => loadWishlist(), 0);
+    }, []);
 
     const handleSearch = async (e) => {
         e.preventDefault();

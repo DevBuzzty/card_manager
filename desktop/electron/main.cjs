@@ -202,14 +202,134 @@ function startSocketServer() {
   console.log('Socket.io server running on port 4000');
 }
 
+let priceUpdateInterval;
+
 app.whenReady().then(() => {
   createWindow();
   startSocketServer();
+  startPricePoller();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 });
+
+function startPricePoller() {
+    if (priceUpdateInterval) clearInterval(priceUpdateInterval);
+
+    // Poll every 60 seconds (can be adjusted)
+    priceUpdateInterval = setInterval(async () => {
+        if (!mainWindow) return;
+
+        console.log("Polling for price updates...");
+        try {
+            // 1. Get a batch of cards to update (e.g., 50 random cards or oldest updated)
+            // For simplicity, let's pick 50 cards at random from the collection to simulate "live" activity across the portfolio
+            const cards = db.prepare('SELECT id, set_code, price FROM cards ORDER BY RANDOM() LIMIT 50').all();
+
+            if (cards.length === 0) return;
+
+            // 2. Extract IDs for batch API call
+            // YGOPRODeck API supports comma-separated IDs: ?id=123,456,789
+            // Note: We need to handle duplicates in the ID list if we have multiple printings of same card,
+            // but the API call only needs unique IDs.
+            const uniqueIds = [...new Set(cards.map(c => c.id))];
+            const idString = uniqueIds.join(',');
+
+            const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${idString}`);
+            if (!response.ok) return; // Silent fail
+
+            const data = await response.json();
+            if (!data.data) return;
+
+            const apiCards = data.data; // Array of card info
+
+            let updates = [];
+            let totalValueChange = 0;
+
+            // 3. Determine price source
+            let priceSource = 'cardmarket';
+            try {
+                const row = db.prepare("SELECT value FROM settings WHERE key = 'price_source'").get();
+                if (row && row.value) priceSource = row.value;
+            } catch (e) {}
+
+            const sourceMap = {
+                'cardmarket': 'cardmarket_price',
+                'tcgplayer': 'tcgplayer_price',
+                'ebay': 'ebay_price',
+                'amazon': 'amazon_price',
+                'coolstuffinc': 'coolstuffinc_price'
+            };
+            const apiField = sourceMap[priceSource] || 'cardmarket_price';
+
+            // 4. Update Database & prepare events
+            const updateStmt = db.prepare('UPDATE cards SET price = @price WHERE id = @id AND set_code = @set_code');
+
+            db.transaction(() => {
+                cards.forEach(localCard => {
+                    const apiData = apiCards.find(api => String(api.id) === String(localCard.id));
+                    if (!apiData) return;
+
+                    let newPrice = 0;
+
+                    // Price Logic (Same as manual update)
+                    let foundSetPrice = false;
+                    if (localCard.set_code && localCard.set_code !== 'Unknown' && apiData.card_sets) {
+                        const matchedSet = apiData.card_sets.find(s => s.set_code === localCard.set_code);
+                        if (matchedSet && matchedSet.set_price) {
+                            newPrice = parseFloat(matchedSet.set_price);
+                            foundSetPrice = true;
+                        }
+                    }
+
+                    if (!foundSetPrice) {
+                        if (apiData.card_prices && apiData.card_prices.length > 0) {
+                            newPrice = parseFloat(apiData.card_prices[0][apiField]) || 0;
+                        }
+                    }
+
+                    // Check if price changed
+                    if (Math.abs(newPrice - (localCard.price || 0)) > 0.01) {
+                         updateStmt.run({
+                             price: newPrice,
+                             id: localCard.id,
+                             set_code: localCard.set_code
+                         });
+                         updates.push({
+                             id: localCard.id,
+                             set_code: localCard.set_code,
+                             oldPrice: localCard.price,
+                             newPrice: newPrice
+                         });
+                         totalValueChange += (newPrice - (localCard.price || 0));
+                    }
+                });
+            })();
+
+            // 5. Emit event if there were changes
+            if (updates.length > 0) {
+                console.log(`Updated ${updates.length} prices via background polling.`);
+
+                // Recalculate total portfolio value efficiently
+                const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards').get();
+
+                // Update history if change is significant
+                if (Math.abs(totalValueChange) > 0.5) {
+                    db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: stats.totalValue || 0 });
+                }
+
+                mainWindow.webContents.send('price-update', {
+                    updates,
+                    totalValue: stats.totalValue || 0
+                });
+            }
+
+        } catch (e) {
+            console.error("Background Price Polling Error:", e);
+        }
+    }, 60000); // 60 seconds
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();

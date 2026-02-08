@@ -162,90 +162,8 @@ export default function DeckBuilder() {
 
   const filteredCollection = collection.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
 
-  // Sub-component for a card row in deck list
-  const DeckCardRow = ({ card, type }) => {
-      // Check ownership
-      const owned = collection.find(c => c.id === card.card_id);
-      const ownedQty = owned ? owned.quantity : 0;
-      const missing = card.quantity > ownedQty;
-
-      return (
-          <div
-            onClick={() => removeFromDeck(card.card_id, type)}
-            className="flex items-center justify-between p-2 hover:bg-red-500/10 rounded cursor-pointer group border-b border-gray-800"
-          >
-              <div className="flex items-center gap-2 overflow-hidden">
-                  <span className="font-bold text-gray-400 w-4">{card.quantity}</span>
-                  <div className="w-8 h-8 bg-black rounded overflow-hidden flex-shrink-0">
-                      <img src={card.image_url} alt="" className="w-full h-full object-cover" />
-                  </div>
-                  <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
-              </div>
-              {missing && (
-                  <div className="flex items-center text-xs text-red-500" title={`You own ${ownedQty}, need ${card.quantity}`}>
-                      <AlertTriangle className="w-3 h-3 mr-1" />
-                      {ownedQty}/{card.quantity}
-                  </div>
-              )}
-          </div>
-      );
-  };
-
   // Stats Components
-  const DeckStats = () => {
-      const allCards = [...mainDeck, ...extraDeck, ...sideDeck];
-      // Type breakdown (Monster, Spell, Trap) - Main Deck Only usually matters for ratios
-      let monsters = 0, spells = 0, traps = 0;
-      mainDeck.forEach(c => {
-          if (c.type && c.type.includes('Monster')) monsters += c.quantity;
-          else if (c.type && c.type.includes('Spell')) spells += c.quantity;
-          else if (c.type && c.type.includes('Trap')) traps += c.quantity;
-      });
-
-      const typeData = [
-          { name: 'Monster', value: monsters, color: '#A68349' }, // Orange/Brown
-          { name: 'Spell', value: spells, color: '#1D9E74' },   // Green
-          { name: 'Trap', value: traps, color: '#BC5A84' }     // Pink
-      ].filter(d => d.value > 0);
-
-      // Attribute breakdown (All cards)
-      const attrCounts = {};
-      allCards.forEach(c => {
-          if (c.attribute) {
-              attrCounts[c.attribute] = (attrCounts[c.attribute] || 0) + c.quantity;
-          }
-      });
-      const attrData = Object.keys(attrCounts).map(k => ({ name: k, value: attrCounts[k] }));
-
-      return (
-          <div className="grid grid-cols-2 gap-4 h-64 mb-4">
-              <div className="bg-black/30 p-4 rounded-xl border border-gray-800">
-                  <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Card Types (Main)</h4>
-                  <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                          <Pie data={typeData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={60}>
-                              {typeData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                              ))}
-                          </Pie>
-                          <RechartsTooltip contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
-                      </PieChart>
-                  </ResponsiveContainer>
-              </div>
-              <div className="bg-black/30 p-4 rounded-xl border border-gray-800">
-                  <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Attributes</h4>
-                   <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={attrData}>
-                          <XAxis dataKey="name" stroke="#666" fontSize={10} />
-                          <YAxis stroke="#666" fontSize={10} />
-                          <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
-                          <Bar dataKey="value" fill="#9D00FF" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                  </ResponsiveContainer>
-              </div>
-          </div>
-      );
-  };
+  const deckStatsProps = { mainDeck, extraDeck, sideDeck };
 
   return (
     <div className="flex h-full gap-6">
@@ -360,7 +278,7 @@ export default function DeckBuilder() {
                         </div>
                     </div>
 
-                    {showStats && <DeckStats />}
+                    {showStats && <DeckStats {...deckStatsProps} />}
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pr-2">
                         {/* Main Deck */}
@@ -371,7 +289,7 @@ export default function DeckBuilder() {
                             </div>
                             <div className="space-y-1">
                                 {mainDeck.length === 0 && <p className="text-gray-600 text-sm italic">Drag or click cards to add.</p>}
-                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" />)}
+                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" collection={collection} removeFromDeck={removeFromDeck} />)}
                             </div>
                         </div>
 
@@ -382,7 +300,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{extraDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" />)}
+                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" collection={collection} removeFromDeck={removeFromDeck} />)}
                             </div>
                         </div>
 
@@ -393,7 +311,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{sideDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" />)}
+                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" collection={collection} removeFromDeck={removeFromDeck} />)}
                             </div>
                         </div>
                     </div>
@@ -408,3 +326,87 @@ export default function DeckBuilder() {
     </div>
   );
 }
+
+// Sub-component for a card row in deck list
+const DeckCardRow = ({ card, type, collection, removeFromDeck }) => {
+    // Check ownership
+    const owned = collection.find(c => c.id === card.card_id);
+    const ownedQty = owned ? owned.quantity : 0;
+    const missing = card.quantity > ownedQty;
+
+    return (
+        <div
+          onClick={() => removeFromDeck(card.card_id, type)}
+          className="flex items-center justify-between p-2 hover:bg-red-500/10 rounded cursor-pointer group border-b border-gray-800"
+        >
+            <div className="flex items-center gap-2 overflow-hidden">
+                <span className="font-bold text-gray-400 w-4">{card.quantity}</span>
+                <div className="w-8 h-8 bg-black rounded overflow-hidden flex-shrink-0">
+                    <img src={card.image_url} alt="" className="w-full h-full object-cover" />
+                </div>
+                <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
+            </div>
+            {missing && (
+                <div className="flex items-center text-xs text-red-500" title={`You own ${ownedQty}, need ${card.quantity}`}>
+                    <AlertTriangle className="w-3 h-3 mr-1" />
+                    {ownedQty}/{card.quantity}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const DeckStats = ({ mainDeck, extraDeck, sideDeck }) => {
+    const allCards = [...mainDeck, ...extraDeck, ...sideDeck];
+    // Type breakdown (Monster, Spell, Trap) - Main Deck Only usually matters for ratios
+    let monsters = 0, spells = 0, traps = 0;
+    mainDeck.forEach(c => {
+        if (c.type && c.type.includes('Monster')) monsters += c.quantity;
+        else if (c.type && c.type.includes('Spell')) spells += c.quantity;
+        else if (c.type && c.type.includes('Trap')) traps += c.quantity;
+    });
+
+    const typeData = [
+        { name: 'Monster', value: monsters, color: '#A68349' }, // Orange/Brown
+        { name: 'Spell', value: spells, color: '#1D9E74' },   // Green
+        { name: 'Trap', value: traps, color: '#BC5A84' }     // Pink
+    ].filter(d => d.value > 0);
+
+    // Attribute breakdown (All cards)
+    const attrCounts = {};
+    allCards.forEach(c => {
+        if (c.attribute) {
+            attrCounts[c.attribute] = (attrCounts[c.attribute] || 0) + c.quantity;
+        }
+    });
+    const attrData = Object.keys(attrCounts).map(k => ({ name: k, value: attrCounts[k] }));
+
+    return (
+        <div className="grid grid-cols-2 gap-4 h-64 mb-4">
+            <div className="bg-black/30 p-4 rounded-xl border border-gray-800">
+                <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Card Types (Main)</h4>
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie data={typeData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={60}>
+                            {typeData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                            ))}
+                        </Pie>
+                        <RechartsTooltip contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+            <div className="bg-black/30 p-4 rounded-xl border border-gray-800">
+                <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Attributes</h4>
+                 <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={attrData}>
+                        <XAxis dataKey="name" stroke="#666" fontSize={10} />
+                        <YAxis stroke="#666" fontSize={10} />
+                        <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
+                        <Bar dataKey="value" fill="#9D00FF" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+    );
+};

@@ -18,47 +18,11 @@ export default function Dashboard({ setActiveTab }) {
     const handleQuickAdd = (e) => {
         e.preventDefault();
         if (quickAddCode.length >= 4 && window.api) {
-            // Simulate a scan event. The Main process sends this to renderer,
-            // but we can just emit it locally if we had a local event bus,
-            // OR we can invoke an IPC handler that sends the event back to us.
-            // But actually, we want the Staging Area to pick this up.
-            // Since StagingArea listens to `onCardScanned`, we need to trigger that.
-            // The cleanest way is to ask the main process to emit the event.
-            // BUT, `onCardScanned` is a listener. We can't easily "emit" from renderer to renderer unless via Main.
-            // Let's create a new IPC handler for "manual-scan" in main.cjs.
-
-            // Wait, we don't have that handler yet.
-            // Alternative: Dashboard doesn't need to "emit". It can just call the same logic?
-            // No, Staging Area holds the state.
-            // So we MUST go through the main process event loop.
-            // Let's use the socket logic? No, too complex.
-            // Let's rely on the fact that `window.api` is our bridge.
-            // We can add a `manualScan` method to preload/main.
-
             window.api.manualScan(quickAddCode);
             setQuickAddCode('');
             setActiveTab('staging'); // Switch to staging to see the result
         }
     };
-
-    const StatCard = ({ icon: Icon, label, value, color, onClick }) => (
-        <div
-            onClick={onClick}
-            className="bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800 hover:border-space-violet/50 transition-all cursor-pointer group relative overflow-hidden"
-        >
-            <div className={`absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full opacity-10 ${color}`}></div>
-            <div className="flex items-center gap-4 relative z-10">
-                <div className={`p-3 rounded-xl bg-opacity-20 ${color} text-white`}>
-                    <Icon className="w-6 h-6" />
-                </div>
-                <div>
-                    <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">{label}</p>
-                    <h3 className="text-2xl font-bold text-white">{value}</h3>
-                </div>
-            </div>
-            <ArrowRight className="absolute bottom-4 right-4 w-4 h-4 text-gray-600 group-hover:text-space-violet transition-colors" />
-        </div>
-    );
 
     return (
         <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -150,3 +114,25 @@ export default function Dashboard({ setActiveTab }) {
         </div>
     );
 }
+
+const StatCard = ({ icon, label, value, color, onClick }) => {
+    const IconComponent = icon;
+    return (
+        <div
+            onClick={onClick}
+            className="bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800 hover:border-space-violet/50 transition-all cursor-pointer group relative overflow-hidden"
+        >
+            <div className={`absolute right-[-20px] top-[-20px] w-24 h-24 rounded-full opacity-10 ${color}`}></div>
+            <div className="flex items-center gap-4 relative z-10">
+                <div className={`p-3 rounded-xl bg-opacity-20 ${color} text-white`}>
+                    <IconComponent className="w-6 h-6" />
+                </div>
+                <div>
+                    <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">{label}</p>
+                    <h3 className="text-2xl font-bold text-white">{value}</h3>
+                </div>
+            </div>
+            <ArrowRight className="absolute bottom-4 right-4 w-4 h-4 text-gray-600 group-hover:text-space-violet transition-colors" />
+        </div>
+    );
+};
