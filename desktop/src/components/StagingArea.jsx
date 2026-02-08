@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from 'react';
-import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus, HelpCircle } from 'lucide-react';
+import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus, HelpCircle, Edit } from 'lucide-react';
 import { playScanSound } from '../utils/sound';
 import CustomSelect from './CustomSelect';
 import RarityGuide from './RarityGuide';
@@ -53,7 +53,11 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
        // Prepare data
        const cardData = { ...card.data, quantity: card.quantity || 1 };
 
-       if (card.selectedSet) {
+       if (card.isManualEntry) {
+           cardData.set_code = card.manualSetCode || 'Unknown';
+           cardData.rarity = card.manualRarity || 'Unknown';
+           cardData.price = 0; // Manual entry defaults to 0
+       } else if (card.selectedSet) {
            cardData.set_code = card.selectedSet.set_code;
            cardData.rarity = card.selectedSet.set_rarity;
            cardData.price = parseFloat(card.selectedSet.set_price) || 0;
@@ -235,28 +239,57 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     </div>
 
                                     {/* Rarity */}
-                                    {card.data.card_sets ? (
-                                        <div className="flex-1">
-                                            <CustomSelect
-                                                value={card.selectedSet?.set_code || ''}
-                                                onChange={(val) => {
-                                                    const selected = card.data.card_sets.find(s => s.set_code === val);
-                                                    handleUpdateCard(card.tempId, { selectedSet: selected });
-                                                }}
-                                                placeholder={card.data.card_sets[0] ? `${card.data.card_sets[0].set_rarity} (Default)` : "Select Rarity"}
-                                                options={card.data.card_sets.map(set => ({
-                                                    value: set.set_code,
-                                                    label: `${set.set_code} - ${set.set_rarity}`
-                                                }))}
-                                                className="w-full"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <div className="flex-1 bg-gray-800 rounded px-2 py-1 text-xs text-yellow-500 border border-yellow-500/30 flex items-center justify-center">
-                                            <AlertCircle className="w-3 h-3 mr-1" />
-                                            No sets found via API
-                                        </div>
-                                    )}
+                                    <div className="flex-1 flex gap-2">
+                                        {card.isManualEntry ? (
+                                            <div className="flex gap-2 flex-1 animate-in fade-in zoom-in duration-200">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Set Code"
+                                                    className="w-1/2 bg-black/40 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:border-space-violet outline-none"
+                                                    value={card.manualSetCode || ''}
+                                                    onChange={(e) => handleUpdateCard(card.tempId, { manualSetCode: e.target.value })}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Rarity"
+                                                    className="w-1/2 bg-black/40 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:border-space-violet outline-none"
+                                                    value={card.manualRarity || ''}
+                                                    onChange={(e) => handleUpdateCard(card.tempId, { manualRarity: e.target.value })}
+                                                />
+                                            </div>
+                                        ) : (
+                                            card.data.card_sets ? (
+                                                <div className="flex-1">
+                                                    <CustomSelect
+                                                        value={card.selectedSet?.set_code || ''}
+                                                        onChange={(val) => {
+                                                            const selected = card.data.card_sets.find(s => s.set_code === val);
+                                                            handleUpdateCard(card.tempId, { selectedSet: selected });
+                                                        }}
+                                                        placeholder={card.data.card_sets[0] ? `${card.data.card_sets[0].set_rarity} (Default)` : "Select Rarity"}
+                                                        options={card.data.card_sets.map(set => ({
+                                                            value: set.set_code,
+                                                            label: `${set.set_code} - ${set.set_rarity}`
+                                                        }))}
+                                                        className="w-full"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="flex-1 bg-gray-800 rounded px-2 py-1 text-xs text-yellow-500 border border-yellow-500/30 flex items-center justify-center">
+                                                    <AlertCircle className="w-3 h-3 mr-1" />
+                                                    No sets found via API
+                                                </div>
+                                            )
+                                        )}
+
+                                        <button
+                                            onClick={() => handleUpdateCard(card.tempId, { isManualEntry: !card.isManualEntry })}
+                                            className={`p-1.5 rounded transition-colors ${card.isManualEntry ? 'bg-space-violet text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                                            title="Toggle Manual Entry"
+                                        >
+                                            <Edit className="w-3 h-3" />
+                                        </button>
+                                    </div>
                                 </div>
                             </>
                         ) : (
