@@ -46,6 +46,26 @@ export default function RarityGuide({ onClose }) {
         name: "Starlight Rare",
         description: "Entire card face has a holographic foil, name is gold or red foil.",
         color: "bg-cyan-300"
+    },
+    {
+        name: "Quarter Century Secret Rare",
+        description: "25th Anniversary watermark in text box, gold/holographic sparkling finish, gold name.",
+        color: "bg-yellow-200"
+    },
+    {
+        name: "Collector's Rare",
+        description: "Rainbow-colored reflection on the artwork and card border, with a textured surface.",
+        color: "bg-indigo-300"
+    },
+    {
+        name: "Gold Rare",
+        description: "Gold borders and frames, with foil on the artwork.",
+        color: "bg-yellow-600"
+    },
+    {
+        name: "Platinum Rare",
+        description: "Platinum-colored foil over the entire card surface.",
+        color: "bg-gray-200"
     }
   ];
 
