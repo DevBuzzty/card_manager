@@ -573,9 +573,9 @@ ipcMain.handle('update-card-meta', (event, data) => {
     }
 });
 
-async function performCardUpdate(cards, eventSender) {
+async function performCardUpdate(cardsToUpdate, eventSender) {
     let updatedCount = 0;
-    const total = cards.length;
+    const total = cardsToUpdate.length;
 
     let priceSource = 'cardmarket';
     try {
@@ -594,6 +594,7 @@ async function performCardUpdate(cards, eventSender) {
     };
     const apiField = sourceMap[priceSource] || 'cardmarket_price';
 
+    // Record history BEFORE update
     try {
         const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();
         if (totalVal && totalVal.val > 0) {
@@ -602,24 +603,40 @@ async function performCardUpdate(cards, eventSender) {
     } catch(e) { console.log(e); }
 
     for (let i = 0; i < total; i++) {
-       const card = cards[i];
+       const cardEntry = cardsToUpdate[i];
 
        if (eventSender) {
            eventSender.send('update-progress', { current: i + 1, total });
        }
 
        try {
-          const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${card.id}`);
+          const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${cardEntry.id}`);
           if (response.ok) {
              const data = await response.json();
              if (data.data && data.data.length > 0) {
                 const apiCard = data.data[0];
                 const imageUrl = apiCard.card_images && apiCard.card_images.length > 0 ? apiCard.card_images[0].image_url : '';
 
-                let price = card.price || 0;
-                if (apiCard.card_prices && apiCard.card_prices.length > 0) {
-                    price = parseFloat(apiCard.card_prices[0][apiField]) || 0;
+                let newPrice = 0;
+
+                // --- PRICE LOGIC START ---
+                // If the stored card has a set_code, try to find specific price
+                let foundSetPrice = false;
+                if (cardEntry.set_code && cardEntry.set_code !== 'Unknown' && apiCard.card_sets) {
+                    const matchedSet = apiCard.card_sets.find(s => s.set_code === cardEntry.set_code);
+                    if (matchedSet && matchedSet.set_price) {
+                        newPrice = parseFloat(matchedSet.set_price);
+                        foundSetPrice = true;
+                    }
                 }
+
+                // Fallback if no set matched or no set code stored
+                if (!foundSetPrice) {
+                    if (apiCard.card_prices && apiCard.card_prices.length > 0) {
+                        newPrice = parseFloat(apiCard.card_prices[0][apiField]) || 0;
+                    }
+                }
+                // --- PRICE LOGIC END ---
 
                 // Map Link Rating to Level if Link Monster
                 let level = apiCard.level;
@@ -631,9 +648,10 @@ async function performCardUpdate(cards, eventSender) {
                   UPDATE cards SET
                     name = @name, type = @type, desc = @desc, image_url = @image_url,
                     atk = @atk, def = @def, level = @level, race = @race, attribute = @attribute, price = @price
-                  WHERE id = @id
+                  WHERE id = @id AND set_code = @set_code
                 `).run({
                    id: String(apiCard.id),
+                   set_code: cardEntry.set_code || 'Unknown', // Update specific row
                    name: apiCard.name,
                    type: apiCard.type,
                    desc: apiCard.desc,
@@ -643,16 +661,24 @@ async function performCardUpdate(cards, eventSender) {
                    level: valOrNull(level),
                    race: apiCard.race || null,
                    attribute: apiCard.attribute || null,
-                   price: price
+                   price: newPrice
                 });
                 updatedCount++;
              }
           }
        } catch (err) {
-          console.error(`Failed to update card ${card.id}`, err);
+          console.error(`Failed to update card ${cardEntry.id}`, err);
        }
        await new Promise(r => setTimeout(r, 100));
     }
+
+    // Record history AFTER update
+    try {
+        const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();
+        if (totalVal && totalVal.val > 0) {
+             db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: totalVal.val });
+        }
+    } catch(e) { console.log(e); }
 
     if (eventSender) {
         eventSender.send('update-progress', { current: total, total });
@@ -663,7 +689,8 @@ async function performCardUpdate(cards, eventSender) {
 
 ipcMain.handle('update-all-cards', async (event) => {
   try {
-    const cards = db.prepare('SELECT id FROM cards').all();
+    // We must select set_code too, to identify unique rows
+    const cards = db.prepare('SELECT id, set_code FROM cards').all();
     const updatedCount = await performCardUpdate(cards, event.sender);
     return { success: true, updatedCount };
   } catch (error) {
@@ -674,44 +701,9 @@ ipcMain.handle('update-all-cards', async (event) => {
 
 ipcMain.handle('update-missing-cards', async (event) => {
   try {
-    // We want to target cards where data is truly missing.
-    // However, since we now map Link Rating to Level, we should check for NULLs again.
-    // Also, 0 is now preserved.
-    // Query: Any card with NULL atk, or (NULL def AND not link), or NULL level
-    // But verifying "not link" in SQL without TYPE being reliable (maybe null too) is hard.
-    // Simpler: Just select cards where ANY of these is NULL. performCardUpdate handles logic.
-    const cards = db.prepare('SELECT id, type FROM cards WHERE atk IS NULL OR def IS NULL OR level IS NULL').all();
-
-    // Filter out Link monsters who have DEF as NULL (which is valid)
-    const validMissing = cards.filter(c => {
-         // If it's a Link monster, DEF being NULL is fine.
-         // But ATK and LEVEL (Link Rating) should be there.
-         if (c.type && c.type.includes('Link')) {
-             // For Link: missing if ATK is null OR Level is null (since we map linkval to level now)
-             // If DB has NULL level for Link, it's missing (needs update).
-             // If DB has NULL def for Link, it's NOT missing.
-             // We can't check column values here easily without fetching them.
-             // The SQL 'WHERE atk IS NULL OR def IS NULL OR level IS NULL' returns it if ANY is null.
-             // If DEF is NULL (valid for Link), it returns it.
-             // We want to update it IF it needs update.
-             // If we already updated it, DEF is still NULL. We don't want to re-update forever.
-
-             // We need to fetch the row to check specifically.
-             // Optimization: Update the SQL.
-             return true; // We'll let performCardUpdate run. It's safe to re-run.
-         }
-         return true;
-    });
-
-    // Actually, to avoid infinite loops of "Fetch Missing", we should refine the SQL or logic.
-    // If I select WHERE def IS NULL, and it's a Link monster, I will always select it.
-    // performCardUpdate will set def=NULL.
-    // Next time, I select it again.
-
-    // FIX: Refine SQL.
-    // We only care if ATK is missing, OR (Level is missing), OR (Def is missing AND Type NOT LIKE '%Link%')
+    // Select specific rows (id, set_code) that need update
     const cardsToUpdate = db.prepare(`
-        SELECT id FROM cards
+        SELECT id, set_code FROM cards
         WHERE atk IS NULL
            OR level IS NULL
            OR (def IS NULL AND (type IS NULL OR type NOT LIKE '%Link%'))
