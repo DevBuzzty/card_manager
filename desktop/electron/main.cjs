@@ -313,7 +313,7 @@ ipcMain.handle('get-db-path', () => {
     return dbPath;
 });
 
-ipcMain.handle('delete-database', async () => {
+ipcMain.handle('reset-database', async () => {
     try {
         db.close();
         if (fs.existsSync(dbPath)) {
@@ -321,9 +321,18 @@ ipcMain.handle('delete-database', async () => {
         }
         app.relaunch();
         app.exit(0);
+        return { success: true };
     } catch (e) {
         return { success: false, error: e.message };
     }
+});
+
+ipcMain.handle('manual-scan', (event, passcode) => {
+    // Emit 'card-scanned' event to the renderer, just like a socket event would
+    if (mainWindow) {
+        mainWindow.webContents.send('card-scanned', { passcode });
+    }
+    return { success: true };
 });
 
 ipcMain.handle('fetch-card-data', async (event, passcode) => {

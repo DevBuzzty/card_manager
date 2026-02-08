@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Database, FileUp, Download, RefreshCw, Layers } from 'lucide-react';
+import { Database, FileUp, Download, RefreshCw, Layers, Trash2 } from 'lucide-react';
 
 export default function Settings() {
     const [priceSource, setPriceSource] = useState('cardmarket');
@@ -31,6 +31,15 @@ export default function Settings() {
             if (window.api) {
                 const res = await window.api.restoreDatabase();
                 if (!res.success && !res.canceled) alert("Restore failed: " + res.error);
+            }
+        }
+    };
+
+    const handleReset = async () => {
+        if (confirm("DANGER: This will permanently delete your ENTIRE collection and all decks. This cannot be undone. Are you absolutely sure?")) {
+            if (window.api) {
+                const res = await window.api.resetDatabase();
+                if (!res.success) alert("Reset failed: " + res.error);
             }
         }
     };
@@ -69,6 +78,18 @@ export default function Settings() {
                             >
                                 <FileUp className="w-4 h-4 mr-2" />
                                 Import Backup
+                            </button>
+                        </div>
+
+                        <div className="p-4 bg-red-900/10 rounded-lg border border-red-900/30 hover:bg-red-900/20 hover:border-red-500/50 transition-colors col-span-1 md:col-span-2">
+                            <h4 className="font-bold text-red-400 mb-2">Reset Database</h4>
+                            <p className="text-sm text-red-300/60 mb-4">Permanently delete all data and start fresh.</p>
+                            <button
+                                onClick={handleReset}
+                                className="w-full flex items-center justify-center px-4 py-2 bg-red-900/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg transition-colors border border-red-900/50"
+                            >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Factory Reset
                             </button>
                         </div>
                     </div>

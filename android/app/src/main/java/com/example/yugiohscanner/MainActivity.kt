@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.CenterFocusWeak
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.History
@@ -307,6 +308,8 @@ fun ScannerScreen(
     var isFlashOn by remember { mutableStateOf(false) }
     var isFocusLocked by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
+    var showManualEntry by remember { mutableStateOf(false) }
+    var manualCode by remember { mutableStateOf("") }
 
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var cameraInfo by remember { mutableStateOf<CameraInfo?>(null) }
@@ -452,6 +455,15 @@ fun ScannerScreen(
                 .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Manual Entry
+            IconButton(
+                onClick = { showManualEntry = true },
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = "Manual Entry", tint = Color.White)
+            }
+
              // History Toggle
             IconButton(
                 onClick = { showHistory = true },
@@ -506,6 +518,86 @@ fun ScannerScreen(
                     .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
             ) {
                 Icon(Icons.Default.Settings, contentDescription = "Disconnect", tint = Color.White)
+            }
+        }
+
+        // Manual Entry Overlay
+        if (showManualEntry) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.9f))
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background, RoundedCornerShape(16.dp))
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("Manual Entry", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    OutlinedTextField(
+                        value = manualCode,
+                        onValueChange = { if (it.length <= 8 && it.all { char -> char.isDigit() }) manualCode = it },
+                        label = { Text("Passcode") },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                showManualEntry = false
+                                manualCode = ""
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                        ) {
+                            Text("Cancel")
+                        }
+                        Button(
+                            onClick = {
+                                if (manualCode.length >= 4) { // Basic validation
+                                    lastScannedCode = manualCode
+                                    scanStatus = "Manual: $manualCode"
+
+                                    // Trigger Feedback
+                                    triggerFeedback()
+
+                                    // Add to History
+                                    onAddHistory(manualCode)
+
+                                    // Emit to socket
+                                    val data = JSONObject()
+                                    data.put("passcode", manualCode)
+                                    socket?.emit("card_scanned", data)
+
+                                    showManualEntry = false
+                                    manualCode = ""
+                                } else {
+                                    Toast.makeText(context, "Invalid Code", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Submit")
+                        }
+                    }
+                }
             }
         }
 

@@ -4,6 +4,7 @@ import { TrendingUp, Library, Layers, Clock, ArrowRight } from 'lucide-react';
 export default function Dashboard({ setActiveTab }) {
     const [stats, setStats] = useState({ totalValue: 0, totalCards: 0, uniqueCards: 0 });
     const [recentCards, setRecentCards] = useState([]);
+    const [quickAddCode, setQuickAddCode] = useState('');
 
     useEffect(() => {
         if (window.api) {
@@ -13,6 +14,32 @@ export default function Dashboard({ setActiveTab }) {
             });
         }
     }, []);
+
+    const handleQuickAdd = (e) => {
+        e.preventDefault();
+        if (quickAddCode.length >= 4 && window.api) {
+            // Simulate a scan event. The Main process sends this to renderer,
+            // but we can just emit it locally if we had a local event bus,
+            // OR we can invoke an IPC handler that sends the event back to us.
+            // But actually, we want the Staging Area to pick this up.
+            // Since StagingArea listens to `onCardScanned`, we need to trigger that.
+            // The cleanest way is to ask the main process to emit the event.
+            // BUT, `onCardScanned` is a listener. We can't easily "emit" from renderer to renderer unless via Main.
+            // Let's create a new IPC handler for "manual-scan" in main.cjs.
+
+            // Wait, we don't have that handler yet.
+            // Alternative: Dashboard doesn't need to "emit". It can just call the same logic?
+            // No, Staging Area holds the state.
+            // So we MUST go through the main process event loop.
+            // Let's use the socket logic? No, too complex.
+            // Let's rely on the fact that `window.api` is our bridge.
+            // We can add a `manualScan` method to preload/main.
+
+            window.api.manualScan(quickAddCode);
+            setQuickAddCode('');
+            setActiveTab('staging'); // Switch to staging to see the result
+        }
+    };
 
     const StatCard = ({ icon: Icon, label, value, color, onClick }) => (
         <div
@@ -40,12 +67,34 @@ export default function Dashboard({ setActiveTab }) {
                     <h1 className="text-4xl font-bold text-white mb-2">Welcome Back</h1>
                     <p className="text-gray-400">Here's what's happening with your collection.</p>
                 </div>
-                <button
-                    onClick={() => setActiveTab('staging')}
-                    className="px-6 py-3 bg-space-violet hover:bg-space-violet-dark text-white rounded-xl font-bold shadow-lg shadow-space-violet/20 transition-all hover:scale-105"
-                >
-                    Start Scanning
-                </button>
+                <div className="flex gap-4">
+                    <form onSubmit={handleQuickAdd} className="flex bg-[#1E1E1E] border border-gray-700 rounded-xl overflow-hidden focus-within:border-space-violet transition-colors">
+                         <input
+                            type="text"
+                            placeholder="Quick Add Passcode..."
+                            className="bg-transparent text-white px-4 py-3 outline-none w-48 font-mono text-sm"
+                            value={quickAddCode}
+                            onChange={(e) => {
+                                if (e.target.value.length <= 8 && /^\d*$/.test(e.target.value)) {
+                                    setQuickAddCode(e.target.value);
+                                }
+                            }}
+                         />
+                         <button
+                            type="submit"
+                            disabled={quickAddCode.length < 4}
+                            className="bg-gray-800 hover:bg-space-violet text-white px-4 font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                         >
+                            +
+                         </button>
+                    </form>
+                    <button
+                        onClick={() => setActiveTab('staging')}
+                        className="px-6 py-3 bg-space-violet hover:bg-space-violet-dark text-white rounded-xl font-bold shadow-lg shadow-space-violet/20 transition-all hover:scale-105"
+                    >
+                        Start Scanning
+                    </button>
+                </div>
             </div>
 
             {/* Stats Grid */}

@@ -37,4 +37,10 @@ contextBridge.exposeInMainWorld('api', {
   addToWishlist: (card) => ipcRenderer.invoke('add-to-wishlist', card),
   removeFromWishlist: (id) => ipcRenderer.invoke('remove-from-wishlist', id),
   searchOnline: (query) => ipcRenderer.invoke('search-online', query),
+
+  // Manual Scan
+  manualScan: (passcode) => ipcRenderer.invoke('manual-scan', passcode),
+
+  // Reset
+  resetDatabase: () => ipcRenderer.invoke('reset-database'),
 });

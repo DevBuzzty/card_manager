@@ -80,6 +80,12 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
       setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
   };
 
+  const handleClearAll = () => {
+      if (confirm("Clear all scanned cards? This cannot be undone.")) {
+          setScannedCards([]);
+      }
+  };
+
   const handleUpdateCard = (tempId, updates) => {
       setScannedCards(prev => prev.map(c => {
           if (c.tempId === tempId) {
@@ -122,6 +128,15 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 <span className="ml-3 text-sm font-normal text-gray-500 bg-gray-900 px-2 py-1 rounded-full">{scannedCards.length}</span>
             </h2>
             <div className="flex space-x-2">
+                {scannedCards.length > 0 && (
+                    <button
+                        onClick={handleClearAll}
+                        className="flex items-center px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 rounded-lg transition-colors text-sm border border-red-500/30"
+                    >
+                        <X className="w-4 h-4 mr-2" />
+                        Clear All
+                    </button>
+                )}
                 {scannedCards.some(c => c.status === 'loaded') && (
                      <button
                         onClick={() => {
