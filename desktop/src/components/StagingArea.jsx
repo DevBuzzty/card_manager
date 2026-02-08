@@ -1,9 +1,11 @@
-import { useEffect, useCallback } from 'react';
-import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus } from 'lucide-react';
+import { useEffect, useCallback, useState } from 'react';
+import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus, HelpCircle } from 'lucide-react';
 import { playScanSound } from '../utils/sound';
 import CustomSelect from './CustomSelect';
+import RarityGuide from './RarityGuide';
 
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
+  const [showRarityGuide, setShowRarityGuide] = useState(false);
 
   const fetchCard = useCallback(async (tempId, passcode) => {
     // Set loading immediately to prevent double fetch
@@ -157,8 +159,19 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                     <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
                     Import CSV
                 </button>
+                <button
+                    onClick={() => setShowRarityGuide(true)}
+                    className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors text-sm shadow-[0_0_10px_rgba(157,0,255,0.3)] hover:shadow-[0_0_20px_rgba(157,0,255,0.5)]"
+                >
+                    <HelpCircle className="w-4 h-4 mr-2" />
+                    Rarity Guide
+                </button>
             </div>
         </div>
+
+        {showRarityGuide && (
+            <RarityGuide onClose={() => setShowRarityGuide(false)} />
+        )}
 
         {scannedCards.length === 0 && (
             <div className="flex flex-col items-center justify-center h-64 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl bg-gray-900/50">
@@ -222,7 +235,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     </div>
 
                                     {/* Rarity */}
-                                    {card.data.card_sets && (
+                                    {card.data.card_sets ? (
                                         <div className="flex-1">
                                             <CustomSelect
                                                 value={card.selectedSet?.set_code || ''}
@@ -237,6 +250,11 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                 }))}
                                                 className="w-full"
                                             />
+                                        </div>
+                                    ) : (
+                                        <div className="flex-1 bg-gray-800 rounded px-2 py-1 text-xs text-yellow-500 border border-yellow-500/30 flex items-center justify-center">
+                                            <AlertCircle className="w-3 h-3 mr-1" />
+                                            No sets found via API
                                         </div>
                                     )}
                                 </div>
