@@ -46,6 +46,12 @@ contextBridge.exposeInMainWorld('api', {
   // Manual Scan
   manualScan: (passcode) => ipcRenderer.invoke('manual-scan', passcode),
 
+  // Settings
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSetting: (data) => ipcRenderer.invoke('save-setting', data),
+  backupDatabase: () => ipcRenderer.invoke('backup-database'),
+  restoreDatabase: () => ipcRenderer.invoke('restore-database'),
+
   // Reset
   resetDatabase: () => ipcRenderer.invoke('reset-database'),
   cleanupDatabase: () => ipcRenderer.invoke('cleanup-database'),
