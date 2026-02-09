@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, ArrowUpRight, DollarSign, Clock, Layers } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowUpRight, DollarSign, Clock, Layers, RefreshCw } from 'lucide-react';
 
 export default function Portfolio() {
     const [history, setHistory] = useState([]);
@@ -9,6 +9,7 @@ export default function Portfolio() {
     const [timeframe, setTimeframe] = useState('ALL');
     const [allocation, setAllocation] = useState([]);
     const [isLive, setIsLive] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     const loadData = async () => {
         if (!window.api) return;
@@ -93,6 +94,15 @@ export default function Portfolio() {
     const percentChange = startValue > 0 ? (absoluteChange / startValue) * 100 : 0;
     const isPositive = absoluteChange >= 0;
 
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        if (window.api) {
+            await window.api.updateAllCards();
+            loadData();
+        }
+        setIsRefreshing(false);
+    };
+
     const COLORS = ['#9D00FF', '#00C49F', '#FFBB28', '#FF8042'];
 
     return (
@@ -107,6 +117,14 @@ export default function Portfolio() {
                                  Live Update
                              </span>
                          )}
+                         <button
+                            onClick={handleRefresh}
+                            disabled={isRefreshing}
+                            className="p-1 hover:bg-white/10 rounded-full transition-colors text-gray-500 hover:text-white"
+                            title="Refresh Prices"
+                         >
+                             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                         </button>
                     </div>
                     <h1 className={`text-6xl font-bold text-white mt-2 tracking-tight transition-colors duration-500 ${isLive ? 'text-green-400' : ''}`}>
                         ${stats.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -149,7 +167,7 @@ export default function Portfolio() {
                             itemStyle={{ color: '#fff' }}
                             labelStyle={{ color: '#888' }}
                             formatter={(value) => [`$${value.toFixed(2)}`, 'Value']}
-                            labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                            labelFormatter={(label) => new Date(label).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         />
                         <Area
                             type="monotone"

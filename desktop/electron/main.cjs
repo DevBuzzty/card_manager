@@ -277,12 +277,14 @@ function startPricePoller() {
                     let foundSetPrice = false;
                     if (localCard.set_code && localCard.set_code !== 'Unknown' && apiData.card_sets) {
                         const matchedSet = apiData.card_sets.find(s => s.set_code === localCard.set_code);
-                        if (matchedSet && matchedSet.set_price) {
+                        // Check if matched set exists AND has a non-zero price
+                        if (matchedSet && matchedSet.set_price && parseFloat(matchedSet.set_price) > 0) {
                             newPrice = parseFloat(matchedSet.set_price);
                             foundSetPrice = true;
                         }
                     }
 
+                    // Fallback if no set matched, no set code, OR set price was 0
                     if (!foundSetPrice) {
                         if (apiData.card_prices && apiData.card_prices.length > 0) {
                             newPrice = parseFloat(apiData.card_prices[0][apiField]) || 0;
@@ -785,13 +787,14 @@ async function performCardUpdate(cardsToUpdate, eventSender) {
                 let foundSetPrice = false;
                 if (cardEntry.set_code && cardEntry.set_code !== 'Unknown' && apiCard.card_sets) {
                     const matchedSet = apiCard.card_sets.find(s => s.set_code === cardEntry.set_code);
-                    if (matchedSet && matchedSet.set_price) {
+                    // Check if matched set exists AND has a non-zero price
+                    if (matchedSet && matchedSet.set_price && parseFloat(matchedSet.set_price) > 0) {
                         newPrice = parseFloat(matchedSet.set_price);
                         foundSetPrice = true;
                     }
                 }
 
-                // Fallback if no set matched or no set code stored
+                // Fallback if no set matched, no set code, OR set price was 0
                 if (!foundSetPrice) {
                     if (apiCard.card_prices && apiCard.card_prices.length > 0) {
                         newPrice = parseFloat(apiCard.card_prices[0][apiField]) || 0;

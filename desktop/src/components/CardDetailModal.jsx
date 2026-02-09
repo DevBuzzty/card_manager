@@ -172,12 +172,21 @@ export default function CardDetailModal({ card, onClose }) {
                                 value={selectedNewSet}
                                 onChange={setSelectedNewSet}
                                 placeholder="Select Set..."
-                                options={availableSets
-                                    .filter(s => !localVariants.some(v => v.set_code === s.set_code && v.rarity === s.set_rarity))
-                                    .map(set => ({
-                                        value: `${set.set_code}|${set.set_rarity}`,
-                                        label: `${set.set_code} - ${set.set_rarity} ($${set.set_price})`
-                                    }))}
+                                options={(() => {
+                                    // Deduplicate sets based on set_code + rarity
+                                    const unique = new Map();
+                                    availableSets.forEach(s => {
+                                        const key = `${s.set_code}|${s.set_rarity}`;
+                                        if (!unique.has(key)) unique.set(key, s);
+                                    });
+
+                                    return Array.from(unique.values())
+                                        .filter(s => !localVariants.some(v => v.set_code === s.set_code && v.rarity === s.set_rarity))
+                                        .map(set => ({
+                                            value: `${set.set_code}|${set.set_rarity}`,
+                                            label: `${set.set_code} - ${set.set_rarity} ($${set.set_price})`
+                                        }));
+                                })()}
                             />
                         </div>
                         <button
