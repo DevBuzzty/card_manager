@@ -48,4 +48,5 @@ contextBridge.exposeInMainWorld('api', {
 
   // Reset
   resetDatabase: () => ipcRenderer.invoke('reset-database'),
+  cleanupDatabase: () => ipcRenderer.invoke('cleanup-database'),
 });

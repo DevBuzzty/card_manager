@@ -361,6 +361,47 @@ ipcMain.handle('export-deck-ydk', async (event, { name, content }) => {
     }
 });
 
+ipcMain.handle('cleanup-database', async () => {
+    try {
+        // Find cards with 'Unknown' set_code
+        const unknowns = db.prepare("SELECT id, quantity FROM cards WHERE set_code = 'Unknown'").all();
+        let mergedCount = 0;
+        let deletedCount = 0;
+
+        db.transaction(() => {
+            unknowns.forEach(unknown => {
+                // Check if a specific version exists
+                const specific = db.prepare("SELECT id, set_code, quantity FROM cards WHERE id = ? AND set_code != 'Unknown' LIMIT 1").get(unknown.id);
+
+                if (specific) {
+                    // Merge quantity to the specific one
+                    const newQty = specific.quantity + unknown.quantity;
+                    db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ?").run(newQty, specific.id, specific.set_code);
+
+                    // Delete the unknown one
+                    db.prepare("DELETE FROM cards WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
+
+                    mergedCount++;
+                } else {
+                    // If no specific version exists, we keep the Unknown one, or we could force delete if it's considered junk.
+                    // For safety, we keep it but maybe try to update its metadata later.
+                }
+            });
+
+            // Recalculate portfolio value
+            const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();
+            if (totalVal) {
+                 db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: totalVal.val || 0 });
+            }
+        })();
+
+        return { success: true, merged: mergedCount };
+    } catch (e) {
+        console.error("Cleanup Error:", e);
+        return { success: false, error: e.message };
+    }
+});
+
 // Backup & Restore
 ipcMain.handle('backup-database', async () => {
     try {

@@ -147,13 +147,32 @@ export default function Settings() {
 
                         <button
                             onClick={handleReset}
-                            className="col-span-1 md:col-span-2 p-4 bg-red-900/10 hover:bg-red-900/20 rounded-xl border border-red-900/30 hover:border-red-500/50 transition-all text-left group mt-4"
+                            className="p-4 bg-red-900/10 hover:bg-red-900/20 rounded-xl border border-red-900/30 hover:border-red-500/50 transition-all text-left group mt-4"
                         >
                             <div className="flex items-center text-red-500 mb-2">
                                 <Trash2 className="w-5 h-5 mr-2" />
                                 <h4 className="font-bold">Factory Reset</h4>
                             </div>
-                            <p className="text-sm text-red-400/60 group-hover:text-red-400">Permanently delete all data and start fresh. This action cannot be undone.</p>
+                            <p className="text-sm text-red-400/60 group-hover:text-red-400">Permanently delete all data. Cannot be undone.</p>
+                        </button>
+
+                        <button
+                            onClick={async () => {
+                                if (confirm("This will find all 'Unknown' set cards and merge them into specific versions if available. Continue?")) {
+                                    if(window.api) {
+                                        const res = await window.api.cleanupDatabase();
+                                        if(res.success) alert(`Merged ${res.merged} entries.`);
+                                        else alert("Error: " + res.error);
+                                    }
+                                }
+                            }}
+                            className="p-4 bg-space-violet/10 hover:bg-space-violet/20 rounded-xl border border-space-violet/30 hover:border-space-violet/50 transition-all text-left group mt-4"
+                        >
+                            <div className="flex items-center text-space-violet mb-2">
+                                <RefreshCw className="w-5 h-5 mr-2" />
+                                <h4 className="font-bold">Cleanup Duplicates</h4>
+                            </div>
+                            <p className="text-sm text-space-violet/60 group-hover:text-space-violet">Merge legacy 'Unknown' cards into specific sets to fix value duplication.</p>
                         </button>
                     </div>
                 </div>
