@@ -8,6 +8,7 @@ import MissingData from './components/MissingData';
 import Wishlist from './components/Wishlist';
 import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -64,30 +65,32 @@ function App() {
             </div>
         )}
         <div className="flex-1 overflow-auto">
-            {activeTab === 'dashboard' && (
-            <Dashboard setActiveTab={setActiveTab} />
-            )}
-            {activeTab === 'staging' && (
-            <StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />
-            )}
-            {activeTab === 'collection' && (
-            <CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />
-            )}
-            {activeTab === 'portfolio' && (
-            <Portfolio />
-            )}
-            {activeTab === 'deckbuilder' && (
-            <DeckBuilder />
-            )}
-            {activeTab === 'missing' && (
-            <MissingData />
-            )}
-            {activeTab === 'wishlist' && (
-            <Wishlist />
-            )}
-            {activeTab === 'settings' && (
-            <Settings />
-            )}
+            <ErrorBoundary>
+                {activeTab === 'dashboard' && (
+                <Dashboard setActiveTab={setActiveTab} />
+                )}
+                {activeTab === 'staging' && (
+                <StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />
+                )}
+                {activeTab === 'collection' && (
+                <CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />
+                )}
+                {activeTab === 'portfolio' && (
+                <Portfolio />
+                )}
+                {activeTab === 'deckbuilder' && (
+                <DeckBuilder />
+                )}
+                {activeTab === 'missing' && (
+                <MissingData />
+                )}
+                {activeTab === 'wishlist' && (
+                <Wishlist />
+                )}
+                {activeTab === 'settings' && (
+                <Settings />
+                )}
+            </ErrorBoundary>
         </div>
       </main>
     </div>

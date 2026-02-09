@@ -34,7 +34,7 @@ export default function Portfolio() {
         const assets = collection
             .map(c => ({ ...c, equity: (c.price || 0) * (c.quantity || 1) }))
             .sort((a, b) => b.equity - a.equity)
-            .slice(0, 5);
+            .slice(0, 100);
         setTopAssets(assets);
 
         // Process Allocation (by Type)

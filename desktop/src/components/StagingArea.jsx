@@ -310,16 +310,25 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             card.data.card_sets ? (
                                                 <div className="flex-1">
                                                     <CustomSelect
-                                                        value={card.selectedSet?.set_code || ''}
+                                                        value={card.selectedSet ? `${card.selectedSet.set_code}|${card.selectedSet.set_rarity}` : ''}
                                                         onChange={(val) => {
-                                                            const selected = card.data.card_sets.find(s => s.set_code === val);
+                                                            // val is "code|rarity"
+                                                            const [code, rarity] = val.split('|');
+                                                            const selected = card.data.card_sets.find(s => s.set_code === code && s.set_rarity === rarity);
                                                             handleUpdateCard(card.tempId, { selectedSet: selected });
                                                         }}
                                                         placeholder={card.data.card_sets[0] ? `${card.data.card_sets[0].set_rarity} (Default)` : "Select Rarity"}
-                                                        options={card.data.card_sets.map(set => ({
-                                                            value: set.set_code,
-                                                            label: `${set.set_code} - ${set.set_rarity}`
-                                                        }))}
+                                                        options={(() => {
+                                                            const unique = new Map();
+                                                            card.data.card_sets.forEach(s => {
+                                                                const key = `${s.set_code}|${s.set_rarity}`;
+                                                                if (!unique.has(key)) unique.set(key, s);
+                                                            });
+                                                            return Array.from(unique.values()).map(set => ({
+                                                                value: `${set.set_code}|${set.set_rarity}`,
+                                                                label: `${set.set_code} - ${set.set_rarity} ($${set.set_price || '0.00'})`
+                                                            }));
+                                                        })()}
                                                         className="w-full"
                                                     />
                                                 </div>
