@@ -95,6 +95,7 @@ try {
   if (!columnNames.includes('rarity')) db.exec("ALTER TABLE cards ADD COLUMN rarity TEXT");
   if (!columnNames.includes('set_code')) db.exec("ALTER TABLE cards ADD COLUMN set_code TEXT");
   if (!columnNames.includes('price')) db.exec("ALTER TABLE cards ADD COLUMN price REAL");
+  if (!columnNames.includes('last_updated')) db.exec("ALTER TABLE cards ADD COLUMN last_updated DATETIME");
 
   // PRIMARY KEY Migration
   const pkColumns = columns.filter(c => c.pk > 0);
@@ -223,9 +224,9 @@ function startPricePoller() {
 
         console.log("Polling for price updates...");
         try {
-            // 1. Get a batch of cards to update (e.g., 50 random cards or oldest updated)
-            // For simplicity, let's pick 50 cards at random from the collection to simulate "live" activity across the portfolio
-            const cards = db.prepare('SELECT id, set_code, price FROM cards ORDER BY RANDOM() LIMIT 50').all();
+            // 1. Get a batch of cards to update (oldest updated first)
+            // Prioritize cards that haven't been updated recently to ensure full coverage over time
+            const cards = db.prepare('SELECT id, set_code, price FROM cards ORDER BY last_updated ASC LIMIT 50').all();
 
             if (cards.length === 0) return;
 
@@ -811,7 +812,8 @@ async function performCardUpdate(cardsToUpdate, eventSender) {
                 db.prepare(`
                   UPDATE cards SET
                     name = @name, type = @type, desc = @desc, image_url = @image_url,
-                    atk = @atk, def = @def, level = @level, race = @race, attribute = @attribute, price = @price
+                    atk = @atk, def = @def, level = @level, race = @race, attribute = @attribute, price = @price,
+                    last_updated = CURRENT_TIMESTAMP
                   WHERE id = @id AND set_code = @set_code
                 `).run({
                    id: String(apiCard.id),

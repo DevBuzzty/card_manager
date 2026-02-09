@@ -22,10 +22,20 @@ export default function Portfolio() {
         if (!hist || hist.length === 0) {
             setHistory([{ timestamp: new Date().toISOString(), value: portfolio.totalValue }]);
         } else {
-            setHistory(hist.map(h => ({
-                timestamp: h.timestamp,
-                value: h.total_value
-            })));
+            setHistory(hist.map(h => {
+                // Ensure timestamp is valid string. SQL timestamp might be "YYYY-MM-DD HH:MM:SS" which needs "T" and "Z" for robust JS parsing
+                let validTs = h.timestamp;
+                if (validTs && !validTs.includes('T')) {
+                    validTs = validTs.replace(' ', 'T') + 'Z';
+                }
+                return {
+                    timestamp: validTs,
+                    value: h.total_value
+                };
+            }).filter(h => {
+                const d = new Date(h.timestamp);
+                return !isNaN(d.getTime()) && d.getFullYear() > 1980; // Filter out epoch defaults
+            }));
         }
 
         setStats(portfolio);

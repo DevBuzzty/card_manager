@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Upload, FileUp, AlertTriangle, Download, BarChart2, PieChart as PieChartIcon } from 'lucide-react';
+import { Plus, Trash2, Save, Upload, FileUp, AlertTriangle, Download, BarChart2, PieChart as PieChartIcon, Play } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 
 export default function DeckBuilder() {
@@ -8,6 +8,8 @@ export default function DeckBuilder() {
   const [collection, setCollection] = useState([]);
   const [filter, setFilter] = useState('');
   const [showStats, setShowStats] = useState(false);
+  const [testHand, setTestHand] = useState([]);
+  const [showTestHand, setShowTestHand] = useState(false);
 
   // Deck Creation State
   const [isCreating, setIsCreating] = useState(false);
@@ -127,6 +129,24 @@ export default function DeckBuilder() {
       const res = await window.api.exportDeckYdk({ name: activeDeck.name, content });
       if (res.success) alert("Deck exported!");
       else if (!res.canceled) alert("Export failed: " + res.error);
+  };
+
+  const drawTestHand = () => {
+      // Create a flat array of all main deck cards based on quantity
+      const deck = [];
+      mainDeck.forEach(c => {
+          for (let i = 0; i < c.quantity; i++) deck.push(c);
+      });
+
+      if (deck.length < 5) {
+          alert("Main deck must have at least 5 cards.");
+          return;
+      }
+
+      // Shuffle and pick 5
+      const shuffled = [...deck].sort(() => 0.5 - Math.random());
+      setTestHand(shuffled.slice(0, 5));
+      setShowTestHand(true);
   };
 
   const addToDeck = (card) => {
@@ -267,6 +287,10 @@ export default function DeckBuilder() {
                             </button>
                         </div>
                         <div className="flex gap-2">
+                             <button onClick={drawTestHand} className="flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors text-sm font-medium border border-gray-700">
+                                <Play className="w-4 h-4 mr-2" />
+                                Test Hand
+                            </button>
                              <button onClick={handleExportYdk} className="flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors text-sm font-medium border border-gray-700">
                                 <Download className="w-4 h-4 mr-2" />
                                 Export YDK
@@ -279,6 +303,25 @@ export default function DeckBuilder() {
                     </div>
 
                     {showStats && <DeckStats {...deckStatsProps} />}
+
+                    {showTestHand && (
+                        <div className="mb-6 p-4 bg-black/40 rounded-xl border border-gray-800 animate-in fade-in slide-in-from-top-4">
+                            <div className="flex justify-between items-center mb-3">
+                                <h3 className="text-sm font-bold text-white">Opening Hand (5 Cards)</h3>
+                                <div className="flex gap-2">
+                                    <button onClick={drawTestHand} className="text-xs text-space-violet hover:underline">Redraw</button>
+                                    <button onClick={() => setShowTestHand(false)} className="text-xs text-gray-500 hover:text-white">Close</button>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 justify-center">
+                                {testHand.map((card, idx) => (
+                                    <div key={idx} className="w-20 aspect-[2/3] relative group animate-in zoom-in duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
+                                        <img src={card.image_url} alt="" className="w-full h-full object-cover rounded border border-gray-700 shadow-lg" />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pr-2">
                         {/* Main Deck */}
