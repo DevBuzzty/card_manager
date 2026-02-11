@@ -6,8 +6,24 @@ const Database = require('better-sqlite3');
 const os = require('os');
 
 // Database Setup
-const dbPath = path.join(app.getPath('userData'), 'cards.db');
-const db = new Database(dbPath);
+const userDataPath = app.getPath('userData');
+const configPath = path.join(userDataPath, 'config.json');
+
+// Load config to find DB path
+let dbPath = path.join(userDataPath, 'cards.db');
+try {
+    if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        if (config.dbPath && fs.existsSync(config.dbPath)) {
+            dbPath = config.dbPath;
+        }
+    }
+} catch (e) {
+    console.error("Failed to load config:", e);
+}
+
+console.log("Using Database at:", dbPath);
+let db = new Database(dbPath);
 
 // Create table
 db.exec(`
@@ -477,6 +493,54 @@ ipcMain.handle('get-db-path', () => {
     return dbPath;
 });
 
+ipcMain.handle('move-database', async () => {
+    try {
+        const result = await dialog.showOpenDialog(mainWindow, {
+            title: 'Select New Database Folder',
+            properties: ['openDirectory']
+        });
+
+        if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+
+        const newFolder = result.filePaths[0];
+        const newDbPath = path.join(newFolder, 'cards.db');
+
+        // Check if DB already exists there
+        if (fs.existsSync(newDbPath)) {
+            const confirm = await dialog.showMessageBox(mainWindow, {
+                type: 'warning',
+                buttons: ['Use Existing', 'Overwrite', 'Cancel'],
+                message: 'A database already exists in this folder.',
+                detail: 'Do you want to use the existing one or overwrite it with your current data?'
+            });
+
+            if (confirm.response === 2) return { canceled: true };
+
+            if (confirm.response === 1) {
+                // Overwrite: Close current, copy file
+                db.close();
+                fs.copyFileSync(dbPath, newDbPath);
+            }
+            // If response === 0 (Use Existing), we just switch paths without copying
+        } else {
+            // Copy current DB to new location
+            db.close();
+            fs.copyFileSync(dbPath, newDbPath);
+        }
+
+        // Update config
+        fs.writeFileSync(configPath, JSON.stringify({ dbPath: newDbPath }, null, 2));
+
+        // Restart to load new DB
+        app.relaunch();
+        app.exit(0);
+
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 ipcMain.handle('reset-database', async () => {
     try {
         db.close();
@@ -639,21 +703,26 @@ ipcMain.handle('search-online', async (event, query) => {
 
 ipcMain.handle('add-card-to-db', (event, card) => {
   try {
-    const existing = db.prepare('SELECT quantity FROM cards WHERE id = @id AND set_code = @set_code').get({
-        id: String(card.id),
-        set_code: card.set_code || 'Unknown'
-    });
+    const id = String(card.id);
+    const setCode = card.set_code || 'Unknown';
+
+    // Check for exact variant match
+    const existing = db.prepare('SELECT quantity FROM cards WHERE id = ? AND set_code = ?').get(id, setCode);
 
     if (existing) {
         const newQty = existing.quantity + (card.quantity || 1);
         db.prepare('UPDATE cards SET quantity = @qty, price = @price WHERE id = @id AND set_code = @set_code').run({
             qty: newQty,
             price: card.price || 0,
-            id: String(card.id),
-            set_code: card.set_code || 'Unknown'
+            id: id,
+            set_code: setCode
         });
         return { success: true, updated: true };
     } else {
+        // Prevent duplicate 'Unknown' entries if one already exists?
+        // No, user might be adding a second Unknown pile.
+        // But if they add a specific set (LOB-001) and 'Unknown' exists, we currently keep both (cleanup tool handles merge).
+        // This is safe.
         const stmt = db.prepare(`
           INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price)
           VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute, @quantity, @rarity, @set_code, @price)
@@ -895,9 +964,11 @@ ipcMain.handle('get-collection', () => {
 
 ipcMain.handle('check-card-exists', (event, passcode) => {
   try {
+    // Check SUM of quantity for this ID regardless of set_code
     const stmt = db.prepare('SELECT SUM(quantity) as count FROM cards WHERE id = ?');
-    const result = stmt.get(passcode);
-    return { exists: (result.count || 0) > 0, quantity: result.count || 0 };
+    const result = stmt.get(String(passcode)); // Ensure string for text ID column
+    const totalQty = result.count || 0;
+    return { exists: totalQty > 0, quantity: totalQty };
   } catch (error) {
     console.error('DB Check Error:', error);
     return { exists: false, quantity: 0 };

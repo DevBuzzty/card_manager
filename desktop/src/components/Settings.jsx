@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign } from 'lucide-react';
+import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput } from 'lucide-react';
 
 export default function Settings() {
     const [priceSource, setPriceSource] = useState('cardmarket');
@@ -54,6 +54,13 @@ export default function Settings() {
                 const res = await window.api.restoreDatabase();
                 if (res.error) alert("Restore failed: " + res.error);
             }
+        }
+    };
+
+    const handleMoveDb = async () => {
+        if(window.api) {
+            const res = await window.api.moveDatabase();
+            if(res.error) alert("Move failed: " + res.error);
         }
     };
 
@@ -132,6 +139,17 @@ export default function Settings() {
                                 <h4 className="font-bold">Backup Database</h4>
                             </div>
                             <p className="text-sm text-gray-500 group-hover:text-gray-400">Save your entire collection and decks to a local file.</p>
+                        </button>
+
+                        <button
+                            onClick={handleMoveDb}
+                            className="p-4 bg-gray-900/50 hover:bg-gray-800 rounded-xl border border-gray-700 hover:border-purple-400/50 transition-all text-left group"
+                        >
+                            <div className="flex items-center text-purple-400 mb-2">
+                                <FolderInput className="w-5 h-5 mr-2" />
+                                <h4 className="font-bold">Move Database Location</h4>
+                            </div>
+                            <p className="text-sm text-gray-500 group-hover:text-gray-400">Move data to OneDrive/Dropbox folder for cloud sync (Requires Restart).</p>
                         </button>
 
                         <button

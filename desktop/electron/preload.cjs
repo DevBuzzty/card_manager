@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('api', {
   saveSetting: (data) => ipcRenderer.invoke('save-setting', data),
   backupDatabase: () => ipcRenderer.invoke('backup-database'),
   restoreDatabase: () => ipcRenderer.invoke('restore-database'),
+  moveDatabase: () => ipcRenderer.invoke('move-database'),
 
   // Reset
   resetDatabase: () => ipcRenderer.invoke('reset-database'),
