@@ -381,16 +381,31 @@ ipcMain.handle('export-deck-ydk', async (event, { name, content }) => {
 });
 
 ipcMain.handle('cleanup-database', async () => {
+    // Legacy cleanup handler, now aliased to the smarter logic
+    return await mergeUnknownCardsLogic();
+});
+
+ipcMain.handle('merge-unknown-cards', async () => {
+    return await mergeUnknownCardsLogic();
+});
+
+function mergeUnknownCardsLogic() {
     try {
         // Find cards with 'Unknown' set_code
         const unknowns = db.prepare("SELECT id, quantity FROM cards WHERE set_code = 'Unknown'").all();
         let mergedCount = 0;
-        let deletedCount = 0;
 
         db.transaction(() => {
             unknowns.forEach(unknown => {
-                // Check if a specific version exists
-                const specific = db.prepare("SELECT id, set_code, quantity FROM cards WHERE id = ? AND set_code != 'Unknown' LIMIT 1").get(unknown.id);
+                // Find the MOST COMMON specific variant for this card ID
+                // ORDER BY quantity DESC ensures we merge into the one user has the most of
+                const specific = db.prepare(`
+                    SELECT id, set_code, quantity
+                    FROM cards
+                    WHERE id = ? AND set_code != 'Unknown'
+                    ORDER BY quantity DESC
+                    LIMIT 1
+                `).get(unknown.id);
 
                 if (specific) {
                     // Merge quantity to the specific one
@@ -401,9 +416,6 @@ ipcMain.handle('cleanup-database', async () => {
                     db.prepare("DELETE FROM cards WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
 
                     mergedCount++;
-                } else {
-                    // If no specific version exists, we keep the Unknown one, or we could force delete if it's considered junk.
-                    // For safety, we keep it but maybe try to update its metadata later.
                 }
             });
 
@@ -416,10 +428,10 @@ ipcMain.handle('cleanup-database', async () => {
 
         return { success: true, merged: mergedCount };
     } catch (e) {
-        console.error("Cleanup Error:", e);
+        console.error("Merge Unknown Error:", e);
         return { success: false, error: e.message };
     }
-});
+}
 
 // Backup & Restore
 ipcMain.handle('backup-database', async () => {

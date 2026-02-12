@@ -9,6 +9,7 @@ import Wishlist from './components/Wishlist';
 import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
+import UnknownCards from './components/UnknownCards';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -80,6 +81,9 @@ function App() {
                 )}
                 {activeTab === 'deckbuilder' && (
                 <DeckBuilder />
+                )}
+                {activeTab === 'unknown' && (
+                <UnknownCards />
                 )}
                 {activeTab === 'missing' && (
                 <MissingData />
