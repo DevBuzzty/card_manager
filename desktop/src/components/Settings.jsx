@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput } from 'lucide-react';
+import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown } from 'lucide-react';
 
 export default function Settings() {
     const [priceSource, setPriceSource] = useState('cardmarket');
     const [loading, setLoading] = useState(false);
+    const [progress, setProgress] = useState({ current: 0, total: 0 });
 
     useEffect(() => {
         if (window.api) {
@@ -12,6 +13,11 @@ export default function Settings() {
                     setPriceSource(settings.price_source);
                 }
             });
+
+            const cleanup = window.api.onUpdateProgress((data) => {
+                setProgress(data);
+            });
+            return () => cleanup();
         }
     }, []);
 
@@ -28,6 +34,7 @@ export default function Settings() {
         if (!confirm(`Update ALL card prices using ${priceSource}? This may take a while.`)) return;
 
         setLoading(true);
+        setProgress({ current: 0, total: 0 });
         if (window.api) {
             // This triggers the full update logic in main.cjs, which reads the new setting
             const res = await window.api.updateAllCards();
@@ -71,6 +78,23 @@ export default function Settings() {
                 if (!res.success) alert("Reset failed: " + res.error);
             }
         }
+    };
+
+    const handleDowngrade = async () => {
+        if (loading) return;
+        if (!confirm("This will scan your ENTIRE collection and change every card to its lowest price / common variant. This is intended to fix portfolio inflation caused by high-rarity defaults. \n\nAny specific rarities you manually set will be overwritten if a cheaper version exists. Continue?")) return;
+
+        setLoading(true);
+        setProgress({ current: 0, total: 0 });
+        if (window.api) {
+            const res = await window.api.downgradeToLowestRarity();
+            if (res.success) {
+                alert(`Successfully optimized ${res.count} cards to lowest rarity/price.`);
+            } else {
+                alert("Optimization failed: " + res.error);
+            }
+        }
+        setLoading(false);
     };
 
     return (
@@ -128,6 +152,21 @@ export default function Settings() {
                         <Database className="w-6 h-6 mr-2" />
                         <h3 className="text-xl font-bold text-white">Data Management</h3>
                     </div>
+
+                    {loading && progress.total > 0 && (
+                        <div className="mb-6">
+                            <div className="flex justify-between text-xs text-gray-400 mb-1">
+                                <span>Processing...</span>
+                                <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+                            </div>
+                            <div className="bg-gray-900 rounded-full h-2 overflow-hidden border border-gray-700">
+                                <div
+                                    className="bg-blue-500 h-full transition-all duration-300"
+                                    style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <button
@@ -191,6 +230,21 @@ export default function Settings() {
                                 <h4 className="font-bold">Cleanup Duplicates</h4>
                             </div>
                             <p className="text-sm text-space-violet/60 group-hover:text-space-violet">Merge legacy 'Unknown' cards into specific sets to fix value duplication.</p>
+                        </button>
+
+                        <button
+                            onClick={handleDowngrade}
+                            disabled={loading}
+                            className="p-4 bg-yellow-900/10 hover:bg-yellow-900/20 rounded-xl border border-yellow-900/30 hover:border-yellow-500/50 transition-all text-left group mt-4"
+                        >
+                            <div className="flex items-center text-yellow-500 mb-2">
+                                <TrendingDown className={`w-5 h-5 mr-2 ${loading ? 'animate-bounce' : ''}`} />
+                                <h4 className="font-bold">Optimize Collection (Downgrade)</h4>
+                            </div>
+                            <p className="text-sm text-yellow-400/60 group-hover:text-yellow-400">
+                                Fix inflated values by setting all cards to their lowest price variant (Common).
+                                Use this if 'Convert to Default' caused issues.
+                            </p>
                         </button>
                     </div>
                 </div>

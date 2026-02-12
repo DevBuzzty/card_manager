@@ -35,7 +35,7 @@ export default function UnknownCards() {
     };
 
     const handleConvertToDefault = async () => {
-        if (!confirm("This will fetch data for ALL remaining 'Unknown' cards and assign them to their default (first available) set code. This is an online operation and may take time. Continue?")) return;
+        if (!confirm("This will fetch data for ALL remaining 'Unknown' cards and assign them to their CHEAPEST available set (Common/Low Price). This is intended to avoid portfolio inflation. \n\nThis is an online operation and may take time. Continue?")) return;
 
         setLoading(true);
         if (window.api) {

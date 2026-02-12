@@ -58,4 +58,5 @@ contextBridge.exposeInMainWorld('api', {
   cleanupDatabase: () => ipcRenderer.invoke('cleanup-database'),
   mergeUnknownCards: () => ipcRenderer.invoke('merge-unknown-cards'),
   convertUnknownsToDefault: () => ipcRenderer.invoke('convert-unknowns-to-default'),
+  downgradeToLowestRarity: () => ipcRenderer.invoke('downgrade-to-lowest-rarity'),
 });

@@ -357,6 +357,44 @@ app.on('window-all-closed', () => {
 // Helper for numeric/value fields to preserve 0
 const valOrNull = (v) => (v !== undefined && v !== null && v !== '') ? v : null;
 
+// Helper to find best default set (Lowest Price > Common)
+function findBestDefaultSet(cardSets) {
+    if (!cardSets || cardSets.length === 0) return null;
+
+    return cardSets.sort((a, b) => {
+        const pA = parseFloat(a.set_price) || 0;
+        const pB = parseFloat(b.set_price) || 0;
+
+        // Prefer lowest non-zero price. If both zero, treat as equal.
+        // If one is zero and other is not, prefer the non-zero (assuming zero is 'unknown price')?
+        // OR assume zero is 'free'? No, cards aren't free.
+        // Let's treat 0 as Infinity for sorting purposes to push it to bottom,
+        // unless ALL are 0.
+
+        const priceA = pA === 0 ? 999999 : pA;
+        const priceB = pB === 0 ? 999999 : pB;
+
+        if (Math.abs(priceA - priceB) > 0.01) {
+            return priceA - priceB;
+        }
+
+        // Tie-breaker: Rarity Ranking (Lower is better/more common)
+        const getRank = (r) => {
+            if (!r) return 10;
+            const lower = r.toLowerCase();
+            if (lower === 'common') return 1;
+            if (lower === 'short print') return 2;
+            if (lower === 'rare') return 3;
+            if (lower === 'super rare') return 4;
+            if (lower === 'ultra rare') return 5;
+            if (lower === 'secret rare') return 6;
+            return 10;
+        };
+
+        return getRank(a.set_rarity) - getRank(b.set_rarity);
+    })[0];
+}
+
 // IPC Handlers
 
 ipcMain.handle('get-ip-address', () => {
@@ -422,12 +460,13 @@ ipcMain.handle('convert-unknowns-to-default', async () => {
                     if (data.data && data.data.length > 0) {
                         const apiCard = data.data[0];
 
-                        // Default Logic: Pick the first set
-                        if (apiCard.card_sets && apiCard.card_sets.length > 0) {
-                            const defaultSet = apiCard.card_sets[0];
-                            const newSetCode = defaultSet.set_code;
-                            const newRarity = defaultSet.set_rarity;
-                            const newPrice = parseFloat(defaultSet.set_price) ||
+                        // Updated Logic: Pick the best default (Lowest Price / Common)
+                        const bestSet = findBestDefaultSet(apiCard.card_sets);
+
+                        if (bestSet) {
+                            const newSetCode = bestSet.set_code;
+                            const newRarity = bestSet.set_rarity;
+                            const newPrice = parseFloat(bestSet.set_price) ||
                                              (parseFloat(apiCard.card_prices[0][apiField]) || 0);
 
                             // Check if this specific set already exists
@@ -462,6 +501,92 @@ ipcMain.handle('convert-unknowns-to-default', async () => {
         return { success: true, converted: convertedCount };
     } catch (e) {
         console.error("Convert Default Error:", e);
+        return { success: false, error: e.message };
+    }
+});
+
+ipcMain.handle('downgrade-to-lowest-rarity', async (event) => {
+    try {
+        const allCards = db.prepare("SELECT id, set_code, quantity FROM cards").all();
+        let changedCount = 0;
+        const total = allCards.length;
+
+        if (event.sender) event.sender.send('update-progress', { current: 0, total });
+
+        // Determine price source for fallback
+        let priceSource = 'cardmarket';
+        try {
+            const row = db.prepare("SELECT value FROM settings WHERE key = 'price_source'").get();
+            if (row && row.value) priceSource = row.value;
+        } catch (e) {}
+
+        const sourceMap = {
+            'cardmarket': 'cardmarket_price',
+            'tcgplayer': 'tcgplayer_price',
+            'ebay': 'ebay_price',
+            'amazon': 'amazon_price',
+            'coolstuffinc': 'coolstuffinc_price'
+        };
+        const apiField = sourceMap[priceSource] || 'cardmarket_price';
+
+        for (let i = 0; i < total; i++) {
+             const card = allCards[i];
+             if (event.sender && i % 5 === 0) event.sender.send('update-progress', { current: i + 1, total });
+
+             // Verify card still exists
+             const current = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ?").get(card.id, card.set_code);
+             if (!current) continue;
+
+             try {
+                const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${card.id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.data && data.data.length > 0) {
+                        const apiCard = data.data[0];
+                        const bestSet = findBestDefaultSet(apiCard.card_sets);
+
+                        // If we found a better set, and it's different from current
+                        if (bestSet && bestSet.set_code !== card.set_code) {
+                            const newSetCode = bestSet.set_code;
+                            const newRarity = bestSet.set_rarity;
+                            const newPrice = parseFloat(bestSet.set_price) ||
+                                             (parseFloat(apiCard.card_prices[0][apiField]) || 0);
+
+                            // Check if target set already exists
+                            const existingTarget = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ?").get(card.id, newSetCode);
+
+                            if (existingTarget) {
+                                // Merge
+                                const newQty = existingTarget.quantity + current.quantity;
+                                db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ?").run(newQty, card.id, newSetCode);
+                                db.prepare("DELETE FROM cards WHERE id = ? AND set_code = ?").run(card.id, card.set_code);
+                            } else {
+                                // Move (Rename set_code)
+                                db.prepare("UPDATE cards SET set_code = ?, rarity = ?, price = ? WHERE id = ? AND set_code = ?").run(newSetCode, newRarity, newPrice, card.id, card.set_code);
+                            }
+                            changedCount++;
+                        }
+                    }
+                }
+             } catch (err) {
+                 console.error(`Failed to downgrade card ${card.id}`, err);
+             }
+
+             // Sleep to avoid rate limits
+             await new Promise(r => setTimeout(r, 50));
+        }
+
+        if (event.sender) event.sender.send('update-progress', { current: total, total });
+
+        // Update History
+        const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();
+        if (totalVal) {
+             db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: totalVal.val || 0 });
+        }
+
+        return { success: true, count: changedCount };
+    } catch (e) {
+        console.error("Downgrade Error:", e);
         return { success: false, error: e.message };
     }
 });
