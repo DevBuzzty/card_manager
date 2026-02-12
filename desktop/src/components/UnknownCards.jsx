@@ -34,6 +34,22 @@ export default function UnknownCards() {
         setLoading(false);
     };
 
+    const handleConvertToDefault = async () => {
+        if (!confirm("This will fetch data for ALL remaining 'Unknown' cards and assign them to their default (first available) set code. This is an online operation and may take time. Continue?")) return;
+
+        setLoading(true);
+        if (window.api) {
+            const res = await window.api.convertUnknownsToDefault();
+            if (res.success) {
+                alert(`Converted ${res.converted} cards to specific sets.`);
+                loadData();
+            } else {
+                alert("Error: " + res.error);
+            }
+        }
+        setLoading(false);
+    };
+
     const handleDelete = async (card) => {
         if (!confirm(`Delete ${card.quantity}x ${card.name} (Unknown Set)?`)) return;
 
@@ -68,6 +84,14 @@ export default function UnknownCards() {
                         <p className="text-2xl font-bold text-white">{unknowns.length}</p>
                         <p className="text-xs text-gray-500 uppercase">Entries</p>
                     </div>
+                    <button
+                        onClick={handleConvertToDefault}
+                        disabled={loading || unknowns.length === 0}
+                        className="flex items-center px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-bold transition-colors disabled:opacity-50 border border-gray-600"
+                    >
+                        <RefreshCw className={`w-5 h-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        Convert to Default
+                    </button>
                     <button
                         onClick={handleAutoMerge}
                         disabled={loading || unknowns.length === 0}

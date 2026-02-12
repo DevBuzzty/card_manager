@@ -389,6 +389,83 @@ ipcMain.handle('merge-unknown-cards', async () => {
     return await mergeUnknownCardsLogic();
 });
 
+ipcMain.handle('convert-unknowns-to-default', async () => {
+    try {
+        // Find cards with 'Unknown' set_code
+        const unknowns = db.prepare("SELECT id, quantity, price FROM cards WHERE set_code = 'Unknown'").all();
+        let convertedCount = 0;
+
+        // Determine price source
+        let priceSource = 'cardmarket';
+        try {
+            const row = db.prepare("SELECT value FROM settings WHERE key = 'price_source'").get();
+            if (row && row.value) priceSource = row.value;
+        } catch (e) {}
+
+        const sourceMap = {
+            'cardmarket': 'cardmarket_price',
+            'tcgplayer': 'tcgplayer_price',
+            'ebay': 'ebay_price',
+            'amazon': 'amazon_price',
+            'coolstuffinc': 'coolstuffinc_price'
+        };
+        const apiField = sourceMap[priceSource] || 'cardmarket_price';
+
+        // Process in small batches to not block event loop
+        for (let i = 0; i < unknowns.length; i++) {
+            const unknown = unknowns[i];
+
+            try {
+                const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${unknown.id}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.data && data.data.length > 0) {
+                        const apiCard = data.data[0];
+
+                        // Default Logic: Pick the first set
+                        if (apiCard.card_sets && apiCard.card_sets.length > 0) {
+                            const defaultSet = apiCard.card_sets[0];
+                            const newSetCode = defaultSet.set_code;
+                            const newRarity = defaultSet.set_rarity;
+                            const newPrice = parseFloat(defaultSet.set_price) ||
+                                             (parseFloat(apiCard.card_prices[0][apiField]) || 0);
+
+                            // Check if this specific set already exists
+                            const existing = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ?").get(unknown.id, newSetCode);
+
+                            if (existing) {
+                                // Merge into existing
+                                const newQty = existing.quantity + unknown.quantity;
+                                db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ?").run(newQty, unknown.id, newSetCode);
+                                db.prepare("DELETE FROM cards WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
+                            } else {
+                                // Update current Unknown row to become the specific row
+                                db.prepare("UPDATE cards SET set_code = ?, rarity = ?, price = ? WHERE id = ? AND set_code = 'Unknown'").run(newSetCode, newRarity, newPrice, unknown.id);
+                            }
+                            convertedCount++;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(`Failed to convert card ${unknown.id}`, err);
+            }
+            // Small delay to be nice to API
+            await new Promise(r => setTimeout(r, 50));
+        }
+
+        // Update History
+        const totalVal = db.prepare("SELECT SUM(price * quantity) as val FROM cards").get();
+        if (totalVal) {
+             db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: totalVal.val || 0 });
+        }
+
+        return { success: true, converted: convertedCount };
+    } catch (e) {
+        console.error("Convert Default Error:", e);
+        return { success: false, error: e.message };
+    }
+});
+
 function mergeUnknownCardsLogic() {
     try {
         // Find cards with 'Unknown' set_code

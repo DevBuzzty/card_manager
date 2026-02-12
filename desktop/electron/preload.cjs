@@ -57,4 +57,5 @@ contextBridge.exposeInMainWorld('api', {
   resetDatabase: () => ipcRenderer.invoke('reset-database'),
   cleanupDatabase: () => ipcRenderer.invoke('cleanup-database'),
   mergeUnknownCards: () => ipcRenderer.invoke('merge-unknown-cards'),
+  convertUnknownsToDefault: () => ipcRenderer.invoke('convert-unknowns-to-default'),
 });
