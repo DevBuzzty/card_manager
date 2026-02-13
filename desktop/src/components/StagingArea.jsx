@@ -1,16 +1,50 @@
 import { useEffect, useCallback, useState } from 'react';
-import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus, HelpCircle, Edit } from 'lucide-react';
+import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus, HelpCircle, Edit, Globe } from 'lucide-react';
 import { playScanSound } from '../utils/sound';
 import CustomSelect from './CustomSelect';
 import RarityGuide from './RarityGuide';
 import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
 
+// Helper to transform English Set Code to German/Target Language
+const getLocalizedSetCode = (setCode, lang) => {
+    if (!setCode) return '';
+    if (lang === 'EN') return setCode;
+
+    // Pattern: LOB-EN001 -> LOB-DE001
+    // Pattern: LOB-001 -> LOB-DE001 (For older sets)
+    // Pattern: 25TH-EN001 -> 25TH-DE001
+
+    if (lang === 'DE') {
+        if (setCode.includes('-EN')) {
+            return setCode.replace('-EN', '-DE');
+        }
+        // Handle older sets or other regions (e.g. -NA, -AE) by replacing/injecting DE
+        // If it looks like XXX-000, inject DE
+        if (/^[A-Z0-9]+-\d+$/.test(setCode)) {
+            const [prefix, number] = setCode.split('-');
+            return `${prefix}-DE${number}`; // Or -G for very old? Stick to DE for consistency
+        }
+        // If it already has region code other than DE?
+        if (/^[A-Z0-9]+-[A-Z]{2}\d+$/.test(setCode)) {
+             // Replace existing 2-letter code
+             return setCode.replace(/-[A-Z]{2}/, '-DE');
+        }
+    }
+
+    if (lang === 'JP') {
+        if (setCode.includes('-EN')) return setCode.replace('-EN', '-JP');
+        return `${setCode}-JP`; // Fallback
+    }
+
+    return setCode;
+};
+
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
   const [showRarityGuide, setShowRarityGuide] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
 
-  const fetchCard = useCallback(async (tempId, passcode) => {
+  const fetchCard = useCallback(async (tempId, passcode, incomingSetCode) => {
     // Set loading immediately to prevent double fetch
     setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loading' } : c));
 
@@ -20,23 +54,56 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             if (data && !data.error) {
                 // Check if already in DB
                 const result = await window.api.checkCardExists(passcode);
-                setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loaded', data, inCollection: result.exists, ownedQuantity: result.quantity } : c));
-                playScanSound(); // Play sound on successful fetch
+
+                // Determine Language & Set Code
+                // If scanned Set Code exists (e.g. LOB-DE001), infer language and pre-select
+                let defaultLang = 'DE'; // User preference: >99% German
+                let preSelectedSet = null;
+
+                if (incomingSetCode) {
+                    if (incomingSetCode.includes('-DE') || incomingSetCode.includes('-G')) defaultLang = 'DE';
+                    else if (incomingSetCode.includes('-JP')) defaultLang = 'JP';
+                    else defaultLang = 'EN';
+
+                    // Try to match incoming set code to API data (stripping region)
+                    // API Set Code: LOB-EN001
+                    // Incoming: LOB-DE001
+                    // Normalized: LOB-001 (prefix + number)
+
+                    if (data.card_sets) {
+                        const incomingNormalized = incomingSetCode.replace(/-[A-Z]{2}/, '-').replace(/-G/, '-').replace(/-EN/, '-');
+
+                        preSelectedSet = data.card_sets.find(s => {
+                            const apiNormalized = s.set_code.replace(/-[A-Z]{2}/, '-').replace(/-EN/, '-');
+                            return apiNormalized === incomingNormalized;
+                        });
+                    }
+                }
+
+                setScannedCards(prev => prev.map(c => c.tempId === tempId ? {
+                    ...c,
+                    status: 'loaded',
+                    data,
+                    inCollection: result.exists,
+                    ownedQuantity: result.quantity,
+                    language: defaultLang,
+                    selectedSet: preSelectedSet || c.selectedSet
+                } : c));
+                playScanSound();
             } else {
-                // If not found or error, remove the card entirely
                 setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
             }
-        } catch (e) { // eslint-disable-line no-unused-vars
-             // If error, remove the card entirely
+        } catch (e) {
              setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
         }
     } else {
-        // Mock for browser dev without Electron
+        // Mock
         setTimeout(() => {
              setScannedCards(prev => prev.map(c => c.tempId === tempId ? {
                  ...c,
                  status: 'loaded',
-                 data: { name: 'Blue-Eyes White Dragon', type: 'Normal Monster', race: 'Dragon', card_images: [{ image_url: 'https://images.ygoprodeck.com/images/cards/89631139.jpg' }] }
+                 data: { name: 'Blue-Eyes White Dragon', type: 'Normal Monster', race: 'Dragon', card_images: [{ image_url: 'https://images.ygoprodeck.com/images/cards/89631139.jpg' }] },
+                 language: 'DE'
              } : c));
         }, 1000);
     }
@@ -45,7 +112,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   useEffect(() => {
     scannedCards.forEach(card => {
       if (card.status === 'pending') {
-        fetchCard(card.tempId, card.passcode);
+        fetchCard(card.tempId, card.passcode, card.scannedSetCode);
       }
     });
   }, [scannedCards, fetchCard]);
@@ -54,14 +121,18 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
     const card = scannedCards.find(c => c.tempId === tempId);
     if (card && card.status === 'loaded') {
        // Prepare data
-       const cardData = { ...card.data, quantity: card.quantity || 1 };
+       const cardData = {
+           ...card.data,
+           quantity: card.quantity || 1,
+           language: card.language || 'DE'
+       };
 
        if (card.isManualEntry) {
            cardData.set_code = card.manualSetCode || 'Unknown';
            cardData.rarity = card.manualRarity || 'Unknown';
-           cardData.price = 0; // Manual entry defaults to 0
+           cardData.price = 0;
        } else if (card.selectedSet) {
-           cardData.set_code = card.selectedSet.set_code;
+           cardData.set_code = card.selectedSet.set_code; // Stores the API (English) code usually
            cardData.rarity = card.selectedSet.set_rarity;
            cardData.price = parseFloat(card.selectedSet.set_price) || 0;
        } else if (card.data.card_sets && card.data.card_sets.length > 0) {
@@ -115,7 +186,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         tempId: Date.now() + Math.random(), // Unique temp ID
                         passcode: c.passcode,
                         status: 'pending',
-                        data: null
+                        data: null,
+                        language: 'DE' // Default to DE for imports
                     })),
                     ...prev
                 ]);
@@ -191,36 +263,13 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             <CardSearchModal
                 onClose={() => setShowSearch(false)}
                 onSelect={(card) => {
-                    // Manually inject into scanned list
-                    setScannedCards(prev => [{
-                        tempId: Date.now() + Math.random(),
-                        passcode: String(card.id),
-                        status: 'loaded', // Already have data from search
-                        data: card, // Search result object matches DB structure roughly
-                        quantity: 1,
-                        isManualEntry: true // Default to manual entry so they can set rarity easily?
-                                            // Actually, search result might have set info if detailed.
-                                            // But usually 'fname' endpoint returns minimal data.
-                                            // Let's assume minimal and trigger a fetch?
-                                            // No, passing 'loaded' avoids refetch.
-                                            // Let's pass 'pending' to force a full fetch with sets?
-                                            // YES. Better to get full details including sets.
-                        // status: 'pending' // Override above
-                    }, ...prev]);
-                    // Actually, if we set 'pending', it will refetch in useEffect.
-                    // Let's update the object passed to setScannedCards
-
-                    /*
-                       We want to use the ID to fetch full details (prices, sets).
-                       The search result has 'id'.
-                    */
                    setScannedCards(prev => [{
                        tempId: Date.now() + Math.random(),
                        passcode: String(card.id),
                        status: 'pending',
-                       data: null
+                       data: null,
+                       language: 'DE'
                    }, ...prev]);
-
                    setShowSearch(false);
                 }}
             />
@@ -269,9 +318,9 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     <span className="text-gray-400 truncate">{card.data.type}</span>
                                 </div>
 
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 items-center">
                                     {/* Quantity */}
-                                    <div className="flex items-center bg-black/40 rounded-lg border border-gray-700 p-0.5">
+                                    <div className="flex items-center bg-black/40 rounded-lg border border-gray-700 p-0.5 h-8">
                                         <button
                                             onClick={() => handleUpdateCard(card.tempId, { quantity: Math.max(1, (card.quantity || 1) - 1) })}
                                             className="p-1 hover:bg-gray-700 rounded text-gray-400"
@@ -285,6 +334,20 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                         >
                                             <Plus className="w-3 h-3" />
                                         </button>
+                                    </div>
+
+                                    {/* Language Selector */}
+                                    <div className="flex items-center bg-black/40 rounded-lg border border-gray-700 p-0.5 h-8 px-2">
+                                        <Globe className="w-3 h-3 text-gray-400 mr-2" />
+                                        <select
+                                            value={card.language || 'DE'}
+                                            onChange={(e) => handleUpdateCard(card.tempId, { language: e.target.value })}
+                                            className="bg-transparent text-xs text-white outline-none cursor-pointer"
+                                        >
+                                            <option value="DE">German (DE)</option>
+                                            <option value="EN">English (EN)</option>
+                                            <option value="JP">Japanese (JP)</option>
+                                        </select>
                                     </div>
 
                                     {/* Rarity */}
@@ -312,12 +375,11 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                     <CustomSelect
                                                         value={card.selectedSet ? `${card.selectedSet.set_code}|${card.selectedSet.set_rarity}` : ''}
                                                         onChange={(val) => {
-                                                            // val is "code|rarity"
                                                             const [code, rarity] = val.split('|');
                                                             const selected = card.data.card_sets.find(s => s.set_code === code && s.set_rarity === rarity);
                                                             handleUpdateCard(card.tempId, { selectedSet: selected });
                                                         }}
-                                                        placeholder={card.data.card_sets[0] ? `${card.data.card_sets[0].set_rarity} (Default)` : "Select Rarity"}
+                                                        placeholder={card.data.card_sets[0] ? `${getLocalizedSetCode(card.data.card_sets[0].set_code, card.language || 'DE')} - ${card.data.card_sets[0].set_rarity}` : "Select Rarity"}
                                                         options={(() => {
                                                             const unique = new Map();
                                                             card.data.card_sets.forEach(s => {
@@ -326,7 +388,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                             });
                                                             return Array.from(unique.values()).map(set => ({
                                                                 value: `${set.set_code}|${set.set_rarity}`,
-                                                                label: `${set.set_code} - ${set.set_rarity} ($${set.set_price || '0.00'})`
+                                                                label: `${getLocalizedSetCode(set.set_code, card.language || 'DE')} - ${set.set_rarity} ($${set.set_price || '0.00'})`
                                                             }));
                                                         })()}
                                                         className="w-full"

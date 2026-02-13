@@ -42,8 +42,9 @@ db.exec(`
     rarity TEXT,
     set_code TEXT,
     price REAL,
+    language TEXT DEFAULT 'DE',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id, set_code)
+    PRIMARY KEY (id, set_code, language)
   )
 `);
 
@@ -112,13 +113,17 @@ try {
   if (!columnNames.includes('set_code')) db.exec("ALTER TABLE cards ADD COLUMN set_code TEXT");
   if (!columnNames.includes('price')) db.exec("ALTER TABLE cards ADD COLUMN price REAL");
   if (!columnNames.includes('last_updated')) db.exec("ALTER TABLE cards ADD COLUMN last_updated DATETIME");
+  if (!columnNames.includes('language')) db.exec("ALTER TABLE cards ADD COLUMN language TEXT DEFAULT 'DE'");
 
-  // PRIMARY KEY Migration
+  // PRIMARY KEY Migration (id, set_code -> id, set_code, language)
   const pkColumns = columns.filter(c => c.pk > 0);
-  if (pkColumns.length === 1 && pkColumns[0].name === 'id') {
-      console.log("Migrating cards table to composite PRIMARY KEY...");
+  // We need to check if PK is exactly (id, set_code) or needs upgrade
+  // If language is missing from PK, we must migrate
+  const pkNames = pkColumns.map(c => c.name).sort().join(',');
+  if (pkNames === 'id,set_code' || pkNames === 'id') {
+      console.log("Migrating cards table to include LANGUAGE in PRIMARY KEY...");
       db.transaction(() => {
-          db.exec("ALTER TABLE cards RENAME TO cards_temp");
+          db.exec("ALTER TABLE cards RENAME TO cards_temp_v2");
           db.exec(`
             CREATE TABLE cards (
                 id TEXT,
@@ -135,18 +140,21 @@ try {
                 rarity TEXT,
                 set_code TEXT,
                 price REAL,
+                language TEXT DEFAULT 'DE',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (id, set_code)
+                last_updated DATETIME,
+                PRIMARY KEY (id, set_code, language)
             )
           `);
+          // Note: we default existing rows to 'DE' since user said 99.5% are German
           db.exec(`
             INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
-                   COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, created_at)
+                   rarity, set_code, price, language, created_at, last_updated)
             SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
-                   COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, created_at
-            FROM cards_temp
+                   COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, 'DE', created_at, last_updated
+            FROM cards_temp_v2
           `);
-          db.exec("DROP TABLE cards_temp");
+          db.exec("DROP TABLE cards_temp_v2");
       })();
       console.log("Migration complete.");
   }
@@ -918,27 +926,25 @@ ipcMain.handle('add-card-to-db', (event, card) => {
   try {
     const id = String(card.id);
     const setCode = card.set_code || 'Unknown';
+    const language = card.language || 'DE'; // Default to German if not specified
 
-    // Check for exact variant match
-    const existing = db.prepare('SELECT quantity FROM cards WHERE id = ? AND set_code = ?').get(id, setCode);
+    // Check for exact variant match (including language)
+    const existing = db.prepare('SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND language = ?').get(id, setCode, language);
 
     if (existing) {
         const newQty = existing.quantity + (card.quantity || 1);
-        db.prepare('UPDATE cards SET quantity = @qty, price = @price WHERE id = @id AND set_code = @set_code').run({
+        db.prepare('UPDATE cards SET quantity = @qty, price = @price WHERE id = @id AND set_code = @set_code AND language = @language').run({
             qty: newQty,
             price: card.price || 0,
             id: id,
-            set_code: setCode
+            set_code: setCode,
+            language: language
         });
         return { success: true, updated: true };
     } else {
-        // Prevent duplicate 'Unknown' entries if one already exists?
-        // No, user might be adding a second Unknown pile.
-        // But if they add a specific set (LOB-001) and 'Unknown' exists, we currently keep both (cleanup tool handles merge).
-        // This is safe.
         const stmt = db.prepare(`
-          INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price)
-          VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute, @quantity, @rarity, @set_code, @price)
+          INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language)
+          VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute, @quantity, @rarity, @set_code, @price, @language)
         `);
 
         const imageUrl = card.card_images && card.card_images.length > 0 ? card.card_images[0].image_url : '';
@@ -963,7 +969,8 @@ ipcMain.handle('add-card-to-db', (event, card) => {
           quantity: card.quantity || 1,
           rarity: card.rarity || 'Unknown',
           set_code: card.set_code || 'Unknown',
-          price: card.price || 0
+          price: card.price || 0,
+          language: language
         });
         return { success: true, inserted: true };
     }
@@ -992,16 +999,26 @@ ipcMain.handle('get-price-history', () => {
 
 ipcMain.handle('update-card-meta', (event, data) => {
     try {
+        // We need to handle PK updates carefully (id, set_code, language)
+        // If the new PK already exists, we might need to merge.
+        // For simplicity, let's assume UI prevents conflict or we handle it via catch
+
+        // We also need to know the OLD language to target the row
+        const language = data.language || 'DE';
+        const oldLanguage = data.old_language || language;
+
         const stmt = db.prepare(`
             UPDATE cards
-            SET set_code = @new_set_code, rarity = @rarity, quantity = @quantity, price = @price
-            WHERE id = @passcode AND set_code = @old_set_code
+            SET set_code = @new_set_code, rarity = @rarity, quantity = @quantity, price = @price, language = @language
+            WHERE id = @passcode AND set_code = @old_set_code AND language = @old_language
         `);
 
         const result = stmt.run({
             passcode: String(data.passcode),
             old_set_code: data.old_set_code || 'Unknown',
+            old_language: oldLanguage,
             new_set_code: data.new_set_code || 'Unknown',
+            language: language,
             rarity: data.rarity || 'Unknown',
             quantity: data.quantity || 1,
             price: data.price || 0

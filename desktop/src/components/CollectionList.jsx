@@ -16,6 +16,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [filterAttribute, setFilterAttribute] = useState('All');
   const [filterRace, setFilterRace] = useState('All');
   const [filterSet, setFilterSet] = useState('All');
+  const [filterLang, setFilterLang] = useState('All'); // 'All', 'DE', 'EN', 'JP'
 
   const updating = isUpdating || localUpdating;
 
@@ -26,9 +27,9 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     } else {
         // Mock
         setRawCards([
-            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/46986414.jpg', atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 1, price: 5.50, set_code: 'LOB-005', rarity: 'Ultra Rare' },
-            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/46986414.jpg', atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 3, price: 1.20, set_code: 'SDY-006', rarity: 'Common' },
-            { id: '89631139', name: 'Blue-Eyes White Dragon', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/89631139.jpg', atk: 3000, def: 2500, level: 8, race: 'Dragon', attribute: 'LIGHT', desc: 'This legendary dragon...', quantity: 1, price: 50.00, set_code: 'LOB-001', rarity: 'Ultra Rare' }
+            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/46986414.jpg', atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 1, price: 5.50, set_code: 'LOB-005', rarity: 'Ultra Rare', language: 'EN' },
+            { id: '46986414', name: 'Dark Magician', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/46986414.jpg', atk: 2500, def: 2100, level: 7, race: 'Spellcaster', attribute: 'DARK', desc: 'The ultimate wizard...', quantity: 3, price: 1.20, set_code: 'SDY-006', rarity: 'Common', language: 'DE' },
+            { id: '89631139', name: 'Blue-Eyes White Dragon', type: 'Normal Monster', image_url: 'https://images.ygoprodeck.com/images/cards/89631139.jpg', atk: 3000, def: 2500, level: 8, race: 'Dragon', attribute: 'LIGHT', desc: 'This legendary dragon...', quantity: 1, price: 50.00, set_code: 'LOB-001', rarity: 'Ultra Rare', language: 'JP' }
         ]);
     }
   };
@@ -84,7 +85,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                   // Keep latest created_at for sorting
                   newestDate: new Date(0),
                   // Aggregated sets
-                  sets: new Set()
+                  sets: new Set(),
+                  languages: new Set()
               };
           }
           const g = groups[card.id];
@@ -92,6 +94,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
           g.totalValue += (card.price || 0) * (card.quantity || 1);
           g.variants.push(card);
           if (card.set_code) g.sets.add(card.set_code.split('-')[0]); // Add Set Code Prefix (e.g. LOB)
+          if (card.language) g.languages.add(card.language);
 
           if ((card.price || 0) > g.maxPrice) g.maxPrice = card.price || 0;
 
@@ -128,8 +131,9 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
         const matchesAttribute = filterAttribute === 'All' || c.attribute === filterAttribute;
         const matchesRace = filterRace === 'All' || c.race === filterRace;
         const matchesSet = filterSet === 'All' || Array.from(c.sets).includes(filterSet);
+        const matchesLang = filterLang === 'All' || Array.from(c.languages).includes(filterLang);
 
-        return matchesSearch && matchesType && matchesAttribute && matchesRace && matchesSet;
+        return matchesSearch && matchesType && matchesAttribute && matchesRace && matchesSet && matchesLang;
       }).sort((a, b) => {
           switch (sortType) {
               case 'name': return (a.name || '').localeCompare(b.name || '');
@@ -141,7 +145,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               default: return 0;
           }
       });
-  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, sortType]);
+  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, sortType]);
 
   const clearFilters = () => {
       setFilter('');
@@ -149,6 +153,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       setFilterAttribute('All');
       setFilterRace('All');
       setFilterSet('All');
+      setFilterLang('All');
   };
 
   return (
@@ -232,6 +237,19 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                         { value: "Link", label: "Link" },
                         { value: "Ritual", label: "Ritual" },
                         { value: "Pendulum", label: "Pendulum" },
+                    ]}
+                />
+
+                <CustomSelect
+                    value={filterLang}
+                    onChange={setFilterLang}
+                    placeholder="Lang"
+                    className="w-[100px]"
+                    options={[
+                        { value: "All", label: "All Lang" },
+                        { value: "DE", label: "German" },
+                        { value: "EN", label: "English" },
+                        { value: "JP", label: "Japanese" }
                     ]}
                 />
 
