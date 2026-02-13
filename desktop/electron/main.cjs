@@ -357,28 +357,12 @@ app.on('window-all-closed', () => {
 // Helper for numeric/value fields to preserve 0
 const valOrNull = (v) => (v !== undefined && v !== null && v !== '') ? v : null;
 
-// Helper to find best default set (Lowest Price > Common)
+// Helper to find best default set (Lowest Rarity > Lowest Price)
 function findBestDefaultSet(cardSets) {
     if (!cardSets || cardSets.length === 0) return null;
 
     return cardSets.sort((a, b) => {
-        const pA = parseFloat(a.set_price) || 0;
-        const pB = parseFloat(b.set_price) || 0;
-
-        // Prefer lowest non-zero price. If both zero, treat as equal.
-        // If one is zero and other is not, prefer the non-zero (assuming zero is 'unknown price')?
-        // OR assume zero is 'free'? No, cards aren't free.
-        // Let's treat 0 as Infinity for sorting purposes to push it to bottom,
-        // unless ALL are 0.
-
-        const priceA = pA === 0 ? 999999 : pA;
-        const priceB = pB === 0 ? 999999 : pB;
-
-        if (Math.abs(priceA - priceB) > 0.01) {
-            return priceA - priceB;
-        }
-
-        // Tie-breaker: Rarity Ranking (Lower is better/more common)
+        // Priority 1: Rarity Ranking (Common is best default)
         const getRank = (r) => {
             if (!r) return 10;
             const lower = r.toLowerCase();
@@ -391,7 +375,22 @@ function findBestDefaultSet(cardSets) {
             return 10;
         };
 
-        return getRank(a.set_rarity) - getRank(b.set_rarity);
+        const rankA = getRank(a.set_rarity);
+        const rankB = getRank(b.set_rarity);
+
+        if (rankA !== rankB) {
+            return rankA - rankB;
+        }
+
+        // Priority 2: Lowest Price (if rarities are equal)
+        const pA = parseFloat(a.set_price) || 0;
+        const pB = parseFloat(b.set_price) || 0;
+
+        // Treat 0 as Infinity to avoid preferring "unknown price" over "known price"
+        const priceA = pA === 0 ? 999999 : pA;
+        const priceB = pB === 0 ? 999999 : pB;
+
+        return priceA - priceB;
     })[0];
 }
 
