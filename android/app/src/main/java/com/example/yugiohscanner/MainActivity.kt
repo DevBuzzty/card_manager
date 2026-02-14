@@ -310,7 +310,6 @@ fun ScannerScreen(
     var showHistory by remember { mutableStateOf(false) }
     var showManualEntry by remember { mutableStateOf(false) }
     var manualCode by remember { mutableStateOf("") }
-    var manualSetCode by remember { mutableStateOf("") }
 
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var cameraInfo by remember { mutableStateOf<CameraInfo?>(null) }
@@ -368,14 +367,11 @@ fun ScannerScreen(
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also {
-                            it.setAnalyzer(executor, CardAnalyzer { result ->
-                                val code = result.passcode
-                                val setCode = result.setCode
-
+                            it.setAnalyzer(executor, CardAnalyzer { code ->
                                 // Only trigger if we have a NEW passcode
                                 if (code != lastScannedCode) {
                                     lastScannedCode = code
-                                    scanStatus = if (setCode != null) "Detected: $code ($setCode)" else "Detected: $code"
+                                    scanStatus = "Detected: $code"
 
                                     // Trigger Feedback
                                     triggerFeedback()
@@ -386,9 +382,6 @@ fun ScannerScreen(
                                     // Emit to socket
                                     val data = JSONObject()
                                     data.put("passcode", code)
-                                    if (setCode != null) {
-                                        data.put("set_code", setCode)
-                                    }
                                     socket?.emit("card_scanned", data)
                                 }
                             })
@@ -560,21 +553,6 @@ fun ScannerScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = manualSetCode,
-                        onValueChange = { manualSetCode = it },
-                        label = { Text("Set Code (Optional)") },
-                        placeholder = { Text("e.g. LOB-DE001") },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Row(
@@ -585,7 +563,6 @@ fun ScannerScreen(
                             onClick = {
                                 showManualEntry = false
                                 manualCode = ""
-                                manualSetCode = ""
                             },
                             modifier = Modifier.weight(1f),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
@@ -596,7 +573,7 @@ fun ScannerScreen(
                             onClick = {
                                 if (manualCode.length >= 4) { // Basic validation
                                     lastScannedCode = manualCode
-                                    val status = if (manualSetCode.isNotEmpty()) "Manual: $manualCode ($manualSetCode)" else "Manual: $manualCode"
+                                    val status = "Manual: $manualCode"
                                     scanStatus = status
 
                                     // Trigger Feedback
@@ -608,14 +585,10 @@ fun ScannerScreen(
                                     // Emit to socket
                                     val data = JSONObject()
                                     data.put("passcode", manualCode)
-                                    if (manualSetCode.isNotEmpty()) {
-                                        data.put("set_code", manualSetCode.uppercase())
-                                    }
                                     socket?.emit("card_scanned", data)
 
                                     showManualEntry = false
                                     manualCode = ""
-                                    manualSetCode = ""
                                 } else {
                                     Toast.makeText(context, "Invalid Code", Toast.LENGTH_SHORT).show()
                                 }
@@ -684,16 +657,11 @@ fun ScannerScreen(
     }
 }
 
-data class ScanResult(val passcode: String, val setCode: String?)
-
-class CardAnalyzer(private val onResultDetected: (ScanResult) -> Unit) : ImageAnalysis.Analyzer {
+class CardAnalyzer(private val onResultDetected: (String) -> Unit) : ImageAnalysis.Analyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
     // Pattern for 8-digit passcode
     private val passcodePattern = Pattern.compile("\\b\\d{8}\\b")
-
-    // Pattern for Set Code: 3-4 letters/digits, hyphen, 3-5 letters/digits (e.g., LOB-EN001, SDK-DE001)
-    private val setCodePattern = Pattern.compile("\\b[A-Z0-9]{3,4}-[A-Z0-9]{3,5}\\b")
 
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
@@ -704,30 +672,21 @@ class CardAnalyzer(private val onResultDetected: (ScanResult) -> Unit) : ImageAn
             recognizer.process(image)
                 .addOnSuccessListener { visionText ->
                     var foundPasscode: String? = null
-                    var foundSetCode: String? = null
 
-                    // Scan all blocks to find both if possible
+                    // Scan all blocks
                     for (block in visionText.textBlocks) {
                         val text = block.text
-
                         if (foundPasscode == null) {
                             val matcher = passcodePattern.matcher(text)
                             if (matcher.find()) {
                                 foundPasscode = matcher.group()
                             }
                         }
-
-                        if (foundSetCode == null) {
-                            val matcher = setCodePattern.matcher(text)
-                            if (matcher.find()) {
-                                foundSetCode = matcher.group()
-                            }
-                        }
                     }
 
                     // Only trigger if we at least found a passcode
                     if (foundPasscode != null) {
-                        onResultDetected(ScanResult(foundPasscode!!, foundSetCode))
+                        onResultDetected(foundPasscode!!)
                     }
                 }
                 .addOnFailureListener { e ->
