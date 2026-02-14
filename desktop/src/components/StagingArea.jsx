@@ -56,34 +56,47 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 const result = await window.api.checkCardExists(passcode);
 
                 // Determine Language & Set Code
-                // If scanned Set Code exists (e.g. LOB-DE001), infer language and pre-select
                 let defaultLang = 'DE'; // User preference: >99% German
                 let preSelectedSet = null;
+                let germanSets = [];
 
                 if (incomingSetCode) {
                     if (incomingSetCode.includes('-DE') || incomingSetCode.includes('-G')) defaultLang = 'DE';
                     else if (incomingSetCode.includes('-JP')) defaultLang = 'JP';
                     else defaultLang = 'EN';
+                }
 
-                    // Try to match incoming set code to API data (stripping region)
-                    // API Set Code: LOB-EN001
-                    // Incoming: LOB-DE001
-                    // Normalized: LOB-001 (prefix + number)
+                // If defaultLang is DE, try fetching Yugipedia sets
+                if (defaultLang === 'DE') {
+                    try {
+                        const yugipediaSets = await window.api.fetchYugipediaSets(passcode);
+                        if (yugipediaSets && yugipediaSets.length > 0) {
+                            germanSets = yugipediaSets;
+                            // Match incoming set code exactly to Yugipedia
+                            if (incomingSetCode) {
+                                const exactMatch = germanSets.find(s => s.set_code === incomingSetCode);
+                                if (exactMatch) {
+                                    preSelectedSet = { ...exactMatch, isYugipedia: true };
+                                }
+                            }
+                        }
+                    } catch (e) { console.error(e); }
+                }
 
-                    if (data.card_sets) {
-                        const incomingNormalized = incomingSetCode.replace(/-[A-Z]{2}/, '-').replace(/-G/, '-').replace(/-EN/, '-');
-
-                        preSelectedSet = data.card_sets.find(s => {
-                            const apiNormalized = s.set_code.replace(/-[A-Z]{2}/, '-').replace(/-EN/, '-');
-                            return apiNormalized === incomingNormalized;
-                        });
-                    }
+                // If no exact Yugipedia match, try standard API matching
+                if (!preSelectedSet && incomingSetCode && data.card_sets) {
+                    const incomingNormalized = incomingSetCode.replace(/-[A-Z]{2}/, '-').replace(/-G/, '-').replace(/-EN/, '-');
+                    preSelectedSet = data.card_sets.find(s => {
+                        const apiNormalized = s.set_code.replace(/-[A-Z]{2}/, '-').replace(/-EN/, '-');
+                        return apiNormalized === incomingNormalized;
+                    });
                 }
 
                 setScannedCards(prev => prev.map(c => c.tempId === tempId ? {
                     ...c,
                     status: 'loaded',
                     data,
+                    germanSets,
                     inCollection: result.exists,
                     ownedQuantity: result.quantity,
                     language: defaultLang,
@@ -134,6 +147,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
        } else if (card.selectedSet) {
            cardData.set_code = card.selectedSet.set_code; // Stores the API (English) code usually
            cardData.rarity = card.selectedSet.set_rarity;
+           // If it's a Yugipedia set, it has no price, so we rely on 0 (fallback to generic) or we should map it?
+           // The API fallback logic handles 0 prices by checking card_prices.
            cardData.price = parseFloat(card.selectedSet.set_price) || 0;
        } else if (card.data.card_sets && card.data.card_sets.length > 0) {
            // Default to first set if not selected
@@ -370,35 +385,56 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                 />
                                             </div>
                                         ) : (
-                                            card.data.card_sets ? (
+                                            (card.language === 'DE' && card.germanSets && card.germanSets.length > 0) ? (
+                                                // Yugipedia German Sets Dropdown
                                                 <div className="flex-1">
                                                     <CustomSelect
                                                         value={card.selectedSet ? `${card.selectedSet.set_code}|${card.selectedSet.set_rarity}` : ''}
                                                         onChange={(val) => {
                                                             const [code, rarity] = val.split('|');
-                                                            const selected = card.data.card_sets.find(s => s.set_code === code && s.set_rarity === rarity);
-                                                            handleUpdateCard(card.tempId, { selectedSet: selected });
+                                                            const selected = card.germanSets.find(s => s.set_code === code && s.set_rarity === rarity);
+                                                            handleUpdateCard(card.tempId, { selectedSet: { ...selected, isYugipedia: true } });
                                                         }}
-                                                        placeholder={card.data.card_sets[0] ? `${getLocalizedSetCode(card.data.card_sets[0].set_code, card.language || 'DE')} - ${card.data.card_sets[0].set_rarity}` : "Select Rarity"}
-                                                        options={(() => {
-                                                            const unique = new Map();
-                                                            card.data.card_sets.forEach(s => {
-                                                                const key = `${s.set_code}|${s.set_rarity}`;
-                                                                if (!unique.has(key)) unique.set(key, s);
-                                                            });
-                                                            return Array.from(unique.values()).map(set => ({
-                                                                value: `${set.set_code}|${set.set_rarity}`,
-                                                                label: `${getLocalizedSetCode(set.set_code, card.language || 'DE')} - ${set.set_rarity} ($${set.set_price || '0.00'})`
-                                                            }));
-                                                        })()}
+                                                        placeholder="Select German Rarity"
+                                                        options={card.germanSets.map(set => ({
+                                                            value: `${set.set_code}|${set.set_rarity}`,
+                                                            label: `${set.set_code} - ${set.set_rarity}`
+                                                        }))}
                                                         className="w-full"
                                                     />
                                                 </div>
                                             ) : (
-                                                <div className="flex-1 bg-gray-800 rounded px-2 py-1 text-xs text-yellow-500 border border-yellow-500/30 flex items-center justify-center">
-                                                    <AlertCircle className="w-3 h-3 mr-1" />
-                                                    No sets found via API
-                                                </div>
+                                                // Fallback English/Localized API Sets
+                                                card.data.card_sets ? (
+                                                    <div className="flex-1">
+                                                        <CustomSelect
+                                                            value={card.selectedSet ? `${card.selectedSet.set_code}|${card.selectedSet.set_rarity}` : ''}
+                                                            onChange={(val) => {
+                                                                const [code, rarity] = val.split('|');
+                                                                const selected = card.data.card_sets.find(s => s.set_code === code && s.set_rarity === rarity);
+                                                                handleUpdateCard(card.tempId, { selectedSet: selected });
+                                                            }}
+                                                            placeholder={card.data.card_sets[0] ? `${getLocalizedSetCode(card.data.card_sets[0].set_code, card.language || 'DE')} - ${card.data.card_sets[0].set_rarity}` : "Select Rarity"}
+                                                            options={(() => {
+                                                                const unique = new Map();
+                                                                card.data.card_sets.forEach(s => {
+                                                                    const key = `${s.set_code}|${s.set_rarity}`;
+                                                                    if (!unique.has(key)) unique.set(key, s);
+                                                                });
+                                                                return Array.from(unique.values()).map(set => ({
+                                                                    value: `${set.set_code}|${set.set_rarity}`,
+                                                                    label: `${getLocalizedSetCode(set.set_code, card.language || 'DE')} - ${set.set_rarity} ($${set.set_price || '0.00'})`
+                                                                }));
+                                                            })()}
+                                                            className="w-full"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex-1 bg-gray-800 rounded px-2 py-1 text-xs text-yellow-500 border border-yellow-500/30 flex items-center justify-center">
+                                                        <AlertCircle className="w-3 h-3 mr-1" />
+                                                        No sets found via API
+                                                    </div>
+                                                )
                                             )
                                         )}
 

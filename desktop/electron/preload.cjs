@@ -59,4 +59,5 @@ contextBridge.exposeInMainWorld('api', {
   mergeUnknownCards: () => ipcRenderer.invoke('merge-unknown-cards'),
   convertUnknownsToDefault: () => ipcRenderer.invoke('convert-unknowns-to-default'),
   downgradeToLowestRarity: () => ipcRenderer.invoke('downgrade-to-lowest-rarity'),
+  fetchYugipediaSets: (passcode) => ipcRenderer.invoke('fetch-yugipedia-sets', passcode),
 });
