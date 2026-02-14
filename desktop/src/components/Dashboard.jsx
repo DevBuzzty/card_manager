@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Library, Layers, Clock, ArrowRight } from 'lucide-react';
+import SetCompletion from './SetCompletion';
 
 export default function Dashboard({ setActiveTab }) {
     const [stats, setStats] = useState({ totalValue: 0, totalCards: 0, uniqueCards: 0 });
@@ -86,29 +87,36 @@ export default function Dashboard({ setActiveTab }) {
                 />
             </div>
 
-            {/* Recent Activity */}
-            <div className="bg-[#1E1E1E] rounded-2xl border border-gray-800 overflow-hidden">
-                <div className="p-6 border-b border-gray-800 flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-gray-400" />
-                        Recently Added
-                    </h3>
-                    <button onClick={() => setActiveTab('collection')} className="text-sm text-space-violet hover:underline">View All</button>
-                </div>
-                <div className="divide-y divide-gray-800">
-                    {recentCards.length === 0 && (
-                        <div className="p-8 text-center text-gray-500">No cards in collection yet.</div>
-                    )}
-                    {recentCards.map((card, idx) => (
-                        <div key={card.id + card.set_code + idx} className="p-4 flex items-center gap-4 hover:bg-black/20 transition-colors">
-                            <img src={card.image_url} alt="" className="w-10 h-14 object-cover rounded shadow-sm" />
-                            <div className="flex-1">
-                                <h4 className="font-bold text-white">{card.name}</h4>
-                                <p className="text-xs text-gray-500">{card.set_code} • {card.rarity}</p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[400px]">
+                {/* Recent Activity */}
+                <div className="bg-[#1E1E1E] rounded-2xl border border-gray-800 overflow-hidden flex flex-col">
+                    <div className="p-6 border-b border-gray-800 flex justify-between items-center shrink-0">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-gray-400" />
+                            Recently Added
+                        </h3>
+                        <button onClick={() => setActiveTab('collection')} className="text-sm text-space-violet hover:underline">View All</button>
+                    </div>
+                    <div className="divide-y divide-gray-800 overflow-y-auto custom-scrollbar flex-1">
+                        {recentCards.length === 0 && (
+                            <div className="p-8 text-center text-gray-500">No cards in collection yet.</div>
+                        )}
+                        {recentCards.map((card, idx) => (
+                            <div key={card.id + card.set_code + idx} className="p-4 flex items-center gap-4 hover:bg-black/20 transition-colors">
+                                <img src={card.image_url} alt="" className="w-10 h-14 object-cover rounded shadow-sm" />
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-white truncate">{card.name}</h4>
+                                    <p className="text-xs text-gray-500 truncate">{card.set_code} • {card.rarity}</p>
+                                </div>
+                                <div className="text-right font-mono text-space-violet font-bold">${(card.price || 0).toFixed(2)}</div>
                             </div>
-                            <div className="text-right font-mono text-space-violet font-bold">${(card.price || 0).toFixed(2)}</div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
+                </div>
+
+                {/* Set Completion Widget */}
+                <div className="h-full overflow-hidden">
+                    <SetCompletion />
                 </div>
             </div>
         </div>
