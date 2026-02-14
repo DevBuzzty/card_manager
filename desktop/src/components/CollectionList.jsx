@@ -1,10 +1,8 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { Search, RefreshCw, LayoutGrid, List as ListIcon, Database, FilterX } from 'lucide-react';
-import * as ReactWindow from 'react-window';
+import { Grid } from 'react-window';
 import CardDetailModal from './CardDetailModal';
 import CustomSelect from './CustomSelect';
-
-const Grid = ReactWindow.FixedSizeGrid;
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -131,8 +129,14 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   };
 
   // Virtualized Grid Cell Renderer
-  const Cell = ({ columnIndex, rowIndex, style, data }) => {
-      const { items, columnCount } = data;
+  const Cell = ({ columnIndex, rowIndex, style, ...props }) => {
+      // In this version of react-window, data is passed via props merged from cellProps?
+      // Wait, .d.ts says: cellComponent receives (props: { ... } & CellProps)
+      // So items and columnCount should be in props directly if I pass them in cellProps.
+
+      const { items, columnCount } = props;
+      // Note: columnIndex and rowIndex are also in props.
+
       const index = rowIndex * columnCount + columnIndex;
       if (index >= items.length) return null;
       const card = items[index];
@@ -217,14 +221,14 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                             <Grid
                                 columnCount={columnCount}
                                 columnWidth={width / columnCount}
-                                height={height}
+                                defaultHeight={height}
                                 rowCount={rowCount}
                                 rowHeight={280}
                                 width={width}
-                                itemData={{ items: filtered, columnCount }}
-                            >
-                                {Cell}
-                            </Grid>
+                                height={height} // Also pass height for Grid style
+                                cellProps={{ items: filtered, columnCount }}
+                                cellComponent={Cell}
+                            />
                         );
                     }}
                 </AutoSizer>

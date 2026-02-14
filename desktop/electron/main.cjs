@@ -3,8 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const { Server } = require('socket.io');
 const os = require('os');
-const { initDatabase, getDb } = require('./database');
-const { fetchCardData, fetchYugipediaSets } = require('./api-handler');
+const { initDatabase, getDb } = require('./database.cjs');
+const { fetchCardData, fetchYugipediaSets } = require('./api-handler.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -172,9 +172,159 @@ ipcMain.handle('get-portfolio', () => {
     } catch (e) { return { totalValue: 0, totalCards: 0, uniqueCards: 0 }; }
 });
 
-// ... (Other standard handlers: get-decks, create-deck, etc. - kept concise for refactor)
-// Assuming these are standard CRUD, we can keep them here or move to another file.
-// For now, let's keep them but ensure they use the `db` instance from database.js
+// --- Deck Builder Handlers ---
+
+ipcMain.handle('get-decks', () => {
+    return db.prepare('SELECT * FROM decks ORDER BY created_at DESC').all();
+});
+
+ipcMain.handle('create-deck', (event, name) => {
+    const info = db.prepare('INSERT INTO decks (name) VALUES (?)').run(name);
+    return { id: info.lastInsertRowid, name, created_at: new Date().toISOString() };
+});
+
+ipcMain.handle('delete-deck', (event, id) => {
+    db.prepare('DELETE FROM deck_cards WHERE deck_id = ?').run(id);
+    db.prepare('DELETE FROM decks WHERE id = ?').run(id);
+    return { success: true };
+});
+
+ipcMain.handle('save-deck', (event, { deckId, cards }) => {
+    const deleteStmt = db.prepare('DELETE FROM deck_cards WHERE deck_id = ?');
+    const insertStmt = db.prepare('INSERT INTO deck_cards (deck_id, card_id, type, quantity) VALUES (@deck_id, @card_id, @type, @quantity)');
+
+    const transaction = db.transaction((cardsToSave) => {
+        deleteStmt.run(deckId);
+        for (const card of cardsToSave) {
+             insertStmt.run({
+                 deck_id: deckId,
+                 card_id: String(card.id),
+                 type: card.type || 'main',
+                 quantity: card.quantity
+             });
+        }
+    });
+    transaction(cards);
+    return { success: true };
+});
+
+ipcMain.handle('get-deck-details', (event, id) => {
+    // Join with cards to get details if available
+    const query = `
+        SELECT dc.*, c.name, c.image_url, c.type as card_type, c.desc, c.atk, c.def, c.level, c.race, c.attribute, c.price
+        FROM deck_cards dc
+        LEFT JOIN cards c ON dc.card_id = c.id
+        WHERE dc.deck_id = ?
+    `;
+    return db.prepare(query).all(id);
+});
+
+ipcMain.handle('import-deck-ydk', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openFile'],
+        filters: [{ name: 'YDK Deck', extensions: ['ydk'] }]
+    });
+    if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+
+    const content = fs.readFileSync(result.filePaths[0], 'utf-8');
+    const name = path.basename(result.filePaths[0], '.ydk');
+    const lines = content.split(/\r?\n/);
+
+    const cards = [];
+    let currentSection = 'main';
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed === '#main') currentSection = 'main';
+        else if (trimmed === '#extra') currentSection = 'extra';
+        else if (trimmed === '!side') currentSection = 'side';
+        else if (/^\d+$/.test(trimmed)) {
+            cards.push({ id: trimmed, type: currentSection, quantity: 1 });
+        }
+    }
+
+    // Consolidate duplicates
+    const consolidated = [];
+    cards.forEach(c => {
+        const existing = consolidated.find(x => x.id === c.id && x.type === c.type);
+        if (existing) existing.quantity++;
+        else consolidated.push(c);
+    });
+
+    return { canceled: false, name, cards: consolidated };
+});
+
+ipcMain.handle('export-deck-ydk', async (event, { name, content }) => {
+    const result = await dialog.showSaveDialog(mainWindow, {
+        title: 'Export Deck',
+        defaultPath: `${name}.ydk`,
+        filters: [{ name: 'YDK Deck', extensions: ['ydk'] }]
+    });
+
+    if (result.canceled || !result.filePath) return { canceled: true };
+
+    let ydk = '#created by Yu-Gi-Oh! Card Manager\n#main\n';
+    content.filter(c => c.type === 'main').forEach(c => {
+        for(let i=0; i<(c.quantity||1); i++) ydk += `${c.id}\n`;
+    });
+
+    ydk += '#extra\n';
+    content.filter(c => c.type === 'extra').forEach(c => {
+        for(let i=0; i<(c.quantity||1); i++) ydk += `${c.id}\n`;
+    });
+
+    ydk += '!side\n';
+    content.filter(c => c.type === 'side').forEach(c => {
+        for(let i=0; i<(c.quantity||1); i++) ydk += `${c.id}\n`;
+    });
+
+    fs.writeFileSync(result.filePath, ydk);
+    return { success: true };
+});
+
+// --- Other Handlers ---
+
+ipcMain.handle('manual-scan', async (event, passcode) => {
+    if (mainWindow) mainWindow.webContents.send('card-scanned', { passcode });
+    return { success: true };
+});
+
+ipcMain.handle('get-price-history', () => {
+    try {
+        return db.prepare('SELECT * FROM portfolio_history ORDER BY timestamp ASC').all();
+    } catch (e) { return []; }
+});
+
+ipcMain.handle('cleanup-database', async () => {
+    db.exec('VACUUM');
+    return { success: true };
+});
+
+ipcMain.handle('search-online', async (event, query) => {
+    try {
+        // Basic fetch to YGOProDeck for search
+        const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`);
+        if (!response.ok) return [];
+        const json = await response.json();
+        return json.data || [];
+    } catch (e) { return []; }
+});
+
+ipcMain.handle('update-card-meta', (event, data) => {
+    // Expects { id, set_code, quantity, ... }
+    // This is a generic update.
+    try {
+        const { id, set_code, quantity, language } = data;
+        if (!id || !set_code) return { success: false };
+
+        // Construct update query dynamically? Or just update quantity for now?
+        // Usually mostly for quantity.
+        if (quantity !== undefined) {
+             db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ? AND language = ?").run(quantity, id, set_code, language || 'DE');
+        }
+        return { success: true };
+    } catch (e) { return { success: false, error: e.message }; }
+});
 
 ipcMain.handle('check-card-exists', (event, passcode) => {
     const res = db.prepare('SELECT SUM(quantity) as count FROM cards WHERE id = ?').get(String(passcode));

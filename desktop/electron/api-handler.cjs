@@ -1,5 +1,5 @@
 const https = require('https');
-const { getDb } = require('./database');
+const { getDb } = require('./database.cjs');
 
 function fetchJson(url, options = {}) {
     return new Promise((resolve, reject) => {

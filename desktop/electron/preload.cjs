@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('api', {
   saveDeck: (deckId, cards) => ipcRenderer.invoke('save-deck', { deckId, cards }),
   getDeckDetails: (deckId) => ipcRenderer.invoke('get-deck-details', deckId),
   importDeckYdk: () => ipcRenderer.invoke('import-deck-ydk'),
+  exportDeckYdk: (data) => ipcRenderer.invoke('export-deck-ydk', data),
 
   // Wishlist
   getWishlist: () => ipcRenderer.invoke('get-wishlist'),
