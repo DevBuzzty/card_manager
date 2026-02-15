@@ -26,17 +26,19 @@ export default function CardDetailModal({ card, onClose }) {
       if (newQty < 0) return;
 
       const result = await window.api.updateCardMeta({
-          passcode: card.id,
-          old_set_code: variant.set_code,
-          new_set_code: variant.set_code,
+          id: card.id,
+          set_code: variant.set_code,
           rarity: variant.rarity,
           quantity: newQty,
+          language: variant.language || 'DE',
           price: variant.price
       });
 
       if (result.success) {
            setLocalVariants(prev => prev.map(v =>
-               (v.set_code === variant.set_code) ? { ...v, quantity: newQty } : v
+               (v.set_code === variant.set_code && v.rarity === variant.rarity && v.language === variant.language)
+               ? { ...v, quantity: newQty }
+               : v
            ));
       }
   };

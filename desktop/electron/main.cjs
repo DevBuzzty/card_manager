@@ -560,6 +560,7 @@ ipcMain.handle('move-database', async () => {
         const result = await dialog.showOpenDialog(mainWindow, { title: 'Select New Database Folder', properties: ['openDirectory'] });
         if (result.canceled || result.filePaths.length === 0) return { canceled: true };
         const newDbPath = path.join(result.filePaths[0], 'cards.db');
+        const configPath = path.join(userDataPath, 'config.json');
 
         db.close();
         fs.copyFileSync(dbPath, newDbPath);
