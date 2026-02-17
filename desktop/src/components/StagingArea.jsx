@@ -18,8 +18,9 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
         try {
             const data = await window.api.fetchCardData(passcode);
             if (data && !data.error) {
-                // Check if already in DB
-                const result = await window.api.checkCardExists(passcode);
+                // Check if already in DB using canonical ID from API
+                const checkId = data.id || passcode;
+                const result = await window.api.checkCardExists(checkId);
 
                 // Determine Language & Sets
                 let defaultLang = 'DE'; // User preference: >99% German

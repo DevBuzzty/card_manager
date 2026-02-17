@@ -327,7 +327,9 @@ ipcMain.handle('update-card-meta', (event, data) => {
 });
 
 ipcMain.handle('check-card-exists', (event, passcode) => {
-    const res = db.prepare('SELECT SUM(quantity) as count FROM cards WHERE id = ?').get(String(passcode));
+    const p = String(passcode);
+    const normalized = String(parseInt(p, 10)); // removes leading zeros
+    const res = db.prepare('SELECT SUM(quantity) as count FROM cards WHERE id = ? OR id = ?').get(p, normalized);
     return { exists: (res.count || 0) > 0, quantity: res.count || 0 };
 });
 
