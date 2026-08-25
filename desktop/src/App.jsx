@@ -1,15 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
+import { Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
 import CollectionList from './components/CollectionList';
-import Portfolio from './components/Portfolio';
-import DeckBuilder from './components/DeckBuilder';
 import MissingData from './components/MissingData';
 import Wishlist from './components/Wishlist';
 import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import UnknownCards from './components/UnknownCards';
+
+// Heavy tabs (recharts / large deck UI) are code-split so the initial load stays light.
+const Portfolio = lazy(() => import('./components/Portfolio'));
+const DeckBuilder = lazy(() => import('./components/DeckBuilder'));
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -67,6 +70,7 @@ function App() {
         )}
         <div className="flex-1 overflow-auto">
             <ErrorBoundary>
+              <Suspense fallback={<div className="flex items-center justify-center h-full text-space-violet"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
                 {activeTab === 'dashboard' && (
                 <Dashboard setActiveTab={setActiveTab} />
                 )}
@@ -94,6 +98,7 @@ function App() {
                 {activeTab === 'settings' && (
                 <Settings />
                 )}
+              </Suspense>
             </ErrorBoundary>
         </div>
       </main>

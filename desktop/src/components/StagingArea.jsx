@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus, HelpCircle, Edit, Globe } from 'lucide-react';
 import { playScanSound } from '../utils/sound';
 import CustomSelect from './CustomSelect';
@@ -14,67 +14,83 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
     // Set loading immediately to prevent double fetch
     setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loading' } : c));
 
-    if (window.api) {
-        try {
-            const data = await window.api.fetchCardData(passcode);
-            if (data && !data.error) {
-                // Check if already in DB using canonical ID from API
-                const checkId = data.id || passcode;
-                const result = await window.api.checkCardExists(checkId);
-
-                // Determine Language & Sets
-                let defaultLang = 'DE'; // User preference: >99% German
-                let germanSets = [];
-                let preSelectedSet = null;
-
-                // If defaultLang is DE, try fetching Yugipedia sets
-                if (defaultLang === 'DE') {
-                    try {
-                        const yugipediaSets = await window.api.fetchYugipediaSets(passcode);
-                        if (yugipediaSets && yugipediaSets.length > 0) {
-                            germanSets = yugipediaSets;
-                            // Default to first set if available
-                            preSelectedSet = { ...germanSets[0], isYugipedia: true };
-                        }
-                    } catch (e) { console.error(e); }
-                }
-
-                setScannedCards(prev => prev.map(c => c.tempId === tempId ? {
-                    ...c,
-                    status: 'loaded',
-                    data,
-                    germanSets,
-                    inCollection: result.exists,
-                    ownedQuantity: result.quantity,
-                    language: defaultLang,
-                    selectedSet: preSelectedSet || (data.card_sets ? data.card_sets[0] : null)
-                } : c));
-                playScanSound();
-            } else {
-                setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
-            }
-        } catch (e) {
-             setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
-        }
-    } else {
-        // Mock
-        setTimeout(() => {
+    if (!window.api) {
+        // Mock (browser dev, window.api undefined)
+        return new Promise(resolve => setTimeout(() => {
              setScannedCards(prev => prev.map(c => c.tempId === tempId ? {
                  ...c,
                  status: 'loaded',
                  data: { name: 'Blue-Eyes White Dragon', type: 'Normal Monster', race: 'Dragon', card_images: [{ image_url: 'https://images.ygoprodeck.com/images/cards/89631139.jpg' }] },
                  language: 'DE'
              } : c));
-        }, 1000);
+             resolve();
+        }, 1000));
+    }
+
+    try {
+        // Card data and the local ownership check run in parallel (Yugipedia is deferred below).
+        const [data, result] = await Promise.all([
+            window.api.fetchCardData(passcode),
+            window.api.checkCardExists(passcode),
+        ]);
+
+        if (!data || data.error) {
+            setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
+            return;
+        }
+
+        // Show the card immediately with API sets as the initial fallback; German sets load after.
+        setScannedCards(prev => prev.map(c => c.tempId === tempId ? {
+            ...c,
+            status: 'loaded',
+            data,
+            germanSets: [],
+            loadingSets: true,
+            inCollection: result.exists,
+            ownedQuantity: result.quantity,
+            language: c.language || 'DE',
+            selectedSet: c.selectedSet || (data.card_sets ? data.card_sets[0] : null)
+        } : c));
+        playScanSound();
+
+        // Fetch German (Yugipedia) rarities in the background so the scan feels instant.
+        window.api.fetchYugipediaSets(passcode).then(germanSets => {
+            const hasSets = germanSets && germanSets.length > 0;
+            setScannedCards(prev => prev.map(c => {
+                if (c.tempId !== tempId) return c;
+                // Don't clobber a set the user already picked or a manual entry.
+                const keepSelection = c.setTouched || c.isManualEntry;
+                return {
+                    ...c,
+                    loadingSets: false,
+                    germanSets: hasSets ? germanSets : [],
+                    selectedSet: (hasSets && !keepSelection && (c.language || 'DE') === 'DE')
+                        ? { ...germanSets[0], isYugipedia: true }
+                        : c.selectedSet
+                };
+            }));
+        }).catch(() => {
+            setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, loadingSets: false } : c));
+        });
+    } catch (e) {
+        setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
     }
   }, [setScannedCards]);
 
+  // Process pending scans with a concurrency cap so a large CSV import doesn't storm the APIs.
+  const MAX_CONCURRENT_FETCHES = 5;
+  const inFlightRef = useRef(0);
+
   useEffect(() => {
-    scannedCards.forEach(card => {
-      if (card.status === 'pending') {
-        fetchCard(card.tempId, card.passcode);
-      }
-    });
+    const pending = scannedCards.filter(c => c.status === 'pending');
+    if (pending.length === 0) return;
+    let available = MAX_CONCURRENT_FETCHES - inFlightRef.current;
+    for (const card of pending) {
+      if (available <= 0) break;
+      available--;
+      inFlightRef.current++;
+      fetchCard(card.tempId, card.passcode).finally(() => { inFlightRef.current--; });
+    }
   }, [scannedCards, fetchCard]);
 
   const handleAdd = async (tempId) => {
@@ -340,7 +356,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                         onChange={(val) => {
                                                             const [code, rarity] = val.split('|');
                                                             const selected = card.germanSets.find(s => s.set_code === code && s.set_rarity === rarity);
-                                                            handleUpdateCard(card.tempId, { selectedSet: { ...selected, isYugipedia: true } });
+                                                            handleUpdateCard(card.tempId, { selectedSet: { ...selected, isYugipedia: true }, setTouched: true });
                                                         }}
                                                         placeholder="Select German Rarity"
                                                         options={card.germanSets.map(set => ({
@@ -359,7 +375,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                             onChange={(val) => {
                                                                 const [code, rarity] = val.split('|');
                                                                 const selected = card.data.card_sets.find(s => s.set_code === code && s.set_rarity === rarity);
-                                                                handleUpdateCard(card.tempId, { selectedSet: selected });
+                                                                handleUpdateCard(card.tempId, { selectedSet: selected, setTouched: true });
                                                             }}
                                                             placeholder={card.data.card_sets[0] ? `${card.data.card_sets[0].set_code} - ${card.data.card_sets[0].set_rarity}` : "Select Rarity"}
                                                             options={(() => {
