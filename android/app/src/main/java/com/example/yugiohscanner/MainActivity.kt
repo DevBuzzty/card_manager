@@ -92,6 +92,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.regex.Pattern
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -321,14 +322,15 @@ fun ScannerScreen(
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
     // always runs the latest logic without being recreated on every recomposition.
-    val onDetected = rememberUpdatedState<(String) -> Unit> { code ->
+    val onDetected = rememberUpdatedState<(String, String?) -> Unit> { code, setCode ->
         if (code != lastScannedCode) {
             lastScannedCode = code
-            scanStatus = "Detected: $code"
+            scanStatus = if (setCode != null) "Detected: $code ($setCode)" else "Detected: $code"
             triggerFeedback()
             onAddHistory(scanStatus)
             val data = JSONObject()
             data.put("passcode", code)
+            if (setCode != null) data.put("setCode", setCode)
             socket?.emit("card_scanned", data)
         }
     }
@@ -343,7 +345,7 @@ fun ScannerScreen(
     val executor = remember { Executors.newSingleThreadExecutor() }
     val analyzer = remember {
         CardAnalyzer(
-            onResultDetected = { code -> onDetected.value(code) },
+            onResultDetected = { code, setCode -> onDetected.value(code, setCode) },
             onProgress = { code, hits, required -> onProgress.value(code, hits, required) }
         )
     }
@@ -684,19 +686,19 @@ fun ScannerScreen(
 }
 
 class CardAnalyzer(
-    private val onResultDetected: (String) -> Unit,
+    private val onResultDetected: (String, String?) -> Unit,
     private val onProgress: (String, Int, Int) -> Unit = { _, _, _ -> }
 ) : ImageAnalysis.Analyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-    // Pattern for 8-digit passcode (word-bounded so we don't clip longer numbers).
+    // Passcode: 8 digits. Set code: PREFIX-<2-letter region><digits>, e.g. LOB-EN001, DOOD-DE038.
     private val passcodePattern = Pattern.compile("\\b\\d{8}\\b")
+    private val setCodePattern = Pattern.compile("\\b[A-Z0-9]{2,5}-[A-Z]{2}\\d{2,4}\\b")
 
-    // Multi-frame confirmation. A passcode must be read in at least REQUIRED_HITS of the last
-    // WINDOW frames before we trust it. This eliminates single-frame OCR misreads (8<->B, 0<->O,
-    // 1<->7) and ignores stray 8-digit numbers from other cards or the background, because only
-    // the real passcode recurs consistently across frames.
+    // Multi-frame confirmation for the passcode (the identity we key on); the set code is
+    // detected opportunistically over the same window and attached when a passcode confirms.
     private val window = ArrayDeque<Set<String>>()
+    private val setWindow = ArrayDeque<Set<String>>()
     private val WINDOW = 6
     private val REQUIRED_HITS = 3
     private var confirmed: String? = null
@@ -712,15 +714,16 @@ class CardAnalyzer(
 
         recognizer.process(image)
             .addOnSuccessListener { visionText ->
-                // Collect every distinct 8-digit number seen in this frame.
-                val found = HashSet<String>()
+                val passcodes = HashSet<String>()
+                val setCodes = HashSet<String>()
                 for (block in visionText.textBlocks) {
-                    val matcher = passcodePattern.matcher(block.text)
-                    while (matcher.find()) {
-                        found.add(matcher.group())
-                    }
+                    val text = block.text.uppercase(Locale.ROOT)
+                    val pm = passcodePattern.matcher(text)
+                    while (pm.find()) passcodes.add(pm.group())
+                    val sm = setCodePattern.matcher(text)
+                    while (sm.find()) setCodes.add(sm.group())
                 }
-                registerFrame(found)
+                registerFrame(passcodes, setCodes)
             }
             .addOnFailureListener { e ->
                 Log.e("Analyzer", "Text recognition failed", e)
@@ -730,11 +733,12 @@ class CardAnalyzer(
             }
     }
 
-    private fun registerFrame(found: Set<String>) {
-        window.addLast(found)
+    private fun registerFrame(passcodes: Set<String>, setCodes: Set<String>) {
+        window.addLast(passcodes)
         while (window.size > WINDOW) window.removeFirst()
+        setWindow.addLast(setCodes)
+        while (setWindow.size > WINDOW) setWindow.removeFirst()
 
-        // Tally how often each candidate appears across the sliding window.
         val counts = HashMap<String, Int>()
         for (frame in window) for (code in frame) counts[code] = (counts[code] ?: 0) + 1
 
@@ -746,9 +750,16 @@ class CardAnalyzer(
             onProgress(best.key, best.value.coerceAtMost(REQUIRED_HITS), REQUIRED_HITS)
             if (best.value >= REQUIRED_HITS) {
                 confirmed = best.key
-                onResultDetected(best.key)
+                onResultDetected(best.key, bestSetCode())
             }
         }
+    }
+
+    // Most frequently seen set code across the current window (null if none seen).
+    private fun bestSetCode(): String? {
+        val counts = HashMap<String, Int>()
+        for (frame in setWindow) for (code in frame) counts[code] = (counts[code] ?: 0) + 1
+        return counts.maxByOrNull { it.value }?.key
     }
 
     // Release the ML Kit recognizer; call when the scanner is torn down.
