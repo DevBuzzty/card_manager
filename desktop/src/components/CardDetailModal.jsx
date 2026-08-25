@@ -21,9 +21,25 @@ export default function CardDetailModal({ card, onClose }) {
 
   if (!card) return null;
 
+  const removeVariantLocal = (variant) => {
+      setLocalVariants(prev => prev.filter(v =>
+          !(v.set_code === variant.set_code && v.rarity === variant.rarity && v.language === variant.language)
+      ));
+  };
+
+  const handleDeleteVariant = async (variant) => {
+      const result = await window.api.deleteCard({
+          id: card.id,
+          set_code: variant.set_code,
+          language: variant.language || 'DE'
+      });
+      if (result.success) removeVariantLocal(variant);
+  };
+
   const handleUpdateQuantity = async (variant, delta) => {
       const newQty = (variant.quantity || 0) + delta;
       if (newQty < 0) return;
+      if (newQty === 0) { await handleDeleteVariant(variant); return; }
 
       const result = await window.api.updateCardMeta({
           id: card.id,
@@ -160,6 +176,13 @@ export default function CardDetailModal({ card, onClose }) {
                                         <Plus className="w-3 h-3" />
                                     </button>
                                 </div>
+                                <button
+                                    onClick={() => { if (confirm(`Delete ${variant.set_code} (${variant.rarity})?`)) handleDeleteVariant(variant); }}
+                                    className="p-1.5 bg-crit/10 hover:bg-crit/20 text-crit rounded transition-colors"
+                                    title="Delete this printing"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                             </div>
                         </div>
                     ))}

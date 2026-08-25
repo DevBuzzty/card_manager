@@ -3,7 +3,7 @@ import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning }
 import CardTile from './CardTile';
 import SetCompletion from './SetCompletion';
 
-export default function Dashboard({ setActiveTab }) {
+export default function Dashboard({ setActiveTab, onOpenPalette }) {
   const [stats, setStats] = useState({ totalValue: 0, totalCards: 0, uniqueCards: 0 });
   const [cards, setCards] = useState([]);
   const [history, setHistory] = useState([]);
@@ -68,7 +68,7 @@ export default function Dashboard({ setActiveTab }) {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setActiveTab('collection')}
+            onClick={() => onOpenPalette && onOpenPalette()}
             className="flex items-center gap-2 bg-obsidian-700 border border-line rounded-xl px-3.5 py-2.5 text-sm text-ink-faint hover:text-ink transition-colors min-w-[260px]"
           >
             <Search className="w-4 h-4" strokeWidth={1.8} />

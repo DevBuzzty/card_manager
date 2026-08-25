@@ -1,4 +1,4 @@
-import { Home, Layers, Library, TrendingUp, BarChart3, BookOpen, Settings, Heart, Wifi } from 'lucide-react';
+import { Home, Layers, Library, BarChart3, BookOpen, Settings, Heart, Wifi } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import clsx from 'clsx';
 
