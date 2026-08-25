@@ -106,6 +106,41 @@ function findBestDefaultSet(cardSets) {
     })[0];
 }
 
+// Resolve the configured price source to its YGOPRODeck API field.
+function getPriceSourceField() {
+    let priceSource = 'cardmarket';
+    try {
+        const r = db.prepare("SELECT value FROM settings WHERE key = 'price_source'").get();
+        if (r) priceSource = r.value;
+    } catch (e) { /* settings table may be empty */ }
+    const sourceMap = { cardmarket: 'cardmarket_price', tcgplayer: 'tcgplayer_price', ebay: 'ebay_price', amazon: 'amazon_price' };
+    return sourceMap[priceSource] || 'cardmarket_price';
+}
+
+// Pick the best price for a card: exact set price if the set_code matches, else card-level price.
+function priceForCard(apiData, setCode, apiField) {
+    if (setCode && setCode !== 'Unknown' && apiData.card_sets) {
+        const matched = apiData.card_sets.find(s => s.set_code === setCode);
+        if (matched && matched.set_price && parseFloat(matched.set_price) > 0) return parseFloat(matched.set_price);
+    }
+    if (apiData.card_prices && apiData.card_prices.length > 0) {
+        return parseFloat(apiData.card_prices[0][apiField]) || 0;
+    }
+    return 0;
+}
+
+// Extract the language-independent detail fields from a YGOPRODeck card object.
+function detailsFromApi(apiCard) {
+    const imageUrl = apiCard.card_images && apiCard.card_images.length > 0 ? apiCard.card_images[0].image_url : '';
+    let level = apiCard.level;
+    if (apiCard.type && apiCard.type.includes('Link') && apiCard.linkval !== undefined) level = apiCard.linkval;
+    return {
+        name: apiCard.name, type: apiCard.type, desc: apiCard.desc, image_url: imageUrl,
+        atk: valOrNull(apiCard.atk), def: valOrNull(apiCard.def), level: valOrNull(level),
+        race: apiCard.race || null, attribute: apiCard.attribute || null
+    };
+}
+
 // --- IPC Handlers ---
 
 ipcMain.handle('get-ip-address', () => getLocalIpAddress());
@@ -340,7 +375,7 @@ function startPricePoller() {
         if (!mainWindow) return;
         try {
             // Prioritize cards updated longest ago
-            const cards = db.prepare('SELECT id, set_code, price FROM cards ORDER BY last_updated ASC LIMIT 50').all();
+            const cards = db.prepare('SELECT id, set_code, language, price FROM cards ORDER BY last_updated ASC LIMIT 50').all();
             if (cards.length === 0) return;
 
             const uniqueIds = [...new Set(cards.map(c => c.id))].join(',');
@@ -363,7 +398,7 @@ function startPricePoller() {
             const sourceMap = { 'cardmarket': 'cardmarket_price', 'tcgplayer': 'tcgplayer_price', 'ebay': 'ebay_price', 'amazon': 'amazon_price' };
             const apiField = sourceMap[priceSource] || 'cardmarket_price';
 
-            const updateStmt = db.prepare('UPDATE cards SET price = @price, last_updated = CURRENT_TIMESTAMP WHERE id = @id AND set_code = @set_code');
+            const updateStmt = db.prepare('UPDATE cards SET price = @price, last_updated = CURRENT_TIMESTAMP WHERE id = @id AND set_code = @set_code AND language = @language');
 
             db.transaction(() => {
                 cards.forEach(localCard => {
@@ -384,12 +419,12 @@ function startPricePoller() {
                     }
 
                     if (Math.abs(newPrice - (localCard.price || 0)) > 0.01) {
-                        updateStmt.run({ price: newPrice, id: localCard.id, set_code: localCard.set_code });
+                        updateStmt.run({ price: newPrice, id: localCard.id, set_code: localCard.set_code, language: localCard.language });
                         updates.push({ id: localCard.id, newPrice });
                         totalValueChange += (newPrice - (localCard.price || 0));
                     } else {
                         // Still update timestamp
-                        db.prepare('UPDATE cards SET last_updated = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ?').run(localCard.id, localCard.set_code);
+                        db.prepare('UPDATE cards SET last_updated = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ?').run(localCard.id, localCard.set_code, localCard.language);
                     }
                 });
             })();
@@ -467,17 +502,92 @@ ipcMain.handle('merge-unknown-cards', async () => {
     } catch (e) { return { success: false, error: e.message }; }
 });
 
+// "Update All": force-refresh details + prices for every card. Bypasses the API cache
+// (prices change) by batching unique passcodes directly against YGOPRODeck.
 ipcMain.handle('update-all-cards', async (event) => {
-    // Re-implement update logic using cachedFetch where appropriate?
-    // No, "Update All" usually implies "Force Refresh Prices/Data".
-    // So we should bypass cache or use short TTL.
-    // For now, let's keep it simple.
-    return { success: true, updatedCount: 0 };
+    try {
+        const rows = db.prepare('SELECT id, set_code, language FROM cards').all();
+        const total = rows.length;
+        if (total === 0) return { success: true, updatedCount: 0 };
+
+        const apiField = getPriceSourceField();
+        const uniqueIds = [...new Set(rows.map(r => String(r.id)))];
+        const apiMap = new Map();
+        const CHUNK = 40;
+
+        if (event.sender) event.sender.send('update-progress', { current: 0, total: uniqueIds.length });
+        for (let i = 0; i < uniqueIds.length; i += CHUNK) {
+            const chunk = uniqueIds.slice(i, i + CHUNK);
+            try {
+                const resp = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${chunk.join(',')}`);
+                if (resp.ok) {
+                    const json = await resp.json();
+                    (json.data || []).forEach(c => apiMap.set(String(c.id), c));
+                }
+            } catch (e) { console.error('update-all fetch error:', e); }
+            if (event.sender) event.sender.send('update-progress', { current: Math.min(i + CHUNK, uniqueIds.length), total: uniqueIds.length });
+        }
+
+        const updateStmt = db.prepare(`UPDATE cards SET name=@name, type=@type, desc=@desc, image_url=@image_url,
+            atk=@atk, def=@def, level=@level, race=@race, attribute=@attribute, price=@price, last_updated=CURRENT_TIMESTAMP
+            WHERE id=@id AND set_code=@set_code AND language=@language`);
+
+        let updatedCount = 0;
+        db.transaction(() => {
+            rows.forEach(row => {
+                const apiData = apiMap.get(String(row.id));
+                if (!apiData) return;
+                const d = detailsFromApi(apiData);
+                const price = priceForCard(apiData, row.set_code, apiField);
+                updateStmt.run({ ...d, price, id: String(row.id), set_code: row.set_code, language: row.language });
+                updatedCount++;
+            });
+        })();
+
+        try {
+            const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards').get();
+            db.prepare('INSERT INTO portfolio_history (total_value) VALUES (@val)').run({ val: stats.totalValue || 0 });
+            if (mainWindow) mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+        } catch (e) { /* history snapshot is best-effort */ }
+
+        if (event.sender) event.sender.send('update-progress', { current: uniqueIds.length, total: uniqueIds.length });
+        return { success: true, updatedCount };
+    } catch (e) { return { success: false, error: e.message }; }
 });
 
-ipcMain.handle('update-missing-cards', async () => {
-    // ...
-    return { success: true, updatedCount: 0 };
+// "Fetch Missing": fill in cards that lack critical detail fields. Detail fields are the same
+// across printings/languages, so we refresh by passcode and use the cache (details don't change).
+ipcMain.handle('update-missing-cards', async (event) => {
+    try {
+        const candidates = db.prepare(`
+            SELECT DISTINCT id FROM cards
+            WHERE name IS NULL OR name = '' OR image_url IS NULL OR image_url = ''
+               OR (type IS NOT NULL AND type NOT LIKE '%Spell%' AND type NOT LIKE '%Trap%'
+                   AND (atk IS NULL OR level IS NULL))
+        `).all();
+        const total = candidates.length;
+        let updatedCount = 0;
+        if (event.sender) event.sender.send('update-progress', { current: 0, total });
+
+        const updateStmt = db.prepare(`UPDATE cards SET name=@name, type=@type, desc=@desc, image_url=@image_url,
+            atk=@atk, def=@def, level=@level, race=@race, attribute=@attribute, last_updated=CURRENT_TIMESTAMP
+            WHERE id=@id`);
+
+        for (let i = 0; i < total; i++) {
+            if (event.sender && i % 5 === 0) event.sender.send('update-progress', { current: i, total });
+            try {
+                const data = await fetchCardData(candidates[i].id); // cached
+                if (data && data.data && data.data.length > 0) {
+                    const d = detailsFromApi(data.data[0]);
+                    updateStmt.run({ ...d, id: candidates[i].id });
+                    updatedCount++;
+                }
+            } catch (e) { console.error('update-missing error:', e); }
+        }
+
+        if (event.sender) event.sender.send('update-progress', { current: total, total });
+        return { success: true, updatedCount };
+    } catch (e) { return { success: false, error: e.message }; }
 });
 
 // Wishlist
