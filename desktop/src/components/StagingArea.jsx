@@ -108,6 +108,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   // Process pending scans with a concurrency cap so a large CSV import doesn't storm the APIs.
   const MAX_CONCURRENT_FETCHES = 5;
   const inFlightRef = useRef(0);
+  // Guards handleAdd against re-entrant calls for the same card (e.g. OS key-repeat on Enter).
+  const committingRef = useRef(new Set());
 
   useEffect(() => {
     const pending = scannedCards.filter(c => c.status === 'pending');
@@ -124,40 +126,46 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   const handleAdd = async (tempId) => {
     const card = scannedCards.find(c => c.tempId === tempId);
     if (card && card.status === 'loaded') {
-       // Prepare data
-       const cardData = {
-           ...card.data,
-           quantity: card.quantity || 1,
-           language: card.language || 'DE'
-       };
+       if (committingRef.current.has(tempId)) return;
+       committingRef.current.add(tempId);
+       try {
+           // Prepare data
+           const cardData = {
+               ...card.data,
+               quantity: card.quantity || 1,
+               language: card.language || 'DE'
+           };
 
-       if (card.isManualEntry) {
-           cardData.set_code = card.manualSetCode || 'Unknown';
-           cardData.rarity = card.manualRarity || 'Unknown';
-           cardData.price = 0;
-       } else if (card.selectedSet) {
-           cardData.set_code = card.selectedSet.set_code;
-           cardData.rarity = card.selectedSet.set_rarity;
-           // If it's a Yugipedia set, it has no price, so we rely on 0 (fallback to generic) or we should map it?
-           // The API fallback logic handles 0 prices by checking card_prices.
-           cardData.price = parseFloat(card.selectedSet.set_price) || 0;
-       } else if (card.data.card_sets && card.data.card_sets.length > 0) {
-           // Default to first set if not selected
-           const first = card.data.card_sets[0];
-           cardData.set_code = first.set_code;
-           cardData.rarity = first.set_rarity;
-           cardData.price = parseFloat(first.set_price) || 0;
-       }
+           if (card.isManualEntry) {
+               cardData.set_code = card.manualSetCode || 'Unknown';
+               cardData.rarity = card.manualRarity || 'Unknown';
+               cardData.price = 0;
+           } else if (card.selectedSet) {
+               cardData.set_code = card.selectedSet.set_code;
+               cardData.rarity = card.selectedSet.set_rarity;
+               // If it's a Yugipedia set, it has no price, so we rely on 0 (fallback to generic) or we should map it?
+               // The API fallback logic handles 0 prices by checking card_prices.
+               cardData.price = parseFloat(card.selectedSet.set_price) || 0;
+           } else if (card.data.card_sets && card.data.card_sets.length > 0) {
+               // Default to first set if not selected
+               const first = card.data.card_sets[0];
+               cardData.set_code = first.set_code;
+               cardData.rarity = first.set_rarity;
+               cardData.price = parseFloat(first.set_price) || 0;
+           }
 
-       if (window.api) {
-            const result = await window.api.addCardToDb(cardData);
-            if (result.success) {
+           if (window.api) {
+                const result = await window.api.addCardToDb(cardData);
+                if (result.success) {
+                    setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
+                } else {
+                    alert("Failed to save: " + result.error);
+                }
+           } else {
                 setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
-            } else {
-                alert("Failed to save: " + result.error);
-            }
-       } else {
-            setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
+           }
+       } finally {
+           committingRef.current.delete(tempId);
        }
     }
   };
