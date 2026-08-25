@@ -162,6 +162,20 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
     }
   };
 
+  // Enter commits the topmost loaded card (bulk scanning without the mouse).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Enter') return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      const top = scannedCards.find(c => c.status === 'loaded');
+      if (top) { e.preventDefault(); handleAdd(top.tempId); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scannedCards]);
+
   const handleDiscard = (tempId) => {
       setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
   };
@@ -222,6 +236,20 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                     >
                         <X className="w-4 h-4 mr-2" />
                         Clear All
+                    </button>
+                )}
+                {scannedCards.some(c => c.status === 'loaded' && c.setMatchConfidence === 'exact') && (
+                     <button
+                        onClick={() => {
+                            scannedCards
+                                .filter(c => c.status === 'loaded' && c.setMatchConfidence === 'exact')
+                                .forEach(c => handleAdd(c.tempId));
+                        }}
+                        disabled={isUpdating}
+                        className="flex items-center px-4 py-2 bg-good/20 hover:bg-good/30 text-good rounded-lg transition-colors text-sm border border-good/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Check className="w-4 h-4 mr-2" />
+                        Add All Detected
                     </button>
                 )}
                 {scannedCards.some(c => c.status === 'loaded') && (
