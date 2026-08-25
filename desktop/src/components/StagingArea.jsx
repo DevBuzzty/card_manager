@@ -5,9 +5,7 @@ import CustomSelect from './CustomSelect';
 import RarityGuide from './RarityGuide';
 import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
-
-// Find a set entry whose set_code matches the OCR-detected code (case-insensitive).
-const matchSet = (sets, code) => (code && sets) ? sets.find(s => s.set_code && s.set_code.toUpperCase() === code.toUpperCase()) : null;
+import { matchCandidates } from '../utils/setCodeMatch';
 
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
   const [showRarityGuide, setShowRarityGuide] = useState(false);
@@ -43,18 +41,23 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
         }
 
         // Show the card immediately with API sets as the initial fallback; German sets load after.
-        setScannedCards(prev => prev.map(c => c.tempId === tempId ? {
-            ...c,
-            status: 'loaded',
-            data,
-            germanSets: [],
-            loadingSets: true,
-            inCollection: result.exists,
-            ownedQuantity: result.quantity,
-            language: c.language || 'DE',
-            selectedSet: c.selectedSet || matchSet(data.card_sets, c.scannedSetCode) || (data.card_sets ? data.card_sets[0] : null),
-            setAutoDetected: !!(c.scannedSetCode && matchSet(data.card_sets, c.scannedSetCode))
-        } : c));
+        setScannedCards(prev => prev.map(c => {
+            if (c.tempId !== tempId) return c;
+            const apiMatch = matchCandidates(c.scannedSetCandidates, data.card_sets);
+            return {
+                ...c,
+                status: 'loaded',
+                data,
+                germanSets: [],
+                loadingSets: true,
+                inCollection: result.exists,
+                ownedQuantity: result.quantity,
+                language: c.language || 'DE',
+                selectedSet: c.selectedSet || apiMatch.set || (data.card_sets ? data.card_sets[0] : null),
+                setAutoDetected: apiMatch.confidence !== 'none',
+                setMatchConfidence: apiMatch.confidence
+            };
+        }));
         playScanSound();
 
         // Fetch German (Yugipedia) rarities in the background so the scan feels instant.
@@ -65,21 +68,24 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 // Don't clobber a set the user already picked or a manual entry.
                 const keepSelection = c.setTouched || c.isManualEntry;
                 const applyDE = hasSets && !keepSelection && (c.language || 'DE') === 'DE';
-                const scanned = applyDE ? matchSet(germanSets, c.scannedSetCode) : null;
+                const deMatch = applyDE ? matchCandidates(c.scannedSetCandidates, germanSets) : null;
                 let chosen = c.selectedSet;
                 let auto = c.setAutoDetected;
+                let confidence = c.setMatchConfidence;
                 if (applyDE) {
-                    if (scanned) {
-                        // Prefer the localized German printing when the scanned code matches it.
-                        chosen = { ...scanned, isYugipedia: true };
+                    if (deMatch && deMatch.set) {
+                        // Prefer the localized German printing when a candidate matches it.
+                        chosen = { ...deMatch.set, isYugipedia: true };
                         auto = true;
+                        confidence = deMatch.confidence;
                     } else if (c.setAutoDetected) {
-                        // The API path already validated the scanned code — keep it, don't clobber.
+                        // The API path already matched the scanned code — keep it, don't clobber.
                         chosen = c.selectedSet;
                         auto = true;
                     } else {
                         chosen = { ...germanSets[0], isYugipedia: true };
                         auto = false;
+                        confidence = 'none';
                     }
                 }
                 return {
@@ -87,7 +93,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                     loadingSets: false,
                     germanSets: hasSets ? germanSets : [],
                     selectedSet: chosen,
-                    setAutoDetected: auto
+                    setAutoDetected: auto,
+                    setMatchConfidence: confidence
                 };
             }));
         }).catch(() => {
@@ -422,9 +429,14 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             )
                                         )}
 
-                                        {card.setAutoDetected && !card.isManualEntry && (
+                                        {card.setMatchConfidence === 'exact' && !card.isManualEntry && (
                                             <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-good bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set code read from the card">
-                                                Auto
+                                                Erkannt
+                                            </span>
+                                        )}
+                                        {card.setMatchConfidence === 'fuzzy' && !card.isManualEntry && (
+                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 rounded px-1.5 py-1" title="Set code recovered from an imperfect scan — please verify">
+                                                Prüfen?
                                             </span>
                                         )}
 
