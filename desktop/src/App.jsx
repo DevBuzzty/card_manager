@@ -11,11 +11,13 @@ import ErrorBoundary from './components/ErrorBoundary';
 // Heavy tabs are code-split so the initial load stays light.
 const Insights = lazy(() => import('./components/Insights'));
 const DeckBuilder = lazy(() => import('./components/DeckBuilder'));
+const CommandPalette = lazy(() => import('./components/CommandPalette'));
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [scannedCards, setScannedCards] = useState([]);
   const [updateProgress, setUpdateProgress] = useState(null); // { current, total } or null
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
     if (window.api) {
@@ -56,6 +58,17 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setPaletteOpen(o => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <div className="flex h-screen bg-obsidian text-ink overflow-hidden font-sans">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -70,7 +83,7 @@ function App() {
             <ErrorBoundary>
               <Suspense fallback={<div className="flex items-center justify-center h-full text-space-violet"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
                 {activeTab === 'dashboard' && (
-                <Dashboard setActiveTab={setActiveTab} />
+                <Dashboard setActiveTab={setActiveTab} onOpenPalette={() => setPaletteOpen(true)} />
                 )}
                 {activeTab === 'staging' && (
                 <StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />
@@ -94,6 +107,9 @@ function App() {
             </ErrorBoundary>
         </div>
       </main>
+      <Suspense fallback={null}>
+        {paletteOpen && <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} setActiveTab={setActiveTab} />}
+      </Suspense>
     </div>
   );
 }
