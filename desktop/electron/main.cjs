@@ -198,7 +198,18 @@ ipcMain.handle('add-card-to-db', (event, card) => {
 });
 
 ipcMain.handle('get-collection', () => {
-    return db.prepare('SELECT * FROM cards ORDER BY created_at DESC').all();
+    return db.prepare('SELECT * FROM cards WHERE quantity > 0 ORDER BY created_at DESC').all();
+});
+
+ipcMain.handle('delete-card', (event, { id, set_code, language }) => {
+    try {
+        if (!id || !set_code) return { success: false, error: 'Missing id or set_code' };
+        db.prepare('DELETE FROM cards WHERE id = ? AND set_code = ? AND language = ?')
+          .run(String(id), set_code, language || 'DE');
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
 });
 
 ipcMain.handle('get-portfolio', () => {
