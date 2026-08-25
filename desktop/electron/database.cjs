@@ -180,6 +180,15 @@ function runMigrations() {
     } catch (e) {
         console.log("Migration check failed or not needed", e);
     }
+
+    // Cleanup: remove zero/negative-quantity rows left over from the legacy
+    // decrement-to-zero behavior. Idempotent — a no-op once the table is clean.
+    try {
+        const info = db.prepare("DELETE FROM cards WHERE quantity <= 0").run();
+        if (info.changes > 0) console.log(`Quantity cleanup: removed ${info.changes} zero-quantity row(s).`);
+    } catch (e) {
+        console.error("Quantity cleanup failed:", e);
+    }
 }
 
 // Prepare commonly used statements
