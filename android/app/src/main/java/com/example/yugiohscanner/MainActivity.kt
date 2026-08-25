@@ -3,6 +3,7 @@ package com.example.yugiohscanner
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -322,15 +323,19 @@ fun ScannerScreen(
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
     // always runs the latest logic without being recreated on every recomposition.
-    val onDetected = rememberUpdatedState<(String, String?) -> Unit> { code, setCode ->
+    val onDetected = rememberUpdatedState<(String, List<String>) -> Unit> { code, setCodes ->
         if (code != lastScannedCode) {
             lastScannedCode = code
-            scanStatus = if (setCode != null) "Detected: $code ($setCode)" else "Detected: $code"
+            val best = setCodes.firstOrNull()
+            scanStatus = if (best != null) "Detected: $code ($best)" else "Detected: $code"
             triggerFeedback()
             onAddHistory(scanStatus)
             val data = JSONObject()
             data.put("passcode", code)
-            if (setCode != null) data.put("setCode", setCode)
+            if (best != null) {
+                data.put("setCode", best)
+                data.put("setCodeCandidates", JSONArray(setCodes))
+            }
             socket?.emit("card_scanned", data)
         }
     }
@@ -345,7 +350,7 @@ fun ScannerScreen(
     val executor = remember { Executors.newSingleThreadExecutor() }
     val analyzer = remember {
         CardAnalyzer(
-            onResultDetected = { code, setCode -> onDetected.value(code, setCode) },
+            onResultDetected = { code, setCodes -> onDetected.value(code, setCodes) },
             onProgress = { code, hits, required -> onProgress.value(code, hits, required) }
         )
     }
@@ -686,7 +691,7 @@ fun ScannerScreen(
 }
 
 class CardAnalyzer(
-    private val onResultDetected: (String, String?) -> Unit,
+    private val onResultDetected: (String, List<String>) -> Unit,
     private val onProgress: (String, Int, Int) -> Unit = { _, _, _ -> }
 ) : ImageAnalysis.Analyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -710,7 +715,15 @@ class CardAnalyzer(
             imageProxy.close()
             return
         }
-        val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+        val rotation = imageProxy.imageInfo.rotationDegrees
+        val full = imageProxy.toBitmap()
+        // Keep the central band where the framed card sits; drop edge/background text.
+        val cropW = (full.width * 0.85f).toInt()
+        val cropH = (full.height * 0.95f).toInt()
+        val x = (full.width - cropW) / 2
+        val y = (full.height - cropH) / 2
+        val cropped = Bitmap.createBitmap(full, x, y, cropW, cropH)
+        val image = InputImage.fromBitmap(cropped, rotation)
 
         recognizer.process(image)
             .addOnSuccessListener { visionText ->
@@ -750,16 +763,16 @@ class CardAnalyzer(
             onProgress(best.key, best.value.coerceAtMost(REQUIRED_HITS), REQUIRED_HITS)
             if (best.value >= REQUIRED_HITS) {
                 confirmed = best.key
-                onResultDetected(best.key, bestSetCode())
+                onResultDetected(best.key, topSetCodes(3))
             }
         }
     }
 
-    // Most frequently seen set code across the current window (null if none seen).
-    private fun bestSetCode(): String? {
+    // Most frequent set codes across the current window, highest first (up to `limit`).
+    private fun topSetCodes(limit: Int): List<String> {
         val counts = HashMap<String, Int>()
         for (frame in setWindow) for (code in frame) counts[code] = (counts[code] ?: 0) + 1
-        return counts.maxByOrNull { it.value }?.key
+        return counts.entries.sortedByDescending { it.value }.take(limit).map { it.key }
     }
 
     // Release the ML Kit recognizer; call when the scanner is torn down.
