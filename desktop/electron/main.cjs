@@ -214,7 +214,7 @@ ipcMain.handle('delete-card', (event, { id, set_code, language }) => {
 
 ipcMain.handle('get-portfolio', () => {
     try {
-        return db.prepare('SELECT SUM(price * quantity) as totalValue, SUM(quantity) as totalCards, COUNT(*) as uniqueCards FROM cards').get();
+        return db.prepare('SELECT SUM(price * quantity) as totalValue, SUM(quantity) as totalCards, COUNT(*) as uniqueCards FROM cards WHERE quantity > 0').get();
     } catch (e) { return { totalValue: 0, totalCards: 0, uniqueCards: 0 }; }
 });
 

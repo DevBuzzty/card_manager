@@ -18,7 +18,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
     return () => clearTimeout(t);
   }, [open]);
 
-  // Group raw rows by passcode into the shape CardDetailModal expects (with `variants`).
+  // Derived values are recomputed each render (cheap; query changes every keystroke anyway).
   const groupedMap = {};
   cards.forEach(c => {
     if (!groupedMap[c.id]) groupedMap[c.id] = { ...c, variants: [], quantity: 0, sets: new Set() };
@@ -56,7 +56,9 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
-      if (e.key === 'Escape') { if (detail) setDetail(null); else onClose(); }
+      // While a card's detail modal is open, only Escape (which closes the modal) applies.
+      if (detail) { if (e.key === 'Escape') setDetail(null); return; }
+      if (e.key === 'Escape') { onClose(); }
       else if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s + 1, flat.length - 1)); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); setSel(s => Math.max(s - 1, 0)); }
       else if (e.key === 'Enter') { e.preventDefault(); runItem(flat[sel]); }
@@ -67,24 +69,14 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
 
   if (!open) return null;
 
-  let rowIndex = -1;
-  const Row = ({ item, children }) => {
-    rowIndex += 1;
-    const i = rowIndex;
-    const active = i === sel;
-    return (
-      <button
-        onMouseEnter={() => setSel(i)}
-        onClick={() => runItem(item)}
-        className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${active ? 'bg-space-violet/15 text-white' : 'text-ink-muted'}`}
-      >
-        {children}
-      </button>
-    );
-  };
+  const rowClass = (active) =>
+    `w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${active ? 'bg-space-violet/15 text-white' : 'text-ink-muted'}`;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center pt-[12vh] px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-40 flex items-start justify-center pt-[12vh] px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={() => { if (!detail) onClose(); }}
+    >
       <div className="w-full max-w-xl bg-obsidian-800 border border-line rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 py-4 border-b border-line">
           <Search className="w-5 h-5 text-violet-soft" strokeWidth={1.8} />
@@ -102,28 +94,31 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
           {actionResults.length > 0 && (
             <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-2 pb-1">Actions</div>
           )}
-          {actionResults.map(a => (
-            <Row key={a.id} item={{ type: 'action', ...a }}>
+          {actionResults.map((a, i) => (
+            <button key={a.id} onMouseEnter={() => setSel(i)} onClick={() => runItem({ type: 'action', ...a })} className={rowClass(i === sel)}>
               <a.icon className="w-4 h-4 shrink-0" strokeWidth={1.8} />
               <span className="flex-1">{a.label}</span>
-            </Row>
+            </button>
           ))}
 
           {cardResults.length > 0 && (
             <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-3 pb-1">Cards</div>
           )}
-          {cardResults.map(c => (
-            <Row key={c.id} item={{ type: 'card', card: c }}>
-              <div className="w-7 h-10 rounded overflow-hidden bg-obsidian-600 shrink-0">
-                {c.image_url && <img src={c.image_url} alt="" className="w-full h-full object-cover" />}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-ink truncate">{c.name}</div>
-                <div className="font-mono text-[10px] text-ink-faint">{c.id} · ×{c.quantity}</div>
-              </div>
-              <CornerDownLeft className="w-3.5 h-3.5 opacity-40" />
-            </Row>
-          ))}
+          {cardResults.map((c, ci) => {
+            const i = actionResults.length + ci;
+            return (
+              <button key={c.id} onMouseEnter={() => setSel(i)} onClick={() => runItem({ type: 'card', card: c })} className={rowClass(i === sel)}>
+                <div className="w-7 h-10 rounded overflow-hidden bg-obsidian-600 shrink-0">
+                  {c.image_url && <img src={c.image_url} alt="" className="w-full h-full object-cover" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-ink truncate">{c.name}</div>
+                  <div className="font-mono text-[10px] text-ink-faint">{c.id} · ×{c.quantity}</div>
+                </div>
+                <CornerDownLeft className="w-3.5 h-3.5 opacity-40" />
+              </button>
+            );
+          })}
 
           {q && flat.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-ink-faint">No matches.</div>
