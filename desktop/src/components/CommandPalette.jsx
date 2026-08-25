@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, Layers, Library, TrendingUp, BookOpen, Heart, CornerDownLeft } from 'lucide-react';
 import CardDetailModal from './CardDetailModal';
 
@@ -9,57 +9,43 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
   const [detail, setDetail] = useState(null);
   const inputRef = useRef(null);
 
+  // The palette mounts fresh each time it opens (conditional render in App), so initial
+  // state is already clean — this effect only loads data and focuses the input.
   useEffect(() => {
     if (!open) return;
-    setQuery('');
-    setSel(0);
-    setDetail(null);
     if (window.api) window.api.getCollection().then(rows => setCards(rows || []));
     const t = setTimeout(() => inputRef.current?.focus(), 30);
     return () => clearTimeout(t);
   }, [open]);
 
   // Group raw rows by passcode into the shape CardDetailModal expects (with `variants`).
-  const grouped = useMemo(() => {
-    const g = {};
-    cards.forEach(c => {
-      if (!g[c.id]) g[c.id] = { ...c, variants: [], quantity: 0, sets: new Set() };
-      g[c.id].variants.push(c);
-      g[c.id].quantity += (c.quantity || 1);
-      if (c.set_code) g[c.id].sets.add(c.set_code);
-    });
-    return Object.values(g);
-  }, [cards]);
+  const groupedMap = {};
+  cards.forEach(c => {
+    if (!groupedMap[c.id]) groupedMap[c.id] = { ...c, variants: [], quantity: 0, sets: new Set() };
+    groupedMap[c.id].variants.push(c);
+    groupedMap[c.id].quantity += (c.quantity || 1);
+    if (c.set_code) groupedMap[c.id].sets.add(c.set_code);
+  });
+  const grouped = Object.values(groupedMap);
 
   const go = (tab) => { setActiveTab(tab); onClose(); };
-  const actions = useMemo(() => [
+  const actions = [
     { id: 'a-scan', label: 'Start Scanning', icon: Layers, run: () => go('staging') },
     { id: 'a-collection', label: 'Open Collection', icon: Library, run: () => go('collection') },
     { id: 'a-insights', label: 'Open Insights', icon: TrendingUp, run: () => go('insights') },
     { id: 'a-decks', label: 'Open Deck Builder', icon: BookOpen, run: () => go('deckbuilder') },
     { id: 'a-wishlist', label: 'Open Wishlist', icon: Heart, run: () => go('wishlist') },
-  ], []); // eslint-disable-line react-hooks/exhaustive-deps
+  ];
 
   const q = query.trim().toLowerCase();
-  const actionResults = useMemo(
-    () => actions.filter(a => !q || a.label.toLowerCase().includes(q)),
-    [actions, q]
-  );
-  const cardResults = useMemo(() => {
-    if (!q) return [];
-    return grouped.filter(c =>
-      (c.name && c.name.toLowerCase().includes(q)) ||
-      String(c.id).includes(query.trim()) ||
-      Array.from(c.sets).some(s => s.toLowerCase().includes(q))
-    ).slice(0, 8);
-  }, [grouped, q, query]);
+  const actionResults = actions.filter(a => !q || a.label.toLowerCase().includes(q));
+  const cardResults = !q ? [] : grouped.filter(c =>
+    (c.name && c.name.toLowerCase().includes(q)) ||
+    String(c.id).includes(query.trim()) ||
+    Array.from(c.sets).some(s => s.toLowerCase().includes(q))
+  ).slice(0, 8);
 
-  const flat = useMemo(
-    () => [...actionResults.map(a => ({ type: 'action', ...a })), ...cardResults.map(c => ({ type: 'card', card: c }))],
-    [actionResults, cardResults]
-  );
-
-  useEffect(() => { setSel(0); }, [query]);
+  const flat = [...actionResults.map(a => ({ type: 'action', ...a })), ...cardResults.map(c => ({ type: 'card', card: c }))];
 
   const runItem = (item) => {
     if (!item) return;
@@ -105,7 +91,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
           <input
             ref={inputRef}
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => { setQuery(e.target.value); setSel(0); }}
             placeholder="Jump to a card, set or action…"
             className="flex-1 bg-transparent outline-none text-ink text-base"
           />
