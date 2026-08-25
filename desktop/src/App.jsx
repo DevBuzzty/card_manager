@@ -9,6 +9,7 @@ import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import UnknownCards from './components/UnknownCards';
+import Statistics from './components/Statistics';
 
 // Heavy tabs (recharts / large deck UI) are code-split so the initial load stays light.
 const Portfolio = lazy(() => import('./components/Portfolio'));
@@ -82,6 +83,9 @@ function App() {
                 )}
                 {activeTab === 'portfolio' && (
                 <Portfolio />
+                )}
+                {activeTab === 'statistics' && (
+                <Statistics />
                 )}
                 {activeTab === 'deckbuilder' && (
                 <DeckBuilder />

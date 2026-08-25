@@ -1,4 +1,4 @@
-import { Layers, Library, Wifi, TrendingUp, BookOpen, AlertTriangle, Settings, Heart, LayoutDashboard } from 'lucide-react';
+import { Layers, Library, Wifi, TrendingUp, BookOpen, AlertTriangle, Settings, Heart, LayoutDashboard, BarChart3 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import clsx from 'clsx';
 
@@ -41,6 +41,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         <NavItem id="staging" icon={Layers} label="Staging Area" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="collection" icon={Library} label="My Collection" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="portfolio" icon={TrendingUp} label="Portfolio" activeTab={activeTab} setActiveTab={setActiveTab} />
+        <NavItem id="statistics" icon={BarChart3} label="Statistics" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="deckbuilder" icon={BookOpen} label="Deck Builder" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="unknown" icon={AlertTriangle} label="Unknown Cards" activeTab={activeTab} setActiveTab={setActiveTab} />
         <NavItem id="missing" icon={AlertTriangle} label="Missing Data" activeTab={activeTab} setActiveTab={setActiveTab} />
