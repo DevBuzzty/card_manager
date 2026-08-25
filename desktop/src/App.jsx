@@ -3,12 +3,10 @@ import { Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
 import CollectionList from './components/CollectionList';
-import MissingData from './components/MissingData';
 import Wishlist from './components/Wishlist';
 import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
-import UnknownCards from './components/UnknownCards';
 
 // Heavy tabs are code-split so the initial load stays light.
 const Insights = lazy(() => import('./components/Insights'));
@@ -85,12 +83,6 @@ function App() {
                 )}
                 {activeTab === 'deckbuilder' && (
                 <DeckBuilder />
-                )}
-                {activeTab === 'unknown' && (
-                <UnknownCards />
-                )}
-                {activeTab === 'missing' && (
-                <MissingData />
                 )}
                 {activeTab === 'wishlist' && (
                 <Wishlist />

@@ -4,6 +4,7 @@ import { Grid } from 'react-window';
 import CardDetailModal from './CardDetailModal';
 import CustomSelect from './CustomSelect';
 import CardTile from './CardTile';
+import { getRarityInfo } from '../utils/rarity.js';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -43,6 +44,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [filterSet, setFilterSet] = useState('All');
   const [filterLang, setFilterLang] = useState('All');
   const [filterRarity, setFilterRarity] = useState('All');
+  const [segment, setSegment] = useState('all'); // all | unknown | incomplete | foils
+  const [segmentBusy, setSegmentBusy] = useState(false);
 
   const updating = isUpdating || localUpdating;
 
@@ -106,8 +109,33 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       };
   }, [groupedCards]);
 
+  // A grouped card is "incomplete" if a monster is missing atk/def/level, or anything lacks an image.
+  const isIncomplete = (c) => {
+      const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');
+      const isLink = c.type && c.type.includes('Link');
+      if (isMonster) {
+          if (c.atk == null) return true;
+          if (!isLink && c.def == null) return true;
+          if (c.level == null) return true;
+          return false;
+      }
+      return !c.image_url;
+  };
+  const hasUnknownVariant = (c) => c.variants && c.variants.some(v => v.set_code === 'Unknown');
+  const hasFoilVariant = (c) => Array.from(c.rarities).some(r => !!getRarityInfo(r).foil);
+
+  const segmentCounts = useMemo(() => ({
+      all: groupedCards.length,
+      unknown: groupedCards.filter(hasUnknownVariant).length,
+      incomplete: groupedCards.filter(isIncomplete).length,
+      foils: groupedCards.filter(hasFoilVariant).length,
+  }), [groupedCards]);
+
   const filtered = useMemo(() => {
       return groupedCards.filter(c => {
+        if (segment === 'unknown' && !hasUnknownVariant(c)) return false;
+        if (segment === 'incomplete' && !isIncomplete(c)) return false;
+        if (segment === 'foils' && !hasFoilVariant(c)) return false;
         const q = filter.trim().toLowerCase();
         const matchesSearch = !q
             || (c.name && c.name.toLowerCase().includes(q))
@@ -135,7 +163,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               default: return 0;
           }
       });
-  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, sortType]);
+  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, sortType, segment]);
 
   const clearFilters = () => {
       setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All'); setFilterRarity('All');
@@ -164,6 +192,21 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       );
   };
 
+  const runUnknownAction = async (kind) => {
+      if (!window.api || segmentBusy) return;
+      const msg = kind === 'merge'
+          ? "Merge all 'Unknown' cards into their most common owned set variant?"
+          : "Assign all 'Unknown' cards to their cheapest available set (online, may take a while)?";
+      if (!confirm(msg)) return;
+      setSegmentBusy(true);
+      try {
+          const res = kind === 'merge' ? await window.api.mergeUnknownCards() : await window.api.convertUnknownsToDefault();
+          if (res.success) { alert(kind === 'merge' ? `Merged ${res.merged} cards.` : `Converted ${res.converted} cards.`); loadCollection(); }
+          else alert('Failed: ' + res.error);
+      } catch { alert('Action failed.'); }
+      finally { setSegmentBusy(false); }
+  };
+
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
         <div className="flex flex-col gap-4 mb-4 bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 shrink-0">
@@ -182,6 +225,37 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                     </button>
                 </div>
             </div>
+
+            {/* Segment control */}
+            <div className="flex flex-wrap items-center gap-2">
+                {[
+                    { id: 'all', label: 'All' },
+                    { id: 'unknown', label: 'Unknown' },
+                    { id: 'incomplete', label: 'Incomplete' },
+                    { id: 'foils', label: 'Foils' },
+                ].map(s => (
+                    <button
+                        key={s.id}
+                        onClick={() => setSegment(s.id)}
+                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-display text-xs font-medium transition-colors ${
+                            segment === s.id ? 'bg-space-violet text-white shadow-[0_6px_16px_-8px_#9D00FF]' : 'bg-obsidian-700 text-ink-muted hover:text-ink border border-line'
+                        }`}
+                    >
+                        {s.label}
+                        <span className={`font-mono text-[9.5px] px-1.5 rounded-full ${segment === s.id ? 'bg-black/25' : 'bg-black/30'}`}>{segmentCounts[s.id]}</span>
+                    </button>
+                ))}
+            </div>
+
+            {/* Unknown batch actions */}
+            {segment === 'unknown' && segmentCounts.unknown > 0 && (
+                <div className="flex items-center gap-3 bg-gold/5 border border-gold/25 rounded-xl px-4 py-3">
+                    <span className="text-xs text-ink-muted flex-1">These cards have no specific set code — resolve them to avoid inflated values.</span>
+                    <button onClick={() => runUnknownAction('convert')} disabled={segmentBusy} className="px-3 py-1.5 bg-obsidian-600 hover:bg-obsidian-700 text-ink rounded-lg text-xs font-medium border border-line disabled:opacity-50">Convert to Default</button>
+                    <button onClick={() => runUnknownAction('merge')} disabled={segmentBusy} className="px-3 py-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg text-xs font-medium disabled:opacity-50">{segmentBusy ? 'Working…' : 'Auto-Merge All'}</button>
+                </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-3">
                 <div className="relative group flex-1 min-w-[200px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
