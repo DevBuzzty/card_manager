@@ -6,6 +6,9 @@ import RarityGuide from './RarityGuide';
 import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
 
+// Find a set entry whose set_code matches the OCR-detected code (case-insensitive).
+const matchSet = (sets, code) => (code && sets) ? sets.find(s => s.set_code && s.set_code.toUpperCase() === code.toUpperCase()) : null;
+
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
   const [showRarityGuide, setShowRarityGuide] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -49,7 +52,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             inCollection: result.exists,
             ownedQuantity: result.quantity,
             language: c.language || 'DE',
-            selectedSet: c.selectedSet || (data.card_sets ? data.card_sets[0] : null)
+            selectedSet: c.selectedSet || matchSet(data.card_sets, c.scannedSetCode) || (data.card_sets ? data.card_sets[0] : null),
+            setAutoDetected: !!(c.scannedSetCode && matchSet(data.card_sets, c.scannedSetCode))
         } : c));
         playScanSound();
 
@@ -60,13 +64,15 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 if (c.tempId !== tempId) return c;
                 // Don't clobber a set the user already picked or a manual entry.
                 const keepSelection = c.setTouched || c.isManualEntry;
+                const applyDE = hasSets && !keepSelection && (c.language || 'DE') === 'DE';
+                const scanned = applyDE ? matchSet(germanSets, c.scannedSetCode) : null;
+                const chosen = applyDE ? { ...(scanned || germanSets[0]), isYugipedia: true } : c.selectedSet;
                 return {
                     ...c,
                     loadingSets: false,
                     germanSets: hasSets ? germanSets : [],
-                    selectedSet: (hasSets && !keepSelection && (c.language || 'DE') === 'DE')
-                        ? { ...germanSets[0], isYugipedia: true }
-                        : c.selectedSet
+                    selectedSet: chosen,
+                    setAutoDetected: applyDE ? !!scanned : c.setAutoDetected
                 };
             }));
         }).catch(() => {
@@ -399,6 +405,12 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                     </div>
                                                 )
                                             )
+                                        )}
+
+                                        {card.setAutoDetected && !card.isManualEntry && (
+                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-good bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set code read from the card">
+                                                Auto
+                                            </span>
                                         )}
 
                                         <button

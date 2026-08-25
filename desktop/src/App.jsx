@@ -34,6 +34,7 @@ function App() {
             return [{
                 tempId: Date.now() + Math.random(),
                 passcode: data.passcode,
+                scannedSetCode: data.setCode || null,
                 status: 'pending',
                 data: null
             }, ...prev];
