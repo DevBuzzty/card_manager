@@ -59,8 +59,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         <NavItem id="wishlist" icon={Heart} label="Wishlist" activeTab={activeTab} setActiveTab={setActiveTab} />
 
         <GroupLabel>Analysieren</GroupLabel>
-        <NavItem id="portfolio" icon={TrendingUp} label="Portfolio" activeTab={activeTab} setActiveTab={setActiveTab} />
-        <NavItem id="statistics" icon={BarChart3} label="Statistics" activeTab={activeTab} setActiveTab={setActiveTab} />
+        <NavItem id="insights" icon={BarChart3} label="Insights" activeTab={activeTab} setActiveTab={setActiveTab} />
 
         <GroupLabel>Bauen</GroupLabel>
         <NavItem id="deckbuilder" icon={BookOpen} label="Deck Builder" activeTab={activeTab} setActiveTab={setActiveTab} />

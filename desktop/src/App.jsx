@@ -9,10 +9,9 @@ import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import UnknownCards from './components/UnknownCards';
-import Statistics from './components/Statistics';
 
-// Heavy tabs (recharts / large deck UI) are code-split so the initial load stays light.
-const Portfolio = lazy(() => import('./components/Portfolio'));
+// Heavy tabs are code-split so the initial load stays light.
+const Insights = lazy(() => import('./components/Insights'));
 const DeckBuilder = lazy(() => import('./components/DeckBuilder'));
 
 function App() {
@@ -60,9 +59,9 @@ function App() {
   }, []);
 
   return (
-    <div className="flex h-screen bg-space-black text-space-white overflow-hidden font-sans">
+    <div className="flex h-screen bg-obsidian text-ink overflow-hidden font-sans">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="flex-1 overflow-auto bg-space-black p-6 flex flex-col">
+      <main className="flex-1 overflow-auto bg-obsidian p-6 flex flex-col">
         {updateProgress && (
             <div className="bg-gray-900 border-b border-gray-800 px-6 py-2 flex items-center justify-between text-xs text-space-violet animate-pulse">
                 <span className="font-bold uppercase tracking-wider">Updating Card Database...</span>
@@ -81,11 +80,8 @@ function App() {
                 {activeTab === 'collection' && (
                 <CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />
                 )}
-                {activeTab === 'portfolio' && (
-                <Portfolio />
-                )}
-                {activeTab === 'statistics' && (
-                <Statistics />
+                {activeTab === 'insights' && (
+                <Insights />
                 )}
                 {activeTab === 'deckbuilder' && (
                 <DeckBuilder />
