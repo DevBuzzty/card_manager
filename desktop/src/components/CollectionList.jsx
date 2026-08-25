@@ -3,6 +3,7 @@ import { Search, RefreshCw, LayoutGrid, List as ListIcon, Database, FilterX } fr
 import { Grid } from 'react-window';
 import CardDetailModal from './CardDetailModal';
 import CustomSelect from './CustomSelect';
+import CardTile from './CardTile';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -155,33 +156,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
       return (
           <div style={{ ...style, padding: 8 }}>
-              <div
+              <CardTile
+                  card={{ ...card, price: card.variants && card.variants.length > 1 ? Math.min(...card.variants.map(v => v.price || 0)) : (card.price || 0) }}
                   onClick={() => setSelectedCard(card)}
-                  className="h-full w-full bg-[#1E1E1E] rounded-xl overflow-hidden shadow-lg hover:shadow-space-violet/20 border border-gray-800 hover:border-space-violet/50 cursor-pointer flex flex-col transition-colors"
-              >
-                  <div className="relative flex-1 bg-black">
-                        <img
-                            src={card.image_url}
-                            alt={card.name}
-                            className="absolute inset-0 w-full h-full object-cover"
-                            loading="lazy"
-                        />
-                        {card.quantity > 1 && (
-                            <div className="absolute top-1 right-1 bg-green-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded">
-                                x{card.quantity}
-                            </div>
-                        )}
-                  </div>
-                  <div className="p-2 h-14 flex flex-col justify-center">
-                      <h3 className="font-bold text-gray-200 text-xs leading-tight truncate">{card.name}</h3>
-                      <div className="flex justify-between items-center mt-1">
-                          <p className="text-[9px] text-gray-500 font-mono">{card.id}</p>
-                          <p className="text-[10px] text-space-violet font-medium">
-                              ${card.variants.length > 1 ? Math.min(...card.variants.map(v=>v.price||0)).toFixed(2) : (card.price||0).toFixed(2)}
-                          </p>
-                      </div>
-                  </div>
-              </div>
+              />
           </div>
       );
   };
