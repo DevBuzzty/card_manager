@@ -67,8 +67,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -317,6 +319,49 @@ fun ScannerScreen(
     // Feedback Helper (Empty as per requirement)
     val triggerFeedback = remember { {} }
 
+    // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
+    // always runs the latest logic without being recreated on every recomposition.
+    val onDetected = rememberUpdatedState<(String) -> Unit> { code ->
+        if (code != lastScannedCode) {
+            lastScannedCode = code
+            scanStatus = "Detected: $code"
+            triggerFeedback()
+            onAddHistory(scanStatus)
+            val data = JSONObject()
+            data.put("passcode", code)
+            socket?.emit("card_scanned", data)
+        }
+    }
+    val onProgress = rememberUpdatedState<(String, Int, Int) -> Unit> { code, hits, required ->
+        if (code != lastScannedCode) {
+            scanStatus = "Reading $code… ($hits/$required)"
+        }
+    }
+
+    // Owned once and disposed explicitly (see below) to avoid leaking a thread and the ML Kit
+    // recognizer every time the camera use-cases rebind.
+    val executor = remember { Executors.newSingleThreadExecutor() }
+    val analyzer = remember {
+        CardAnalyzer(
+            onResultDetected = { code -> onDetected.value(code) },
+            onProgress = { code, hits, required -> onProgress.value(code, hits, required) }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            executor.shutdown()
+            analyzer.close()
+            if (cameraProviderFuture.isDone) {
+                try {
+                    cameraProviderFuture.get().unbindAll()
+                } catch (e: Exception) {
+                    Log.e("Scanner", "Error unbinding camera on dispose", e)
+                }
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
@@ -355,8 +400,6 @@ fun ScannerScreen(
                     true
                 }
 
-                val executor = Executors.newSingleThreadExecutor()
-
                 cameraProviderFuture.addListener({
                     val cameraProvider = cameraProviderFuture.get()
                     val preview = Preview.Builder().build().also {
@@ -367,32 +410,7 @@ fun ScannerScreen(
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also {
-                            it.setAnalyzer(executor, CardAnalyzer(
-                                onResultDetected = { code ->
-                                    // Only trigger if we have a NEW passcode
-                                    if (code != lastScannedCode) {
-                                        lastScannedCode = code
-                                        scanStatus = "Detected: $code"
-
-                                        // Trigger Feedback
-                                        triggerFeedback()
-
-                                        // Add to History
-                                        onAddHistory(scanStatus)
-
-                                        // Emit to socket
-                                        val data = JSONObject()
-                                        data.put("passcode", code)
-                                        socket?.emit("card_scanned", data)
-                                    }
-                                },
-                                onProgress = { code, hits, required ->
-                                    // Show that a candidate is being confirmed across frames.
-                                    if (code != lastScannedCode) {
-                                        scanStatus = "Reading $code… ($hits/$required)"
-                                    }
-                                }
-                            ))
+                            it.setAnalyzer(executor, analyzer)
                         }
 
                     try {
@@ -731,5 +749,10 @@ class CardAnalyzer(
                 onResultDetected(best.key)
             }
         }
+    }
+
+    // Release the ML Kit recognizer; call when the scanner is torn down.
+    fun close() {
+        recognizer.close()
     }
 }
