@@ -66,13 +66,28 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 const keepSelection = c.setTouched || c.isManualEntry;
                 const applyDE = hasSets && !keepSelection && (c.language || 'DE') === 'DE';
                 const scanned = applyDE ? matchSet(germanSets, c.scannedSetCode) : null;
-                const chosen = applyDE ? { ...(scanned || germanSets[0]), isYugipedia: true } : c.selectedSet;
+                let chosen = c.selectedSet;
+                let auto = c.setAutoDetected;
+                if (applyDE) {
+                    if (scanned) {
+                        // Prefer the localized German printing when the scanned code matches it.
+                        chosen = { ...scanned, isYugipedia: true };
+                        auto = true;
+                    } else if (c.setAutoDetected) {
+                        // The API path already validated the scanned code — keep it, don't clobber.
+                        chosen = c.selectedSet;
+                        auto = true;
+                    } else {
+                        chosen = { ...germanSets[0], isYugipedia: true };
+                        auto = false;
+                    }
+                }
                 return {
                     ...c,
                     loadingSets: false,
                     germanSets: hasSets ? germanSets : [],
                     selectedSet: chosen,
-                    setAutoDetected: applyDE ? !!scanned : c.setAutoDetected
+                    setAutoDetected: auto
                 };
             }));
         }).catch(() => {
