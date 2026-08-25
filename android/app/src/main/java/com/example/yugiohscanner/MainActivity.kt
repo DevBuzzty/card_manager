@@ -367,24 +367,32 @@ fun ScannerScreen(
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also {
-                            it.setAnalyzer(executor, CardAnalyzer { code ->
-                                // Only trigger if we have a NEW passcode
-                                if (code != lastScannedCode) {
-                                    lastScannedCode = code
-                                    scanStatus = "Detected: $code"
+                            it.setAnalyzer(executor, CardAnalyzer(
+                                onResultDetected = { code ->
+                                    // Only trigger if we have a NEW passcode
+                                    if (code != lastScannedCode) {
+                                        lastScannedCode = code
+                                        scanStatus = "Detected: $code"
 
-                                    // Trigger Feedback
-                                    triggerFeedback()
+                                        // Trigger Feedback
+                                        triggerFeedback()
 
-                                    // Add to History
-                                    onAddHistory(scanStatus)
+                                        // Add to History
+                                        onAddHistory(scanStatus)
 
-                                    // Emit to socket
-                                    val data = JSONObject()
-                                    data.put("passcode", code)
-                                    socket?.emit("card_scanned", data)
+                                        // Emit to socket
+                                        val data = JSONObject()
+                                        data.put("passcode", code)
+                                        socket?.emit("card_scanned", data)
+                                    }
+                                },
+                                onProgress = { code, hits, required ->
+                                    // Show that a candidate is being confirmed across frames.
+                                    if (code != lastScannedCode) {
+                                        scanStatus = "Reading $code… ($hits/$required)"
+                                    }
                                 }
-                            })
+                            ))
                         }
 
                     try {
@@ -657,46 +665,71 @@ fun ScannerScreen(
     }
 }
 
-class CardAnalyzer(private val onResultDetected: (String) -> Unit) : ImageAnalysis.Analyzer {
+class CardAnalyzer(
+    private val onResultDetected: (String) -> Unit,
+    private val onProgress: (String, Int, Int) -> Unit = { _, _, _ -> }
+) : ImageAnalysis.Analyzer {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-    // Pattern for 8-digit passcode
+    // Pattern for 8-digit passcode (word-bounded so we don't clip longer numbers).
     private val passcodePattern = Pattern.compile("\\b\\d{8}\\b")
+
+    // Multi-frame confirmation. A passcode must be read in at least REQUIRED_HITS of the last
+    // WINDOW frames before we trust it. This eliminates single-frame OCR misreads (8<->B, 0<->O,
+    // 1<->7) and ignores stray 8-digit numbers from other cards or the background, because only
+    // the real passcode recurs consistently across frames.
+    private val window = ArrayDeque<Set<String>>()
+    private val WINDOW = 6
+    private val REQUIRED_HITS = 3
+    private var confirmed: String? = null
 
     @OptIn(ExperimentalGetImage::class)
     override fun analyze(imageProxy: ImageProxy) {
         val mediaImage = imageProxy.image
-        if (mediaImage != null) {
-            val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-
-            recognizer.process(image)
-                .addOnSuccessListener { visionText ->
-                    var foundPasscode: String? = null
-
-                    // Scan all blocks
-                    for (block in visionText.textBlocks) {
-                        val text = block.text
-                        if (foundPasscode == null) {
-                            val matcher = passcodePattern.matcher(text)
-                            if (matcher.find()) {
-                                foundPasscode = matcher.group()
-                            }
-                        }
-                    }
-
-                    // Only trigger if we at least found a passcode
-                    if (foundPasscode != null) {
-                        onResultDetected(foundPasscode!!)
-                    }
-                }
-                .addOnFailureListener { e ->
-                    Log.e("Analyzer", "Text recognition failed", e)
-                }
-                .addOnCompleteListener {
-                    imageProxy.close()
-                }
-        } else {
+        if (mediaImage == null) {
             imageProxy.close()
+            return
+        }
+        val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+
+        recognizer.process(image)
+            .addOnSuccessListener { visionText ->
+                // Collect every distinct 8-digit number seen in this frame.
+                val found = HashSet<String>()
+                for (block in visionText.textBlocks) {
+                    val matcher = passcodePattern.matcher(block.text)
+                    while (matcher.find()) {
+                        found.add(matcher.group())
+                    }
+                }
+                registerFrame(found)
+            }
+            .addOnFailureListener { e ->
+                Log.e("Analyzer", "Text recognition failed", e)
+            }
+            .addOnCompleteListener {
+                imageProxy.close()
+            }
+    }
+
+    private fun registerFrame(found: Set<String>) {
+        window.addLast(found)
+        while (window.size > WINDOW) window.removeFirst()
+
+        // Tally how often each candidate appears across the sliding window.
+        val counts = HashMap<String, Int>()
+        for (frame in window) for (code in frame) counts[code] = (counts[code] ?: 0) + 1
+
+        // Clear the confirmation once that card has left the view, so re-scanning works.
+        confirmed?.let { if (counts[it] == null) confirmed = null }
+
+        val best = counts.maxByOrNull { it.value } ?: return
+        if (best.key != confirmed) {
+            onProgress(best.key, best.value.coerceAtMost(REQUIRED_HITS), REQUIRED_HITS)
+            if (best.value >= REQUIRED_HITS) {
+                confirmed = best.key
+                onResultDetected(best.key)
+            }
         }
     }
 }
