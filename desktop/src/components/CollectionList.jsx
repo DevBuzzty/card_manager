@@ -41,6 +41,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [filterRace, setFilterRace] = useState('All');
   const [filterSet, setFilterSet] = useState('All');
   const [filterLang, setFilterLang] = useState('All');
+  const [filterRarity, setFilterRarity] = useState('All');
 
   const updating = isUpdating || localUpdating;
 
@@ -71,7 +72,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       rawCards.forEach(card => {
           if (!groups[card.id]) {
               groups[card.id] = {
-                  ...card, quantity: 0, totalValue: 0, variants: [], maxPrice: 0, newestDate: new Date(0), sets: new Set(), languages: new Set()
+                  ...card, quantity: 0, totalValue: 0, variants: [], maxPrice: 0, newestDate: new Date(0), sets: new Set(), languages: new Set(), rarities: new Set()
               };
           }
           const g = groups[card.id];
@@ -80,6 +81,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
           g.variants.push(card);
           if (card.set_code) g.sets.add(card.set_code.split('-')[0]);
           if (card.language) g.languages.add(card.language);
+          if (card.rarity) g.rarities.add(card.rarity);
           if ((card.price || 0) > g.maxPrice) g.maxPrice = card.price || 0;
           const cDate = new Date(card.created_at);
           if (cDate > g.newestDate) g.newestDate = cDate;
@@ -87,29 +89,39 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       return Object.values(groups);
   }, [rawCards]);
 
-  const { attributes, races, sets } = useMemo(() => {
-      const attrs = new Set(), rcs = new Set(), sts = new Set();
+  const { attributes, races, sets, rarities } = useMemo(() => {
+      const attrs = new Set(), rcs = new Set(), sts = new Set(), rars = new Set();
       groupedCards.forEach(c => {
           if (c.attribute) attrs.add(c.attribute);
           if (c.race) rcs.add(c.race);
           c.sets.forEach(s => sts.add(s));
+          c.rarities.forEach(r => rars.add(r));
       });
       return {
           attributes: Array.from(attrs).sort().map(a => ({ value: a, label: a })),
           races: Array.from(rcs).sort().map(r => ({ value: r, label: r })),
-          sets: Array.from(sts).sort().map(s => ({ value: s, label: s }))
+          sets: Array.from(sts).sort().map(s => ({ value: s, label: s })),
+          rarities: Array.from(rars).sort().map(r => ({ value: r, label: r }))
       };
   }, [groupedCards]);
 
   const filtered = useMemo(() => {
       return groupedCards.filter(c => {
-        const matchesSearch = (c.name && c.name.toLowerCase().includes(filter.toLowerCase())) || (c.id && String(c.id).includes(filter));
+        const q = filter.trim().toLowerCase();
+        const matchesSearch = !q
+            || (c.name && c.name.toLowerCase().includes(q))
+            || (c.id && String(c.id).includes(filter.trim()))
+            || (c.race && c.race.toLowerCase().includes(q))
+            || (c.attribute && c.attribute.toLowerCase().includes(q))
+            || Array.from(c.sets).some(s => s.toLowerCase().includes(q))
+            || Array.from(c.rarities).some(r => r.toLowerCase().includes(q));
         if (!matchesSearch) return false;
         if (filterType !== 'All' && (!c.type || !c.type.includes(filterType))) return false;
         if (filterAttribute !== 'All' && c.attribute !== filterAttribute) return false;
         if (filterRace !== 'All' && c.race !== filterRace) return false;
         if (filterSet !== 'All' && !Array.from(c.sets).includes(filterSet)) return false;
         if (filterLang !== 'All' && !Array.from(c.languages).includes(filterLang)) return false;
+        if (filterRarity !== 'All' && !Array.from(c.rarities).includes(filterRarity)) return false;
         return true;
       }).sort((a, b) => {
           switch (sortType) {
@@ -122,10 +134,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               default: return 0;
           }
       });
-  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, sortType]);
+  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, sortType]);
 
   const clearFilters = () => {
-      setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All');
+      setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All'); setFilterRarity('All');
   };
 
   // Virtualized Grid Cell Renderer
@@ -200,8 +212,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 <CustomSelect value={filterType} onChange={setFilterType} placeholder="Type" className="w-[120px]" options={[{ value: "All", label: "Type" }, { value: "Monster", label: "Monster" }, { value: "Spell", label: "Spell" }, { value: "Trap", label: "Trap" }, { value: "Link", label: "Link" }, { value: "XYZ", label: "XYZ" }, { value: "Synchro", label: "Synchro" }, { value: "Fusion", label: "Fusion" }]} />
                 <CustomSelect value={filterLang} onChange={setFilterLang} placeholder="Lang" className="w-[90px]" options={[{ value: "All", label: "Lang" }, { value: "DE", label: "DE" }, { value: "EN", label: "EN" }, { value: "JP", label: "JP" }]} />
                 <CustomSelect value={filterAttribute} onChange={setFilterAttribute} placeholder="Attr" className="w-[120px]" options={[{ value: "All", label: "Attr" }, ...attributes]} />
+                <CustomSelect value={filterRace} onChange={setFilterRace} placeholder="Race" className="w-[130px]" options={[{ value: "All", label: "Race/Type" }, ...races]} />
+                <CustomSelect value={filterRarity} onChange={setFilterRarity} placeholder="Rarity" className="w-[130px]" options={[{ value: "All", label: "Rarity" }, ...rarities]} />
                 <CustomSelect value={filterSet} onChange={setFilterSet} placeholder="Set" className="w-[120px]" options={[{ value: "All", label: "Set" }, ...sets]} />
-                <CustomSelect value={sortType} onChange={setSortType} placeholder="Sort" className="w-[140px]" options={[{ value: "newest", label: "Newest" }, { value: "price", label: "Price" }, { value: "name", label: "Name" }, { value: "atk", label: "ATK" }]} />
+                <CustomSelect value={sortType} onChange={setSortType} placeholder="Sort" className="w-[140px]" options={[{ value: "newest", label: "Newest" }, { value: "price", label: "Price" }, { value: "name", label: "Name" }, { value: "atk", label: "ATK" }, { value: "def", label: "DEF" }, { value: "level", label: "Level" }]} />
                 <button onClick={clearFilters} className="p-2 text-gray-500 hover:text-red-400"><FilterX className="w-4 h-4" /></button>
             </div>
         </div>

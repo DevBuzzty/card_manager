@@ -337,8 +337,14 @@ ipcMain.handle('cleanup-database', async () => {
 
 ipcMain.handle('search-online', async (event, query) => {
     try {
-        // Basic fetch to YGOProDeck for search
-        const response = await fetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`);
+        const q = String(query).trim();
+        if (!q) return [];
+        // A purely numeric query is an 8-digit passcode -> exact id lookup; otherwise fuzzy name search.
+        const isPasscode = /^\d+$/.test(q);
+        const url = isPasscode
+            ? `https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${encodeURIComponent(q)}`
+            : `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(q)}`;
+        const response = await fetch(url);
         if (!response.ok) return [];
         const json = await response.json();
         return json.data || [];

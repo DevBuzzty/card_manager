@@ -8,20 +8,16 @@ export default function CardSearchModal({ onClose, onSelect }) {
 
     const handleSearch = async (e) => {
         e.preventDefault();
-        if (!query.trim() || query.length < 3) return;
+        const q = query.trim();
+        const isPasscode = /^\d+$/.test(q);
+        // Name search needs >=3 chars; a numeric passcode may be shorter.
+        if (!q || (!isPasscode && q.length < 3)) return;
 
         setLoading(true);
         try {
             if (window.api) {
-                // Using existing searchOnline from preload, which uses ?fname=
-                // Note: This searches by name. Searching by setcode isn't explicitly supported by the simple helper yet,
-                // but the user asked for setcode search.
-                // The current `searchOnline` in preload does: `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(query)}`
-                // This is fuzzy name search. It doesn't search setcode.
-                // However, often users search by name anyway.
-                // To support setcode, we might need to enhance the backend handler or just rely on name for now.
-                // Given "passcodes are missing", name search is the primary fallback.
-                const data = await window.api.searchOnline(query);
+                // Backend routes numeric queries to an id lookup, text to fuzzy name search.
+                const data = await window.api.searchOnline(q);
                 setResults(data.slice(0, 50));
             }
         } catch (error) {
@@ -30,6 +26,8 @@ export default function CardSearchModal({ onClose, onSelect }) {
             setLoading(false);
         }
     };
+
+    const isPasscodeQuery = /^\d+$/.test(query.trim());
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
@@ -50,7 +48,7 @@ export default function CardSearchModal({ onClose, onSelect }) {
                             <input
                                 autoFocus
                                 type="text"
-                                placeholder="Search by Card Name..."
+                                placeholder="Search by Card Name or Passcode..."
                                 className="w-full bg-black/40 border border-gray-700 text-white pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:border-space-violet transition-colors"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
@@ -58,13 +56,13 @@ export default function CardSearchModal({ onClose, onSelect }) {
                         </div>
                         <button
                             type="submit"
-                            disabled={loading || query.length < 3}
+                            disabled={loading || (!isPasscodeQuery && query.trim().length < 3) || !query.trim()}
                             className="bg-space-violet hover:bg-space-violet-dark text-white px-6 rounded-xl font-bold transition-colors disabled:opacity-50"
                         >
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Search'}
                         </button>
                     </form>
-                    <p className="text-xs text-gray-500 mt-2 ml-1">Tip: Use this if the card has no passcode or the scanner fails.</p>
+                    <p className="text-xs text-gray-500 mt-2 ml-1">Tip: Search by card name, or type an 8-digit passcode for an exact lookup.</p>
                 </div>
 
                 {/* Results */}
