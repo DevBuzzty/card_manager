@@ -5,9 +5,7 @@ import CustomSelect from './CustomSelect';
 import RarityGuide from './RarityGuide';
 import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
-
-// Find a set entry whose set_code matches the OCR-detected code (case-insensitive).
-const matchSet = (sets, code) => (code && sets) ? sets.find(s => s.set_code && s.set_code.toUpperCase() === code.toUpperCase()) : null;
+import { matchCandidates } from '../utils/setCodeMatch';
 
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
   const [showRarityGuide, setShowRarityGuide] = useState(false);
@@ -43,18 +41,23 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
         }
 
         // Show the card immediately with API sets as the initial fallback; German sets load after.
-        setScannedCards(prev => prev.map(c => c.tempId === tempId ? {
-            ...c,
-            status: 'loaded',
-            data,
-            germanSets: [],
-            loadingSets: true,
-            inCollection: result.exists,
-            ownedQuantity: result.quantity,
-            language: c.language || 'DE',
-            selectedSet: c.selectedSet || matchSet(data.card_sets, c.scannedSetCode) || (data.card_sets ? data.card_sets[0] : null),
-            setAutoDetected: !!(c.scannedSetCode && matchSet(data.card_sets, c.scannedSetCode))
-        } : c));
+        setScannedCards(prev => prev.map(c => {
+            if (c.tempId !== tempId) return c;
+            const apiMatch = matchCandidates(c.scannedSetCandidates, data.card_sets);
+            return {
+                ...c,
+                status: 'loaded',
+                data,
+                germanSets: [],
+                loadingSets: true,
+                inCollection: result.exists,
+                ownedQuantity: result.quantity,
+                language: c.language || 'DE',
+                selectedSet: c.selectedSet || apiMatch.set || (data.card_sets ? data.card_sets[0] : null),
+                setAutoDetected: apiMatch.confidence !== 'none',
+                setMatchConfidence: apiMatch.confidence
+            };
+        }));
         playScanSound();
 
         // Fetch German (Yugipedia) rarities in the background so the scan feels instant.
@@ -65,21 +68,24 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 // Don't clobber a set the user already picked or a manual entry.
                 const keepSelection = c.setTouched || c.isManualEntry;
                 const applyDE = hasSets && !keepSelection && (c.language || 'DE') === 'DE';
-                const scanned = applyDE ? matchSet(germanSets, c.scannedSetCode) : null;
+                const deMatch = applyDE ? matchCandidates(c.scannedSetCandidates, germanSets) : null;
                 let chosen = c.selectedSet;
                 let auto = c.setAutoDetected;
+                let confidence = c.setMatchConfidence;
                 if (applyDE) {
-                    if (scanned) {
-                        // Prefer the localized German printing when the scanned code matches it.
-                        chosen = { ...scanned, isYugipedia: true };
+                    if (deMatch && deMatch.set) {
+                        // Prefer the localized German printing when a candidate matches it.
+                        chosen = { ...deMatch.set, isYugipedia: true };
                         auto = true;
+                        confidence = deMatch.confidence;
                     } else if (c.setAutoDetected) {
-                        // The API path already validated the scanned code — keep it, don't clobber.
+                        // The API path already matched the scanned code — keep it, don't clobber.
                         chosen = c.selectedSet;
                         auto = true;
                     } else {
                         chosen = { ...germanSets[0], isYugipedia: true };
                         auto = false;
+                        confidence = 'none';
                     }
                 }
                 return {
@@ -87,7 +93,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                     loadingSets: false,
                     germanSets: hasSets ? germanSets : [],
                     selectedSet: chosen,
-                    setAutoDetected: auto
+                    setAutoDetected: auto,
+                    setMatchConfidence: confidence
                 };
             }));
         }).catch(() => {
@@ -101,6 +108,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   // Process pending scans with a concurrency cap so a large CSV import doesn't storm the APIs.
   const MAX_CONCURRENT_FETCHES = 5;
   const inFlightRef = useRef(0);
+  // Guards handleAdd against re-entrant calls for the same card (e.g. OS key-repeat on Enter).
+  const committingRef = useRef(new Set());
 
   useEffect(() => {
     const pending = scannedCards.filter(c => c.status === 'pending');
@@ -117,43 +126,63 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   const handleAdd = async (tempId) => {
     const card = scannedCards.find(c => c.tempId === tempId);
     if (card && card.status === 'loaded') {
-       // Prepare data
-       const cardData = {
-           ...card.data,
-           quantity: card.quantity || 1,
-           language: card.language || 'DE'
-       };
+       if (committingRef.current.has(tempId)) return;
+       committingRef.current.add(tempId);
+       try {
+           // Prepare data
+           const cardData = {
+               ...card.data,
+               quantity: card.quantity || 1,
+               language: card.language || 'DE'
+           };
 
-       if (card.isManualEntry) {
-           cardData.set_code = card.manualSetCode || 'Unknown';
-           cardData.rarity = card.manualRarity || 'Unknown';
-           cardData.price = 0;
-       } else if (card.selectedSet) {
-           cardData.set_code = card.selectedSet.set_code;
-           cardData.rarity = card.selectedSet.set_rarity;
-           // If it's a Yugipedia set, it has no price, so we rely on 0 (fallback to generic) or we should map it?
-           // The API fallback logic handles 0 prices by checking card_prices.
-           cardData.price = parseFloat(card.selectedSet.set_price) || 0;
-       } else if (card.data.card_sets && card.data.card_sets.length > 0) {
-           // Default to first set if not selected
-           const first = card.data.card_sets[0];
-           cardData.set_code = first.set_code;
-           cardData.rarity = first.set_rarity;
-           cardData.price = parseFloat(first.set_price) || 0;
-       }
+           if (card.isManualEntry) {
+               cardData.set_code = card.manualSetCode || 'Unknown';
+               cardData.rarity = card.manualRarity || 'Unknown';
+               cardData.price = 0;
+           } else if (card.selectedSet) {
+               cardData.set_code = card.selectedSet.set_code;
+               cardData.rarity = card.selectedSet.set_rarity;
+               // If it's a Yugipedia set, it has no price, so we rely on 0 (fallback to generic) or we should map it?
+               // The API fallback logic handles 0 prices by checking card_prices.
+               cardData.price = parseFloat(card.selectedSet.set_price) || 0;
+           } else if (card.data.card_sets && card.data.card_sets.length > 0) {
+               // Default to first set if not selected
+               const first = card.data.card_sets[0];
+               cardData.set_code = first.set_code;
+               cardData.rarity = first.set_rarity;
+               cardData.price = parseFloat(first.set_price) || 0;
+           }
 
-       if (window.api) {
-            const result = await window.api.addCardToDb(cardData);
-            if (result.success) {
+           if (window.api) {
+                const result = await window.api.addCardToDb(cardData);
+                if (result.success) {
+                    setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
+                } else {
+                    alert("Failed to save: " + result.error);
+                }
+           } else {
                 setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
-            } else {
-                alert("Failed to save: " + result.error);
-            }
-       } else {
-            setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
+           }
+       } finally {
+           committingRef.current.delete(tempId);
        }
     }
   };
+
+  // Enter commits the topmost loaded card (bulk scanning without the mouse).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Enter') return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      const top = scannedCards.find(c => c.status === 'loaded');
+      if (top) { e.preventDefault(); handleAdd(top.tempId); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scannedCards]);
 
   const handleDiscard = (tempId) => {
       setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
@@ -215,6 +244,20 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                     >
                         <X className="w-4 h-4 mr-2" />
                         Clear All
+                    </button>
+                )}
+                {scannedCards.some(c => c.status === 'loaded' && c.setMatchConfidence === 'exact') && (
+                     <button
+                        onClick={() => {
+                            scannedCards
+                                .filter(c => c.status === 'loaded' && c.setMatchConfidence === 'exact')
+                                .forEach(c => handleAdd(c.tempId));
+                        }}
+                        disabled={isUpdating}
+                        className="flex items-center px-4 py-2 bg-good/20 hover:bg-good/30 text-good rounded-lg transition-colors text-sm border border-good/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Check className="w-4 h-4 mr-2" />
+                        Add All Detected
                     </button>
                 )}
                 {scannedCards.some(c => c.status === 'loaded') && (
@@ -422,9 +465,14 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             )
                                         )}
 
-                                        {card.setAutoDetected && !card.isManualEntry && (
+                                        {card.setMatchConfidence === 'exact' && !card.isManualEntry && (
                                             <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-good bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set code read from the card">
-                                                Auto
+                                                Erkannt
+                                            </span>
+                                        )}
+                                        {card.setMatchConfidence === 'fuzzy' && !card.isManualEntry && (
+                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 rounded px-1.5 py-1" title="Set code recovered from an imperfect scan — please verify">
+                                                Prüfen?
                                             </span>
                                         )}
 
