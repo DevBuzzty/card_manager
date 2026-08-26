@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    kotlin("plugin.serialization") version "1.9.22"
+    kotlin("plugin.serialization") version "2.0.0"
 }
 
 android {
@@ -68,11 +68,11 @@ dependencies {
     // Socket.io
     implementation("io.socket:socket.io-client:2.1.0")
 
-    // Supabase (Postgrest + Auth) + Ktor engine
-    implementation(platform("io.github.jan-tennert.supabase:bom:2.6.1"))
-    implementation("io.github.jan-tennert.supabase:postgrest-kt")
-    implementation("io.github.jan-tennert.supabase:auth-kt")
-    implementation("io.ktor:ktor-client-okhttp:2.3.12")
+    // Supabase (Postgrest + Auth) + Ktor engine (explicit versions; supabase-kt has no
+    // usable Gradle BOM here. 3.8.0 needs Kotlin 2.0 + Ktor 3.5.1, both matched.)
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:3.8.0")
+    implementation("io.github.jan-tennert.supabase:auth-kt:3.8.0")
+    implementation("io.ktor:ktor-client-okhttp:3.5.1")
 
     // Async card images
     implementation("io.coil-kt:coil-compose:2.6.0")
