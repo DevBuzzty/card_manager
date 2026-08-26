@@ -121,16 +121,18 @@ function runMigrations() {
         const columnNames = columns.map(c => c.name);
 
         // Ensure columns exist
-        const required = ['atk', 'def', 'level', 'race', 'attribute', 'quantity', 'rarity', 'set_code', 'price', 'last_updated', 'language'];
+        const required = ['atk', 'def', 'level', 'race', 'attribute', 'quantity', 'rarity', 'set_code', 'price', 'last_updated', 'language', 'updated_at', 'deleted'];
         required.forEach(col => {
             if (!columnNames.includes(col)) {
                 let type = 'TEXT';
-                if (['atk', 'def', 'level', 'quantity'].includes(col)) type = 'INTEGER';
+                if (['atk', 'def', 'level', 'quantity', 'deleted'].includes(col)) type = 'INTEGER';
                 if (col === 'price') type = 'REAL';
 
                 let defaultVal = '';
                 if (col === 'language') defaultVal = " DEFAULT 'DE'";
                 if (col === 'quantity') defaultVal = " DEFAULT 1";
+                if (col === 'deleted') defaultVal = " DEFAULT 0";
+                if (col === 'updated_at') defaultVal = " DEFAULT CURRENT_TIMESTAMP";
 
                 db.exec(`ALTER TABLE cards ADD COLUMN ${col} ${type}${defaultVal}`);
             }
@@ -180,6 +182,17 @@ function runMigrations() {
     } catch (e) {
         console.log("Migration check failed or not needed", e);
     }
+
+    // Auto-stamp updated_at on any change so the sync layer can detect dirty rows
+    // without touching every mutation site. The WHEN guard prevents recursion.
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_cards_updated AFTER UPDATE ON cards FOR EACH ROW
+      WHEN NEW.updated_at = OLD.updated_at
+      BEGIN
+        UPDATE cards SET updated_at = CURRENT_TIMESTAMP
+        WHERE id = NEW.id AND set_code = NEW.set_code AND language = NEW.language;
+      END;
+    `);
 
     // Cleanup: remove zero/negative-quantity rows left over from the legacy
     // decrement-to-zero behavior. Idempotent — a no-op once the table is clean.

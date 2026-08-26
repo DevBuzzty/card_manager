@@ -169,7 +169,7 @@ ipcMain.handle('add-card-to-db', (event, card) => {
 
     if (existing) {
         const newQty = existing.quantity + (card.quantity || 1);
-        db.prepare('UPDATE cards SET quantity = @qty, price = @price WHERE id = @id AND set_code = @set_code AND language = @language').run({
+        db.prepare('UPDATE cards SET quantity = @qty, price = @price, deleted = 0 WHERE id = @id AND set_code = @set_code AND language = @language').run({
             qty: newQty, price: card.price || 0, id, set_code: setCode, language
         });
         return { success: true, updated: true };
@@ -198,13 +198,13 @@ ipcMain.handle('add-card-to-db', (event, card) => {
 });
 
 ipcMain.handle('get-collection', () => {
-    return db.prepare('SELECT * FROM cards WHERE quantity > 0 ORDER BY created_at DESC').all();
+    return db.prepare('SELECT * FROM cards WHERE quantity > 0 AND deleted = 0 ORDER BY created_at DESC').all();
 });
 
 ipcMain.handle('delete-card', (event, { id, set_code, language }) => {
     try {
         if (!id || !set_code) return { success: false, error: 'Missing id or set_code' };
-        db.prepare('DELETE FROM cards WHERE id = ? AND set_code = ? AND language = ?')
+        db.prepare('UPDATE cards SET deleted = 1 WHERE id = ? AND set_code = ? AND language = ?')
           .run(String(id), set_code, language || 'DE');
         return { success: true };
     } catch (e) {
@@ -214,7 +214,7 @@ ipcMain.handle('delete-card', (event, { id, set_code, language }) => {
 
 ipcMain.handle('get-portfolio', () => {
     try {
-        return db.prepare('SELECT SUM(price * quantity) as totalValue, SUM(quantity) as totalCards, COUNT(*) as uniqueCards FROM cards WHERE quantity > 0').get();
+        return db.prepare('SELECT SUM(price * quantity) as totalValue, SUM(quantity) as totalCards, COUNT(*) as uniqueCards FROM cards WHERE quantity > 0 AND deleted = 0').get();
     } catch (e) { return { totalValue: 0, totalCards: 0, uniqueCards: 0 }; }
 });
 
@@ -381,7 +381,7 @@ ipcMain.handle('update-card-meta', (event, data) => {
 ipcMain.handle('check-card-exists', (event, passcode) => {
     const p = String(passcode);
     const normalized = String(parseInt(p, 10)); // removes leading zeros
-    const res = db.prepare('SELECT SUM(quantity) as count FROM cards WHERE id = ? OR id = ?').get(p, normalized);
+    const res = db.prepare('SELECT SUM(quantity) as count FROM cards WHERE (id = ? OR id = ?) AND deleted = 0').get(p, normalized);
     return { exists: (res.count || 0) > 0, quantity: res.count || 0 };
 });
 
@@ -392,7 +392,7 @@ function startPricePoller() {
         if (!mainWindow) return;
         try {
             // Prioritize cards updated longest ago
-            const cards = db.prepare('SELECT id, set_code, language, price FROM cards ORDER BY last_updated ASC LIMIT 50').all();
+            const cards = db.prepare('SELECT id, set_code, language, price FROM cards WHERE deleted = 0 ORDER BY last_updated ASC LIMIT 50').all();
             if (cards.length === 0) return;
 
             const uniqueIds = [...new Set(cards.map(c => c.id))].join(',');
