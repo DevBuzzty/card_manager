@@ -53,6 +53,8 @@ function runMigrations() {
         language TEXT DEFAULT 'DE',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         last_updated DATETIME,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        deleted INTEGER DEFAULT 0,
         PRIMARY KEY (id, set_code, language)
       )
     `);
@@ -132,11 +134,14 @@ function runMigrations() {
                 if (col === 'language') defaultVal = " DEFAULT 'DE'";
                 if (col === 'quantity') defaultVal = " DEFAULT 1";
                 if (col === 'deleted') defaultVal = " DEFAULT 0";
-                if (col === 'updated_at') defaultVal = " DEFAULT CURRENT_TIMESTAMP";
 
                 db.exec(`ALTER TABLE cards ADD COLUMN ${col} ${type}${defaultVal}`);
             }
         });
+
+        // updated_at cannot be ALTER-added with a CURRENT_TIMESTAMP default (SQLite
+        // rejects non-constant defaults), so it is added without a default and backfilled here.
+        db.exec("UPDATE cards SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
 
         // PK Migration (id, set_code -> id, set_code, language)
         const pkColumns = columns.filter(c => c.pk > 0);
@@ -191,6 +196,16 @@ function runMigrations() {
     db.exec(`
       CREATE TRIGGER IF NOT EXISTS trg_cards_updated AFTER UPDATE ON cards FOR EACH ROW
       WHEN NEW.updated_at = OLD.updated_at
+      BEGIN
+        UPDATE cards SET updated_at = CURRENT_TIMESTAMP
+        WHERE id = NEW.id AND set_code = NEW.set_code AND language = NEW.language;
+      END;
+    `);
+
+    // Stamp updated_at on insert when the caller didn't set it, so new cards sync.
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_cards_inserted AFTER INSERT ON cards FOR EACH ROW
+      WHEN NEW.updated_at IS NULL
       BEGIN
         UPDATE cards SET updated_at = CURRENT_TIMESTAMP
         WHERE id = NEW.id AND set_code = NEW.set_code AND language = NEW.language;
