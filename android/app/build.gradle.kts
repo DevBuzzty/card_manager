@@ -2,7 +2,6 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    kotlin("plugin.serialization") version "2.0.0"
 }
 
 android {
@@ -45,15 +44,6 @@ android {
     }
 }
 
-configurations.all {
-    resolutionStrategy {
-        // supabase auth-kt 3.x transitively pulls androidx.browser 1.10.0, which demands
-        // compileSdk 36 / AGP 8.9.1. We only use email/password auth (no Custom Tabs / OAuth),
-        // so pin browser to a compileSdk-34-compatible version instead of upgrading the toolchain.
-        force("androidx.browser:browser:1.8.0")
-    }
-}
-
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
@@ -77,11 +67,10 @@ dependencies {
     // Socket.io
     implementation("io.socket:socket.io-client:2.1.0")
 
-    // Supabase (Postgrest + Auth) + Ktor engine (explicit versions; supabase-kt has no
-    // usable Gradle BOM here. 3.8.0 needs Kotlin 2.0 + Ktor 3.5.1, both matched.)
-    implementation("io.github.jan-tennert.supabase:postgrest-kt:3.8.0")
-    implementation("io.github.jan-tennert.supabase:auth-kt:3.8.0")
-    implementation("io.ktor:ktor-client-okhttp:3.5.1")
+    // Supabase access via plain REST with OkHttp — avoids supabase-kt's Kotlin/Ktor
+    // version coupling (the SDK is built against much newer Kotlin than this project uses).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // Async card images
     implementation("io.coil-kt:coil-compose:2.6.0")

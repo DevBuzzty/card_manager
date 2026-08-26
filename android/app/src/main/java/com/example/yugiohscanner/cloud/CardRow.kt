@@ -1,17 +1,14 @@
 package com.example.yugiohscanner.cloud
 
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-
-@Serializable
+// One printing of a card, mirrored from the Supabase `cards` table.
+// Plain data class (parsed via org.json) — no kotlinx.serialization dependency.
 data class CardRow(
     val id: String,
-    @SerialName("set_code") val setCode: String = "Unknown",
-    val language: String = "DE",
-    val name: String? = null,
-    @SerialName("image_url") val imageUrl: String? = null,
-    val rarity: String? = null,
-    val quantity: Int = 0,
-    val price: Double? = null,
-    val deleted: Boolean = false,
+    val setCode: String,
+    val language: String,
+    val name: String?,
+    val imageUrl: String?,
+    val rarity: String?,
+    val quantity: Int,
+    val price: Double?,
 )
