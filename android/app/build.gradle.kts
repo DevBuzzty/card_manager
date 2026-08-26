@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    kotlin("plugin.serialization") version "1.9.22"
 }
 
 android {
@@ -66,6 +67,15 @@ dependencies {
 
     // Socket.io
     implementation("io.socket:socket.io-client:2.1.0")
+
+    // Supabase (Postgrest + Auth) + Ktor engine
+    implementation(platform("io.github.jan-tennert.supabase:bom:2.6.0"))
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.github.jan-tennert.supabase:auth-kt")
+    implementation("io.ktor:ktor-client-okhttp:2.3.12")
+
+    // Async card images
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
     // Icons
     implementation("androidx.compose.material:material-icons-extended")
