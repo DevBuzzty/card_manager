@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const os = require('os');
 const { initDatabase, getDb } = require('./database.cjs');
 const { fetchCardData, fetchYugipediaSets } = require('./api-handler.cjs');
+const { startSync } = require('./sync.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -67,6 +68,7 @@ app.whenReady().then(() => {
   createWindow();
   startSocketServer();
   startPricePoller();
+  startSync(db, () => mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
