@@ -73,7 +73,7 @@ function startSync(db, getWindow) {
     const cursor = getSetting(db, 'sync_last_push') || '1970-01-01T00:00:00Z';
     const changed = db.prepare('SELECT * FROM cards WHERE updated_at > ?').all(cursor);
     if (changed.length > 0) {
-      const { error } = await c.from('cards').upsert(changed.map(rowToRemote));
+      const { error } = await c.from('cards').upsert(changed.map(rowToRemote), { onConflict: 'id,set_code,language' });
       if (error) throw new Error('Push failed: ' + error.message);
       const maxTs = changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor);
       setSetting(db, 'sync_last_push', maxTs);
@@ -104,7 +104,11 @@ function startSync(db, getWindow) {
       await push(c);
       emit('idle', pulled > 0 ? `pulled ${pulled}` : 'up to date');
     } catch (e) {
-      client = null; // force re-auth next cycle
+      // Only drop the session on auth/token failures; keep it through transient
+      // network blips so we don't re-authenticate every cycle (rate-limit risk).
+      if (/jwt|token|expired|invalid.*(api key|claim)|401|not authenticated/i.test(e.message || '')) {
+        client = null;
+      }
       emit('error', e.message);
     } finally {
       running = false;
