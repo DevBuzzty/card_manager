@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown } from 'lucide-react';
+import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud } from 'lucide-react';
 
 export default function Settings() {
     const [priceSource, setPriceSource] = useState('cardmarket');
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState({ current: 0, total: 0 });
+    const [sync, setSync] = useState({ supabase_url: '', supabase_key: '', supabase_email: '', supabase_password: '', sync_enabled: 'false' });
+    const [syncStatus, setSyncStatus] = useState(null);
 
     useEffect(() => {
         if (window.api) {
@@ -12,14 +14,25 @@ export default function Settings() {
                 if (settings && settings.price_source) {
                     setPriceSource(settings.price_source);
                 }
+                setSync(() => ({
+                    supabase_url: settings?.supabase_url ?? '', supabase_key: settings?.supabase_key ?? '',
+                    supabase_email: settings?.supabase_email ?? '', supabase_password: settings?.supabase_password ?? '',
+                    sync_enabled: settings?.sync_enabled ?? 'false',
+                }));
             });
 
             const cleanup = window.api.onUpdateProgress((data) => {
                 setProgress(data);
             });
-            return () => cleanup();
+            const offStatus = window.api.onSyncStatus(setSyncStatus);
+            return () => { cleanup(); offStatus(); };
         }
     }, []);
+
+    const saveSync = async (key, value) => {
+        setSync(prev => ({ ...prev, [key]: value }));
+        if (window.api) await window.api.saveSetting({ key, value });
+    };
 
     const handleSaveSource = async (e) => {
         const newSource = e.target.value;
@@ -246,6 +259,55 @@ export default function Settings() {
                                 Use this if 'Convert to Default' caused issues.
                             </p>
                         </button>
+                    </div>
+                </div>
+
+                {/* Cloud Sync Section */}
+                <div className="bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800 shadow-xl">
+                    <div className="flex items-center mb-6 text-green-400 border-b border-gray-800 pb-4">
+                        <Cloud className="w-6 h-6 mr-2" />
+                        <h3 className="text-xl font-bold text-white">Cloud Sync (Supabase)</h3>
+                    </div>
+
+                    <div className="space-y-3">
+                        <input
+                            className="w-full bg-black/40 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors"
+                            placeholder="Project URL"
+                            value={sync.supabase_url}
+                            onChange={e => saveSync('supabase_url', e.target.value)}
+                        />
+                        <input
+                            className="w-full bg-black/40 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors"
+                            placeholder="anon public key"
+                            value={sync.supabase_key}
+                            onChange={e => saveSync('supabase_key', e.target.value)}
+                        />
+                        <input
+                            className="w-full bg-black/40 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors"
+                            placeholder="Account email"
+                            value={sync.supabase_email}
+                            onChange={e => saveSync('supabase_email', e.target.value)}
+                        />
+                        <input
+                            type="password"
+                            className="w-full bg-black/40 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors"
+                            placeholder="Account password"
+                            value={sync.supabase_password}
+                            onChange={e => saveSync('supabase_password', e.target.value)}
+                        />
+                        <label className="flex items-center gap-2 text-white pt-2">
+                            <input
+                                type="checkbox"
+                                checked={sync.sync_enabled === 'true'}
+                                onChange={e => saveSync('sync_enabled', e.target.checked ? 'true' : 'false')}
+                            />
+                            Enable sync
+                        </label>
+                        {syncStatus && (
+                            <p className={`text-sm ${syncStatus.state === 'error' ? 'text-red-400' : 'text-gray-400'}`}>
+                                {syncStatus.state}: {syncStatus.message} {syncStatus.at && `(${new Date(syncStatus.at).toLocaleTimeString()})`}
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>
