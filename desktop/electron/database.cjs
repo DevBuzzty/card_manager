@@ -164,14 +164,17 @@ function runMigrations() {
                         language TEXT DEFAULT 'DE',
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         last_updated DATETIME,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        deleted INTEGER DEFAULT 0,
                         PRIMARY KEY (id, set_code, language)
                     )
                 `);
                 db.exec(`
                     INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
-                        rarity, set_code, price, language, created_at, last_updated)
+                        rarity, set_code, price, language, created_at, last_updated, updated_at, deleted)
                     SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
-                        COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, 'DE', created_at, last_updated
+                        COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, 'DE', created_at, last_updated,
+                        COALESCE(updated_at, CURRENT_TIMESTAMP), COALESCE(deleted, 0)
                     FROM cards_temp_v2
                 `);
                 db.exec("DROP TABLE cards_temp_v2");
