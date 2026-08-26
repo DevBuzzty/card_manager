@@ -69,7 +69,7 @@ dependencies {
     implementation("io.socket:socket.io-client:2.1.0")
 
     // Supabase (Postgrest + Auth) + Ktor engine
-    implementation(platform("io.github.jan-tennert.supabase:bom:2.6.0"))
+    implementation(platform("io.github.jan-tennert.supabase:bom:2.6.1"))
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
     implementation("io.github.jan-tennert.supabase:auth-kt")
     implementation("io.ktor:ktor-client-okhttp:2.3.12")
