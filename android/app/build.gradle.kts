@@ -45,6 +45,15 @@ android {
     }
 }
 
+configurations.all {
+    resolutionStrategy {
+        // supabase auth-kt 3.x transitively pulls androidx.browser 1.10.0, which demands
+        // compileSdk 36 / AGP 8.9.1. We only use email/password auth (no Custom Tabs / OAuth),
+        // so pin browser to a compileSdk-34-compatible version instead of upgrading the toolchain.
+        force("androidx.browser:browser:1.8.0")
+    }
+}
+
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
