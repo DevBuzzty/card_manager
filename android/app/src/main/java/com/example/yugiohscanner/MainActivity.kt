@@ -44,6 +44,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.CenterFocusWeak
 import androidx.compose.material.icons.filled.Close
@@ -53,6 +54,8 @@ import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -60,7 +63,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -84,6 +90,10 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.example.yugiohscanner.cloud.SupabaseCloud
+import com.example.yugiohscanner.ui.CloudLoginScreen
+import com.example.yugiohscanner.ui.CollectionScreen
+import com.example.yugiohscanner.ui.PortfolioScreen
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -110,8 +120,48 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen()
+                    MainScaffold()
                 }
+            }
+        }
+    }
+}
+
+enum class Tab { SCANNER, COLLECTION, PORTFOLIO }
+
+@Composable
+fun MainScaffold() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE) }
+    var tab by remember { mutableStateOf(Tab.SCANNER) }
+    var cloudReady by remember { mutableStateOf(false) }
+
+    // Auto-init cloud if already configured from a previous session.
+    LaunchedEffect(Unit) {
+        if (SupabaseCloud.isConfigured(prefs)) {
+            try { SupabaseCloud.init(prefs); SupabaseCloud.signIn(); cloudReady = true } catch (_: Exception) {}
+        }
+    }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar(containerColor = Color(0xFF1E1E1E)) {
+                NavigationBarItem(selected = tab == Tab.SCANNER, onClick = { tab = Tab.SCANNER },
+                    icon = { Icon(Icons.Default.CameraAlt, null) }, label = { Text("Scan") })
+                NavigationBarItem(selected = tab == Tab.COLLECTION, onClick = { tab = Tab.COLLECTION },
+                    icon = { Icon(Icons.Default.Style, null) }, label = { Text("Sammlung") })
+                NavigationBarItem(selected = tab == Tab.PORTFOLIO, onClick = { tab = Tab.PORTFOLIO },
+                    icon = { Icon(Icons.Default.TrendingUp, null) }, label = { Text("Wert") })
+            }
+        }
+    ) { padding ->
+        Box(Modifier.padding(padding)) {
+            when (tab) {
+                Tab.SCANNER -> MainScreen() // existing scanner+config flow, untouched
+                Tab.COLLECTION -> if (cloudReady) CollectionScreen()
+                    else CloudLoginScreen(prefs) { cloudReady = true }
+                Tab.PORTFOLIO -> if (cloudReady) PortfolioScreen()
+                    else CloudLoginScreen(prefs) { cloudReady = true }
             }
         }
     }
