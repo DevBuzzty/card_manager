@@ -32,6 +32,10 @@ function setSetting(db, key, value) {
     .run({ key, value: String(value) });
 }
 
+// Rows the desktop just pushed; their cloud echo is skipped on the next pull so it
+// doesn't re-dirty local state. Keyed by composite key -> the cloud updated_at we created.
+const recentlyPushed = new Map();
+
 function startSync(db, getWindow) {
   let client = null;
   let running = false;
@@ -62,11 +66,24 @@ function startSync(db, getWindow) {
     if (!data || data.length === 0) return 0;
     const apply = db.prepare(`UPDATE cards SET quantity = @quantity, deleted = @deleted
       WHERE id = @id AND set_code = @set_code AND language = @language`);
+    let appliedCount = 0;
     db.transaction(() => {
-      for (const r of data) apply.run(remoteToLocalPatch(r));
+      for (const r of data) {
+        const key = `${r.id}|${r.set_code}|${r.language}`;
+        if (recentlyPushed.get(key) === r.updated_at) {
+          // Our own echo: the desktop pushed this row and this is the cloud trigger's
+          // re-stamp coming back. Skip applying it so we don't re-dirty local state.
+          recentlyPushed.delete(key);
+          continue;
+        }
+        apply.run(remoteToLocalPatch(r));
+        appliedCount++;
+      }
     })();
+    // Advance past everything fetched (including skipped echoes) — rows are ordered
+    // by updated_at ascending, so the cursor never jumps past a row we didn't see.
     setSetting(db, 'sync_last_pull', data[data.length - 1].updated_at);
-    return data.length;
+    return appliedCount;
   }
 
   async function push(c) {
@@ -75,17 +92,14 @@ function startSync(db, getWindow) {
     if (changed.length > 0) {
       const { data, error } = await c.from('cards')
         .upsert(changed.map(rowToRemote), { onConflict: 'id,set_code,language' })
-        .select('id,updated_at');
+        .select('id,set_code,language,updated_at');
       if (error) throw new Error('Push failed: ' + error.message);
       const maxTs = changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor);
       setSetting(db, 'sync_last_push', maxTs);
-      // The upsert re-stamped these rows' cloud updated_at (via trigger). Advance the pull
-      // cursor past them so the next pull doesn't re-fetch and re-apply our own push
-      // (which would otherwise bump local updated_at again and echo forever).
-      if (data && data.length > 0) {
-        const maxCloudTs = data.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), '');
-        const pullCursor = getSetting(db, 'sync_last_pull') || '1970-01-01T00:00:00Z';
-        if (maxCloudTs > pullCursor) setSetting(db, 'sync_last_pull', maxCloudTs);
+      // Remember the cloud updated_at the trigger stamped on each row we just pushed,
+      // so the next pull can recognize its own echo and skip re-applying it.
+      for (const r of (data || [])) {
+        recentlyPushed.set(`${r.id}|${r.set_code}|${r.language}`, r.updated_at);
       }
     }
     // Mirror hard-deletes (consolidation tools bypass soft-delete): any cloud row
