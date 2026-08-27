@@ -22,6 +22,7 @@ fun CollectionScreen() {
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun reload() { cards = CollectionRepository.loadCards(); loading = false }
@@ -34,13 +35,26 @@ fun CollectionScreen() {
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         OutlinedTextField(query, { query = it }, label = { Text("Suche") }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
+        errorMsg?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+        }
         if (loading) { CircularProgressIndicator(); return@Column }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(filtered, key = { "${it.id}|${it.setCode}|${it.language}" }) { card ->
                 CardListItem(card,
-                    onInc = { scope.launch { CollectionRepository.setQuantity(card, card.quantity + 1); reload() } },
-                    onDec = { if (card.quantity > 1) scope.launch { CollectionRepository.setQuantity(card, card.quantity - 1); reload() } },
-                    onDelete = { scope.launch { CollectionRepository.softDelete(card); reload() } })
+                    onInc = { scope.launch {
+                        try { CollectionRepository.setQuantity(card, card.quantity + 1); errorMsg = null; reload() }
+                        catch (e: Exception) { errorMsg = e.message ?: "Aktualisieren fehlgeschlagen" }
+                    } },
+                    onDec = { if (card.quantity > 1) scope.launch {
+                        try { CollectionRepository.setQuantity(card, card.quantity - 1); errorMsg = null; reload() }
+                        catch (e: Exception) { errorMsg = e.message ?: "Aktualisieren fehlgeschlagen" }
+                    } },
+                    onDelete = { scope.launch {
+                        try { CollectionRepository.softDelete(card); errorMsg = null; reload() }
+                        catch (e: Exception) { errorMsg = e.message ?: "Löschen fehlgeschlagen" }
+                    } })
             }
         }
     }

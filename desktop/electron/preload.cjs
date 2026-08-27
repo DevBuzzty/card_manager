@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('sync-status', subscription);
     return () => ipcRenderer.removeListener('sync-status', subscription);
   },
+  onCollectionChanged: (cb) => { const s=(_e)=>cb(); ipcRenderer.on('collection-changed', s); return () => ipcRenderer.removeListener('collection-changed', s); },
 
   // Deck Builder
   getDecks: () => ipcRenderer.invoke('get-decks'),

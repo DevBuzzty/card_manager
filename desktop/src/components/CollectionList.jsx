@@ -58,6 +58,13 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
   useEffect(() => { loadCollection(); }, [updating]);
 
+  // Reload when the sync cycle pulls changes from the phone
+  useEffect(() => {
+    if (!window.api || !window.api.onCollectionChanged) return;
+    const cleanup = window.api.onCollectionChanged(() => loadCollection());
+    return () => cleanup && cleanup();
+  }, []);
+
   const handleUpdate = async (mode) => {
     if (!window.api || updating) return;
     if (!confirm(mode === 'all' ? "Update ALL cards?" : "Fetch missing details?")) return;

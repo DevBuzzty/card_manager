@@ -449,7 +449,7 @@ function startPricePoller() {
             })();
 
             if (updates.length > 0) {
-                const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards').get();
+                const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards WHERE deleted = 0').get();
                 if (Math.abs(totalValueChange) > 0.5) {
                     db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: stats.totalValue || 0 });
                 }
@@ -564,7 +564,7 @@ ipcMain.handle('update-all-cards', async (event) => {
         })();
 
         try {
-            const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards').get();
+            const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards WHERE deleted = 0').get();
             db.prepare('INSERT INTO portfolio_history (total_value) VALUES (@val)').run({ val: stats.totalValue || 0 });
             if (mainWindow) mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
         } catch (e) { /* history snapshot is best-effort */ }

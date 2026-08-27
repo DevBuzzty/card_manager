@@ -73,10 +73,20 @@ function startSync(db, getWindow) {
     const cursor = getSetting(db, 'sync_last_push') || '1970-01-01T00:00:00Z';
     const changed = db.prepare('SELECT * FROM cards WHERE updated_at > ?').all(cursor);
     if (changed.length > 0) {
-      const { error } = await c.from('cards').upsert(changed.map(rowToRemote), { onConflict: 'id,set_code,language' });
+      const { data, error } = await c.from('cards')
+        .upsert(changed.map(rowToRemote), { onConflict: 'id,set_code,language' })
+        .select('id,updated_at');
       if (error) throw new Error('Push failed: ' + error.message);
       const maxTs = changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor);
       setSetting(db, 'sync_last_push', maxTs);
+      // The upsert re-stamped these rows' cloud updated_at (via trigger). Advance the pull
+      // cursor past them so the next pull doesn't re-fetch and re-apply our own push
+      // (which would otherwise bump local updated_at again and echo forever).
+      if (data && data.length > 0) {
+        const maxCloudTs = data.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), '');
+        const pullCursor = getSetting(db, 'sync_last_pull') || '1970-01-01T00:00:00Z';
+        if (maxCloudTs > pullCursor) setSetting(db, 'sync_last_pull', maxCloudTs);
+      }
     }
     // Mirror hard-deletes (consolidation tools bypass soft-delete): any cloud row
     // absent locally gets tombstoned so the phone stops showing it.
@@ -102,6 +112,10 @@ function startSync(db, getWindow) {
       emit('syncing');
       const pulled = await pull(c);
       await push(c);
+      if (pulled > 0) {
+        const w = getWindow();
+        if (w) w.webContents.send('collection-changed');
+      }
       emit('idle', pulled > 0 ? `pulled ${pulled}` : 'up to date');
     } catch (e) {
       // Only drop the session on auth/token failures; keep it through transient

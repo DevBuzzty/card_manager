@@ -79,8 +79,14 @@ export default function Portfolio() {
                 setTimeout(() => setIsLive(false), 2000);
             });
 
+            // Reload when the sync cycle pulls changes from the phone
+            const cleanupSync = window.api.onCollectionChanged && window.api.onCollectionChanged(() => {
+                setTimeout(() => loadData(), 0);
+            });
+
             return () => {
                 if (cleanup) cleanup();
+                if (cleanupSync) cleanupSync();
             }
         }
     }, []);

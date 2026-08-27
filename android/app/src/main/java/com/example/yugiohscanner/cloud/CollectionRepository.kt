@@ -5,6 +5,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -18,13 +19,14 @@ object CollectionRepository {
             .addQueryParameter("deleted", "eq.false")
             .addQueryParameter("quantity", "gt.0")
             .build()
-        val req = Request.Builder()
-            .url(url)
-            .addHeader("apikey", SupabaseCloud.key())
-            .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
-            .get()
-            .build()
-        SupabaseCloud.http().newCall(req).execute().use { resp ->
+        executeWithReauth {
+            Request.Builder()
+                .url(url)
+                .addHeader("apikey", SupabaseCloud.key())
+                .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
+                .get()
+                .build()
+        }.use { resp ->
             val text = resp.body?.string() ?: "[]"
             if (!resp.isSuccessful) throw RuntimeException("Laden fehlgeschlagen (${resp.code}): $text")
             parse(JSONArray(text))
@@ -43,17 +45,29 @@ object CollectionRepository {
             .addQueryParameter("set_code", "eq.${row.setCode}")
             .addQueryParameter("language", "eq.${row.language}")
             .build()
-        val req = Request.Builder()
-            .url(url)
-            .addHeader("apikey", SupabaseCloud.key())
-            .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
-            .addHeader("Content-Type", "application/json")
-            .patch(body.toString().toRequestBody(SupabaseCloud.jsonMedia))
-            .build()
-        SupabaseCloud.http().newCall(req).execute().use { resp ->
+        executeWithReauth {
+            Request.Builder()
+                .url(url)
+                .addHeader("apikey", SupabaseCloud.key())
+                .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
+                .addHeader("Content-Type", "application/json")
+                .patch(body.toString().toRequestBody(SupabaseCloud.jsonMedia))
+                .build()
+        }.use { resp ->
             if (!resp.isSuccessful)
                 throw RuntimeException("Aktualisieren fehlgeschlagen (${resp.code}): ${resp.body?.string()}")
         }
+    }
+
+    // Executes the request built by `buildRequest`. On a 401 (expired ~1h access token),
+    // re-authenticates once via SupabaseCloud.signIn() and retries the same request once
+    // (rebuilt so it picks up the fresh token) before giving up.
+    private suspend fun executeWithReauth(buildRequest: () -> Request): Response = withContext(Dispatchers.IO) {
+        val first = SupabaseCloud.http().newCall(buildRequest()).execute()
+        if (first.code != 401) return@withContext first
+        first.close()
+        SupabaseCloud.signIn()
+        SupabaseCloud.http().newCall(buildRequest()).execute()
     }
 
     private fun parse(arr: JSONArray): List<CardRow> {
