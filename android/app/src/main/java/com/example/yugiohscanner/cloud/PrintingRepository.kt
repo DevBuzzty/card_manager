@@ -29,8 +29,7 @@ object PrintingRepository {
                 val code = s.optString("set_code", "")
                 val rarity = s.optString("set_rarity", "")
                 if (code.isBlank()) continue
-                val key = "$code|$rarity"
-                if (!seen.add(key)) continue
+                if (!seen.add(code)) continue
                 val price = s.optString("set_price", "0").toDoubleOrNull() ?: 0.0
                 out.add(SetOption(code, rarity, price))
             }

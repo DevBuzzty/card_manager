@@ -492,7 +492,10 @@ ipcMain.handle('convert-unknowns-to-default', async () => {
                             db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ? AND language = 'DE'").run(existing.quantity + unknown.quantity, unknown.id, newSetCode);
                             db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
                         } else {
-                            db.prepare("UPDATE cards SET set_code = ?, rarity = ?, price = ? WHERE id = ? AND set_code = 'Unknown'").run(newSetCode, newRarity, newPrice, unknown.id);
+                            db.prepare(`INSERT OR IGNORE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language, deleted)
+  SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, ?, ?, ?, language, 0
+  FROM cards WHERE id = ? AND set_code = 'Unknown'`).run(newRarity, newSetCode, newPrice, unknown.id);
+                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
                         }
                         convertedCount++;
                     }
@@ -750,7 +753,10 @@ ipcMain.handle('downgrade-to-lowest-rarity', async (event) => {
                             db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ?").run(existingTarget.quantity + current.quantity, card.id, newSetCode);
                             db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = ?").run(card.id, card.set_code);
                         } else {
-                            db.prepare("UPDATE cards SET set_code = ?, rarity = ?, price = ? WHERE id = ? AND set_code = ?").run(newSetCode, newRarity, newPrice, card.id, card.set_code);
+                            db.prepare(`INSERT OR IGNORE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language, deleted)
+  SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, ?, ?, ?, language, 0
+  FROM cards WHERE id = ? AND set_code = ?`).run(newRarity, newSetCode, newPrice, card.id, card.set_code);
+                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = ?").run(card.id, card.set_code);
                         }
                         changedCount++;
                     }

@@ -125,8 +125,8 @@ private fun AddPrintingSection(base: CardRow, owned: List<CardRow>, onError: (St
         loading = true
         scope.launch {
             try {
-                val ownedKeys = owned.map { "${it.setCode}|${it.rarity}" }.toHashSet()
-                sets = PrintingRepository.fetchSets(base.id).filter { "${it.setCode}|${it.rarity}" !in ownedKeys }
+                val ownedKeys = owned.map { it.setCode }.toHashSet()
+                sets = PrintingRepository.fetchSets(base.id).filter { it.setCode !in ownedKeys }
                 expanded = true
             } catch (e: Exception) { onError(e.message ?: "Sets laden fehlgeschlagen") }
             loading = false
