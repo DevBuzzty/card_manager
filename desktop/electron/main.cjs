@@ -468,7 +468,7 @@ function startPricePoller() {
 
 ipcMain.handle('convert-unknowns-to-default', async () => {
     try {
-        const unknowns = db.prepare("SELECT id, quantity FROM cards WHERE set_code = 'Unknown'").all();
+        const unknowns = db.prepare("SELECT id, quantity FROM cards WHERE set_code = 'Unknown' AND deleted = 0").all();
         let convertedCount = 0;
 
         let priceSource = 'cardmarket';
@@ -489,8 +489,8 @@ ipcMain.handle('convert-unknowns-to-default', async () => {
                         // Check existing
                         const existing = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND language = 'DE'").get(unknown.id, newSetCode);
                         if (existing) {
-                            db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ? AND language = 'DE'").run(existing.quantity + unknown.quantity, unknown.id, newSetCode);
-                            db.prepare("DELETE FROM cards WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
+                            db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ? AND language = 'DE'").run(existing.quantity + unknown.quantity, unknown.id, newSetCode);
+                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
                         } else {
                             db.prepare("UPDATE cards SET set_code = ?, rarity = ?, price = ? WHERE id = ? AND set_code = 'Unknown'").run(newSetCode, newRarity, newPrice, unknown.id);
                         }
@@ -505,14 +505,14 @@ ipcMain.handle('convert-unknowns-to-default', async () => {
 
 ipcMain.handle('merge-unknown-cards', async () => {
     try {
-        const unknowns = db.prepare("SELECT id, quantity FROM cards WHERE set_code = 'Unknown'").all();
+        const unknowns = db.prepare("SELECT id, quantity FROM cards WHERE set_code = 'Unknown' AND deleted = 0").all();
         let mergedCount = 0;
         db.transaction(() => {
             unknowns.forEach(u => {
-                const specific = db.prepare("SELECT id, set_code, quantity FROM cards WHERE id = ? AND set_code != 'Unknown' ORDER BY quantity DESC LIMIT 1").get(u.id);
+                const specific = db.prepare("SELECT id, set_code, quantity FROM cards WHERE id = ? AND set_code != 'Unknown' AND deleted = 0 ORDER BY quantity DESC LIMIT 1").get(u.id);
                 if (specific) {
-                    db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ?").run(specific.quantity + u.quantity, specific.id, specific.set_code);
-                    db.prepare("DELETE FROM cards WHERE id = ? AND set_code = 'Unknown'").run(u.id);
+                    db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ?").run(specific.quantity + u.quantity, specific.id, specific.set_code);
+                    db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = 'Unknown'").run(u.id);
                     mergedCount++;
                 }
             });
@@ -717,7 +717,7 @@ ipcMain.handle('reset-database', async () => {
 ipcMain.handle('downgrade-to-lowest-rarity', async (event) => {
     // Re-implemented fully
     try {
-        const allCards = db.prepare("SELECT id, set_code, quantity FROM cards").all();
+        const allCards = db.prepare("SELECT id, set_code, quantity FROM cards WHERE deleted = 0").all();
         let changedCount = 0;
         const total = allCards.length;
         if (event.sender) event.sender.send('update-progress', { current: 0, total });
@@ -730,7 +730,7 @@ ipcMain.handle('downgrade-to-lowest-rarity', async (event) => {
              const card = allCards[i];
              if (event.sender && i % 10 === 0) event.sender.send('update-progress', { current: i + 1, total });
 
-             const current = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ?").get(card.id, card.set_code);
+             const current = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND deleted = 0").get(card.id, card.set_code);
              if (!current) continue;
 
              try {
@@ -747,8 +747,8 @@ ipcMain.handle('downgrade-to-lowest-rarity', async (event) => {
 
                         const existingTarget = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ?").get(card.id, newSetCode);
                         if (existingTarget) {
-                            db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ?").run(existingTarget.quantity + current.quantity, card.id, newSetCode);
-                            db.prepare("DELETE FROM cards WHERE id = ? AND set_code = ?").run(card.id, card.set_code);
+                            db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ?").run(existingTarget.quantity + current.quantity, card.id, newSetCode);
+                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = ?").run(card.id, card.set_code);
                         } else {
                             db.prepare("UPDATE cards SET set_code = ?, rarity = ?, price = ? WHERE id = ? AND set_code = ?").run(newSetCode, newRarity, newPrice, card.id, card.set_code);
                         }

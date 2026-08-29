@@ -215,8 +215,8 @@ function runMigrations() {
     // Cleanup: remove zero/negative-quantity rows left over from the legacy
     // decrement-to-zero behavior. Idempotent — a no-op once the table is clean.
     try {
-        const info = db.prepare("DELETE FROM cards WHERE quantity <= 0").run();
-        if (info.changes > 0) console.log(`Quantity cleanup: removed ${info.changes} zero-quantity row(s).`);
+        const info = db.prepare("UPDATE cards SET deleted = 1 WHERE quantity <= 0 AND deleted = 0").run();
+        if (info.changes > 0) console.log(`Quantity cleanup: tombstoned ${info.changes} zero-quantity row(s).`);
     } catch (e) {
         console.error("Quantity cleanup failed:", e);
     }
