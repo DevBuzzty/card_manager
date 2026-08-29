@@ -25,50 +25,63 @@ fun CollectionScreen() {
     var loading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var detailId by remember { mutableStateOf<String?>(null) }
+    var showSearch by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     suspend fun reload() { cards = CollectionRepository.loadCards(); loading = false }
     LaunchedEffect(Unit) { try { reload() } catch (_: Exception) { loading = false } }
 
+    // Full-screen sub-views take over the whole tab.
+    if (showSearch) {
+        SearchScreen(onClose = { showSearch = false }, onAdded = { scope.launch { runCatching { reload() } } })
+        return
+    }
+    detailId?.let { id ->
+        CardDetailScreen(
+            cardId = id,
+            initial = cards,
+            onClose = { detailId = null },
+            onChanged = { scope.launch { runCatching { reload() } } },
+        )
+        return
+    }
+
     val filtered = cards.filter {
         query.isBlank() || (it.name ?: "").contains(query, true) || it.setCode.contains(query, true)
     }
 
-    Column(Modifier.fillMaxSize().padding(12.dp)) {
-        OutlinedTextField(query, { query = it }, label = { Text("Suche") }, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(8.dp))
-        errorMsg?.let {
-            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(12.dp)) {
+            OutlinedTextField(query, { query = it }, label = { Text("Suche") }, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
-        }
-        if (loading) { CircularProgressIndicator(); return@Column }
-        detailId?.let { id ->
-            CardDetailScreen(
-                cardId = id,
-                initial = cards,
-                onClose = { detailId = null },
-                onChanged = { scope.launch { runCatching { reload() } } },
-            )
-            return@Column
-        }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(filtered, key = { "${it.id}|${it.setCode}|${it.language}" }) { card ->
-                CardListItem(card,
-                    onOpen = { detailId = card.id },
-                    onInc = { scope.launch {
-                        try { CollectionRepository.setQuantity(card, card.quantity + 1); errorMsg = null; reload() }
-                        catch (e: Exception) { errorMsg = e.message ?: "Aktualisieren fehlgeschlagen" }
-                    } },
-                    onDec = { if (card.quantity > 1) scope.launch {
-                        try { CollectionRepository.setQuantity(card, card.quantity - 1); errorMsg = null; reload() }
-                        catch (e: Exception) { errorMsg = e.message ?: "Aktualisieren fehlgeschlagen" }
-                    } },
-                    onDelete = { scope.launch {
-                        try { CollectionRepository.softDelete(card); errorMsg = null; reload() }
-                        catch (e: Exception) { errorMsg = e.message ?: "Löschen fehlgeschlagen" }
-                    } })
+            errorMsg?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+            }
+            if (loading) { CircularProgressIndicator(); return@Column }
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(filtered, key = { "${it.id}|${it.setCode}|${it.language}" }) { card ->
+                    CardListItem(card,
+                        onOpen = { detailId = card.id },
+                        onInc = { scope.launch {
+                            try { CollectionRepository.setQuantity(card, card.quantity + 1); errorMsg = null; reload() }
+                            catch (e: Exception) { errorMsg = e.message ?: "Aktualisieren fehlgeschlagen" }
+                        } },
+                        onDec = { if (card.quantity > 1) scope.launch {
+                            try { CollectionRepository.setQuantity(card, card.quantity - 1); errorMsg = null; reload() }
+                            catch (e: Exception) { errorMsg = e.message ?: "Aktualisieren fehlgeschlagen" }
+                        } },
+                        onDelete = { scope.launch {
+                            try { CollectionRepository.softDelete(card); errorMsg = null; reload() }
+                            catch (e: Exception) { errorMsg = e.message ?: "Löschen fehlgeschlagen" }
+                        } })
+                }
             }
         }
+        FloatingActionButton(
+            onClick = { showSearch = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        ) { Icon(Icons.Default.Add, "Karte suchen") }
     }
 }
 

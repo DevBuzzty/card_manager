@@ -3,8 +3,6 @@ package com.example.yugiohscanner.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -19,8 +17,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
-import com.example.yugiohscanner.cloud.PrintingRepository
-import com.example.yugiohscanner.cloud.SetOption
 import kotlinx.coroutines.launch
 
 @Composable
@@ -112,49 +108,3 @@ private fun Stat(label: String, value: String) {
     }
 }
 
-@Composable
-private fun AddPrintingSection(base: CardRow, owned: List<CardRow>, onError: (String) -> Unit, onAdded: () -> Unit) {
-    var sets by remember { mutableStateOf<List<SetOption>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
-    var expanded by remember { mutableStateOf(false) }
-    var adding by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    Text("Weitere Druckvariante hinzufügen", style = MaterialTheme.typography.titleMedium)
-    Button(enabled = !loading, onClick = {
-        loading = true
-        scope.launch {
-            try {
-                val ownedKeys = owned.map { it.setCode }.toHashSet()
-                sets = PrintingRepository.fetchSets(base.id).filter { it.setCode !in ownedKeys }
-                expanded = true
-            } catch (e: Exception) { onError(e.message ?: "Sets laden fehlgeschlagen") }
-            loading = false
-        }
-    }) { Text(if (loading) "Lade Sets…" else "Sets anzeigen") }
-
-    if (expanded) {
-        if (sets.isEmpty()) {
-            Text("Keine weiteren Sets gefunden.", style = MaterialTheme.typography.bodySmall)
-        } else {
-            LazyColumn(Modifier.heightIn(max = 240.dp)) {
-                items(sets, key = { "${it.setCode}|${it.rarity}" }) { s ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("${s.setCode} · ${s.rarity}", style = MaterialTheme.typography.bodyMedium)
-                            Text("%.2f €".format(s.price), style = MaterialTheme.typography.bodySmall)
-                        }
-                        Button(enabled = !adding, onClick = {
-                            adding = true
-                            scope.launch {
-                                try { CollectionRepository.addPrinting(base, s.setCode, s.rarity, s.price); onAdded(); expanded = false }
-                                catch (e: Exception) { onError(e.message ?: "Hinzufügen fehlgeschlagen") }
-                                adding = false
-                            }
-                        }) { Text("Hinzufügen") }
-                    }
-                }
-            }
-        }
-    }
-}
