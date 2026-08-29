@@ -23,6 +23,31 @@ function remoteToLocalPatch(r) {
   };
 }
 
+// Remote row -> full local INSERT payload (all mirrored columns), for a phone-created
+// printing the desktop doesn't have yet.
+function remoteToLocalFull(r) {
+  return {
+    id: String(r.id), set_code: r.set_code || 'Unknown', language: r.language || 'DE',
+    name: r.name ?? null, type: r.type ?? null, desc: r.desc ?? null, image_url: r.image_url ?? null,
+    atk: r.atk ?? null, def: r.def ?? null, level: r.level ?? null, race: r.race ?? null,
+    attribute: r.attribute ?? null, quantity: r.quantity ?? 1, rarity: r.rarity ?? null,
+    price: r.price ?? null, deleted: r.deleted ? 1 : 0,
+  };
+}
+
+// Apply one pulled remote row: existing local row -> patch quantity+deleted (desktop stays
+// authoritative for detail columns); missing local row -> insert the full row.
+function applyRemoteRow(db, r) {
+  const info = db.prepare(`UPDATE cards SET quantity = @quantity, deleted = @deleted
+    WHERE id = @id AND set_code = @set_code AND language = @language`).run(remoteToLocalPatch(r));
+  if (info.changes === 0) {
+    db.prepare(`INSERT OR IGNORE INTO cards
+      (id, set_code, language, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, price, deleted)
+      VALUES (@id,@set_code,@language,@name,@type,@desc,@image_url,@atk,@def,@level,@race,@attribute,@quantity,@rarity,@price,@deleted)`)
+      .run(remoteToLocalFull(r));
+  }
+}
+
 function getSetting(db, key) {
   try { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? r.value : null; }
   catch { return null; }
@@ -64,8 +89,6 @@ function startSync(db, getWindow) {
     const { data, error } = await c.from('cards').select('*').gt('updated_at', cursor).order('updated_at');
     if (error) throw new Error('Pull failed: ' + error.message);
     if (!data || data.length === 0) return 0;
-    const apply = db.prepare(`UPDATE cards SET quantity = @quantity, deleted = @deleted
-      WHERE id = @id AND set_code = @set_code AND language = @language`);
     let appliedCount = 0;
     db.transaction(() => {
       for (const r of data) {
@@ -76,7 +99,7 @@ function startSync(db, getWindow) {
           recentlyPushed.delete(key);
           continue;
         }
-        apply.run(remoteToLocalPatch(r));
+        applyRemoteRow(db, r);
         appliedCount++;
       }
     })();
@@ -100,19 +123,6 @@ function startSync(db, getWindow) {
       // so the next pull can recognize its own echo and skip re-applying it.
       for (const r of (data || [])) {
         recentlyPushed.set(`${r.id}|${r.set_code}|${r.language}`, r.updated_at);
-      }
-    }
-    // Mirror hard-deletes (consolidation tools bypass soft-delete): any cloud row
-    // absent locally gets tombstoned so the phone stops showing it.
-    const localKeys = new Set(db.prepare('SELECT id, set_code, language FROM cards').all()
-      .map(r => `${r.id}|${r.set_code}|${r.language}`));
-    const { data: remoteKeys, error: rkErr } = await c.from('cards')
-      .select('id, set_code, language').eq('deleted', false);
-    if (rkErr) throw new Error('Mirror check failed: ' + rkErr.message);
-    for (const rk of (remoteKeys || [])) {
-      if (!localKeys.has(`${rk.id}|${rk.set_code}|${rk.language}`)) {
-        await c.from('cards').update({ deleted: true })
-          .eq('id', rk.id).eq('set_code', rk.set_code).eq('language', rk.language);
       }
     }
   }
@@ -147,4 +157,4 @@ function startSync(db, getWindow) {
   setTimeout(cycle, 3000); // initial kick shortly after launch
 }
 
-module.exports = { startSync, rowToRemote, remoteToLocalPatch };
+module.exports = { startSync, rowToRemote, remoteToLocalPatch, remoteToLocalFull, applyRemoteRow };
