@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +24,7 @@ fun CollectionScreen() {
     var query by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    var detailId by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun reload() { cards = CollectionRepository.loadCards(); loading = false }
@@ -40,9 +42,19 @@ fun CollectionScreen() {
             Spacer(Modifier.height(8.dp))
         }
         if (loading) { CircularProgressIndicator(); return@Column }
+        detailId?.let { id ->
+            CardDetailScreen(
+                cardId = id,
+                initial = cards,
+                onClose = { detailId = null },
+                onChanged = { scope.launch { runCatching { reload() } } },
+            )
+            return@Column
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(filtered, key = { "${it.id}|${it.setCode}|${it.language}" }) { card ->
                 CardListItem(card,
+                    onOpen = { detailId = card.id },
                     onInc = { scope.launch {
                         try { CollectionRepository.setQuantity(card, card.quantity + 1); errorMsg = null; reload() }
                         catch (e: Exception) { errorMsg = e.message ?: "Aktualisieren fehlgeschlagen" }
@@ -61,15 +73,17 @@ fun CollectionScreen() {
 }
 
 @Composable
-private fun CardListItem(card: CardRow, onInc: () -> Unit, onDec: () -> Unit, onDelete: () -> Unit) {
+private fun CardListItem(card: CardRow, onOpen: () -> Unit, onInc: () -> Unit, onDec: () -> Unit, onDelete: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        AsyncImage(model = card.imageUrl, contentDescription = card.name,
-            modifier = Modifier.width(48.dp).height(70.dp))
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f)) {
-            Text(card.name ?: card.id, style = MaterialTheme.typography.bodyLarge)
-            Text("${card.setCode} · ${card.rarity ?: "?"} · ${"%.2f".format(card.price ?: 0.0)} €",
-                style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.weight(1f).clickable { onOpen() }, verticalAlignment = Alignment.CenterVertically) {
+            AsyncImage(model = card.imageUrl, contentDescription = card.name,
+                modifier = Modifier.width(48.dp).height(70.dp))
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(card.name ?: card.id, style = MaterialTheme.typography.bodyLarge)
+                Text("${card.setCode} · ${card.rarity ?: "?"} · ${"%.2f".format(card.price ?: 0.0)} €",
+                    style = MaterialTheme.typography.bodySmall)
+            }
         }
         IconButton(onClick = onDec) { Icon(Icons.Default.Remove, "−") }
         Text("${card.quantity}")

@@ -39,6 +39,32 @@ object CollectionRepository {
     suspend fun softDelete(row: CardRow) =
         patch(row, JSONObject().put("deleted", true))
 
+    // Creates a new printing row in the cloud, reusing the base card's shared detail fields.
+    // Only for a printing the user does NOT already own (the picker excludes owned ones).
+    suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double) = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("id", base.id).put("set_code", setCode).put("language", "DE")
+            .put("name", base.name).put("type", base.type).put("desc", base.desc)
+            .put("image_url", base.imageUrl).put("atk", base.atk ?: JSONObject.NULL)
+            .put("def", base.def ?: JSONObject.NULL).put("level", base.level ?: JSONObject.NULL)
+            .put("race", base.race).put("attribute", base.attribute)
+            .put("quantity", 1).put("rarity", rarity).put("price", price).put("deleted", false)
+            .toString()
+        executeWithReauth {
+            Request.Builder()
+                .url("${SupabaseCloud.base()}/rest/v1/cards")
+                .addHeader("apikey", SupabaseCloud.key())
+                .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=minimal")
+                .post(body.toRequestBody(SupabaseCloud.jsonMedia))
+                .build()
+        }.use { resp ->
+            if (!resp.isSuccessful)
+                throw RuntimeException("Hinzufügen fehlgeschlagen (${resp.code}): ${resp.body?.string()}")
+        }
+    }
+
     private suspend fun patch(row: CardRow, body: JSONObject) = withContext(Dispatchers.IO) {
         val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
             .addQueryParameter("id", "eq.${row.id}")
@@ -84,6 +110,13 @@ object CollectionRepository {
                     rarity = o.strOrNull("rarity"),
                     quantity = o.optInt("quantity", 0),
                     price = if (o.isNull("price")) null else o.optDouble("price", 0.0),
+                    type = o.strOrNull("type"),
+                    desc = o.strOrNull("desc"),
+                    atk = if (o.isNull("atk")) null else o.optInt("atk"),
+                    def = if (o.isNull("def")) null else o.optInt("def"),
+                    level = if (o.isNull("level")) null else o.optInt("level"),
+                    race = o.strOrNull("race"),
+                    attribute = o.strOrNull("attribute"),
                 )
             )
         }

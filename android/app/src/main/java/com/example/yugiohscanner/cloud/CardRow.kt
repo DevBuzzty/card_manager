@@ -11,4 +11,11 @@ data class CardRow(
     val rarity: String?,
     val quantity: Int,
     val price: Double?,
+    val type: String? = null,
+    val desc: String? = null,
+    val atk: Int? = null,
+    val def: Int? = null,
+    val level: Int? = null,
+    val race: String? = null,
+    val attribute: String? = null,
 )
