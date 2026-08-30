@@ -167,7 +167,8 @@ fun MainScaffold() {
                     else CloudLoginScreen(prefs) { cloudReady = true }
                 Tab.PORTFOLIO -> if (cloudReady) PortfolioScreen()
                     else CloudLoginScreen(prefs) { cloudReady = true }
-                Tab.DEALS -> DealsScreen(prefs)
+                Tab.DEALS -> if (cloudReady) DealsScreen()
+                    else CloudLoginScreen(prefs) { cloudReady = true }
             }
         }
     }

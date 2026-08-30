@@ -1,26 +1,19 @@
 package com.example.yugiohscanner.ui
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.net.Uri
-import android.os.Build
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.core.app.NotificationCompat
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,110 +22,59 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import io.socket.client.IO
-import io.socket.client.Socket
-import org.json.JSONObject
-import java.util.concurrent.atomic.AtomicInteger
+import com.example.yugiohscanner.cloud.DealAlert
+import com.example.yugiohscanner.cloud.DealWatch
+import com.example.yugiohscanner.cloud.DealsRepository
+import kotlinx.coroutines.launch
 
-private data class Deal(
-    val id: String, val source: String, val title: String,
-    val price: Double?, val url: String
-)
-
-private const val CH_ID = "deals"
-private val notifId = AtomicInteger(1000)
-
-private fun ensureChannel(ctx: Context) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        val mgr = ctx.getSystemService(NotificationManager::class.java)
-        if (mgr.getNotificationChannel(CH_ID) == null) {
-            mgr.createNotificationChannel(
-                NotificationChannel(CH_ID, "Deals", NotificationManager.IMPORTANCE_HIGH)
-            )
-        }
-    }
-}
-
-private fun notifyDeal(ctx: Context, d: Deal) {
-    try {
-        val n = NotificationCompat.Builder(ctx, CH_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_search)
-            .setContentTitle("Deal ${d.price?.let { "$it €" } ?: ""}".trim())
-            .setContentText(d.title)
-            .setAutoCancel(true)
-            .build()
-        androidx.core.app.NotificationManagerCompat.from(ctx).notify(notifId.incrementAndGet(), n)
-    } catch (_: SecurityException) { /* POST_NOTIFICATIONS not granted */ }
-}
-
-private fun dealFrom(o: JSONObject): Deal = Deal(
-    id = o.optString("listingId", o.optString("listing_id", o.optString("id"))),
-    source = o.optString("source"),
-    title = o.optString("title"),
-    price = if (o.isNull("price")) null else o.optDouble("price"),
-    url = o.optString("url"),
-)
-
+// Autonomous Deals tab: reads watches + alerts straight from Supabase (no desktop needed).
+// Adding a watch or hitting refresh fires an immediate cloud scrape, then reloads.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DealsScreen(prefs: SharedPreferences) {
+fun DealsScreen() {
     val context = LocalContext.current
-    val ip = remember { prefs.getString("ip_address", "") ?: "" }
-    var connected by remember { mutableStateOf(false) }
-    val deals = remember { mutableStateListOf<Deal>() }
+    val scope = rememberCoroutineScope()
+    val alerts = remember { mutableStateListOf<DealAlert>() }
+    val watches = remember { mutableStateListOf<DealWatch>() }
     var query by remember { mutableStateOf("") }
     var maxPrice by remember { mutableStateOf("") }
-    var socketRef by remember { mutableStateOf<Socket?>(null) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
 
-    // main-thread poster for socket callbacks
-    val post = remember { { r: () -> Unit -> android.os.Handler(android.os.Looper.getMainLooper()).post(r) } }
-
-    // Ask for notification permission on Android 13+ so deal alerts can pop.
-    val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED) {
-            notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
+    suspend fun reloadFromCloud() {
+        watches.clear(); watches.addAll(DealsRepository.loadWatches())
+        alerts.clear(); alerts.addAll(DealsRepository.loadAlerts())
     }
 
-    DisposableEffect(ip) {
-        ensureChannel(context)
-        var socket: Socket? = null
-        if (ip.isNotBlank()) {
+    fun refresh(scrapeFirst: Boolean = true) {
+        scope.launch {
+            loading = true
             try {
-                val s = IO.socket("http://$ip:4000")
-                s.on(Socket.EVENT_CONNECT) { post { connected = true }; s.emit("request_deals") }
-                s.on(Socket.EVENT_DISCONNECT) { post { connected = false } }
-                s.on("deals_snapshot") { args ->
-                    val obj = args.getOrNull(0) as? JSONObject ?: return@on
-                    val arr = obj.optJSONArray("alerts") ?: return@on
-                    val list = ArrayList<Deal>()
-                    for (i in 0 until arr.length()) list.add(dealFrom(arr.getJSONObject(i)))
-                    post { deals.clear(); deals.addAll(list) }
-                }
-                s.on("deal_alert") { args ->
-                    val obj = args.getOrNull(0) as? JSONObject ?: return@on
-                    val d = dealFrom(obj)
-                    post { deals.add(0, d) }
-                    notifyDeal(context, d)
-                }
-                s.connect()
-                socket = s
-                socketRef = s
-            } catch (_: Exception) {}
+                if (scrapeFirst) DealsRepository.triggerScrape()
+                reloadFromCloud()
+                error = null
+            } catch (e: Exception) { error = e.message }
+            loading = false
         }
-        onDispose { socket?.disconnect() }
     }
+
+    LaunchedEffect(Unit) { refresh() }
 
     val addWatch = {
         val p = maxPrice.toDoubleOrNull()
         if (query.isNotBlank() && p != null) {
-            socketRef?.emit("add_deal_watch", JSONObject().apply {
-                put("query", query.trim()); put("maxPrice", p)
-            })
+            val q = query.trim()
             query = ""; maxPrice = ""
+            scope.launch {
+                loading = true
+                try {
+                    DealsRepository.addWatch(q, p)
+                    DealsRepository.triggerScrape()
+                    reloadFromCloud()
+                    error = null
+                } catch (e: Exception) { error = e.message }
+                loading = false
+            }
         }
     }
 
@@ -140,21 +82,25 @@ fun DealsScreen(prefs: SharedPreferences) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Deals", style = MaterialTheme.typography.headlineSmall, color = Color.White)
-                Spacer(Modifier.width(8.dp))
-                Text(if (connected) "• verbunden" else "• nicht verbunden",
-                    color = if (connected) Color(0xFF4ADE80) else Color(0xFF888888),
-                    style = MaterialTheme.typography.labelMedium)
+                Spacer(Modifier.weight(1f))
+                if (loading) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Color(0xFF9D00FF))
+                } else {
+                    IconButton(onClick = { refresh() }) {
+                        Icon(Icons.Default.Refresh, "Aktualisieren", tint = Color.White)
+                    }
+                }
             }
-            if (ip.isBlank()) {
-                Text("Verbinde zuerst im Scan-Tab mit dem Desktop.",
-                    color = Color(0xFF888888), modifier = Modifier.padding(top = 8.dp))
+            error?.let {
+                Text(it, color = Color(0xFFEF4444), style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(top = 4.dp))
             }
 
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = query, onValueChange = { query = it },
-                    placeholder = { Text("Suchbegriff, z.B. Display …") },
+                    placeholder = { Text("Suchbegriff, z.B. Battles of Legend …") },
                     singleLine = true, modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -168,14 +114,39 @@ fun DealsScreen(prefs: SharedPreferences) {
                 FilledIconButton(onClick = addWatch) { Icon(Icons.Default.Add, "Watch") }
             }
 
+            if (watches.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(watches) { w ->
+                        InputChip(
+                            selected = false,
+                            onClick = {},
+                            label = { Text("${w.query}  ≤${w.maxPrice.toInt()}€") },
+                            trailingIcon = {
+                                Icon(Icons.Default.Close, "Löschen",
+                                    modifier = Modifier.size(18.dp).clickable {
+                                        scope.launch {
+                                            try { DealsRepository.deleteWatch(w.id); reloadFromCloud() }
+                                            catch (e: Exception) { error = e.message }
+                                        }
+                                    })
+                            }
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.height(12.dp))
-            if (deals.isEmpty()) {
+            if (alerts.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Noch keine Deals. Lege einen Watch an.", color = Color(0xFF888888))
+                    Text(
+                        if (loading) "Suche Deals …" else "Noch keine Deals. Lege einen Watch an.",
+                        color = Color(0xFF888888)
+                    )
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(deals) { d ->
+                    items(alerts, key = { it.id }) { d ->
                         Surface(color = Color(0xFF1E1E1E), shape = RoundedCornerShape(12.dp)) {
                             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
@@ -185,13 +156,19 @@ fun DealsScreen(prefs: SharedPreferences) {
                                         style = MaterialTheme.typography.labelSmall)
                                 }
                                 Spacer(Modifier.width(8.dp))
-                                Text(d.price?.let { "$it €" } ?: "—", color = Color(0xFFF5C542),
+                                Text(d.price?.let { "${it.toInt()} €" } ?: "—", color = Color(0xFFF5C542),
                                     style = MaterialTheme.typography.titleMedium)
                                 IconButton(onClick = {
                                     if (d.url.isNotBlank()) context.startActivity(
                                         Intent(Intent.ACTION_VIEW, Uri.parse(d.url))
                                     )
                                 }) { Icon(Icons.Default.OpenInNew, "Öffnen", tint = Color(0xFF9D00FF)) }
+                                IconButton(onClick = {
+                                    scope.launch {
+                                        try { DealsRepository.dismissAlert(d.id); alerts.remove(d) }
+                                        catch (e: Exception) { error = e.message }
+                                    }
+                                }) { Icon(Icons.Default.Close, "Ausblenden", tint = Color(0xFF888888)) }
                             }
                         }
                     }
