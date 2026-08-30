@@ -58,7 +58,8 @@ function startDealPoller(db, notify, intervalMs = 5 * 60 * 1000) {
     }
   };
   tick();
-  return setInterval(tick, intervalMs);
+  const id = setInterval(tick, intervalMs);
+  return { stop: () => clearInterval(id), pollNow: tick };
 }
 
 module.exports = { ADAPTERS, findDeals, startDealPoller };

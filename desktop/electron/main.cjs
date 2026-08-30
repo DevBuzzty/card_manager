@@ -65,6 +65,7 @@ function startSocketServer() {
         db.prepare('INSERT INTO deal_watches (query, max_price, sources, active) VALUES (?, ?, ?, 1)')
           .run(String(data.query || ''), Number(data.maxPrice) || 0,
                data.sources ? JSON.stringify(data.sources) : null);
+        if (dealPoller) dealPoller.pollNow();
         if (mainWindow) mainWindow.webContents.send('deal-watches-changed');
       } catch (e) { console.error('add_deal_watch failed', e); }
     });
@@ -73,13 +74,14 @@ function startSocketServer() {
 }
 
 let priceUpdateInterval;
+let dealPoller;
 
 app.whenReady().then(() => {
   createWindow();
   startSocketServer();
   startPricePoller();
   startSync(db, () => mainWindow);
-  startDealPoller(db, (alert) => {
+  dealPoller = startDealPoller(db, (alert) => {
     if (mainWindow) mainWindow.webContents.send('deal-alert', alert);
     if (io) io.emit('deal_alert', alert);   // push to the phone
     try {
@@ -173,6 +175,7 @@ ipcMain.handle('get-ip-address', () => getLocalIpAddress());
 ipcMain.handle('add-deal-watch', (event, { query, maxPrice, sources }) => {
     const info = db.prepare('INSERT INTO deal_watches (query, max_price, sources, active) VALUES (?, ?, ?, 1)')
         .run(String(query || ''), Number(maxPrice) || 0, sources ? JSON.stringify(sources) : null);
+    if (dealPoller) dealPoller.pollNow();   // check right away
     return info.lastInsertRowid;
 });
 ipcMain.handle('get-deal-watches', () => db.prepare('SELECT * FROM deal_watches ORDER BY created_at DESC').all());
