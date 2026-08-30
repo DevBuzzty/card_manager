@@ -1,3 +1,10 @@
 node_modules/
 desktop/dist-electron/
 android/.idea/
+
+# Ultralytics writes these to the repo root during detector training/eval
+/runs/
+/yolo11n.pt
+
+# Kaggle upload staging (large: code + 14.7k artworks)
+/kaggle_upload/
