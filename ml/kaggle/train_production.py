@@ -29,22 +29,22 @@ KAGGLE_INPUT = Path("/kaggle/input")
 WORK = Path("/kaggle/working")
 
 
-def find_data_root() -> Path:
-    """The attached dataset dir that holds `cards/manifest.json` and the `ml/` code."""
+def find_code_root() -> Path:
+    """The attached dataset dir that holds the `ml/` code package."""
     for d in sorted(KAGGLE_INPUT.glob("*")):
-        if (d / "cards" / "manifest.json").exists() and (d / "ml" / "__init__.py").exists():
+        if (d / "ml" / "__init__.py").exists():
             return d
     raise SystemExit(
-        "Could not find the data dataset. Expected an attached Kaggle dataset with "
-        "<dataset>/cards/manifest.json and <dataset>/ml/__init__.py"
+        "Could not find the code dataset. Expected an attached Kaggle dataset with "
+        "<dataset>/ml/__init__.py"
     )
 
 
 def main() -> None:
     t_start = time.time()
-    data_root = find_data_root()
-    print(f"[setup] data root: {data_root}")
-    sys.path.insert(0, str(data_root))  # make `import ml` resolve to the uploaded code
+    code_root = find_code_root()
+    print(f"[setup] code root: {code_root}")
+    sys.path.insert(0, str(code_root))  # make `import ml` resolve to the uploaded code
 
     import torch
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -53,12 +53,20 @@ def main() -> None:
 
     # Repoint config: inputs are read-only under /kaggle/input, outputs go to /kaggle/working.
     from ml import config
-    config.CARDS_DIR = data_root / "cards"
+    config.CARDS_DIR = WORK / "cards"
     config.DATA_DIR = WORK / "data"
     config.BG_DIR = WORK / "data" / "backgrounds"
     config.OUT_DIR = WORK / "out"
     config.DET_DIR = WORK / "out" / "detect"
     config.EMB_DIR = WORK / "out" / "embed"
+
+    # 0) Download all card artworks fresh from YGOPRODeck (avoids a multi-GB upload).
+    from ml import download_cards
+    print("[data] downloading card artworks (~14.7k, takes a while) ...")
+    entries = download_cards.fetch_card_manifest()
+    download_cards.save_manifest(entries)
+    got = download_cards.download_artworks(entries)
+    print(f"[data] downloaded {got} new artworks (manifest has {len(entries)})")
 
     from ml.generate import load_card_manifest
     items = load_card_manifest()
