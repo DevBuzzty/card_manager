@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Notification, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Server } = require('socket.io');
@@ -6,6 +6,7 @@ const os = require('os');
 const { initDatabase, getDb } = require('./database.cjs');
 const { fetchCardData, fetchYugipediaSets } = require('./api-handler.cjs');
 const { startSync } = require('./sync.cjs');
+const { startDealPoller } = require('./deals/poller.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -58,6 +59,15 @@ function startSocketServer() {
     socket.on('card_scanned', (data) => {
       if (mainWindow) mainWindow.webContents.send('card-scanned', data);
     });
+    // Phone can create a deal watch (query + max price).
+    socket.on('add_deal_watch', (data) => {
+      try {
+        db.prepare('INSERT INTO deal_watches (query, max_price, sources, active) VALUES (?, ?, ?, 1)')
+          .run(String(data.query || ''), Number(data.maxPrice) || 0,
+               data.sources ? JSON.stringify(data.sources) : null);
+        if (mainWindow) mainWindow.webContents.send('deal-watches-changed');
+      } catch (e) { console.error('add_deal_watch failed', e); }
+    });
   });
   console.log('Socket.io server running on port 4000');
 }
@@ -69,6 +79,18 @@ app.whenReady().then(() => {
   startSocketServer();
   startPricePoller();
   startSync(db, () => mainWindow);
+  startDealPoller(db, (alert) => {
+    if (mainWindow) mainWindow.webContents.send('deal-alert', alert);
+    if (io) io.emit('deal_alert', alert);   // push to the phone
+    try {
+      if (Notification.isSupported()) {
+        const priceTxt = alert.price != null ? `${alert.price} €` : '';
+        const n = new Notification({ title: `Deal ${priceTxt}`.trim(), body: alert.title });
+        n.on('click', () => { if (alert.url) shell.openExternal(alert.url); });
+        n.show();
+      }
+    } catch (e) {}
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -146,6 +168,30 @@ function detailsFromApi(apiCard) {
 // --- IPC Handlers ---
 
 ipcMain.handle('get-ip-address', () => getLocalIpAddress());
+
+// --- Deal-scraper: watches + alerts ---
+ipcMain.handle('add-deal-watch', (event, { query, maxPrice, sources }) => {
+    const info = db.prepare('INSERT INTO deal_watches (query, max_price, sources, active) VALUES (?, ?, ?, 1)')
+        .run(String(query || ''), Number(maxPrice) || 0, sources ? JSON.stringify(sources) : null);
+    return info.lastInsertRowid;
+});
+ipcMain.handle('get-deal-watches', () => db.prepare('SELECT * FROM deal_watches ORDER BY created_at DESC').all());
+ipcMain.handle('delete-deal-watch', (event, id) => {
+    db.prepare('DELETE FROM deal_watches WHERE id = ?').run(id);
+    db.prepare('DELETE FROM deal_alerts WHERE watch_id = ?').run(id);
+    return true;
+});
+ipcMain.handle('toggle-deal-watch', (event, { id, active }) => {
+    db.prepare('UPDATE deal_watches SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
+    return true;
+});
+ipcMain.handle('get-deal-alerts', () =>
+    db.prepare('SELECT * FROM deal_alerts WHERE dismissed = 0 ORDER BY found_at DESC LIMIT 200').all());
+ipcMain.handle('dismiss-deal-alert', (event, id) => {
+    db.prepare('UPDATE deal_alerts SET dismissed = 1 WHERE id = ?').run(id);
+    return true;
+});
+ipcMain.handle('open-external', (event, url) => { if (url) shell.openExternal(url); });
 
 ipcMain.handle('fetch-card-data', async (event, passcode) => {
     try {

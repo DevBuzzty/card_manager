@@ -68,4 +68,15 @@ contextBridge.exposeInMainWorld('api', {
   convertUnknownsToDefault: () => ipcRenderer.invoke('convert-unknowns-to-default'),
   downgradeToLowestRarity: () => ipcRenderer.invoke('downgrade-to-lowest-rarity'),
   fetchYugipediaSets: (passcode) => ipcRenderer.invoke('fetch-yugipedia-sets', passcode),
+
+  // Deals (price-alert scraper)
+  addDealWatch: (data) => ipcRenderer.invoke('add-deal-watch', data),
+  getDealWatches: () => ipcRenderer.invoke('get-deal-watches'),
+  deleteDealWatch: (id) => ipcRenderer.invoke('delete-deal-watch', id),
+  toggleDealWatch: (data) => ipcRenderer.invoke('toggle-deal-watch', data),
+  getDealAlerts: () => ipcRenderer.invoke('get-deal-alerts'),
+  dismissDealAlert: (id) => ipcRenderer.invoke('dismiss-deal-alert', id),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  onDealAlert: (cb) => { const s = (_e, v) => cb(v); ipcRenderer.on('deal-alert', s); return () => ipcRenderer.removeListener('deal-alert', s); },
+  onDealWatchesChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('deal-watches-changed', s); return () => ipcRenderer.removeListener('deal-watches-changed', s); },
 });

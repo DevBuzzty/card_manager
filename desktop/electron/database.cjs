@@ -117,6 +117,34 @@ function runMigrations() {
       )
     `);
 
+    // Deal-scraper: price-alert watches + the listings they surfaced.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS deal_watches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        query TEXT NOT NULL,
+        max_price REAL NOT NULL,
+        sources TEXT,
+        active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS deal_alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        watch_id INTEGER,
+        source TEXT,
+        listing_id TEXT,
+        title TEXT,
+        price REAL,
+        url TEXT,
+        image_url TEXT,
+        found_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        notified INTEGER DEFAULT 0,
+        dismissed INTEGER DEFAULT 0,
+        UNIQUE(source, listing_id)
+      )
+    `);
+
     // Check Columns / Migration Logic
     try {
         const columns = db.prepare("PRAGMA table_info(cards)").all();

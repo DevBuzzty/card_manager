@@ -6,6 +6,7 @@ import CollectionList from './components/CollectionList';
 import Wishlist from './components/Wishlist';
 import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
+import Deals from './components/Deals';
 import ErrorBoundary from './components/ErrorBoundary';
 
 // Heavy tabs are code-split so the initial load stays light.
@@ -100,6 +101,9 @@ function App() {
                 )}
                 {activeTab === 'wishlist' && (
                 <Wishlist />
+                )}
+                {activeTab === 'deals' && (
+                <Deals />
                 )}
                 {activeTab === 'settings' && (
                 <Settings />
