@@ -6,7 +6,17 @@ const kleinanzeigen = require('./kleinanzeigen.cjs');
 // Multi-source registry — add adapters here (eBay, Cardmarket, Willhaben, Shpock, FB, ...).
 const ADAPTERS = { kleinanzeigen };
 
-/** Run the watch's sources and return listings at/below max_price (dedup happens in the DB layer). */
+const STOPWORDS = new Set(['of', 'the', 'und', 'der', 'die', 'das', 'de', 'en', 'für', 'mit', 'und']);
+const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9äöü\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+
+/** The title must contain every significant word of the query (site search is too fuzzy). */
+function matchesQuery(title, query) {
+  const tokens = normalize(query).split(' ').filter((t) => t.length >= 3 && !STOPWORDS.has(t));
+  const t = ' ' + normalize(title) + ' ';
+  return tokens.length === 0 || tokens.every((tok) => t.includes(tok));
+}
+
+/** Run the watch's sources and return listings at/below max_price that actually match the query. */
 async function findDeals(watch, adapters = ADAPTERS) {
   const sources = (watch.sources && watch.sources.length)
     ? watch.sources : Object.keys(adapters);
@@ -17,7 +27,9 @@ async function findDeals(watch, adapters = ADAPTERS) {
     try {
       const r = await adapter.search(watch.query);
       for (const it of r.items) {
-        if (it.price != null && it.price <= watch.max_price) deals.push({ ...it, watchId: watch.id });
+        if (it.price == null || it.price > watch.max_price) continue;
+        if (!matchesQuery(it.title, watch.query)) continue;   // reject fuzzy word matches
+        deals.push({ ...it, watchId: watch.id });
       }
     } catch (e) {
       console.error(`[deals] ${src} search failed for "${watch.query}":`, e.message);
