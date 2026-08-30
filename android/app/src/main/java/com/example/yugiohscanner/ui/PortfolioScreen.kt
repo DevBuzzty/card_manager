@@ -23,8 +23,9 @@ import com.example.yugiohscanner.cloud.CollectionRepository
 fun PortfolioScreen() {
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
-        try { cards = CollectionRepository.loadCards() } catch (_: Exception) {}
+        try { cards = CollectionRepository.loadCards() } catch (e: Exception) { error = e.message ?: "Laden fehlgeschlagen" }
         loading = false
     }
     if (loading) { CircularProgressIndicator(); return }
@@ -32,6 +33,10 @@ fun PortfolioScreen() {
     val d = computeDashboard(cards)
 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
+        error?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+        }
         Text("Gesamtwert", style = MaterialTheme.typography.titleMedium)
         Text("%.2f €".format(d.totalValue), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Text("${d.totalCards} Karten · ${d.entries} Einträge", style = MaterialTheme.typography.bodySmall)

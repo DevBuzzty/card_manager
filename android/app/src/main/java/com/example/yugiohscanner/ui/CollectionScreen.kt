@@ -29,7 +29,9 @@ fun CollectionScreen() {
     val scope = rememberCoroutineScope()
 
     suspend fun reload() { cards = CollectionRepository.loadCards(); loading = false }
-    LaunchedEffect(Unit) { try { reload() } catch (_: Exception) { loading = false } }
+    LaunchedEffect(Unit) {
+        try { reload() } catch (e: Exception) { errorMsg = e.message ?: "Laden fehlgeschlagen"; loading = false }
+    }
 
     // Full-screen sub-views take over the whole tab.
     if (showSearch) {
@@ -59,7 +61,10 @@ fun CollectionScreen() {
                 Spacer(Modifier.height(8.dp))
             }
             if (loading) { CircularProgressIndicator(); return@Column }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 88.dp), // clear the "+" FAB
+            ) {
                 items(filtered, key = { "${it.id}|${it.setCode}|${it.language}" }) { card ->
                     CardListItem(card,
                         onOpen = { detailId = card.id },
