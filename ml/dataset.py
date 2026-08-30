@@ -17,21 +17,32 @@ def to_model_tensor(bgr_uint8: np.ndarray) -> torch.Tensor:
 
 class ArtworkDataset(Dataset):
     """One class per artwork. Each __getitem__ returns a freshly augmented
-    224x224 view of the artwork plus its class index."""
+    224x224 view of the artwork plus its class index. `views_per_class` makes
+    every artwork appear that many times per epoch (each a different augmentation),
+    which is what gives ArcFace enough gradient steps to actually converge."""
 
-    def __init__(self, items, seed: int = 0):
+    def __init__(self, items, seed: int = 0, views_per_class: int = 1):
         self.items = list(items)                       # [(passcode, path)]
         self.passcodes = [int(pc) for pc, _ in self.items]
-        self._rng = np.random.default_rng(seed)
+        self.views_per_class = views_per_class
+        self._seed = seed
+        self._rng = None                               # created lazily, per worker
 
     def __len__(self) -> int:
-        return len(self.items)
+        return len(self.items) * self.views_per_class
 
     def num_classes(self) -> int:
         return len(self.items)
 
     def __getitem__(self, idx: int):
-        _pc, path = self.items[idx]
+        if self._rng is None:
+            # Decorrelate augmentations across dataloader workers (each holds a fork);
+            # without a per-worker seed all workers would emit identical crops.
+            info = torch.utils.data.get_worker_info()
+            wid = info.id if info is not None else 0
+            self._rng = np.random.default_rng([self._seed, wid])
+        cls = idx % len(self.items)                    # views collapse to the same class
+        _pc, path = self.items[cls]
         art = compose_scene.load_art_bgr(path)
         crop = compose_scene.augment_crop(art, self._rng)   # 224x224 BGR uint8
-        return to_model_tensor(crop), idx
+        return to_model_tensor(crop), cls

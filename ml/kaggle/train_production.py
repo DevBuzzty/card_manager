@@ -15,7 +15,9 @@ import time
 from pathlib import Path
 
 # ---- Tunables --------------------------------------------------------------
-EPOCHS_EMB = 25          # embedder fine-tune epochs
+EPOCHS_EMB = 30          # embedder fine-tune epochs
+VIEWS_EMB = 6            # augmented views per card per epoch (more = more ArcFace steps)
+WARMUP_EMB = 5           # epochs to ramp the ArcFace margin 0 -> 0.5
 EPOCHS_DET = 80          # detector epochs
 IMGSZ_DET = 640          # detector image size (production)
 N_SCENES = 3000          # synthetic detector scenes to generate
@@ -45,7 +47,9 @@ def main() -> None:
     t_start = time.time()
     data_root = find_data_root()
     print(f"[setup] data root: {data_root}")
-    sys.path.insert(0, str(data_root))  # make `import ml` resolve to the uploaded code
+    # Append (not insert-at-0) so a patched `ml/` already prepended to sys.path by the
+    # run cell (e.g. a small code-only dataset) wins over the copy inside the data dataset.
+    sys.path.append(str(data_root))  # fallback: make `import ml` resolve to the uploaded code
 
     import torch
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -78,10 +82,12 @@ def main() -> None:
     # 3) Fine-tune the embedder (unfrozen, full card set) --------------------
     from ml import train as train_mod
     emb_ckpt = WORK / "out" / "embedder.pt"
-    print(f"[3/6] fine-tuning embedder: {len(items)} classes, {EPOCHS_EMB} epochs, unfrozen ...")
+    print(f"[3/6] fine-tuning embedder: {len(items)} classes, {EPOCHS_EMB} epochs x "
+          f"{VIEWS_EMB} views, margin warmup {WARMUP_EMB}, unfrozen ...")
     train_mod.train(
         items, emb_ckpt, epochs=EPOCHS_EMB, freeze_backbone=False, pretrained=True,
         batch=BATCH_EMB, device=device, num_workers=NUM_WORKERS,
+        views_per_class=VIEWS_EMB, warmup_epochs=WARMUP_EMB,
     )
 
     # 4) Retrieval top-1 eval (subset) --------------------------------------
