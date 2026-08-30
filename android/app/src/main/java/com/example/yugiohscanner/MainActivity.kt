@@ -109,22 +109,6 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // TEMP (Phase-4 Task 2): on-device ML self-test. Remove in Task 4 once the pipeline is wired.
-        try {
-            val pipe = com.example.yugiohscanner.ml.ScanPipeline(this, minSim = 0.0f)
-            val scene = android.graphics.BitmapFactory.decodeStream(assets.open("test_scene.jpg"))
-            pipe.process(scene)  // warm-up (lazy init), then timed steady-state run
-            val t0 = System.currentTimeMillis()
-            val dets = pipe.process(scene)
-            val ms = System.currentTimeMillis() - t0
-            android.util.Log.i("MLSelfTest", "pipeline: ${dets.size} cards in ${ms}ms full frame")
-            dets.sortedByDescending { it.sim }.take(7).forEach {
-                android.util.Log.i("MLSelfTest", String.format("  card pc=%d sim=%.2f", it.passcode, it.sim))
-            }
-            pipe.close()
-        } catch (e: Throwable) {
-            android.util.Log.e("MLSelfTest", "self-test failed", e)
-        }
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
@@ -552,10 +536,15 @@ fun ScannerScreen(
                 val offX = (size.width - mlFrameW * sc) / 2f
                 val offY = (size.height - mlFrameH * sc) / 2f
                 for (d in dets) {
-                    val l = d.box.x1 * sc + offX
-                    val t = d.box.y1 * sc + offY
-                    val r = d.box.x2 * sc + offX
-                    val b = d.box.y2 * sc + offY
+                    // Expand the artwork box to approximate the full card outline (cosmetic;
+                    // the embedder still uses the tight artwork crop). Artwork sits mid-card:
+                    // ~35% of its height above (title) and ~75% below (text box).
+                    val bw = d.box.x2 - d.box.x1
+                    val bh = d.box.y2 - d.box.y1
+                    val l = (d.box.x1 - bw * 0.06f) * sc + offX
+                    val t = (d.box.y1 - bh * 0.35f) * sc + offY
+                    val r = (d.box.x2 + bw * 0.06f) * sc + offX
+                    val b = (d.box.y2 + bh * 0.75f) * sc + offY
                     drawRect(
                         color = Color(0xFF00FF66),
                         topLeft = androidx.compose.ui.geometry.Offset(l, t),
@@ -563,8 +552,8 @@ fun ScannerScreen(
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
                     )
                     drawContext.canvas.nativeCanvas.drawText(
-                        d.passcode.toString(),
-                        l, (t - 8f).coerceAtLeast(24f),
+                        "${d.passcode}  ${(d.sim * 100).toInt()}%",
+                        l, (t - 10f).coerceAtLeast(30f),
                         android.graphics.Paint().apply {
                             color = android.graphics.Color.rgb(0, 255, 102)
                             textSize = 34f
