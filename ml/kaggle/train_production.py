@@ -30,13 +30,14 @@ WORK = Path("/kaggle/working")
 
 
 def find_data_root() -> Path:
-    """The attached dataset dir that holds `cards/manifest.json` and the `ml/` code."""
-    for d in sorted(KAGGLE_INPUT.glob("*")):
-        if (d / "cards" / "manifest.json").exists() and (d / "ml" / "__init__.py").exists():
-            return d
+    """Find the dir holding cards/manifest.json (+ ml/), anywhere under /kaggle/input
+    (robust to however Kaggle nests the extracted dataset)."""
+    for m in KAGGLE_INPUT.rglob("manifest.json"):
+        if m.parent.name == "cards":
+            return m.parent.parent
     raise SystemExit(
-        "Could not find the data dataset. Expected an attached Kaggle dataset with "
-        "<dataset>/cards/manifest.json and <dataset>/ml/__init__.py"
+        "Could not find cards/manifest.json under /kaggle/input — is the dataset attached "
+        "with a cards/ folder (+ ml/)?"
     )
 
 
