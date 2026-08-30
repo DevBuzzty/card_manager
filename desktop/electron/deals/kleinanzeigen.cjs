@@ -16,14 +16,17 @@ function decodeEntities(s) {
     .trim();
 }
 
-// "120 € VB" -> 120 ; "Zu verschenken" -> 0 ; "VB" / "Preis auf Anfrage" -> null
+// "120 € VB" -> 120 ; "Zu verschenken" -> 0 ; "VB"/"Preis auf Anfrage" -> null
+// "1 € VB" / "2 € VB" -> null (nominal negotiation placeholder, not a real price)
 function parsePrice(raw) {
   if (!raw) return null;
   const t = raw.toLowerCase();
   if (t.includes('verschenken')) return 0;
   const m = raw.replace(/\./g, '').match(/(\d+)(?:,(\d+))?\s*€/);
   if (!m) return null;
-  return parseFloat(m[2] ? `${m[1]}.${m[2]}` : m[1]);
+  const val = parseFloat(m[2] ? `${m[1]}.${m[2]}` : m[1]);
+  if (t.includes('vb') && val <= 2) return null;  // placeholder, treat as unknown
+  return val;
 }
 
 async function search(query) {
