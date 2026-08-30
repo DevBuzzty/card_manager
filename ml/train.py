@@ -11,13 +11,15 @@ from ml.generate import load_card_manifest
 
 def train(items, out_path, epochs: int = 5, embed_dim: int = 128,
           freeze_backbone: bool = True, pretrained: bool = True,
-          batch: int = 64, lr: float = 1e-3, device: str = "cpu", seed: int = 0) -> Path:
+          batch: int = 64, lr: float = 1e-3, device: str = "cpu", seed: int = 0,
+          num_workers: int = 0) -> Path:
     torch.manual_seed(seed)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     ds = dataset.ArtworkDataset(items, seed=seed)
-    dl = DataLoader(ds, batch_size=batch, shuffle=True, num_workers=0)
+    dl = DataLoader(ds, batch_size=batch, shuffle=True, num_workers=num_workers,
+                    pin_memory=(device != "cpu"))
 
     emb = M.Embedder(embed_dim, freeze_backbone=freeze_backbone, pretrained=pretrained).to(device)
     arc = M.ArcFace(embed_dim, ds.num_classes()).to(device)
