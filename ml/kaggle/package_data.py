@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """
-Package the `ml/` code into `kaggle_upload/` for a small Kaggle Dataset upload.
+Package the code + card artworks into `kaggle_upload/` for a Kaggle Dataset upload.
 
-The Kaggle notebook downloads the ~14.7k card artworks itself, so this bundles only the
-code (a few KB) — no multi-GB upload. See ml/kaggle/README.md for the full flow.
+Run AFTER the full card download (`python -m ml.download_cards`) has finished, so all
+~14.7k artworks are present. See ml/kaggle/README.md for the full flow.
 """
 import shutil
 from pathlib import Path
@@ -25,10 +25,20 @@ def main() -> None:
     for p in (config.ML_DIR / "kaggle").glob("*.py"):
         shutil.copy(p, dst / "ml" / "kaggle" / p.name)
 
-    print(f"packaged code -> {dst}")
-    print("Upload this folder (just the ml/ code, a few KB) as a Kaggle Dataset "
-          "(see ml/kaggle/README.md).")
-    print("The notebook downloads the ~14.7k card artworks itself — no large upload needed.")
+    # 2) cards: manifest + every artwork jpg
+    cards_dst = dst / "cards"
+    cards_dst.mkdir()
+    manifest = config.CARDS_DIR / "manifest.json"
+    if not manifest.exists():
+        raise SystemExit(f"manifest not found: {manifest} — run `python -m ml.download_cards` first")
+    shutil.copy(manifest, cards_dst / "manifest.json")
+    n = 0
+    for jpg in config.CARDS_DIR.glob("*.jpg"):
+        shutil.copy(jpg, cards_dst / jpg.name)
+        n += 1
+
+    print(f"packaged {n} artworks + code -> {dst}")
+    print("Now zip this folder and upload it as a Kaggle Dataset (see ml/kaggle/README.md).")
 
 
 if __name__ == "__main__":
