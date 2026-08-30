@@ -67,6 +67,9 @@ dependencies {
     // Socket.io
     implementation("io.socket:socket.io-client:2.1.0")
 
+    // ONNX Runtime (on-device inference: detector + embedder)
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
+
     // Supabase access via plain REST with OkHttp — avoids supabase-kt's Kotlin/Ktor
     // version coupling (the SDK is built against much newer Kotlin than this project uses).
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

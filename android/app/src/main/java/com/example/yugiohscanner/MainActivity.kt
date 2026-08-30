@@ -108,6 +108,19 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // TEMP (Phase-4 Task 2): on-device ML self-test. Remove in Task 4 once the pipeline is wired.
+        try {
+            val emb = com.example.yugiohscanner.ml.EmbedderModel(this)
+            val idx = com.example.yugiohscanner.ml.IndexSearcher(this)
+            val gray = android.graphics.Bitmap.createBitmap(224, 224, android.graphics.Bitmap.Config.ARGB_8888)
+            gray.eraseColor(android.graphics.Color.rgb(127, 127, 127))
+            val v = emb.embed(gray)
+            val (pc, sim) = idx.search(v)
+            android.util.Log.i("MLSelfTest", "emb dim=${v.size} nn passcode=$pc sim=$sim")
+            emb.close()
+        } catch (e: Throwable) {
+            android.util.Log.e("MLSelfTest", "self-test failed", e)
+        }
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
