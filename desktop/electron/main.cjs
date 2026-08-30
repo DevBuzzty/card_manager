@@ -69,6 +69,14 @@ function startSocketServer() {
         if (mainWindow) mainWindow.webContents.send('deal-watches-changed');
       } catch (e) { console.error('add_deal_watch failed', e); }
     });
+    // Phone requests the current deals + watches on connect.
+    socket.on('request_deals', () => {
+      try {
+        const alerts = db.prepare('SELECT * FROM deal_alerts WHERE dismissed = 0 ORDER BY found_at DESC LIMIT 100').all();
+        const watches = db.prepare('SELECT * FROM deal_watches ORDER BY created_at DESC').all();
+        socket.emit('deals_snapshot', { alerts, watches });
+      } catch (e) {}
+    });
   });
   console.log('Socket.io server running on port 4000');
 }

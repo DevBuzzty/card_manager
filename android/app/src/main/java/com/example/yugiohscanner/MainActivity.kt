@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.TrendingUp
@@ -94,6 +95,7 @@ import androidx.core.content.ContextCompat
 import com.example.yugiohscanner.cloud.SupabaseCloud
 import com.example.yugiohscanner.ui.CloudLoginScreen
 import com.example.yugiohscanner.ui.CollectionScreen
+import com.example.yugiohscanner.ui.DealsScreen
 import com.example.yugiohscanner.ui.PortfolioScreen
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -128,7 +130,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class Tab { SCANNER, COLLECTION, PORTFOLIO }
+enum class Tab { SCANNER, COLLECTION, PORTFOLIO, DEALS }
 
 @Composable
 fun MainScaffold() {
@@ -153,6 +155,8 @@ fun MainScaffold() {
                     icon = { Icon(Icons.Default.Style, null) }, label = { Text("Sammlung") })
                 NavigationBarItem(selected = tab == Tab.PORTFOLIO, onClick = { tab = Tab.PORTFOLIO },
                     icon = { Icon(Icons.Default.TrendingUp, null) }, label = { Text("Wert") })
+                NavigationBarItem(selected = tab == Tab.DEALS, onClick = { tab = Tab.DEALS },
+                    icon = { Icon(Icons.Default.Sell, null) }, label = { Text("Deals") })
             }
         }
     ) { padding ->
@@ -163,6 +167,7 @@ fun MainScaffold() {
                     else CloudLoginScreen(prefs) { cloudReady = true }
                 Tab.PORTFOLIO -> if (cloudReady) PortfolioScreen()
                     else CloudLoginScreen(prefs) { cloudReady = true }
+                Tab.DEALS -> DealsScreen(prefs)
             }
         }
     }
