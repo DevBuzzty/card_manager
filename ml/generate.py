@@ -39,7 +39,8 @@ def draw_boxes(scene: np.ndarray, boxes, size: int) -> np.ndarray:
     return out
 
 
-def generate_detection_set(n_scenes: int, seed: int = 0, val_split: float = 0.1, debug: bool = False) -> None:
+def generate_detection_set(n_scenes: int, seed: int = 0, val_split: float = 0.1,
+                           debug: bool = False, bg_fraction: float = 0.0) -> None:
     rng = np.random.default_rng(seed)
     cards = load_card_manifest()
     backgrounds = list_backgrounds()
@@ -52,9 +53,12 @@ def generate_detection_set(n_scenes: int, seed: int = 0, val_split: float = 0.1,
 
     for i in range(n_scenes):
         split = "val" if rng.random() < val_split else "train"
-        k = int(rng.integers(1, 9))  # 1..8 Karten
-        idx = rng.integers(0, len(cards), size=k)
-        arts = [(cards[j][0], compose_scene.load_art_bgr(cards[j][1])) for j in idx]
+        if rng.random() < bg_fraction:
+            arts = []  # card-less negative scene: teaches the detector "no card here"
+        else:
+            k = int(rng.integers(1, 9))  # 1..8 Karten
+            idx = rng.integers(0, len(cards), size=k)
+            arts = [(cards[j][0], compose_scene.load_art_bgr(cards[j][1])) for j in idx]
         bg = compose_scene.load_art_bgr(backgrounds[int(rng.integers(0, len(backgrounds)))])
         scene, boxes = compose_scene.compose_scene(bg, arts, rng)
 
@@ -71,8 +75,10 @@ def main() -> None:
     parser.add_argument("--scenes", type=int, default=1000)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--bg-fraction", type=float, default=0.0,
+                        help="fraction of card-less negative scenes (reduces false positives)")
     args = parser.parse_args()
-    generate_detection_set(args.scenes, seed=args.seed, debug=args.debug)
+    generate_detection_set(args.scenes, seed=args.seed, debug=args.debug, bg_fraction=args.bg_fraction)
     print(f"generated {args.scenes} scenes into {config.DET_DIR}")
 
 

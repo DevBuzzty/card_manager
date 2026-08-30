@@ -19,6 +19,7 @@ EPOCHS_EMB = 25          # embedder fine-tune epochs
 EPOCHS_DET = 80          # detector epochs
 IMGSZ_DET = 640          # detector image size (production)
 N_SCENES = 3000          # synthetic detector scenes to generate
+BG_FRACTION = 0.15       # fraction of card-less negative scenes (cuts false positives)
 BATCH_EMB = 128          # embedder batch size (GPU)
 NUM_WORKERS = 4          # dataloader workers (Kaggle has several CPUs)
 EVAL_SUBSET = 2000       # cards used for the top-1 retrieval eval (speed)
@@ -70,8 +71,8 @@ def main() -> None:
 
     # 2) Synthetic detector scenes ------------------------------------------
     from ml import generate
-    print(f"[2/6] generating {N_SCENES} detector scenes ...")
-    generate.generate_detection_set(N_SCENES, seed=1)
+    print(f"[2/6] generating {N_SCENES} detector scenes ({BG_FRACTION:.0%} card-less negatives) ...")
+    generate.generate_detection_set(N_SCENES, seed=1, bg_fraction=BG_FRACTION)
 
     # 3) Fine-tune the embedder (unfrozen, full card set) --------------------
     from ml import train as train_mod
