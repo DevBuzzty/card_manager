@@ -17,7 +17,7 @@ data class Box(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val s
  * Pinned I/O: input 'images' [1,3,320,320] float -> output 'output0' [1,300,6]
  * = (x1,y1,x2,y2,score,cls) in imgsz(320) pixel coords.
  */
-class DetectorModel(context: Context, private val imgsz: Int = 320, private val conf: Float = 0.35f) {
+class DetectorModel(context: Context, private val imgsz: Int = 320, private val conf: Float = 0.6f) {
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
     private val session: OrtSession =
         env.createSession(context.assets.open("detector.onnx").readBytes())

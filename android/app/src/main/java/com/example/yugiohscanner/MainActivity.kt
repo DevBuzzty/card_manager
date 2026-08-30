@@ -423,8 +423,8 @@ fun ScannerScreen(
     }
 
     // Phase-4: on-device ML recognition pipeline + live overlay state.
-    val pipeline = remember { com.example.yugiohscanner.ml.ScanPipeline(context, minSim = 0.55f) }
-    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker() }
+    val pipeline = remember { com.example.yugiohscanner.ml.ScanPipeline(context, minSim = 0.68f) }
+    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 5) }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
