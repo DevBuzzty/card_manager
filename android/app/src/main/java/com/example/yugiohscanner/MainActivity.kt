@@ -110,22 +110,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // TEMP (Phase-4 Task 2): on-device ML self-test. Remove in Task 4 once the pipeline is wired.
         try {
-            val emb = com.example.yugiohscanner.ml.EmbedderModel(this)
-            val idx = com.example.yugiohscanner.ml.IndexSearcher(this)
-            val gray = android.graphics.Bitmap.createBitmap(224, 224, android.graphics.Bitmap.Config.ARGB_8888)
-            gray.eraseColor(android.graphics.Color.rgb(127, 127, 127))
-            val v = emb.embed(gray)
-            val (pc, sim) = idx.search(v)
-            android.util.Log.i("MLSelfTest", "emb dim=${v.size} nn passcode=$pc sim=$sim")
-            val det = com.example.yugiohscanner.ml.DetectorModel(this)
+            val pipe = com.example.yugiohscanner.ml.ScanPipeline(this, minSim = 0.0f)
             val scene = android.graphics.BitmapFactory.decodeStream(assets.open("test_scene.jpg"))
+            pipe.process(scene)  // warm-up (lazy init), then timed steady-state run
             val t0 = System.currentTimeMillis()
-            val boxes = det.detect(scene)
+            val dets = pipe.process(scene)
             val ms = System.currentTimeMillis() - t0
-            android.util.Log.i("MLSelfTest", "detector: ${boxes.size} boxes in ${ms}ms; top=" +
-                boxes.sortedByDescending { it.score }.take(3).map { String.format("%.2f", it.score) })
-            det.close()
-            emb.close()
+            android.util.Log.i("MLSelfTest", "pipeline: ${dets.size} cards in ${ms}ms full frame")
+            dets.sortedByDescending { it.sim }.take(7).forEach {
+                android.util.Log.i("MLSelfTest", String.format("  card pc=%d sim=%.2f", it.passcode, it.sim))
+            }
+            pipe.close()
         } catch (e: Throwable) {
             android.util.Log.e("MLSelfTest", "self-test failed", e)
         }
