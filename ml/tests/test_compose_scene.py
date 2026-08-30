@@ -29,3 +29,14 @@ def test_augment_crop_size():
     art = np.full((120, 80, 3), 180, dtype=np.uint8)
     crop = compose_scene.augment_crop(art, rng)
     assert crop.shape == (config.CROP_SIZE, config.CROP_SIZE, 3)
+
+
+def test_pad_to_square_centers_non_square():
+    import numpy as np
+    from ml import compose_scene
+    bgr = np.full((40, 100, 3), 200, np.uint8)
+    out = compose_scene.pad_to_square(bgr)
+    assert out.shape == (100, 100, 3)
+    # original content preserved in the centered band; padding is fill=127
+    assert out[0, 0].tolist() == [127, 127, 127]
+    assert out[50, 50].tolist() == [200, 200, 200]

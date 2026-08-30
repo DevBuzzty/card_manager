@@ -24,7 +24,7 @@ def embed_clean(emb, items, device: str = "cpu") -> np.ndarray:
     with torch.no_grad():
         for _pc, path in items:
             bgr = compose_scene.load_art_bgr(path)
-            crop = cv2.resize(bgr, (config.CROP_SIZE, config.CROP_SIZE))
+            crop = cv2.resize(compose_scene.pad_to_square(bgr), (config.CROP_SIZE, config.CROP_SIZE))
             t = dataset.to_model_tensor(crop).unsqueeze(0).to(device)
             vecs.append(emb(t).cpu().numpy()[0])
     return np.stack(vecs).astype(np.float32)

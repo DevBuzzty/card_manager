@@ -34,6 +34,15 @@ def augment_card(art_bgr, rng):
     return augment.perspective_warp(bgra, rng)
 
 
+def pad_to_square(bgr, fill: int = 127):
+    h, w = bgr.shape[:2]
+    side = max(h, w)
+    canvas = np.full((side, side, 3), fill, dtype=np.uint8)
+    oy, ox = (side - h) // 2, (side - w) // 2
+    canvas[oy:oy + h, ox:ox + w] = bgr
+    return canvas
+
+
 def augment_crop(art_bgr, rng, size: int = config.CROP_SIZE) -> np.ndarray:
     warped, _ = augment_card(art_bgr, rng)          # BGRA mit transparentem Rand
     h, w = warped.shape[:2]

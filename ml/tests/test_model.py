@@ -18,6 +18,13 @@ def test_embedder_freezes_backbone():
     assert all(p.requires_grad for p in emb.head.parameters())
 
 
+def test_frozen_backbone_stays_in_eval_after_train():
+    emb = M.Embedder(freeze_backbone=True, pretrained=False)
+    emb.train()
+    assert emb.features.training is False   # frozen features stay in eval
+    assert emb.head.training is True        # head still trains
+
+
 def test_arcface_logits_shape_and_loss():
     arc = M.ArcFace(embed_dim=128, n_classes=5)
     emb = torch.nn.functional.normalize(torch.randn(4, 128), dim=1)

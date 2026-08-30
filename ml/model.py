@@ -13,9 +13,17 @@ class Embedder(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         in_dim = backbone.classifier[0].in_features   # 576 for mobilenet_v3_small
         self.head = nn.Linear(in_dim, embed_dim)
+        self._frozen = freeze_backbone
         if freeze_backbone:
             for p in self.features.parameters():
                 p.requires_grad = False
+            self.features.eval()
+
+    def train(self, mode: bool = True):
+        super().train(mode)
+        if self._frozen:
+            self.features.eval()
+        return self
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.features(x)
