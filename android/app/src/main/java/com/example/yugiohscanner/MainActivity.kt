@@ -117,6 +117,14 @@ class MainActivity : ComponentActivity() {
             val v = emb.embed(gray)
             val (pc, sim) = idx.search(v)
             android.util.Log.i("MLSelfTest", "emb dim=${v.size} nn passcode=$pc sim=$sim")
+            val det = com.example.yugiohscanner.ml.DetectorModel(this)
+            val scene = android.graphics.BitmapFactory.decodeStream(assets.open("test_scene.jpg"))
+            val t0 = System.currentTimeMillis()
+            val boxes = det.detect(scene)
+            val ms = System.currentTimeMillis() - t0
+            android.util.Log.i("MLSelfTest", "detector: ${boxes.size} boxes in ${ms}ms; top=" +
+                boxes.sortedByDescending { it.score }.take(3).map { String.format("%.2f", it.score) })
+            det.close()
             emb.close()
         } catch (e: Throwable) {
             android.util.Log.e("MLSelfTest", "self-test failed", e)
