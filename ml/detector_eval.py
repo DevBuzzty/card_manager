@@ -2,9 +2,13 @@ import argparse
 
 from ultralytics import YOLO
 
+from ml import config
+
 
 def evaluate_detector(weights, data_yaml) -> dict:
-    results = YOLO(weights).val(data=str(data_yaml))
+    results = YOLO(weights).val(
+        data=str(data_yaml), project=str(config.OUT_DIR / "runs"), name="val",
+    )
     return {"mAP50": float(results.box.map50), "mAP50_95": float(results.box.map)}
 
 

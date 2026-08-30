@@ -15,6 +15,8 @@ def test_evaluate_detector_returns_metrics(monkeypatch):
 
         def val(self, **kw):
             assert kw["data"] == "data.yaml"
+            assert "project" in kw
+            assert kw["name"] == "val"
             return FakeResults()
 
     monkeypatch.setattr(detector_eval, "YOLO", FakeYOLO)

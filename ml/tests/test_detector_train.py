@@ -22,4 +22,5 @@ def test_train_detector_invokes_yolo(tmp_path, monkeypatch):
     assert calls["train"]["epochs"] == 3
     assert calls["train"]["imgsz"] == 320
     assert calls["train"]["device"] == "cpu"
+    assert calls["train"]["exist_ok"] is True
     assert out == tmp_path / "run" / "weights" / "best.pt"

@@ -12,7 +12,7 @@ def train_detector(data_yaml, epochs: int = 50, imgsz: int = 640,
     project = project or str(config.OUT_DIR / "runs")
     YOLO(model).train(
         data=str(data_yaml), epochs=epochs, imgsz=imgsz,
-        device=device, project=project, name=name,
+        device=device, project=project, name=name, exist_ok=True,
     )
     return Path(project) / name / "weights" / "best.pt"
 
