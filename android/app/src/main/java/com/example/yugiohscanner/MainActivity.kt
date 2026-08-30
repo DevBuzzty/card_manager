@@ -425,18 +425,29 @@ fun ScannerScreen(
     // Phase-4: on-device ML recognition pipeline + live overlay state.
     val pipeline = remember { com.example.yugiohscanner.ml.ScanPipeline(context, minSim = 0.68f) }
     val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 5) }
+    val setCodeOcr = remember { com.example.yugiohscanner.ml.SetCodeOcr() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
     val mlAnalyzer = remember {
-        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, w, h, ms ->
+        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, frame, w, h, ms ->
             mlDetections = dets
             mlFrameW = w
             mlFrameH = h
-            // Stabilise across frames; emit each card once it's confirmed.
-            for (pc in tracker.update(dets)) {
-                Log.i("MlScan", "confirmed card $pc")
-                onDetected.value(pc.toString(), emptyList())
+            // Stabilise across frames; on confirm, OCR the set code (region below the artwork
+            // where it's printed) for rarity, then emit passcode + set codes.
+            for (d in tracker.update(dets)) {
+                Log.i("MlScan", "confirmed card ${d.passcode}")
+                val bw = d.box.x2 - d.box.x1
+                val bh = d.box.y2 - d.box.y1
+                val cx = (d.box.x1 - bw * 0.10f).toInt().coerceIn(0, frame.width - 1)
+                val cy = d.box.y1.toInt().coerceIn(0, frame.height - 1)
+                val cw = (bw * 1.20f).toInt().coerceIn(1, frame.width - cx)
+                val ch = (bh * 1.55f).toInt().coerceIn(1, frame.height - cy)  // extend down for the set code
+                val crop = android.graphics.Bitmap.createBitmap(frame, cx, cy, cw, ch)
+                setCodeOcr.read(crop) { codes ->
+                    onDetected.value(d.passcode.toString(), codes)
+                }
             }
             if (dets.isNotEmpty()) {
                 val top = dets.maxByOrNull { it.sim }
@@ -451,6 +462,7 @@ fun ScannerScreen(
             executor.shutdown()
             analyzer.close()
             pipeline.close()
+            setCodeOcr.close()
             if (cameraProviderFuture.isDone) {
                 try {
                     cameraProviderFuture.get().unbindAll()

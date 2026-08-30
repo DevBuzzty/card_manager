@@ -14,7 +14,7 @@ import androidx.camera.core.ImageProxy
  */
 class MlScanAnalyzer(
     private val pipeline: ScanPipeline,
-    private val onResult: (dets: List<Detection>, frameW: Int, frameH: Int, ms: Long) -> Unit
+    private val onResult: (dets: List<Detection>, frame: Bitmap, frameW: Int, frameH: Int, ms: Long) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     override fun analyze(image: ImageProxy) {
@@ -27,7 +27,7 @@ class MlScanAnalyzer(
             }
             val t0 = System.currentTimeMillis()
             val dets = pipeline.process(upright)
-            onResult(dets, upright.width, upright.height, System.currentTimeMillis() - t0)
+            onResult(dets, upright, upright.width, upright.height, System.currentTimeMillis() - t0)
         } catch (e: Throwable) {
             Log.e("MlScan", "frame failed", e)
         } finally {

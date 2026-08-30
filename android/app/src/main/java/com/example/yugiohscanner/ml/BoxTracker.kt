@@ -15,9 +15,9 @@ class BoxTracker(private val need: Int = 3, private val iouThresh: Float = 0.4f)
 
     private val tracks = ArrayList<Track>()
 
-    /** Feed one frame's detections; returns passcodes that JUST reached confirmation. */
-    fun update(dets: List<Detection>): List<Int> {
-        val newlyConfirmed = ArrayList<Int>()
+    /** Feed one frame's detections; returns the detections that JUST reached confirmation. */
+    fun update(dets: List<Detection>): List<Detection> {
+        val newlyConfirmed = ArrayList<Detection>()
         val matched = BooleanArray(tracks.size)
 
         for (d in dets) {
@@ -32,7 +32,7 @@ class BoxTracker(private val need: Int = 3, private val iouThresh: Float = 0.4f)
             tr.box = d.box
             val c = (tr.votes[d.passcode] ?: 0) + 1
             tr.votes[d.passcode] = c
-            if (!tr.emitted && c >= need) { tr.emitted = true; newlyConfirmed.add(d.passcode) }
+            if (!tr.emitted && c >= need) { tr.emitted = true; newlyConfirmed.add(d) }
         }
 
         // Drop tracks not seen this frame. `matched` is sized to the pre-loop track count,
