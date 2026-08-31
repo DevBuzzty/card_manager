@@ -18,6 +18,8 @@ class PasscodeOcr {
     /** First 8-digit passcode found in the crop, or null. */
     fun read(crop: Bitmap): Int? {
         val text = Tasks.await(recognizer.process(InputImage.fromBitmap(crop, 0)))
+        android.util.Log.i("PasscodeOcr", "region ${crop.width}x${crop.height} raw='" +
+            text.text.replace("\n", " | ") + "'")
         for (block in text.textBlocks) {
             val m = pattern.matcher(block.text)
             if (m.find()) return m.group().toIntOrNull()

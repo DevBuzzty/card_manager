@@ -18,25 +18,25 @@ class PasscodePipeline(context: Context) : CardPipeline {
     override fun process(frame: Bitmap): List<Detection> {
         val out = ArrayList<Detection>()
         for (b in detector.detect(frame)) {
-            val x = b.x1.toInt().coerceIn(0, frame.width - 1)
-            val y = b.y1.toInt().coerceIn(0, frame.height - 1)
-            val w = (b.x2 - b.x1).toInt().coerceIn(1, frame.width - x)
-            val h = (b.y2 - b.y1).toInt().coerceIn(1, frame.height - y)
-            val region = passcodeRegion(frame, x, y, w, h)
+            val region = passcodeRegion(frame, b)
             val pc = region?.let { try { ocr.read(it) } catch (e: Exception) { null } }
             out.add(Detection(b, pc ?: -1, 1f))
         }
         return out
     }
 
-    // Bottom-left ~fifth of the card — where the passcode is printed — upscaled 3x so ML Kit
-    // can resolve the tiny digits even when the card is small in the frame.
-    private fun passcodeRegion(frame: Bitmap, x: Int, y: Int, w: Int, h: Int): Bitmap? {
-        val ry = (y + h * 0.80f).toInt().coerceIn(0, frame.height - 1)
-        val rh = (h * 0.20f).toInt().coerceIn(1, frame.height - ry)
-        val rw = (w * 0.62f).toInt().coerceIn(1, w)
-        if (rw < 4 || rh < 4) return null
-        val strip = Bitmap.createBitmap(frame, x, ry, rw, rh)
+    // The detector boxes the ARTWORK (card middle). The passcode is printed near the card's
+    // bottom edge, i.e. BELOW the artwork box. Crop a band below the box (bottom-left, where
+    // the 8-digit code sits), upscaled 3x so ML Kit can resolve the tiny digits.
+    private fun passcodeRegion(frame: Bitmap, b: Box): Bitmap? {
+        val bw = b.x2 - b.x1
+        val bh = b.y2 - b.y1
+        val rx = (b.x1 - 0.06f * bw).toInt().coerceIn(0, frame.width - 1)
+        val ry = (b.y2 + 0.30f * bh).toInt().coerceIn(0, frame.height - 1)
+        val rw = (0.62f * bw).toInt().coerceIn(1, frame.width - rx)
+        val rh = (0.65f * bh).toInt().coerceIn(1, frame.height - ry)
+        if (rw < 6 || rh < 6) return null
+        val strip = Bitmap.createBitmap(frame, rx, ry, rw, rh)
         return Bitmap.createScaledBitmap(strip, rw * 3, rh * 3, true)
     }
 
