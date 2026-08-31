@@ -58,13 +58,21 @@ async function fetchYugipediaSets(passcode) {
         const redirectUrl = `https://yugipedia.com/api.php?action=query&titles=${passcode}&redirects&format=json`;
         const redirectData = await cachedFetch(redirectUrl, 'yugipedia_redirect', 168);
 
-        if (!redirectData || !redirectData.query) return [];
-
-        const pages = redirectData.query.pages;
-        const pageId = Object.keys(pages)[0];
-        if (pageId === '-1') return [];
-
-        const title = pages[pageId].title;
+        let title = null;
+        if (redirectData && redirectData.query && redirectData.query.pages) {
+            const pages = redirectData.query.pages;
+            const pageId = Object.keys(pages)[0];
+            if (pageId !== '-1') title = pages[pageId].title;
+        }
+        // Yugipedia's passcode redirects are incomplete — fall back to the card's English name
+        // (which is the page title) from YGOPRODeck.
+        if (!title) {
+            try {
+                const card = await fetchCardData(passcode);
+                title = card && card.data && card.data[0] && card.data[0].name;
+            } catch (e) { /* ignore */ }
+        }
+        if (!title) return [];
 
         // 2. Fetch Wikitext
         // Cache for 24 hours
@@ -76,7 +84,7 @@ async function fetchYugipediaSets(passcode) {
         const wikitext = parseData.parse.wikitext['*'];
 
         // 3. Parse German Sets
-        const deSetsMatch = wikitext.match(/\|\s*de_sets\s*=\s*([\s\S]*?)\n\s*\|/);
+        const deSetsMatch = wikitext.match(/\|\s*de_sets\s*=\s*([\s\S]*?)\n\s*(?:\||\}\})/);
         if (!deSetsMatch) return [];
 
         const rawSets = deSetsMatch[1];

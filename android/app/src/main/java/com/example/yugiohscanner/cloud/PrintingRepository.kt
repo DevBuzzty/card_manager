@@ -52,26 +52,11 @@ object PrintingRepository {
         }
     }
 
-    // German printings from Yugipedia: resolve passcode -> page title, fetch wikitext, parse the
+    // German printings from Yugipedia: resolve the page title, fetch wikitext, parse the
     // `de_sets` block (lines "SET-CODE; Set Name; Rarity[,Rarity]"). No price available -> 0.0.
     suspend fun fetchGermanSets(passcode: String): List<SetOption> = withContext(Dispatchers.IO) {
-        // 1) passcode -> page title
-        val titleReq = Request.Builder()
-            .url("https://yugipedia.com/api.php?action=query&titles=$passcode&redirects&format=json")
-            .header("User-Agent", UA).get().build()
-        val title = client.newCall(titleReq).execute().use { resp ->
-            if (!resp.isSuccessful) return@withContext emptyList()
-            val pages = JSONObject(resp.body?.string() ?: "")
-                .optJSONObject("query")?.optJSONObject("pages") ?: return@withContext emptyList()
-            val keys = pages.keys()
-            if (!keys.hasNext()) return@withContext emptyList()
-            val key: String = keys.next().toString()
-            if (key == "-1") return@withContext emptyList()
-            pages.getJSONObject(key).optString("title", "")
-        }
-        if (title.isBlank()) return@withContext emptyList()
+        val title = resolveYugipediaTitle(passcode) ?: return@withContext emptyList()
 
-        // 2) wikitext
         val parseReq = Request.Builder()
             .url("https://yugipedia.com/api.php?action=parse&page=${URLEncoder.encode(title, "UTF-8")}&prop=wikitext&format=json")
             .header("User-Agent", UA).get().build()
@@ -82,8 +67,7 @@ object PrintingRepository {
                 ?: return@withContext emptyList()
         }
 
-        // 3) parse the de_sets block
-        val block = Regex("""\|\s*de_sets\s*=\s*([\s\S]*?)\n\s*\|""").find(wikitext)
+        val block = Regex("""\|\s*de_sets\s*=\s*([\s\S]*?)\n\s*(?:\||\}\})""").find(wikitext)
             ?: return@withContext emptyList()
         val out = ArrayList<SetOption>()
         for (line in block.groupValues[1].split("\n")) {
@@ -96,5 +80,43 @@ object PrintingRepository {
             }
         }
         out
+    }
+
+    // Resolve a passcode to its Yugipedia page title. Yugipedia's passcode redirects are
+    // incomplete, so if the redirect misses, fall back to the card's English name (which IS the
+    // page title) from YGOPRODeck.
+    private suspend fun resolveYugipediaTitle(passcode: String): String? = withContext(Dispatchers.IO) {
+        // 1) passcode -> title via Yugipedia redirect
+        runCatching {
+            val req = Request.Builder()
+                .url("https://yugipedia.com/api.php?action=query&titles=$passcode&redirects&format=json")
+                .header("User-Agent", UA).get().build()
+            client.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    val pages = JSONObject(resp.body?.string() ?: "")
+                        .optJSONObject("query")?.optJSONObject("pages")
+                    val keys = pages?.keys()
+                    if (keys != null && keys.hasNext()) {
+                        val key = keys.next().toString()
+                        if (key != "-1") {
+                            val t = pages.getJSONObject(key).optString("title", "")
+                            if (t.isNotBlank()) return@withContext t
+                        }
+                    }
+                }
+            }
+        }
+        // 2) fallback: English card name from YGOPRODeck
+        runCatching {
+            val req = Request.Builder()
+                .url("https://db.ygoprodeck.com/api/v7/cardinfo.php?id=$passcode")
+                .get().build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@use null
+                val data = JSONObject(resp.body?.string() ?: "").optJSONArray("data")
+                if (data == null || data.length() == 0) null
+                else data.getJSONObject(0).optString("name", "").ifBlank { null }
+            }
+        }.getOrNull()
     }
 }
