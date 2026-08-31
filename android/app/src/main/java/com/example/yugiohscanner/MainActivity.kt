@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
@@ -106,6 +107,7 @@ import com.example.yugiohscanner.ui.CollectionScreen
 import com.example.yugiohscanner.ui.DealsScreen
 import com.example.yugiohscanner.ui.PortfolioScreen
 import com.example.yugiohscanner.ui.MoreScreen
+import com.example.yugiohscanner.ui.UebersichtScreen
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -133,13 +135,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class Tab { SCANNER, COLLECTION, PORTFOLIO, DEALS, SETTINGS }
+enum class Tab { HOME, SCANNER, COLLECTION, PORTFOLIO, DEALS, SETTINGS }
 
 @Composable
 fun MainScaffold() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE) }
-    var tab by remember { mutableStateOf(Tab.PORTFOLIO) }   // land on the dashboard/home
+    var tab by remember { mutableStateOf(Tab.HOME) }   // land on the Übersicht dashboard
     var cloudReady by remember { mutableStateOf(false) }
 
     // Auto-init cloud if already configured from a previous session.
@@ -154,6 +156,10 @@ fun MainScaffold() {
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
+                Tab.HOME -> if (cloudReady) UebersichtScreen(
+                        onOpenWert = { tab = Tab.PORTFOLIO }, onOpenScan = { tab = Tab.SCANNER },
+                        onOpenDeals = { tab = Tab.DEALS }, onOpenSammlung = { tab = Tab.COLLECTION })
+                    else CloudLoginScreen(prefs) { cloudReady = true }
                 Tab.SCANNER -> MainScreen() // existing scanner+config flow, untouched
                 Tab.COLLECTION -> if (cloudReady) CollectionScreen()
                     else CloudLoginScreen(prefs) { cloudReady = true }
@@ -161,7 +167,7 @@ fun MainScaffold() {
                     else CloudLoginScreen(prefs) { cloudReady = true }
                 Tab.DEALS -> if (cloudReady) DealsScreen()
                     else CloudLoginScreen(prefs) { cloudReady = true }
-                Tab.SETTINGS -> MoreScreen(prefs) { cloudReady = false }
+                Tab.SETTINGS -> MoreScreen(prefs, onOpenWert = { tab = Tab.PORTFOLIO }) { cloudReady = false }
             }
         }
     }
@@ -176,8 +182,8 @@ private fun AppBottomBar(current: Tab, onSelect: (Tab) -> Unit) {
             color = SurfaceColor,
         ) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                NavItem(Modifier.weight(1f), "Übersicht", Icons.Default.Home, current == Tab.HOME) { onSelect(Tab.HOME) }
                 NavItem(Modifier.weight(1f), "Sammlung", Icons.Default.Style, current == Tab.COLLECTION) { onSelect(Tab.COLLECTION) }
-                NavItem(Modifier.weight(1f), "Wert", Icons.Default.TrendingUp, current == Tab.PORTFOLIO) { onSelect(Tab.PORTFOLIO) }
                 Spacer(Modifier.weight(1f))   // gap under the raised Scan button
                 NavItem(Modifier.weight(1f), "Deals", Icons.Default.Sell, current == Tab.DEALS) { onSelect(Tab.DEALS) }
                 NavItem(Modifier.weight(1f), "Mehr", Icons.Default.Settings, current == Tab.SETTINGS) { onSelect(Tab.SETTINGS) }

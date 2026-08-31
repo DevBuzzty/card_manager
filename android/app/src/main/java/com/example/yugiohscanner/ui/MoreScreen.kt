@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,7 +24,7 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 
 @Composable
-fun MoreScreen(prefs: SharedPreferences, onLoggedOut: () -> Unit) {
+fun MoreScreen(prefs: SharedPreferences, onOpenWert: () -> Unit = {}, onLoggedOut: () -> Unit) {
     var sub by remember { mutableStateOf<String?>(null) }
 
     // Full-screen sub-views take over the whole tab.
@@ -60,6 +61,7 @@ fun MoreScreen(prefs: SharedPreferences, onLoggedOut: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Mehr", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
             Spacer(Modifier.height(2.dp))
+            MenuRow(Icons.Default.TrendingUp, "Wert", onClick = onOpenWert)
             MenuRow(Icons.Default.FavoriteBorder, "Wishlist", onClick = { sub = "wishlist" })
             MenuRow(Icons.Default.Dashboard, "Set-Vervollständigung", onClick = { sub = "sets" })
             MenuRow(Icons.Default.Style, "Decks", onClick = { sub = "decks" })
