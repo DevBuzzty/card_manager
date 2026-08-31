@@ -296,49 +296,68 @@ ipcMain.handle('get-portfolio', () => {
 
 // --- Deck Builder Handlers ---
 
-ipcMain.handle('get-decks', () => {
-    return db.prepare('SELECT * FROM decks ORDER BY created_at DESC').all();
+// Decks live in Supabase (structure shared with the phone). Desktop `type`/`quantity` map to
+// Supabase `section`/`count`; full card details still come from the local `cards` table.
+ipcMain.handle('get-decks', async () => {
+    const c = await dealsClient();
+    const { data, error } = await c.from('decks').select('*').order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
 });
 
-ipcMain.handle('create-deck', (event, name) => {
-    const info = db.prepare('INSERT INTO decks (name) VALUES (?)').run(name);
-    return { id: info.lastInsertRowid, name, created_at: new Date().toISOString() };
+ipcMain.handle('create-deck', async (event, name) => {
+    const c = await dealsClient();
+    const { data, error } = await c.from('decks').insert({ name }).select('*').single();
+    if (error) throw new Error(error.message);
+    return data;
 });
 
-ipcMain.handle('delete-deck', (event, id) => {
-    db.prepare('DELETE FROM deck_cards WHERE deck_id = ?').run(id);
-    db.prepare('DELETE FROM decks WHERE id = ?').run(id);
+ipcMain.handle('delete-deck', async (event, id) => {
+    const c = await dealsClient();
+    const { error } = await c.from('decks').delete().eq('id', id);   // deck_cards cascade in the DB
+    if (error) throw new Error(error.message);
     return { success: true };
 });
 
-ipcMain.handle('save-deck', (event, { deckId, cards }) => {
-    const deleteStmt = db.prepare('DELETE FROM deck_cards WHERE deck_id = ?');
-    const insertStmt = db.prepare('INSERT INTO deck_cards (deck_id, card_id, type, quantity) VALUES (@deck_id, @card_id, @type, @quantity)');
+ipcMain.handle('save-deck', async (event, { deckId, cards }) => {
+    const c = await dealsClient();
+    await c.from('deck_cards').delete().eq('deck_id', deckId);
+    if (cards && cards.length) {
+        const lookup = db.prepare('SELECT name, image_url FROM cards WHERE id = ? LIMIT 1');
+        const rows = cards.map(card => {
+            const det = lookup.get(String(card.id)) || {};
+            return {
+                deck_id: deckId, card_id: String(card.id),
+                name: card.name || det.name || null,
+                image_url: card.image_url || det.image_url || null,
+                count: card.quantity || 1,
+                section: card.type || 'main',
+            };
+        });
+        const { error } = await c.from('deck_cards').insert(rows);
+        if (error) throw new Error(error.message);
+    }
+    return { success: true };
+});
 
-    const transaction = db.transaction((cardsToSave) => {
-        deleteStmt.run(deckId);
-        for (const card of cardsToSave) {
-             insertStmt.run({
-                 deck_id: deckId,
-                 card_id: String(card.id),
-                 type: card.type || 'main',
-                 quantity: card.quantity
-             });
-        }
+ipcMain.handle('get-deck-details', async (event, id) => {
+    const c = await dealsClient();
+    const { data, error } = await c.from('deck_cards').select('*').eq('deck_id', id);
+    if (error) throw new Error(error.message);
+    const detail = db.prepare(
+        'SELECT name, image_url, type AS card_type, desc, atk, def, level, race, attribute, price ' +
+        'FROM cards WHERE id = ? AND deleted = 0 LIMIT 1'
+    );
+    return (data || []).map(dc => {
+        const d = detail.get(String(dc.card_id)) || {};
+        return {
+            deck_id: dc.deck_id, card_id: dc.card_id, type: dc.section, quantity: dc.count,
+            name: dc.name || d.name || null, image_url: dc.image_url || d.image_url || null,
+            card_type: d.card_type || null, desc: d.desc || null,
+            atk: d.atk ?? null, def: d.def ?? null, level: d.level ?? null,
+            race: d.race || null, attribute: d.attribute || null, price: d.price ?? null,
+        };
     });
-    transaction(cards);
-    return { success: true };
-});
-
-ipcMain.handle('get-deck-details', (event, id) => {
-    // Join with cards to get details if available
-    const query = `
-        SELECT dc.*, c.name, c.image_url, c.type as card_type, c.desc, c.atk, c.def, c.level, c.race, c.attribute, c.price
-        FROM deck_cards dc
-        LEFT JOIN cards c ON dc.card_id = c.id
-        WHERE dc.deck_id = ?
-    `;
-    return db.prepare(query).all(id);
 });
 
 ipcMain.handle('import-deck-ydk', async () => {
@@ -686,18 +705,35 @@ ipcMain.handle('update-missing-cards', async (event) => {
     } catch (e) { return { success: false, error: e.message }; }
 });
 
-// Wishlist
-ipcMain.handle('get-wishlist', () => db.prepare('SELECT * FROM wishlist ORDER BY created_at DESC').all());
-ipcMain.handle('add-to-wishlist', (event, card) => {
-    const exists = db.prepare('SELECT id FROM wishlist WHERE card_id = ?').get(String(card.id));
-    if (exists) return { success: false };
-    db.prepare('INSERT INTO wishlist (card_id, name, image_url, price) VALUES (@id, @name, @image_url, @price)').run({
-        id: String(card.id), name: card.name, image_url: card.image_url, price: card.price || 0
+// Wishlist (Supabase cloud — shared with the phone). Desktop `price` <-> Supabase `max_price`.
+ipcMain.handle('get-wishlist', async () => {
+    const c = await dealsClient();
+    const { data, error } = await c.from('wishlist').select('*').order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data || []).map(w => ({ ...w, price: w.max_price }));   // keep the renderer's `price` field
+});
+ipcMain.handle('add-to-wishlist', async (event, card) => {
+    const c = await dealsClient();
+    const { data: existing } = await c.from('wishlist').select('id').eq('card_id', String(card.id)).limit(1);
+    if (existing && existing.length) return { success: false };
+    const maxPrice = card.price != null ? Number(card.price) : null;
+    const { error } = await c.from('wishlist').insert({
+        card_id: String(card.id), name: card.name, image_url: card.image_url, max_price: maxPrice,
     });
+    if (error) throw new Error(error.message);
+    // Like the phone: a wishlist card also spawns a deal watch so it's hunted across marketplaces.
+    if (maxPrice != null && card.name) {
+        try {
+            await c.from('deal_watches').insert({ query: String(card.name), max_price: maxPrice });
+            triggerCloudScrape(c);
+        } catch (e) {}
+    }
     return { success: true };
 });
-ipcMain.handle('remove-from-wishlist', (event, id) => {
-    db.prepare('DELETE FROM wishlist WHERE id = ?').run(id);
+ipcMain.handle('remove-from-wishlist', async (event, id) => {
+    const c = await dealsClient();
+    const { error } = await c.from('wishlist').delete().eq('id', id);
+    if (error) throw new Error(error.message);
     return true;
 });
 
