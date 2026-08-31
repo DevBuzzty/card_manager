@@ -445,15 +445,34 @@ ipcMain.handle('search-online', async (event, query) => {
     try {
         const q = String(query).trim();
         if (!q) return [];
-        // A purely numeric query is an 8-digit passcode -> exact id lookup; otherwise fuzzy name search.
+        const base = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
+        const fetchCards = async (url) => {
+            const r = await fetch(url);
+            if (!r.ok) return []; // YGOPRODeck returns HTTP 400 {"error":...} for no matches
+            const j = await r.json();
+            return j.data || [];
+        };
+        // A purely numeric query is an 8-digit passcode -> exact id lookup (in German, so the
+        // German name comes back); otherwise a fuzzy name search.
         const isPasscode = /^\d+$/.test(q);
-        const url = isPasscode
-            ? `https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${encodeURIComponent(q)}`
-            : `https://db.ygoprodeck.com/api/v7/cardinfo.php?fname=${encodeURIComponent(q)}`;
-        const response = await fetch(url);
-        if (!response.ok) return [];
-        const json = await response.json();
-        return json.data || [];
+        if (isPasscode) {
+            return await fetchCards(`${base}?id=${encodeURIComponent(q)}&language=de`);
+        }
+        // The collection is mostly German, but YGOPRODeck's language=de only matches German
+        // names -> search the German DB first, fall back to the English DB, and merge by id
+        // (keeping the German-named hit when a card matches in both).
+        const [de, en] = await Promise.all([
+            fetchCards(`${base}?fname=${encodeURIComponent(q)}&language=de`),
+            fetchCards(`${base}?fname=${encodeURIComponent(q)}`),
+        ]);
+        const seen = new Set();
+        const out = [];
+        for (const c of [...de, ...en]) {
+            if (seen.has(c.id)) continue;
+            seen.add(c.id);
+            out.push(c);
+        }
+        return out;
     } catch (e) { return []; }
 });
 
