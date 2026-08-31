@@ -112,13 +112,43 @@ SEED = [
 ]
 
 
+# Broad foil/rarity queries — one search returns many DIFFERENT cards; label_photos.py then reads
+# the true passcode off each. Best diversity per request for domain-adaptation data.
+POOL_QUERIES = [
+    "yu-gi-oh secret rare", "yugioh ultra rare 1st edition", "yu-gi-oh ghost rare",
+    "yugioh ultimate rare", "yu-gi-oh quarter century secret", "yugioh secret rare deutsch",
+    "yu-gi-oh collector rare", "yugioh starlight rare", "yu-gi-oh prismatic secret",
+]
+
+
+def harvest_pool(queries):
+    """Dump every listing photo into data/harvest/pool/ (unlabeled); label_photos.py labels them."""
+    d = OUT / "pool"
+    d.mkdir(parents=True, exist_ok=True)
+    n = len(list(d.glob("*.jpg")))
+    for q in queries:
+        got = 0
+        for url, _title in search_images(q, limit=25):
+            try:
+                (d / f"pool_{n}.jpg").write_bytes(_get(url))
+                n += 1
+                got += 1
+                time.sleep(0.4)
+            except Exception as e:
+                print(f"   img failed: {e}")
+        print(f"[pool] '{q}': +{got}")
+        time.sleep(1.0)
+    print(f"\nPOOL: {n} photos in {d}  (run label_photos.py to OCR-label them)")
+
+
 def main():
     args = sys.argv[1:]
-    if args and args[0] == "--file":
-        names = [l.strip() for l in Path(args[1]).read_text(encoding="utf-8").splitlines() if l.strip()]
+    if args and args[0] == "--pool":
+        harvest_pool(args[1:] or POOL_QUERIES)
+    elif args and args[0] == "--file":
+        harvest([l.strip() for l in Path(args[1]).read_text(encoding="utf-8").splitlines() if l.strip()])
     else:
-        names = args or SEED
-    harvest(names)
+        harvest(args or SEED)
 
 
 if __name__ == "__main__":
