@@ -14,14 +14,29 @@ object CardSearchRepository {
     suspend fun search(query: String): List<CardRow> = withContext(Dispatchers.IO) {
         val q = query.trim()
         if (q.isEmpty()) return@withContext emptyList()
-        val isPasscode = q.all { it.isDigit() }
-        val url = "https://db.ygoprodeck.com/api/v7/cardinfo.php".toHttpUrl().newBuilder()
-            .addQueryParameter(if (isPasscode) "id" else "fname", q)
-            .build()
-        val req = Request.Builder().url(url).get().build()
+        // Passcode: one lookup, in German (returns the German name too).
+        if (q.all { it.isDigit() }) return@withContext fetch("id", q, german = true)
+        // Name: the collection is mostly German, so search the German DB first, then the
+        // English DB as a fallback (YGOPRODeck's language=de only matches German names).
+        // Merge by id, keeping the German-named hit when a card matches in both.
+        val de = fetch("fname", q, german = true)
+        val en = fetch("fname", q, german = false)
+        val seen = HashSet<String>()
+        val out = ArrayList<CardRow>(de.size + en.size)
+        for (c in de) if (seen.add(c.id)) out.add(c)
+        for (c in en) if (seen.add(c.id)) out.add(c)
+        out
+    }
+
+    // One YGOPRODeck query. `german=true` adds language=de so names/descriptions come back
+    // in German. Returns [] on the {"error": ...} no-match response (HTTP 400).
+    private suspend fun fetch(paramKey: String, value: String, german: Boolean): List<CardRow> = withContext(Dispatchers.IO) {
+        val builder = "https://db.ygoprodeck.com/api/v7/cardinfo.php".toHttpUrl().newBuilder()
+            .addQueryParameter(paramKey, value)
+        if (german) builder.addQueryParameter("language", "de")
+        val req = Request.Builder().url(builder.build()).get().build()
         client.newCall(req).execute().use { resp ->
             val text = resp.body?.string() ?: ""
-            // YGOPRODeck returns {"error": "..."} (HTTP 400) for no matches — treat as empty.
             val data = JSONObject(text).optJSONArray("data") ?: return@withContext emptyList()
             val out = ArrayList<CardRow>(data.length())
             for (i in 0 until data.length()) {
