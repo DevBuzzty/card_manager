@@ -82,7 +82,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -98,10 +97,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.example.yugiohscanner.cloud.CardSearchRepository
-import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.SupabaseCloud
-import kotlinx.coroutines.launch
 import com.example.yugiohscanner.ui.theme.AppTheme
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
@@ -312,6 +308,7 @@ fun MainScreen() {
     if (hasCameraPermission) {
         ScannerScreen(
             socket = socket,
+            connected = isConnected,
             onDisconnect = disconnectSocket,
             scanHistory = scanHistory,
             onAddHistory = ::addScanToHistory,
@@ -404,6 +401,7 @@ fun ConfigScreen(
 @Composable
 fun ScannerScreen(
     socket: Socket?,
+    connected: Boolean,
     onDisconnect: () -> Unit,
     scanHistory: List<String>,
     onAddHistory: (String) -> Unit,
@@ -426,30 +424,29 @@ fun ScannerScreen(
 
     // Feedback Helper (Empty as per requirement)
     val triggerFeedback = remember { {} }
-    val scope = rememberCoroutineScope()
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
     // always runs the latest logic without being recreated on every recomposition.
-    // Autonomous flow: scanned passcode → YGOPRODeck lookup → add to the Supabase collection
-    // (set 'Unknown', quantity +1). No desktop needed. Set codes are ignored in this mode.
-    val onDetected = rememberUpdatedState<(String, List<String>) -> Unit> { code, _ ->
+    // Old flow: scanned passcode (+ set code) is pushed to the desktop over the socket, which
+    // shows it in the Staging Area for the user to confirm. Needs the desktop running.
+    val onDetected = rememberUpdatedState<(String, List<String>) -> Unit> { code, setCodes ->
         if (code != lastScannedCode) {
             lastScannedCode = code
             triggerFeedback()
-            scanStatus = "Nachschlagen $code…"
-            scope.launch {
-                try {
-                    val base = CardSearchRepository.search(code).firstOrNull()
-                    if (base == null) {
-                        scanStatus = "Karte $code nicht gefunden"
-                    } else {
-                        val msg = CollectionRepository.addScanned(base)
-                        scanStatus = "✓ $msg"
-                        onAddHistory(msg)
-                    }
-                } catch (e: Exception) {
-                    scanStatus = "Fehler: ${e.message}"
+            if (!connected) {
+                // Nothing to receive the scan — tell the user instead of silently dropping it.
+                scanStatus = "⚠ Kein Desktop verbunden – $code nicht gesendet"
+            } else {
+                val best = setCodes.firstOrNull()
+                scanStatus = if (best != null) "Gesendet: $code ($best)" else "Gesendet: $code"
+                onAddHistory(scanStatus)
+                val data = JSONObject()
+                data.put("passcode", code)
+                if (best != null) {
+                    data.put("setCode", best)
+                    data.put("setCodeCandidates", JSONArray(setCodes))
                 }
+                socket?.emit("card_scanned", data)
             }
         }
     }
@@ -657,6 +654,12 @@ fun ScannerScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Text(
+                text = if (connected) "● Desktop verbunden" else "○ Kein Desktop – in Einstellungen verbinden",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (connected) Color(0xFF39D98A) else Color(0xFFF5C542)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = scanStatus,
                 style = MaterialTheme.typography.titleMedium,

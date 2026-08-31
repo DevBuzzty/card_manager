@@ -65,44 +65,6 @@ object CollectionRepository {
         }
     }
 
-    // Scan flow (autonomous, no desktop): add one copy of a scanned card under the 'Unknown'
-    // set bucket. If that printing already exists, bump its quantity (and un-delete it);
-    // otherwise insert a fresh row with quantity 1. Returns a short status for the UI.
-    suspend fun addScanned(base: CardRow): String = withContext(Dispatchers.IO) {
-        val existing = getRow(base.id, "Unknown", "DE")
-        val label = base.name ?: base.id
-        if (existing != null) {
-            val newQty = existing.quantity + 1
-            patch(existing, JSONObject().put("quantity", newQty).put("deleted", false))
-            "$label → ${newQty}×"
-        } else {
-            addPrinting(base, "Unknown", "", 0.0)
-            "$label hinzugefügt"
-        }
-    }
-
-    // Fetches a single row by composite key (no deleted/quantity filter), or null if absent.
-    private suspend fun getRow(id: String, setCode: String, language: String): CardRow? = withContext(Dispatchers.IO) {
-        val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "*")
-            .addQueryParameter("id", "eq.$id")
-            .addQueryParameter("set_code", "eq.$setCode")
-            .addQueryParameter("language", "eq.$language")
-            .build()
-        executeWithReauth {
-            Request.Builder()
-                .url(url)
-                .addHeader("apikey", SupabaseCloud.key())
-                .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
-                .get()
-                .build()
-        }.use { resp ->
-            val text = resp.body?.string() ?: "[]"
-            if (!resp.isSuccessful) throw RuntimeException("Nachschlagen fehlgeschlagen (${resp.code}): $text")
-            parse(JSONArray(text)).firstOrNull()
-        }
-    }
-
     private suspend fun patch(row: CardRow, body: JSONObject) = withContext(Dispatchers.IO) {
         val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
             .addQueryParameter("id", "eq.${row.id}")
