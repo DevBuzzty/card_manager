@@ -31,6 +31,10 @@ fun MoreScreen(prefs: SharedPreferences, onLoggedOut: () -> Unit) {
         WishlistScreen(onClose = { sub = null })
         return
     }
+    if (sub == "sets") {
+        SetCompletionScreen(onClose = { sub = null })
+        return
+    }
     if (sub == "settings") {
         Surface(Modifier.fillMaxSize(), color = Background) {
             Column(Modifier.fillMaxSize()) {
@@ -53,7 +57,7 @@ fun MoreScreen(prefs: SharedPreferences, onLoggedOut: () -> Unit) {
             Text("Mehr", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
             Spacer(Modifier.height(2.dp))
             MenuRow(Icons.Default.FavoriteBorder, "Wishlist", onClick = { sub = "wishlist" })
-            MenuRow(Icons.Default.Dashboard, "Set-Vervollständigung", soon = true)
+            MenuRow(Icons.Default.Dashboard, "Set-Vervollständigung", onClick = { sub = "sets" })
             MenuRow(Icons.Default.Style, "Decks", soon = true)
             MenuRow(Icons.Default.Settings, "Einstellungen", onClick = { sub = "settings" })
         }
