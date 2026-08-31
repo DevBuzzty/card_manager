@@ -105,7 +105,7 @@ import com.example.yugiohscanner.ui.CloudLoginScreen
 import com.example.yugiohscanner.ui.CollectionScreen
 import com.example.yugiohscanner.ui.DealsScreen
 import com.example.yugiohscanner.ui.PortfolioScreen
-import com.example.yugiohscanner.ui.SettingsScreen
+import com.example.yugiohscanner.ui.MoreScreen
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -161,7 +161,7 @@ fun MainScaffold() {
                     else CloudLoginScreen(prefs) { cloudReady = true }
                 Tab.DEALS -> if (cloudReady) DealsScreen()
                     else CloudLoginScreen(prefs) { cloudReady = true }
-                Tab.SETTINGS -> SettingsScreen(prefs) { cloudReady = false }
+                Tab.SETTINGS -> MoreScreen(prefs) { cloudReady = false }
             }
         }
     }
