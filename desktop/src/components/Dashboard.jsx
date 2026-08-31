@@ -56,7 +56,7 @@ export default function Dashboard({ setActiveTab, onOpenPalette }) {
     }
   };
 
-  const money = v => `$${(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = v => `€${(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">

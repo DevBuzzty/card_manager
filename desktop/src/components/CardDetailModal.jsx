@@ -158,13 +158,13 @@ export default function CardDetailModal({ card, onClose }) {
             </div>
 
             {/* Inventory / Variants Section */}
-            <div className="bg-[#2a2a2a] p-4 rounded-xl border border-gray-700 mb-6 flex-grow flex-shrink-0 overflow-auto">
+            <div className="bg-[#2a2a2a] p-4 rounded-xl border border-gray-700 mb-6 flex-shrink-0">
                 <div className="flex items-center justify-between mb-4">
                     <span className="text-sm font-bold uppercase text-gray-400">Inventory Variants</span>
                     <span className="text-xs text-gray-500">Total Owned: {localVariants.reduce((sum, v) => sum + v.quantity, 0)}</span>
                 </div>
 
-                <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-3 mb-4">
                     {localVariants.length === 0 && <p className="text-gray-500 text-sm italic">No variants owned.</p>}
                     {localVariants.map((variant, idx) => (
                         <div key={idx} className="flex items-center justify-between bg-black/40 p-2 rounded-lg border border-gray-800">

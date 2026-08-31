@@ -162,6 +162,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       }).sort((a, b) => {
           switch (sortType) {
               case 'name': return (a.name || '').localeCompare(b.name || '');
+              case 'total': return b.totalValue - a.totalValue;
               case 'price': return b.maxPrice - a.maxPrice;
               case 'atk': return (b.atk || 0) - (a.atk || 0);
               case 'def': return (b.def || 0) - (a.def || 0);
@@ -191,10 +192,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
       return (
           <div style={{ ...style, padding: 8 }}>
-              <CardTile
-                  card={{ ...card, price: card.variants && card.variants.length > 1 ? Math.min(...card.variants.map(v => v.price || 0)) : (card.price || 0) }}
-                  onClick={() => setSelectedCard(card)}
-              />
+              <CardTile card={card} onClick={() => setSelectedCard(card)} />
           </div>
       );
   };
@@ -274,7 +272,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 <CustomSelect value={filterRace} onChange={setFilterRace} placeholder="Race" className="w-[130px]" options={[{ value: "All", label: "Race/Type" }, ...races]} />
                 <CustomSelect value={filterRarity} onChange={setFilterRarity} placeholder="Rarity" className="w-[130px]" options={[{ value: "All", label: "Rarity" }, ...rarities]} />
                 <CustomSelect value={filterSet} onChange={setFilterSet} placeholder="Set" className="w-[120px]" options={[{ value: "All", label: "Set" }, ...sets]} />
-                <CustomSelect value={sortType} onChange={setSortType} placeholder="Sort" className="w-[140px]" options={[{ value: "newest", label: "Newest" }, { value: "price", label: "Price" }, { value: "name", label: "Name" }, { value: "atk", label: "ATK" }, { value: "def", label: "DEF" }, { value: "level", label: "Level" }]} />
+                <CustomSelect value={sortType} onChange={setSortType} placeholder="Sort" className="w-[160px]" options={[{ value: "newest", label: "Neueste" }, { value: "total", label: "Wert (gesamt)" }, { value: "price", label: "Preis (Einzel)" }, { value: "name", label: "Name" }, { value: "atk", label: "ATK" }, { value: "def", label: "DEF" }, { value: "level", label: "Level" }]} />
                 <button onClick={clearFilters} className="p-2 text-gray-500 hover:text-red-400"><FilterX className="w-4 h-4" /></button>
             </div>
         </div>
@@ -296,7 +294,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                                 columnWidth={width / columnCount}
                                 defaultHeight={height}
                                 rowCount={rowCount}
-                                rowHeight={280}
+                                rowHeight={300}
                                 width={width}
                                 height={height} // Also pass height for Grid style
                                 cellProps={{ items: filtered, columnCount }}

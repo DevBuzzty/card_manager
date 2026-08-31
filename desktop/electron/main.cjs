@@ -59,24 +59,9 @@ function startSocketServer() {
     socket.on('card_scanned', (data) => {
       if (mainWindow) mainWindow.webContents.send('card-scanned', data);
     });
-    // Phone can create a deal watch (query + max price).
-    socket.on('add_deal_watch', (data) => {
-      try {
-        db.prepare('INSERT INTO deal_watches (query, max_price, sources, active) VALUES (?, ?, ?, 1)')
-          .run(String(data.query || ''), Number(data.maxPrice) || 0,
-               data.sources ? JSON.stringify(data.sources) : null);
-        if (dealPoller) dealPoller.pollNow();
-        if (mainWindow) mainWindow.webContents.send('deal-watches-changed');
-      } catch (e) { console.error('add_deal_watch failed', e); }
-    });
-    // Phone requests the current deals + watches on connect.
-    socket.on('request_deals', () => {
-      try {
-        const alerts = db.prepare('SELECT * FROM deal_alerts WHERE dismissed = 0 ORDER BY found_at DESC LIMIT 100').all();
-        const watches = db.prepare('SELECT * FROM deal_watches ORDER BY created_at DESC').all();
-        socket.emit('deals_snapshot', { alerts, watches });
-      } catch (e) {}
-    });
+    // (Removed stale pre-cloud deal socket handlers: the phone now reads/writes the shared
+    // Supabase deal tables directly, so add_deal_watch/request_deals over the socket — which
+    // hit orphaned local SQLite tables and referenced an undeclared poller — are dead.)
   });
   console.log('Socket.io server running on port 4000');
 }

@@ -114,7 +114,7 @@ export default function Statistics() {
         };
     }, [cards]);
 
-    const money = v => `$${v.toFixed(2)}`;
+    const money = v => `€${(v || 0).toFixed(2)}`;
 
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

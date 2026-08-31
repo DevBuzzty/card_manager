@@ -143,7 +143,7 @@ export default function Portfolio() {
                          </button>
                     </div>
                     <h1 className={`text-6xl font-bold text-white mt-2 tracking-tight transition-colors duration-500 ${isLive ? 'text-green-400' : ''}`}>
-                        ${stats.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        €{(stats.totalValue || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </h1>
                     <div className={`flex items-center mt-2 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
                         {isPositive ? <TrendingUp className="w-5 h-5 mr-2" /> : <TrendingDown className="w-5 h-5 mr-2" />}
@@ -182,7 +182,7 @@ export default function Portfolio() {
                             contentStyle={{ backgroundColor: '#121212', borderColor: '#333', borderRadius: '8px' }}
                             itemStyle={{ color: '#fff' }}
                             labelStyle={{ color: '#888' }}
-                            formatter={(value) => [`$${value.toFixed(2)}`, 'Value']}
+                            formatter={(value) => [`€${value.toFixed(2)}`, 'Value']}
                             labelFormatter={(label) => new Date(label).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         />
                         <Area
@@ -229,10 +229,10 @@ export default function Portfolio() {
                                                 <div className="text-xs text-gray-500 font-mono">{asset.set_code} • {asset.rarity}</div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-right text-gray-300">${asset.price.toFixed(2)}</td>
+                                        <td className="px-4 py-3 text-right text-gray-300">€{(asset.price || 0).toFixed(2)}</td>
                                         <td className="px-4 py-3 text-right font-mono text-gray-500">x{asset.quantity}</td>
                                         <td className="px-4 py-3 text-right font-bold text-white group-hover:text-space-violet transition-colors">
-                                            ${asset.equity.toFixed(2)}
+                                            €{asset.equity.toFixed(2)}
                                         </td>
                                     </tr>
                                 ))}
@@ -263,7 +263,7 @@ export default function Portfolio() {
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
                                         ))}
                                     </Pie>
-                                    <Tooltip contentStyle={{ backgroundColor: '#121212', borderRadius: '8px', border: '1px solid #333' }} itemStyle={{color: '#fff'}} formatter={(value) => `$${value.toFixed(2)}`} />
+                                    <Tooltip contentStyle={{ backgroundColor: '#121212', borderRadius: '8px', border: '1px solid #333' }} itemStyle={{color: '#fff'}} formatter={(value) => `€${value.toFixed(2)}`} />
                                 </PieChart>
                             </ResponsiveContainer>
                             {/* Center Text */}
@@ -281,7 +281,7 @@ export default function Portfolio() {
                                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
                                         <span className="text-gray-300">{item.name}</span>
                                     </div>
-                                    <span className="font-mono text-gray-500">${item.value.toFixed(2)}</span>
+                                    <span className="font-mono text-gray-500">€{item.value.toFixed(2)}</span>
                                 </div>
                             ))}
                         </div>
