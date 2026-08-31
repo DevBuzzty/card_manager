@@ -91,12 +91,21 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.yugiohscanner.cloud.SupabaseCloud
 import com.example.yugiohscanner.ui.theme.AppTheme
+import com.example.yugiohscanner.ui.theme.Muted
+import com.example.yugiohscanner.ui.theme.Primary
+import com.example.yugiohscanner.ui.theme.SurfaceColor
 import com.example.yugiohscanner.ui.CloudLoginScreen
 import com.example.yugiohscanner.ui.CollectionScreen
 import com.example.yugiohscanner.ui.DealsScreen
 import com.example.yugiohscanner.ui.PortfolioScreen
+import com.example.yugiohscanner.ui.SettingsScreen
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -124,13 +133,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class Tab { SCANNER, COLLECTION, PORTFOLIO, DEALS }
+enum class Tab { SCANNER, COLLECTION, PORTFOLIO, DEALS, SETTINGS }
 
 @Composable
 fun MainScaffold() {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE) }
-    var tab by remember { mutableStateOf(Tab.SCANNER) }
+    var tab by remember { mutableStateOf(Tab.PORTFOLIO) }   // land on the dashboard/home
     var cloudReady by remember { mutableStateOf(false) }
 
     // Auto-init cloud if already configured from a previous session.
@@ -141,18 +150,7 @@ fun MainScaffold() {
     }
 
     Scaffold(
-        bottomBar = {
-            NavigationBar(containerColor = Color(0xFF1E1E1E)) {
-                NavigationBarItem(selected = tab == Tab.SCANNER, onClick = { tab = Tab.SCANNER },
-                    icon = { Icon(Icons.Default.CameraAlt, null) }, label = { Text("Scan") })
-                NavigationBarItem(selected = tab == Tab.COLLECTION, onClick = { tab = Tab.COLLECTION },
-                    icon = { Icon(Icons.Default.Style, null) }, label = { Text("Sammlung") })
-                NavigationBarItem(selected = tab == Tab.PORTFOLIO, onClick = { tab = Tab.PORTFOLIO },
-                    icon = { Icon(Icons.Default.TrendingUp, null) }, label = { Text("Wert") })
-                NavigationBarItem(selected = tab == Tab.DEALS, onClick = { tab = Tab.DEALS },
-                    icon = { Icon(Icons.Default.Sell, null) }, label = { Text("Deals") })
-            }
-        }
+        bottomBar = { AppBottomBar(current = tab, onSelect = { tab = it }) }
     ) { padding ->
         Box(Modifier.padding(padding)) {
             when (tab) {
@@ -163,8 +161,48 @@ fun MainScaffold() {
                     else CloudLoginScreen(prefs) { cloudReady = true }
                 Tab.DEALS -> if (cloudReady) DealsScreen()
                     else CloudLoginScreen(prefs) { cloudReady = true }
+                Tab.SETTINGS -> SettingsScreen(prefs) { cloudReady = false }
             }
         }
+    }
+}
+
+// Bottom bar with a raised center Scan button: Sammlung · Wert · ⦿Scan⦿ · Deals · Mehr.
+@Composable
+private fun AppBottomBar(current: Tab, onSelect: (Tab) -> Unit) {
+    Box(Modifier.fillMaxWidth().height(84.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth().height(64.dp).align(Alignment.BottomCenter),
+            color = SurfaceColor,
+        ) {
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                NavItem(Modifier.weight(1f), "Sammlung", Icons.Default.Style, current == Tab.COLLECTION) { onSelect(Tab.COLLECTION) }
+                NavItem(Modifier.weight(1f), "Wert", Icons.Default.TrendingUp, current == Tab.PORTFOLIO) { onSelect(Tab.PORTFOLIO) }
+                Spacer(Modifier.weight(1f))   // gap under the raised Scan button
+                NavItem(Modifier.weight(1f), "Deals", Icons.Default.Sell, current == Tab.DEALS) { onSelect(Tab.DEALS) }
+                NavItem(Modifier.weight(1f), "Mehr", Icons.Default.Settings, current == Tab.SETTINGS) { onSelect(Tab.SETTINGS) }
+            }
+        }
+        Box(
+            modifier = Modifier.align(Alignment.TopCenter).size(60.dp).clip(CircleShape)
+                .background(Primary).clickable { onSelect(Tab.SCANNER) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.CameraAlt, "Scan", tint = Color.White, modifier = Modifier.size(28.dp))
+        }
+    }
+}
+
+@Composable
+private fun NavItem(modifier: Modifier, label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+    val tint = if (selected) Primary else Muted
+    Column(
+        modifier = modifier.fillMaxHeight().clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(icon, label, tint = tint, modifier = Modifier.size(24.dp))
+        Text(label, color = tint, style = MaterialTheme.typography.labelSmall)
     }
 }
 
