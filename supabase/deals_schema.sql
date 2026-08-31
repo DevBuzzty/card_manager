@@ -23,7 +23,9 @@ create table if not exists public.deal_alerts (
   image_url   text,
   found_at    timestamptz not null default now(),
   dismissed   boolean not null default false,
-  unique (source, listing_id)
+  -- Per-watch dedup: two different watches that match the same listing each get their own
+  -- alert row (a global (source, listing_id) key would drop the second watch's alert).
+  unique (watch_id, source, listing_id)
 );
 
 create index if not exists deal_alerts_user_found on public.deal_alerts (user_id, found_at desc);

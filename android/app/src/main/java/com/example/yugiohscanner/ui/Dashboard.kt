@@ -43,7 +43,8 @@ private fun rarityRank(r: String?): Int = when (r?.lowercase()) {
 private fun typeGroup(type: String?): String = when {
     type?.contains("Spell", ignoreCase = true) == true -> "Zauber"
     type?.contains("Trap", ignoreCase = true) == true -> "Falle"
-    else -> "Monster"
+    type?.contains("Monster", ignoreCase = true) == true -> "Monster"
+    else -> "Sonstige"
 }
 
 // Groups cards by a key (skipping null keys and cards failing `include`), summing
@@ -72,7 +73,7 @@ fun computeDashboard(cards: List<CardRow>): Dashboard {
     val byRarity = groupCards(cards) { it.rarity ?: "Unbekannt" }
         .sortedBy { rarityRank(if (it.label == "Unbekannt") null else it.label) }
 
-    val typeOrder = listOf("Monster", "Zauber", "Falle")
+    val typeOrder = listOf("Monster", "Zauber", "Falle", "Sonstige")
     val typeMap = groupCards(cards) { typeGroup(it.type) }.associateBy { it.label }
     val byType = typeOrder.mapNotNull { typeMap[it] }
 

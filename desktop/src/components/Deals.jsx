@@ -1,41 +1,86 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Tag, Plus, Trash2, ExternalLink, X } from 'lucide-react';
+import { Tag, Plus, Trash2, ExternalLink, X, RefreshCw } from 'lucide-react';
 
 export default function Deals() {
   const [watches, setWatches] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [query, setQuery] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [error, setError] = useState(null);
+  const [scraping, setScraping] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!window.api) return;
     try {
       setWatches(await window.api.getDealWatches());
       setAlerts(await window.api.getDealAlerts());
-    } catch (e) { /* db not ready */ }
+      setError(null);
+    } catch (e) {
+      setError(e.message || 'Laden fehlgeschlagen — in den Einstellungen bei der Cloud anmelden.');
+    }
   }, []);
 
-  useEffect(() => {
-    refresh();
+  // Ask the cloud to scrape now, then reload — the same "fetch fresh on open" the phone does.
+  const scrapeAndRefresh = useCallback(async () => {
     if (!window.api) return;
-    const un1 = window.api.onDealAlert(() => refresh());
-    const un2 = window.api.onDealWatchesChanged(() => refresh());
-    return () => { un1 && un1(); un2 && un2(); };
+    setScraping(true);
+    try {
+      await window.api.triggerDealScrape();
+      await refresh();
+    } catch (e) {
+      setError(e.message || 'Aktualisieren fehlgeschlagen.');
+    } finally {
+      setScraping(false);
+    }
   }, [refresh]);
+
+  useEffect(() => {
+    refresh().then(scrapeAndRefresh); // show cached alerts fast, then scrape for new ones
+  }, [refresh, scrapeAndRefresh]);
 
   const addWatch = async () => {
     if (!query.trim() || !maxPrice) return;
-    await window.api.addDealWatch({ query: query.trim(), maxPrice: parseFloat(maxPrice) });
-    setQuery(''); setMaxPrice('');
-    refresh();
+    try {
+      await window.api.addDealWatch({ query: query.trim(), maxPrice: parseFloat(maxPrice) });
+      setQuery(''); setMaxPrice('');
+      await scrapeAndRefresh();
+    } catch (e) {
+      setError(e.message || 'Watch anlegen fehlgeschlagen.');
+    }
+  };
+
+  const fmtTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    const mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return 'gerade eben';
+    if (mins < 60) return `vor ${mins} Min`;
+    if (mins < 1440) return `vor ${Math.round(mins / 60)} Std`;
+    return d.toLocaleDateString('de-DE');
   };
 
   return (
     <div className="max-w-5xl mx-auto w-full">
       <div className="flex items-center gap-3 mb-5">
         <Tag className="w-6 h-6 text-space-violet" strokeWidth={1.8} />
-        <h2 className="font-display text-xl font-bold text-ink">Deals & Preis-Alerts</h2>
+        <h2 className="font-display text-xl font-bold text-ink flex-1">Deals & Preis-Alerts</h2>
+        <button
+          onClick={scrapeAndRefresh}
+          disabled={scraping}
+          className="flex items-center gap-2 bg-obsidian-800 border border-line hover:border-space-violet/40 text-ink-muted hover:text-ink rounded-lg px-3 py-2 text-sm disabled:opacity-60"
+          title="Jetzt nach neuen Deals suchen"
+        >
+          <RefreshCw className={`w-4 h-4 ${scraping ? 'animate-spin' : ''}`} />
+          {scraping ? 'Suche…' : 'Aktualisieren'}
+        </button>
       </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Add watch */}
       <div className="bg-obsidian-800 border border-line rounded-xl p-4 mb-6">
@@ -87,7 +132,7 @@ export default function Deals() {
       </div>
       {alerts.length === 0 ? (
         <div className="text-center text-ink-faint py-16 text-sm">
-          Noch keine Deals. Lege einen Watch an — der Desktop prüft alle paar Minuten und meldet Treffer unter deinem Preis.
+          Noch keine Deals. Lege einen Watch an — die Cloud durchsucht die Marktplätze regelmäßig (und sofort beim Öffnen) und meldet Treffer unter deinem Preis.
         </div>
       ) : (
         <div className="space-y-2">
@@ -100,7 +145,7 @@ export default function Deals() {
                 <div className="text-sm text-ink truncate">{a.title}</div>
                 <div className="flex items-center gap-2 mt-0.5 text-[11px] text-ink-faint">
                   <span className="uppercase tracking-wider bg-obsidian border border-line rounded px-1.5 py-px">{a.source}</span>
-                  <span>{a.found_at}</span>
+                  <span>{fmtTime(a.found_at)}</span>
                 </div>
               </div>
               <div className="font-mono text-lg text-gold shrink-0">{a.price != null ? `${a.price}€` : '—'}</div>

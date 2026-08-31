@@ -162,7 +162,7 @@ async function dealsClient() {
 }
 function triggerCloudScrape(c) {
     // Fire the scrape-deals Edge Function so new watches get results immediately. Best-effort.
-    try { c.functions.invoke('scrape-deals'); } catch (e) {}
+    try { c.functions.invoke('scrape-deals').catch(() => {}); } catch (e) {}
 }
 ipcMain.handle('add-deal-watch', async (event, { query, maxPrice, sources }) => {
     const c = await dealsClient();
@@ -201,6 +201,13 @@ ipcMain.handle('get-deal-alerts', async () => {
 ipcMain.handle('dismiss-deal-alert', async (event, id) => {
     const c = await dealsClient();
     const { error } = await c.from('deal_alerts').update({ dismissed: true }).eq('id', id);
+    if (error) throw new Error(error.message);
+    return true;
+});
+// Run the cloud scrape and WAIT for it (so the UI can reload fresh results afterwards).
+ipcMain.handle('trigger-deal-scrape', async () => {
+    const c = await dealsClient();
+    const { error } = await c.functions.invoke('scrape-deals');
     if (error) throw new Error(error.message);
     return true;
 });

@@ -6,14 +6,25 @@ const kleinanzeigen = require('./kleinanzeigen.cjs');
 // Multi-source registry — add adapters here (eBay, Cardmarket, Willhaben, Shpock, FB, ...).
 const ADAPTERS = { kleinanzeigen };
 
-const STOPWORDS = new Set(['of', 'the', 'und', 'der', 'die', 'das', 'de', 'en', 'für', 'mit', 'und']);
-const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9äöü\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+const STOPWORDS = new Set(['of', 'the', 'und', 'der', 'die', 'das', 'de', 'en', 'für', 'mit']);
+// Fold ß->ss and umlauts/accents to ASCII (applied to both title and query). Kept in sync
+// with supabase/functions/scrape-deals/index.ts.
+const normalize = (s) => (s || '').toLowerCase()
+  .replace(/ß/g, 'ss')
+  .replace(/[äáàâã]/g, 'a').replace(/[öóòôõ]/g, 'o').replace(/[üúùû]/g, 'u')
+  .replace(/[éèêë]/g, 'e').replace(/[íìîï]/g, 'i').replace(/ç/g, 'c').replace(/ñ/g, 'n')
+  .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** The title must contain every significant word of the query (site search is too fuzzy). */
 function matchesQuery(title, query) {
+  const nt = ' ' + normalize(title) + ' ';
   const tokens = normalize(query).split(' ').filter((t) => t.length >= 3 && !STOPWORDS.has(t));
-  const t = ' ' + normalize(title) + ' ';
-  return tokens.length === 0 || tokens.every((tok) => t.includes(tok));
+  // A query with no significant tokens (e.g. "Ra") must NOT match everything.
+  if (tokens.length === 0) {
+    const raw = normalize(query);
+    return raw.length > 0 && nt.includes(raw);
+  }
+  return tokens.every((tok) => nt.includes(tok));
 }
 
 /** Run the watch's sources and return listings at/below max_price that actually match the query. */

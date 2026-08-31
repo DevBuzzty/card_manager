@@ -42,6 +42,10 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import kotlinx.coroutines.launch
 
+// Euro without truncating decimals: whole numbers show plain, otherwise two decimals.
+private fun euro(v: Double): String =
+    if (v == v.toLong().toDouble()) "${v.toLong()}" else "%.2f".format(v)
+
 // Autonomous Deals tab: reads watches + alerts straight from Supabase (no desktop needed).
 // Adding a watch or hitting refresh fires an immediate cloud scrape, then reloads.
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,7 +140,7 @@ fun DealsScreen() {
                         InputChip(
                             selected = false,
                             onClick = {},
-                            label = { Text("${w.query}  ≤${w.maxPrice.toInt()}€") },
+                            label = { Text("${w.query}  ≤${euro(w.maxPrice)}€") },
                             trailingIcon = {
                                 Icon(Icons.Default.Close, "Löschen",
                                     modifier = Modifier.size(18.dp).clickable {
@@ -197,7 +201,7 @@ private fun DealRow(d: DealAlert, context: android.content.Context, onDismiss: (
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SourceBadge(d.source)
                     Spacer(Modifier.width(8.dp))
-                    Text(d.price?.let { "${it.toInt()} €" } ?: "—", color = Gold,
+                    Text(d.price?.let { "${euro(it)} €" } ?: "—", color = Gold,
                         style = MaterialTheme.typography.titleMedium.copy(fontFamily = MonoFontFamily))
                 }
             }
