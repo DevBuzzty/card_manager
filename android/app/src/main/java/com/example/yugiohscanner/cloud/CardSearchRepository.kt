@@ -14,8 +14,12 @@ object CardSearchRepository {
     suspend fun search(query: String): List<CardRow> = withContext(Dispatchers.IO) {
         val q = query.trim()
         if (q.isEmpty()) return@withContext emptyList()
-        // Passcode: one lookup, in German (returns the German name too).
-        if (q.all { it.isDigit() }) return@withContext fetch("id", q, german = true)
+        // Passcode: German DB first (for the German name), but fall back to English — many cards
+        // (e.g. never released in German) exist ONLY in the English DB and would otherwise 404.
+        if (q.all { it.isDigit() }) {
+            val de = fetch("id", q, german = true)
+            return@withContext de.ifEmpty { fetch("id", q, german = false) }
+        }
         // Name: the collection is mostly German, so search the German DB first, then the
         // English DB as a fallback (YGOPRODeck's language=de only matches German names).
         // Merge by id, keeping the German-named hit when a card matches in both.

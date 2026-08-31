@@ -5,12 +5,17 @@ package com.example.yugiohscanner.ml
  * a track confirms (emitted once) after the same passcode has been seen [need] times.
  * Tracks not matched in a frame are dropped so a card leaving + re-entering re-scans.
  */
-class BoxTracker(private val need: Int = 3, private val iouThresh: Float = 0.4f) {
+class BoxTracker(
+    private val need: Int = 2,
+    private val iouThresh: Float = 0.4f,
+    private val maxMisses: Int = 12,
+) {
 
     private data class Track(
         var box: Box,
         val votes: HashMap<Int, Int> = HashMap(),
         var emitted: Boolean = false,
+        var misses: Int = 0,
     )
 
     private val tracks = ArrayList<Track>()
@@ -30,6 +35,7 @@ class BoxTracker(private val need: Int = 3, private val iouThresh: Float = 0.4f)
             val tr = if (best >= 0) { matched[best] = true; tracks[best] }
                      else Track(d.box).also { tracks.add(it) }
             tr.box = d.box
+            tr.misses = 0
             // passcode < 0 means "not read this frame" — keep the track alive (box updated
             // above) but don't let it vote or confirm.
             if (d.passcode >= 0) {
@@ -39,9 +45,14 @@ class BoxTracker(private val need: Int = 3, private val iouThresh: Float = 0.4f)
             }
         }
 
-        // Drop tracks not seen this frame. `matched` is sized to the pre-loop track count,
-        // so tracks added this frame (index >= matched.size) are never removed — correct.
-        for (m in matched.indices.reversed()) if (!matched[m]) tracks.removeAt(m)
+        // Age tracks not seen this frame; drop only after maxMisses consecutive misses. This lets
+        // votes accumulate across a sporadically-firing detector instead of resetting every gap.
+        // `matched` is sized to the pre-loop track count, so tracks added this frame are untouched.
+        for (m in matched.indices.reversed()) {
+            if (!matched[m]) {
+                if (++tracks[m].misses > maxMisses) tracks.removeAt(m)
+            }
+        }
 
         return newlyConfirmed
     }

@@ -29,16 +29,15 @@ import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import kotlinx.coroutines.launch
 
-// One scanned-but-not-yet-committed card in the phone-side staging area. Set/quantity are
-// editable (mutable state) so a mis-recognised printing can be corrected before committing.
-class ScanStagingEntry(
-    val id: Long,
-    val base: CardRow,
-    val knownSets: List<SetOption>,
-    initialSet: SetOption?,
-) {
-    var selectedSet by mutableStateOf(initialSet)
+// One scanned-but-not-yet-committed card. Added to staging IMMEDIATELY on recognition (feels
+// instant); its details + known printings are filled in asynchronously (loading=true meanwhile).
+// Set/quantity are editable so a mis-recognised printing can be corrected before committing.
+class ScanStagingEntry(val id: Long, val passcode: String) {
+    var base by mutableStateOf<CardRow?>(null)
+    var knownSets by mutableStateOf<List<SetOption>>(emptyList())
+    var selectedSet by mutableStateOf<SetOption?>(null)
     var quantity by mutableIntStateOf(1)
+    var loading by mutableStateOf(true)
 }
 
 @Composable
@@ -93,9 +92,10 @@ fun ScanStagingScreen(
                     scope.launch {
                         try {
                             for (e in entries.toList()) {
+                                val b = e.base ?: continue // still resolving — skip
                                 val s = e.selectedSet
                                 CollectionRepository.addScanned(
-                                    e.base,
+                                    b,
                                     setCode = s?.setCode ?: "Unknown",
                                     rarity = s?.rarity ?: "",
                                     language = s?.language ?: "DE",
@@ -125,14 +125,22 @@ private fun StagingRow(entry: ScanStagingEntry, onDelete: () -> Unit) {
     SpaceCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(model = entry.base.imageUrl, contentDescription = entry.base.name,
+                AsyncImage(model = entry.base?.imageUrl, contentDescription = entry.base?.name,
                     modifier = Modifier.width(48.dp).height(70.dp).clip(RoundedCornerShape(6.dp)))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(entry.base.name ?: entry.base.id, style = MaterialTheme.typography.titleMedium,
-                        color = OnSurface, maxLines = 2)
-                    Text(entry.base.id, style = MaterialTheme.typography.labelSmall,
-                        fontFamily = MonoFontFamily, color = Muted)
+                    Text(entry.base?.name ?: "Passcode ${entry.passcode}",
+                        style = MaterialTheme.typography.titleMedium, color = OnSurface, maxLines = 2)
+                    if (entry.loading) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.width(12.dp).height(12.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(6.dp))
+                            Text("lädt…", style = MaterialTheme.typography.labelSmall, color = Muted)
+                        }
+                    } else {
+                        Text(entry.passcode, style = MaterialTheme.typography.labelSmall,
+                            fontFamily = MonoFontFamily, color = Muted)
+                    }
                 }
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.Delete, "Entfernen", tint = MaterialTheme.colorScheme.error)
@@ -162,7 +170,8 @@ private fun SetPicker(entry: ScanStagingEntry, modifier: Modifier = Modifier) {
 
     Box(modifier) {
         Row(
-            Modifier.fillMaxWidth().clickable { expanded = true }.padding(vertical = 6.dp),
+            Modifier.fillMaxWidth().clickable(enabled = entry.knownSets.isNotEmpty()) { expanded = true }
+                .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(label, style = MaterialTheme.typography.bodyMedium,

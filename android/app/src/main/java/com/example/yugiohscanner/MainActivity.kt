@@ -442,20 +442,28 @@ fun ScannerScreen(
     // printings, and stage it for review. Dedup by passcode so one card is staged once.
     val onConfirmed = rememberUpdatedState<(Int, List<String>) -> Unit> { passcode, codes ->
         val pc = passcode.toString()
-        if (stagingCards.none { it.base.id == pc }) {
-            scanStatus = "Erkenne $pc…"
+        if (passcode > 0 && stagingCards.none { it.passcode == pc }) {
+            // Stage immediately (feels instant); resolve details + known printings in the background.
+            val entry = ScanStagingEntry(System.nanoTime(), pc)
+            stagingCards.add(entry)
+            scanStatus = "＋ $pc — Prüfen (${stagingCards.size})"
             scope.launch {
                 try {
                     val base = CardSearchRepository.search(pc).firstOrNull()
                     if (base == null) {
+                        stagingCards.remove(entry)
                         scanStatus = "Karte $pc nicht gefunden"
-                    } else if (stagingCards.none { it.base.id == pc }) {
+                    } else {
+                        entry.base = base
                         val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
-                        val match = SetCodeMatch.best(codes, known)
-                        stagingCards.add(ScanStagingEntry(System.nanoTime(), base, known, match))
-                        scanStatus = "＋ ${base.name ?: pc} — Prüfen (${stagingCards.size})"
+                        entry.knownSets = known
+                        entry.selectedSet = SetCodeMatch.best(codes, known)
+                        entry.loading = false
                     }
-                } catch (e: Exception) { scanStatus = "Fehler: ${e.message}" }
+                } catch (e: Exception) {
+                    entry.loading = false
+                    scanStatus = "Fehler: ${e.message}"
+                }
             }
         }
     }
@@ -495,7 +503,8 @@ fun ScannerScreen(
     val executor = remember { Executors.newSingleThreadExecutor() }
     val analyzer = remember {
         CardAnalyzer(
-            onResultDetected = { code, setCodes -> onDetected.value(code, setCodes) },
+            // Reliable identification by passcode OCR → autonomous phone staging (onConfirmed).
+            onResultDetected = { code, setCodes -> onConfirmed.value(code.toIntOrNull() ?: -1, setCodes) },
             onProgress = { code, hits, required -> onProgress.value(code, hits, required) }
         )
     }
@@ -503,7 +512,7 @@ fun ScannerScreen(
     // Phase-4: on-device recognition pipeline + live overlay state.
     // Identification is by ARTWORK embedding: each detector crop -> pad-to-square 224 -> embedder
     // -> nearest-neighbour over the on-device index (production model, TOP-1 ~0.998).
-    val pipeline = remember { com.example.yugiohscanner.ml.ScanPipeline(context, minSim = 0.6f) }
+    val pipeline = remember { com.example.yugiohscanner.ml.HybridPipeline(context, minSim = 0.6f) }
     val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 3) }
     val setCodeOcr = remember { com.example.yugiohscanner.ml.SetCodeOcr() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
@@ -604,9 +613,9 @@ fun ScannerScreen(
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also {
-                            // Artwork scanner: live multi-card detection + embedding recognition.
-                            // On confirm it OCRs the set code and emits passcode + set codes to the
-                            // desktop staging area (see mlAnalyzer -> onDetected).
+                            // Artwork scanner (restored strict thresholds 0.6/0.6) → autonomous
+                            // phone staging via onConfirmed. The passcode CardAnalyzer stays built
+                            // but detached (used only for manual entry).
                             it.setAnalyzer(executor, mlAnalyzer)
                         }
 
