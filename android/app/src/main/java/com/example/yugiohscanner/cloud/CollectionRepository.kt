@@ -41,9 +41,9 @@ object CollectionRepository {
 
     // Creates a new printing row in the cloud, reusing the base card's shared detail fields.
     // Only for a printing the user does NOT already own (the picker excludes owned ones).
-    suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double) = withContext(Dispatchers.IO) {
+    suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double, language: String = "DE") = withContext(Dispatchers.IO) {
         val body = JSONObject()
-            .put("id", base.id).put("set_code", setCode).put("language", "DE")
+            .put("id", base.id).put("set_code", setCode).put("language", language)
             .put("name", base.name).put("type", base.type).put("desc", base.desc)
             .put("image_url", base.imageUrl).put("atk", base.atk ?: JSONObject.NULL)
             .put("def", base.def ?: JSONObject.NULL).put("level", base.level ?: JSONObject.NULL)

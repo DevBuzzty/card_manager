@@ -30,7 +30,7 @@ fun AddPrintingSection(base: CardRow, owned: List<CardRow>, onError: (String) ->
         scope.launch {
             try {
                 val ownedKeys = owned.map { it.setCode }.toHashSet()
-                sets = PrintingRepository.fetchSets(base.id).filter { it.setCode !in ownedKeys }
+                sets = PrintingRepository.fetchAllSets(base.id).filter { it.setCode !in ownedKeys }
                 expanded = true
             } catch (e: Exception) { onError(e.message ?: "Sets laden fehlgeschlagen") }
             loading = false
@@ -45,13 +45,13 @@ fun AddPrintingSection(base: CardRow, owned: List<CardRow>, onError: (String) ->
                 items(sets, key = { "${it.setCode}|${it.rarity}" }) { s ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("${s.setCode} · ${s.rarity}", style = MaterialTheme.typography.bodyMedium)
-                            Text("%.2f €".format(s.price), style = MaterialTheme.typography.bodySmall)
+                            Text("[${s.language}] ${s.setCode} · ${s.rarity}", style = MaterialTheme.typography.bodyMedium)
+                            Text(if (s.price > 0) "%.2f €".format(s.price) else "—", style = MaterialTheme.typography.bodySmall)
                         }
                         Button(enabled = !adding, onClick = {
                             adding = true
                             scope.launch {
-                                try { CollectionRepository.addPrinting(base, s.setCode, s.rarity, s.price); onAdded(); expanded = false }
+                                try { CollectionRepository.addPrinting(base, s.setCode, s.rarity, s.price, s.language); onAdded(); expanded = false }
                                 catch (e: Exception) { onError(e.message ?: "Hinzufügen fehlgeschlagen") }
                                 adding = false
                             }

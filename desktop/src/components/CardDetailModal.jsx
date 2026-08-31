@@ -11,10 +11,25 @@ export default function CardDetailModal({ card, onClose }) {
   useEffect(() => {
       setLocalVariants(card.variants || []);
       if (window.api) {
-          window.api.fetchCardData(card.id).then(data => {
-              if (data && data.card_sets) {
-                  setAvailableSets(data.card_sets);
+          // Same sources as the phone: German printings from Yugipedia, English/international
+          // from YGOPRODeck (YGOPRODeck has no -DE- set codes). German first, deduped by code+rarity.
+          Promise.all([
+              window.api.fetchYugipediaSets(card.id).then(s => s || []).catch(() => []),
+              window.api.fetchCardData(card.id).then(d => (d && d.card_sets) || []).catch(() => []),
+          ]).then(([deSets, enSets]) => {
+              const tagged = [
+                  ...deSets.map(s => ({ ...s, language: 'DE' })),
+                  ...enSets.map(s => ({ ...s, language: 'EN' })),
+              ];
+              const seen = new Set();
+              const merged = [];
+              for (const s of tagged) {
+                  const key = `${s.set_code}|${s.set_rarity}`;
+                  if (seen.has(key)) continue;
+                  seen.add(key);
+                  merged.push(s);
               }
+              setAvailableSets(merged);
           });
       }
   }, [card]);
@@ -79,6 +94,7 @@ export default function CardDetailModal({ card, onClose }) {
           set_code: setInfo.set_code,
           rarity: setInfo.set_rarity,
           price: (parseFloat(setInfo.set_price) || 0),
+          language: setInfo.language || 'DE',
           quantity: 1
       };
 
@@ -209,7 +225,7 @@ export default function CardDetailModal({ card, onClose }) {
                                         .filter(s => !localVariants.some(v => v.set_code === s.set_code && v.rarity === s.set_rarity))
                                         .map(set => ({
                                             value: `${set.set_code}|${set.set_rarity}`,
-                                            label: `${set.set_code} - ${set.set_rarity} ($${set.set_price})`
+                                            label: `[${set.language}] ${set.set_code} - ${set.set_rarity}${set.set_price ? ` ($${set.set_price})` : ''}`
                                         }));
                                 })()}
                             />
