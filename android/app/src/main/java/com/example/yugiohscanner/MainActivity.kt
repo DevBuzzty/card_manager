@@ -82,6 +82,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -97,7 +98,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.yugiohscanner.cloud.CardSearchRepository
+import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.SupabaseCloud
+import kotlinx.coroutines.launch
 import com.example.yugiohscanner.ui.theme.AppTheme
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
@@ -422,23 +426,31 @@ fun ScannerScreen(
 
     // Feedback Helper (Empty as per requirement)
     val triggerFeedback = remember { {} }
+    val scope = rememberCoroutineScope()
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
     // always runs the latest logic without being recreated on every recomposition.
-    val onDetected = rememberUpdatedState<(String, List<String>) -> Unit> { code, setCodes ->
+    // Autonomous flow: scanned passcode → YGOPRODeck lookup → add to the Supabase collection
+    // (set 'Unknown', quantity +1). No desktop needed. Set codes are ignored in this mode.
+    val onDetected = rememberUpdatedState<(String, List<String>) -> Unit> { code, _ ->
         if (code != lastScannedCode) {
             lastScannedCode = code
-            val best = setCodes.firstOrNull()
-            scanStatus = if (best != null) "Detected: $code ($best)" else "Detected: $code"
             triggerFeedback()
-            onAddHistory(scanStatus)
-            val data = JSONObject()
-            data.put("passcode", code)
-            if (best != null) {
-                data.put("setCode", best)
-                data.put("setCodeCandidates", JSONArray(setCodes))
+            scanStatus = "Nachschlagen $code…"
+            scope.launch {
+                try {
+                    val base = CardSearchRepository.search(code).firstOrNull()
+                    if (base == null) {
+                        scanStatus = "Karte $code nicht gefunden"
+                    } else {
+                        val msg = CollectionRepository.addScanned(base)
+                        scanStatus = "✓ $msg"
+                        onAddHistory(msg)
+                    }
+                } catch (e: Exception) {
+                    scanStatus = "Fehler: ${e.message}"
+                }
             }
-            socket?.emit("card_scanned", data)
         }
     }
     val onProgress = rememberUpdatedState<(String, Int, Int) -> Unit> { code, hits, required ->
@@ -558,7 +570,10 @@ fun ScannerScreen(
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also {
-                            it.setAnalyzer(executor, mlAnalyzer)
+                            // Placeholder single-card scanner: reliable full-frame passcode OCR
+                            // (the artwork ML pipeline `mlAnalyzer` stays built but detached until
+                            // the embedder is trained).
+                            it.setAnalyzer(executor, analyzer)
                         }
 
                     try {
