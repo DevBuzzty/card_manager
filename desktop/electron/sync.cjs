@@ -127,6 +127,21 @@ function startSync(db, getWindow) {
     }
   }
 
+  // Additive: record today's collection value to Supabase so the phone's value chart fills
+  // even when only the desktop runs. One row per user per day (merge-duplicates). Non-fatal.
+  async function syncSnapshot(c) {
+    try {
+      const row = db.prepare(
+        'SELECT COALESCE(SUM(price * quantity), 0) AS total, COALESCE(SUM(quantity), 0) AS cnt ' +
+        'FROM cards WHERE deleted = 0'
+      ).get();
+      await c.from('portfolio_snapshots')
+        .upsert({ total_value: row.total, card_count: row.cnt }, { onConflict: 'user_id,day' });
+    } catch (e) {
+      // table may not be created yet, or a transient error — never break the sync cycle
+    }
+  }
+
   async function cycle() {
     if (running) return;
     running = true;
@@ -136,6 +151,7 @@ function startSync(db, getWindow) {
       emit('syncing');
       const pulled = await pull(c);
       await push(c);
+      await syncSnapshot(c);
       if (pulled > 0) {
         const w = getWindow();
         if (w) w.webContents.send('collection-changed');
