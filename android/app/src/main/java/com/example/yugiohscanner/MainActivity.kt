@@ -292,7 +292,14 @@ fun MainScreen() {
         isConnected = false
     }
 
-    if (isConnected && hasCameraPermission) {
+    // Desktop is now OPTIONAL: auto-connect in the background if an IP is saved (so scans still
+    // reach the desktop staging area when it's running), but never gate the camera on it.
+    LaunchedEffect(Unit) {
+        val savedIp = prefs.getString("ip_address", "") ?: ""
+        if (savedIp.isNotBlank() && socket == null) connectSocket(savedIp)
+    }
+
+    if (hasCameraPermission) {
         ScannerScreen(
             socket = socket,
             onDisconnect = disconnectSocket,
