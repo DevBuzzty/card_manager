@@ -35,6 +35,10 @@ fun MoreScreen(prefs: SharedPreferences, onLoggedOut: () -> Unit) {
         SetCompletionScreen(onClose = { sub = null })
         return
     }
+    if (sub == "decks") {
+        DecksScreen(onClose = { sub = null })
+        return
+    }
     if (sub == "settings") {
         Surface(Modifier.fillMaxSize(), color = Background) {
             Column(Modifier.fillMaxSize()) {
@@ -58,7 +62,7 @@ fun MoreScreen(prefs: SharedPreferences, onLoggedOut: () -> Unit) {
             Spacer(Modifier.height(2.dp))
             MenuRow(Icons.Default.FavoriteBorder, "Wishlist", onClick = { sub = "wishlist" })
             MenuRow(Icons.Default.Dashboard, "Set-Vervollständigung", onClick = { sub = "sets" })
-            MenuRow(Icons.Default.Style, "Decks", soon = true)
+            MenuRow(Icons.Default.Style, "Decks", onClick = { sub = "decks" })
             MenuRow(Icons.Default.Settings, "Einstellungen", onClick = { sub = "settings" })
         }
     }
