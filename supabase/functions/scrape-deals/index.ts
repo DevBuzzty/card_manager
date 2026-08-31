@@ -1,9 +1,11 @@
 // Supabase Edge Function: scrape active deal watches and insert new listings.
 // Runs on a schedule (cron) so the phone gets deals without the desktop.
-// Deploy:  supabase functions deploy scrape-deals
+// Deploy:  supabase functions deploy scrape-deals --no-verify-jwt
+//   (keep --no-verify-jwt so the pg_cron trigger can call it; auth is the optional secret below)
 // Secrets: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.
-//   Optional: set DEALS_TRIGGER_SECRET to require an `x-deals-secret` header on every call
-//   (callers must then send it; leave unset to keep the function open).
+//   Optional hardening: set DEALS_TRIGGER_SECRET to require an `x-deals-secret` header on every
+//   call — then EVERY caller (desktop, phone, cron) must send that header. Leave unset to keep
+//   the function callable without a secret (it no longer leaks other users' data either way).
 //
 // This is a Deno port of desktop/electron/deals/{kleinanzeigen,poller}.cjs. Keep the
 // scraping regexes and the matchesQuery logic in sync with those files.
