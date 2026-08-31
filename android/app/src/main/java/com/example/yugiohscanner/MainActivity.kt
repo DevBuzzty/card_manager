@@ -467,9 +467,9 @@ fun ScannerScreen(
     }
 
     // Phase-4: on-device recognition pipeline + live overlay state.
-    // Identification is by passcode OCR of each detector crop (the artwork embedder is disabled
-    // until it's trained well enough — see PasscodePipeline).
-    val pipeline = remember { com.example.yugiohscanner.ml.PasscodePipeline(context) }
+    // Identification is by ARTWORK embedding: each detector crop -> pad-to-square 224 -> embedder
+    // -> nearest-neighbour over the on-device index (production model, TOP-1 ~0.998).
+    val pipeline = remember { com.example.yugiohscanner.ml.ScanPipeline(context, minSim = 0.6f) }
     val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 3) }
     val setCodeOcr = remember { com.example.yugiohscanner.ml.SetCodeOcr() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
@@ -567,10 +567,10 @@ fun ScannerScreen(
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also {
-                            // Placeholder single-card scanner: reliable full-frame passcode OCR
-                            // (the artwork ML pipeline `mlAnalyzer` stays built but detached until
-                            // the embedder is trained).
-                            it.setAnalyzer(executor, analyzer)
+                            // Artwork scanner: live multi-card detection + embedding recognition.
+                            // On confirm it OCRs the set code and emits passcode + set codes to the
+                            // desktop staging area (see mlAnalyzer -> onDetected).
+                            it.setAnalyzer(executor, mlAnalyzer)
                         }
 
                     try {
