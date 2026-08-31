@@ -1,14 +1,14 @@
 package com.example.yugiohscanner.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,10 +25,37 @@ import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import kotlinx.coroutines.launch
 
+// One passcode grouped across all its owned printings.
+private data class CardGroup(
+    val id: String,
+    val name: String?,
+    val imageUrl: String?,
+    val totalQty: Int,
+    val totalValue: Double,
+    val maxPrice: Double,
+    val rarities: List<String>,
+    val variants: List<CardRow>,
+)
+
+private fun groupCards(cards: List<CardRow>): List<CardGroup> =
+    cards.groupBy { it.id }.map { (id, rows) ->
+        CardGroup(
+            id = id,
+            name = rows.firstOrNull()?.name,
+            imageUrl = rows.firstOrNull { !it.imageUrl.isNullOrBlank() }?.imageUrl,
+            totalQty = rows.sumOf { it.quantity },
+            totalValue = rows.sumOf { (it.price ?: 0.0) * it.quantity },
+            maxPrice = rows.maxOfOrNull { it.price ?: 0.0 } ?: 0.0,
+            rarities = rows.mapNotNull { it.rarity }.distinct(),
+            variants = rows.sortedByDescending { it.price ?: 0.0 },
+        )
+    }
+
 @Composable
 fun CollectionScreen() {
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
     var query by remember { mutableStateOf("") }
+    var sort by remember { mutableStateOf("total") } // total | single | name
     var loading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var detailId by remember { mutableStateOf<String?>(null) }
@@ -55,13 +82,30 @@ fun CollectionScreen() {
         return
     }
 
-    val filtered = cards.filter {
-        query.isBlank() || (it.name ?: "").contains(query, true) || it.setCode.contains(query, true)
+    val groups = remember(cards, query, sort) {
+        groupCards(cards)
+            .filter { g ->
+                query.isBlank() || (g.name ?: "").contains(query, true) ||
+                    g.variants.any { it.setCode.contains(query, true) }
+            }
+            .sortedWith(
+                when (sort) {
+                    "name" -> compareBy { it.name ?: it.id }
+                    "single" -> compareByDescending { it.maxPrice }
+                    else -> compareByDescending { it.totalValue }
+                }
+            )
     }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(12.dp)) {
             OutlinedTextField(query, { query = it }, label = { Text("Suche") }, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(sort == "total", { sort = "total" }, label = { Text("Wert") })
+                FilterChip(sort == "single", { sort = "single" }, label = { Text("Preis") })
+                FilterChip(sort == "name", { sort = "name" }, label = { Text("Name") })
+            }
             Spacer(Modifier.height(8.dp))
             errorMsg?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -72,21 +116,8 @@ fun CollectionScreen() {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 88.dp), // clear the "+" FAB
             ) {
-                items(filtered, key = { "${it.id}|${it.setCode}|${it.language}" }) { card ->
-                    CardListItem(card,
-                        onOpen = { detailId = card.id },
-                        onInc = { scope.launch {
-                            try { CollectionRepository.setQuantity(card, card.quantity + 1); errorMsg = null; reload() }
-                            catch (e: Exception) { errorMsg = e.message ?: "Aktualisieren fehlgeschlagen" }
-                        } },
-                        onDec = { if (card.quantity > 1) scope.launch {
-                            try { CollectionRepository.setQuantity(card, card.quantity - 1); errorMsg = null; reload() }
-                            catch (e: Exception) { errorMsg = e.message ?: "Aktualisieren fehlgeschlagen" }
-                        } },
-                        onDelete = { scope.launch {
-                            try { CollectionRepository.softDelete(card); errorMsg = null; reload() }
-                            catch (e: Exception) { errorMsg = e.message ?: "Löschen fehlgeschlagen" }
-                        } })
+                items(groups, key = { it.id }) { group ->
+                    CardGroupItem(group, onOpen = { detailId = group.id })
                 }
             }
         }
@@ -100,37 +131,43 @@ fun CollectionScreen() {
 }
 
 @Composable
-private fun CardListItem(card: CardRow, onOpen: () -> Unit, onInc: () -> Unit, onDec: () -> Unit, onDelete: () -> Unit) {
+private fun CardGroupItem(group: CardGroup, onOpen: () -> Unit) {
     SpaceCard(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f).clickable { onOpen() }, verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(model = card.imageUrl, contentDescription = card.name,
+        Column(Modifier.clickable { onOpen() }.padding(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(model = group.imageUrl, contentDescription = group.name,
                     modifier = Modifier.width(48.dp).height(70.dp).clip(RoundedCornerShape(6.dp)))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(card.name ?: card.id, style = MaterialTheme.typography.titleMedium,
+                    Text(group.name ?: group.id, style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface, maxLines = 2)
                     Spacer(Modifier.height(4.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        RarityChip(card.rarity)
-                        Text(card.setCode, style = MaterialTheme.typography.bodySmall,
-                            fontFamily = MonoFontFamily, color = Muted)
+                    // All owned rarities.
+                    Row(Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        group.rarities.forEach { RarityChip(it) }
                     }
-                    Spacer(Modifier.height(4.dp))
-                    ValueText(card.price, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.width(8.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    ValueText(group.totalValue, style = MaterialTheme.typography.titleMedium)
+                    Text("×${group.totalQty}", fontFamily = MonoFontFamily,
+                        style = MaterialTheme.typography.bodySmall, color = Muted)
                 }
             }
-            IconButton(onClick = onDec) {
-                Icon(Icons.Default.Remove, "−", tint = MaterialTheme.colorScheme.primary)
-            }
-            Text("${card.quantity}", fontFamily = MonoFontFamily,
-                color = MaterialTheme.colorScheme.onSurface)
-            IconButton(onClick = onInc) {
-                Icon(Icons.Default.Add, "+", tint = MaterialTheme.colorScheme.primary)
-            }
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(8.dp))
+            // Per-set breakdown: set code · quantity · unit price.
+            group.variants.forEach { v ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(v.setCode, fontFamily = MonoFontFamily,
+                        style = MaterialTheme.typography.bodySmall, color = Muted,
+                        modifier = Modifier.weight(1f))
+                    Text("×${v.quantity}", fontFamily = MonoFontFamily,
+                        style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Spacer(Modifier.width(10.dp))
+                    ValueText(v.price ?: 0.0, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }
