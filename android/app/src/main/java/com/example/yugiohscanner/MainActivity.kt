@@ -412,9 +412,11 @@ fun ScannerScreen(
         )
     }
 
-    // Phase-4: on-device ML recognition pipeline + live overlay state.
-    val pipeline = remember { com.example.yugiohscanner.ml.ScanPipeline(context, minSim = 0.68f) }
-    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 5) }
+    // Phase-4: on-device recognition pipeline + live overlay state.
+    // Identification is by passcode OCR of each detector crop (the artwork embedder is disabled
+    // until it's trained well enough — see PasscodePipeline).
+    val pipeline = remember { com.example.yugiohscanner.ml.PasscodePipeline(context) }
+    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 3) }
     val setCodeOcr = remember { com.example.yugiohscanner.ml.SetCodeOcr() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
@@ -558,7 +560,7 @@ fun ScannerScreen(
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f)
                     )
                     drawContext.canvas.nativeCanvas.drawText(
-                        "${d.passcode}  ${(d.sim * 100).toInt()}%",
+                        if (d.passcode >= 0) d.passcode.toString() else "…",
                         l, (t - 10f).coerceAtLeast(30f),
                         android.graphics.Paint().apply {
                             color = android.graphics.Color.rgb(0, 255, 102)

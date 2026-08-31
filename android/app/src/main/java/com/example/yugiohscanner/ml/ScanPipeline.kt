@@ -6,16 +6,22 @@ import android.graphics.Bitmap
 /** One recognised card: its detector box, matched passcode, and cosine similarity. */
 data class Detection(val box: Box, val passcode: Int, val sim: Float)
 
+/** A per-frame card recogniser: detect boxes and attach a passcode to each. */
+interface CardPipeline {
+    fun process(frame: Bitmap): List<Detection>
+    fun close()
+}
+
 /**
  * Full on-device recognition: detect card boxes, then for each box crop -> pad-to-square 224
  * -> embed -> nearest-neighbour index lookup. Detections below [minSim] are dropped.
  */
-class ScanPipeline(context: Context, private val minSim: Float = 0.5f) {
+class ScanPipeline(context: Context, private val minSim: Float = 0.5f) : CardPipeline {
     private val detector = DetectorModel(context)
     private val embedder = EmbedderModel(context)
     private val index = IndexSearcher(context)
 
-    fun process(frame: Bitmap): List<Detection> {
+    override fun process(frame: Bitmap): List<Detection> {
         val out = ArrayList<Detection>()
         for (b in detector.detect(frame)) {
             val x = b.x1.toInt().coerceIn(0, frame.width - 1)
@@ -30,7 +36,7 @@ class ScanPipeline(context: Context, private val minSim: Float = 0.5f) {
         return out
     }
 
-    fun close() {
+    override fun close() {
         detector.close()
         embedder.close()
     }

@@ -30,9 +30,13 @@ class BoxTracker(private val need: Int = 3, private val iouThresh: Float = 0.4f)
             val tr = if (best >= 0) { matched[best] = true; tracks[best] }
                      else Track(d.box).also { tracks.add(it) }
             tr.box = d.box
-            val c = (tr.votes[d.passcode] ?: 0) + 1
-            tr.votes[d.passcode] = c
-            if (!tr.emitted && c >= need) { tr.emitted = true; newlyConfirmed.add(d) }
+            // passcode < 0 means "not read this frame" — keep the track alive (box updated
+            // above) but don't let it vote or confirm.
+            if (d.passcode >= 0) {
+                val c = (tr.votes[d.passcode] ?: 0) + 1
+                tr.votes[d.passcode] = c
+                if (!tr.emitted && c >= need) { tr.emitted = true; newlyConfirmed.add(d) }
+            }
         }
 
         // Drop tracks not seen this frame. `matched` is sized to the pre-loop track count,

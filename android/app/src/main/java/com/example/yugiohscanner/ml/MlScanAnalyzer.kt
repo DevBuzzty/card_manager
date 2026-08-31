@@ -13,7 +13,7 @@ import androidx.camera.core.ImageProxy
  * ImageAnalysis STRATEGY_KEEP_ONLY_LATEST throttles this naturally to pipeline speed.
  */
 class MlScanAnalyzer(
-    private val pipeline: ScanPipeline,
+    private val pipeline: CardPipeline,
     private val onResult: (dets: List<Detection>, frame: Bitmap, frameW: Int, frameH: Int, ms: Long) -> Unit
 ) : ImageAnalysis.Analyzer {
 
