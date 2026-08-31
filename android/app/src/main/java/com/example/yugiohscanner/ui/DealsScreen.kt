@@ -2,6 +2,7 @@ package com.example.yugiohscanner.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,19 +13,33 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.DealAlert
 import com.example.yugiohscanner.cloud.DealWatch
 import com.example.yugiohscanner.cloud.DealsRepository
+import com.example.yugiohscanner.ui.components.SpaceCard
+import com.example.yugiohscanner.ui.theme.Background
+import com.example.yugiohscanner.ui.theme.ErrorColor
+import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Line
+import com.example.yugiohscanner.ui.theme.MonoFontFamily
+import com.example.yugiohscanner.ui.theme.Muted
+import com.example.yugiohscanner.ui.theme.OnSurface
+import com.example.yugiohscanner.ui.theme.Primary
 import kotlinx.coroutines.launch
 
 // Autonomous Deals tab: reads watches + alerts straight from Supabase (no desktop needed).
@@ -78,21 +93,21 @@ fun DealsScreen() {
         }
     }
 
-    Surface(Modifier.fillMaxSize(), color = Color(0xFF121212)) {
+    Surface(Modifier.fillMaxSize(), color = Background) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Deals", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                Text("Deals", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
                 Spacer(Modifier.weight(1f))
                 if (loading) {
-                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Color(0xFF9D00FF))
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Primary)
                 } else {
                     IconButton(onClick = { refresh() }) {
-                        Icon(Icons.Default.Refresh, "Aktualisieren", tint = Color.White)
+                        Icon(Icons.Default.Refresh, "Aktualisieren", tint = OnSurface)
                     }
                 }
             }
             error?.let {
-                Text(it, color = Color(0xFFEF4444), style = MaterialTheme.typography.labelSmall,
+                Text(it, color = ErrorColor, style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(top = 4.dp))
             }
 
@@ -141,39 +156,68 @@ fun DealsScreen() {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         if (loading) "Suche Deals …" else "Noch keine Deals. Lege einen Watch an.",
-                        color = Color(0xFF888888)
+                        color = Muted
                     )
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(alerts, key = { it.id }) { d ->
-                        Surface(color = Color(0xFF1E1E1E), shape = RoundedCornerShape(12.dp)) {
-                            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(d.title, color = Color.White, maxLines = 2,
-                                        style = MaterialTheme.typography.bodyMedium)
-                                    Text(d.source, color = Color(0xFF888888),
-                                        style = MaterialTheme.typography.labelSmall)
-                                }
-                                Spacer(Modifier.width(8.dp))
-                                Text(d.price?.let { "${it.toInt()} €" } ?: "—", color = Color(0xFFF5C542),
-                                    style = MaterialTheme.typography.titleMedium)
-                                IconButton(onClick = {
-                                    if (d.url.isNotBlank()) context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, Uri.parse(d.url))
-                                    )
-                                }) { Icon(Icons.Default.OpenInNew, "Öffnen", tint = Color(0xFF9D00FF)) }
-                                IconButton(onClick = {
-                                    scope.launch {
-                                        try { DealsRepository.dismissAlert(d.id); alerts.remove(d) }
-                                        catch (e: Exception) { error = e.message }
-                                    }
-                                }) { Icon(Icons.Default.Close, "Ausblenden", tint = Color(0xFF888888)) }
-                            }
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(alerts, key = { it.id }) { d -> DealRow(d, context, onDismiss = {
+                        scope.launch {
+                            try { DealsRepository.dismissAlert(d.id); alerts.remove(d) }
+                            catch (e: Exception) { error = e.message }
                         }
-                    }
+                    }) }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DealRow(d: DealAlert, context: android.content.Context, onDismiss: () -> Unit) {
+    SpaceCard(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Listing photo (falls back to a placeholder tile).
+            Box(
+                Modifier.size(60.dp).clip(RoundedCornerShape(10.dp)).background(Background),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (!d.imageUrl.isNullOrBlank()) {
+                    AsyncImage(model = d.imageUrl, contentDescription = d.title,
+                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                } else {
+                    Icon(Icons.Default.Image, null, tint = Muted, modifier = Modifier.size(24.dp))
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(d.title, color = OnSurface, maxLines = 2, fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SourceBadge(d.source)
+                    Spacer(Modifier.width(8.dp))
+                    Text(d.price?.let { "${it.toInt()} €" } ?: "—", color = Gold,
+                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = MonoFontFamily))
+                }
+            }
+            IconButton(onClick = {
+                if (d.url.isNotBlank()) context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(d.url)))
+            }) { Icon(Icons.Default.OpenInNew, "Öffnen", tint = Primary) }
+            IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, "Ausblenden", tint = Muted) }
+        }
+    }
+}
+
+@Composable
+private fun SourceBadge(source: String) {
+    val label = when (source.lowercase()) {
+        "kleinanzeigen" -> "Kleinanzeigen"
+        else -> source.replaceFirstChar { it.uppercase() }
+    }
+    Box(
+        Modifier.clip(RoundedCornerShape(6.dp)).background(Line).padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(label, color = Muted, fontSize = 11.sp)
     }
 }
