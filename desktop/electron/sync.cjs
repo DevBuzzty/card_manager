@@ -171,6 +171,10 @@ function startSync(db, getWindow) {
 
   setInterval(cycle, 20000);
   setTimeout(cycle, 3000); // initial kick shortly after launch
+
+  // Expose the authed client so other main-process features (deals) can use the same
+  // signed-in Supabase session instead of a separate local store.
+  return { ensureClient };
 }
 
 module.exports = { startSync, rowToRemote, remoteToLocalPatch, remoteToLocalFull, applyRemoteRow };

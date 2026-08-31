@@ -82,25 +82,15 @@ function startSocketServer() {
 }
 
 let priceUpdateInterval;
-let dealPoller;
+let sync;   // { ensureClient } handle from startSync, for cloud deal handlers
 
 app.whenReady().then(() => {
   createWindow();
   startSocketServer();
   startPricePoller();
-  startSync(db, () => mainWindow);
-  dealPoller = startDealPoller(db, (alert) => {
-    if (mainWindow) mainWindow.webContents.send('deal-alert', alert);
-    if (io) io.emit('deal_alert', alert);   // push to the phone
-    try {
-      if (Notification.isSupported()) {
-        const priceTxt = alert.price != null ? `${alert.price} €` : '';
-        const n = new Notification({ title: `Deal ${priceTxt}`.trim(), body: alert.title });
-        n.on('click', () => { if (alert.url) shell.openExternal(alert.url); });
-        n.show();
-      }
-    } catch (e) {}
-  });
+  sync = startSync(db, () => mainWindow);
+  // Deals now live in Supabase (the cloud Edge Function scrapes, shared with the phone).
+  // The old local SQLite poller is disabled — the desktop reads/writes the cloud tables.
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -179,27 +169,54 @@ function detailsFromApi(apiCard) {
 
 ipcMain.handle('get-ip-address', () => getLocalIpAddress());
 
-// --- Deal-scraper: watches + alerts ---
-ipcMain.handle('add-deal-watch', (event, { query, maxPrice, sources }) => {
-    const info = db.prepare('INSERT INTO deal_watches (query, max_price, sources, active) VALUES (?, ?, ?, 1)')
-        .run(String(query || ''), Number(maxPrice) || 0, sources ? JSON.stringify(sources) : null);
-    if (dealPoller) dealPoller.pollNow();   // check right away
-    return info.lastInsertRowid;
+// --- Deal-scraper: watches + alerts (Supabase cloud — same source as the phone) ---
+async function dealsClient() {
+    const c = sync && await sync.ensureClient();
+    if (!c) throw new Error('Cloud nicht verbunden — Supabase-Login in den Einstellungen prüfen.');
+    return c;
+}
+function triggerCloudScrape(c) {
+    // Fire the scrape-deals Edge Function so new watches get results immediately. Best-effort.
+    try { c.functions.invoke('scrape-deals'); } catch (e) {}
+}
+ipcMain.handle('add-deal-watch', async (event, { query, maxPrice, sources }) => {
+    const c = await dealsClient();
+    const { data, error } = await c.from('deal_watches')
+        .insert({ query: String(query || ''), max_price: Number(maxPrice) || 0, sources: sources ? JSON.stringify(sources) : null })
+        .select('id').single();
+    if (error) throw new Error(error.message);
+    triggerCloudScrape(c);
+    return data.id;
 });
-ipcMain.handle('get-deal-watches', () => db.prepare('SELECT * FROM deal_watches ORDER BY created_at DESC').all());
-ipcMain.handle('delete-deal-watch', (event, id) => {
-    db.prepare('DELETE FROM deal_watches WHERE id = ?').run(id);
-    db.prepare('DELETE FROM deal_alerts WHERE watch_id = ?').run(id);
+ipcMain.handle('get-deal-watches', async () => {
+    const c = await dealsClient();
+    const { data, error } = await c.from('deal_watches').select('*').order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return data || [];
+});
+ipcMain.handle('delete-deal-watch', async (event, id) => {
+    const c = await dealsClient();
+    const { error } = await c.from('deal_watches').delete().eq('id', id);   // deal_alerts cascade in the DB
+    if (error) throw new Error(error.message);
     return true;
 });
-ipcMain.handle('toggle-deal-watch', (event, { id, active }) => {
-    db.prepare('UPDATE deal_watches SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
+ipcMain.handle('toggle-deal-watch', async (event, { id, active }) => {
+    const c = await dealsClient();
+    const { error } = await c.from('deal_watches').update({ active: !!active }).eq('id', id);
+    if (error) throw new Error(error.message);
     return true;
 });
-ipcMain.handle('get-deal-alerts', () =>
-    db.prepare('SELECT * FROM deal_alerts WHERE dismissed = 0 ORDER BY found_at DESC LIMIT 200').all());
-ipcMain.handle('dismiss-deal-alert', (event, id) => {
-    db.prepare('UPDATE deal_alerts SET dismissed = 1 WHERE id = ?').run(id);
+ipcMain.handle('get-deal-alerts', async () => {
+    const c = await dealsClient();
+    const { data, error } = await c.from('deal_alerts').select('*')
+        .eq('dismissed', false).order('found_at', { ascending: false }).limit(200);
+    if (error) throw new Error(error.message);
+    return data || [];
+});
+ipcMain.handle('dismiss-deal-alert', async (event, id) => {
+    const c = await dealsClient();
+    const { error } = await c.from('deal_alerts').update({ dismissed: true }).eq('id', id);
+    if (error) throw new Error(error.message);
     return true;
 });
 ipcMain.handle('open-external', (event, url) => { if (url) shell.openExternal(url); });
