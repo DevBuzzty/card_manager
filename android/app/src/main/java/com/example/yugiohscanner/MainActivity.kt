@@ -486,10 +486,13 @@ fun ScannerScreen(
                 Log.i("MlScan", "confirmed card ${d.passcode}")
                 val bw = d.box.x2 - d.box.x1
                 val bh = d.box.y2 - d.box.y1
-                val cx = (d.box.x1 - bw * 0.10f).toInt().coerceIn(0, frame.width - 1)
-                val cy = d.box.y1.toInt().coerceIn(0, frame.height - 1)
-                val cw = (bw * 1.20f).toInt().coerceIn(1, frame.width - cx)
-                val ch = (bh * 1.55f).toInt().coerceIn(1, frame.height - cy)  // extend down for the set code
+                // The set code is printed on the card frame just BELOW the artwork. OCR a narrow
+                // strip there (not the whole artwork, which is just noise) — SetCodeOcr upscales it
+                // so the tiny text is legible.
+                val cx = (d.box.x1 - bw * 0.05f).toInt().coerceIn(0, frame.width - 1)
+                val cy = (d.box.y2 - bh * 0.05f).toInt().coerceIn(0, frame.height - 1)
+                val cw = (bw * 1.10f).toInt().coerceIn(1, frame.width - cx)
+                val ch = (bh * 0.45f).toInt().coerceIn(1, frame.height - cy)
                 val crop = android.graphics.Bitmap.createBitmap(frame, cx, cy, cw, ch)
                 setCodeOcr.read(crop) { codes ->
                     onDetected.value(d.passcode.toString(), codes)
