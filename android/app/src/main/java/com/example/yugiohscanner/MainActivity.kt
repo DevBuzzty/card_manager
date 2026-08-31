@@ -79,6 +79,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,8 +98,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.yugiohscanner.cloud.CardSearchRepository
+import com.example.yugiohscanner.cloud.PrintingRepository
+import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SupabaseCloud
+import com.example.yugiohscanner.ui.ScanStagingEntry
+import com.example.yugiohscanner.ui.ScanStagingScreen
 import com.example.yugiohscanner.ui.theme.AppTheme
+import kotlinx.coroutines.launch
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
@@ -424,11 +431,38 @@ fun ScannerScreen(
 
     // Feedback Helper (Empty as per requirement)
     val triggerFeedback = remember { {} }
+    val scope = rememberCoroutineScope()
+
+    // Phone-side scan staging: recognised cards land here (NOT straight into the cloud) so the
+    // user can review/correct the set code before committing. Works fully without the desktop.
+    val stagingCards = remember { mutableStateListOf<ScanStagingEntry>() }
+    var showStaging by remember { mutableStateOf(false) }
+
+    // Artwork scanner confirm: resolve the card, fuzzy-match the OCR'd set code against its known
+    // printings, and stage it for review. Dedup by passcode so one card is staged once.
+    val onConfirmed = rememberUpdatedState<(Int, List<String>) -> Unit> { passcode, codes ->
+        val pc = passcode.toString()
+        if (stagingCards.none { it.base.id == pc }) {
+            scanStatus = "Erkenne $pc…"
+            scope.launch {
+                try {
+                    val base = CardSearchRepository.search(pc).firstOrNull()
+                    if (base == null) {
+                        scanStatus = "Karte $pc nicht gefunden"
+                    } else if (stagingCards.none { it.base.id == pc }) {
+                        val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
+                        val match = SetCodeMatch.best(codes, known)
+                        stagingCards.add(ScanStagingEntry(System.nanoTime(), base, known, match))
+                        scanStatus = "＋ ${base.name ?: pc} — Prüfen (${stagingCards.size})"
+                    }
+                } catch (e: Exception) { scanStatus = "Fehler: ${e.message}" }
+            }
+        }
+    }
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
     // always runs the latest logic without being recreated on every recomposition.
-    // Old flow: scanned passcode (+ set code) is pushed to the desktop over the socket, which
-    // shows it in the Staging Area for the user to confirm. Needs the desktop running.
+    // (Legacy) socket flow, used by manual entry: push passcode (+ set code) to the desktop.
     val onDetected = rememberUpdatedState<(String, List<String>) -> Unit> { code, setCodes ->
         if (code != lastScannedCode) {
             lastScannedCode = code
@@ -495,7 +529,7 @@ fun ScannerScreen(
                 val ch = (bh * 0.45f).toInt().coerceIn(1, frame.height - cy)
                 val crop = android.graphics.Bitmap.createBitmap(frame, cx, cy, cw, ch)
                 setCodeOcr.read(crop) { codes ->
-                    onDetected.value(d.passcode.toString(), codes)
+                    onConfirmed.value(d.passcode, codes)
                 }
             }
             if (dets.isNotEmpty()) {
@@ -658,9 +692,9 @@ fun ScannerScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = if (connected) "● Desktop verbunden" else "○ Kein Desktop – in Einstellungen verbinden",
+                text = "Scan → Prüfen → Übernehmen (kein Desktop nötig)",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (connected) Color(0xFF39D98A) else Color(0xFFF5C542)
+                color = Color(0xFF9A90B0)
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -669,14 +703,16 @@ fun ScannerScreen(
                 color = Color.White
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    lastScannedCode = null
-                    scanStatus = "Scanning..."
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-            ) {
-                Text("Reset Scan")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = { lastScannedCode = null; scanStatus = "Scanning..." },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                ) { Text("Reset") }
+                Button(
+                    onClick = { showStaging = true },
+                    enabled = stagingCards.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                ) { Text("Prüfen (${stagingCards.size})") }
             }
         }
 
@@ -884,6 +920,16 @@ fun ScannerScreen(
                     }
                 }
             }
+        }
+
+        // Phone-side staging overlay: full-screen opaque surface (rendered LAST so it covers the
+        // camera + controls) to review/correct scanned cards before committing to the cloud.
+        if (showStaging) {
+            ScanStagingScreen(
+                entries = stagingCards,
+                onClose = { showStaging = false },
+                onCommitted = { scanStatus = "Übernommen ✓" },
+            )
         }
     }
 }

@@ -41,14 +41,14 @@ object CollectionRepository {
 
     // Creates a new printing row in the cloud, reusing the base card's shared detail fields.
     // Only for a printing the user does NOT already own (the picker excludes owned ones).
-    suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double, language: String = "DE") = withContext(Dispatchers.IO) {
+    suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double, language: String = "DE", quantity: Int = 1) = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("id", base.id).put("set_code", setCode).put("language", language)
             .put("name", base.name).put("type", base.type).put("desc", base.desc)
             .put("image_url", base.imageUrl).put("atk", base.atk ?: JSONObject.NULL)
             .put("def", base.def ?: JSONObject.NULL).put("level", base.level ?: JSONObject.NULL)
             .put("race", base.race).put("attribute", base.attribute)
-            .put("quantity", 1).put("rarity", rarity).put("price", price).put("deleted", false)
+            .put("quantity", quantity).put("rarity", rarity).put("price", price).put("deleted", false)
             .toString()
         executeWithReauth {
             Request.Builder()
@@ -62,6 +62,41 @@ object CollectionRepository {
         }.use { resp ->
             if (!resp.isSuccessful)
                 throw RuntimeException("Hinzufügen fehlgeschlagen (${resp.code}): ${resp.body?.string()}")
+        }
+    }
+
+    // Autonomous scan flow: add one copy of a scanned card under its (validated) printing. If that
+    // printing already exists, bump its quantity (and un-delete it); otherwise insert a new row.
+    suspend fun addScanned(base: CardRow, setCode: String, rarity: String, language: String, quantity: Int = 1): String = withContext(Dispatchers.IO) {
+        val existing = getRow(base.id, setCode, language)
+        val label = base.name ?: base.id
+        if (existing != null) {
+            val newQty = existing.quantity + quantity
+            patch(existing, JSONObject().put("quantity", newQty).put("deleted", false))
+            "$label → ${newQty}× ($setCode)"
+        } else {
+            addPrinting(base, setCode, rarity, 0.0, language, quantity)
+            "$label hinzugefügt ($setCode)"
+        }
+    }
+
+    // Fetches a single row by composite key (no deleted/quantity filter), or null if absent.
+    private suspend fun getRow(id: String, setCode: String, language: String): CardRow? = withContext(Dispatchers.IO) {
+        val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "*")
+            .addQueryParameter("id", "eq.$id")
+            .addQueryParameter("set_code", "eq.$setCode")
+            .addQueryParameter("language", "eq.$language")
+            .build()
+        executeWithReauth {
+            Request.Builder().url(url)
+                .addHeader("apikey", SupabaseCloud.key())
+                .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
+                .get().build()
+        }.use { resp ->
+            val text = resp.body?.string() ?: "[]"
+            if (!resp.isSuccessful) throw RuntimeException("Nachschlagen fehlgeschlagen (${resp.code}): $text")
+            parse(JSONArray(text)).firstOrNull()
         }
     }
 
