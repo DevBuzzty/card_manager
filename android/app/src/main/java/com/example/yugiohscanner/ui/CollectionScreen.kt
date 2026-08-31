@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -12,10 +13,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.ui.components.RarityChip
+import com.example.yugiohscanner.ui.components.SpaceCard
+import com.example.yugiohscanner.ui.components.ValueText
+import com.example.yugiohscanner.ui.theme.MonoFontFamily
+import com.example.yugiohscanner.ui.theme.Muted
 import kotlinx.coroutines.launch
 
 @Composable
@@ -85,6 +92,8 @@ fun CollectionScreen() {
         }
         FloatingActionButton(
             onClick = { showSearch = true },
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         ) { Icon(Icons.Default.Add, "Karte suchen") }
     }
@@ -92,20 +101,37 @@ fun CollectionScreen() {
 
 @Composable
 private fun CardListItem(card: CardRow, onOpen: () -> Unit, onInc: () -> Unit, onDec: () -> Unit, onDelete: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).clickable { onOpen() }, verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(model = card.imageUrl, contentDescription = card.name,
-                modifier = Modifier.width(48.dp).height(70.dp))
-            Spacer(Modifier.width(8.dp))
-            Column {
-                Text(card.name ?: card.id, style = MaterialTheme.typography.bodyLarge)
-                Text("${card.setCode} · ${card.rarity ?: "?"} · ${"%.2f".format(card.price ?: 0.0)} €",
-                    style = MaterialTheme.typography.bodySmall)
+    SpaceCard(Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.weight(1f).clickable { onOpen() }, verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(model = card.imageUrl, contentDescription = card.name,
+                    modifier = Modifier.width(48.dp).height(70.dp).clip(RoundedCornerShape(6.dp)))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(card.name ?: card.id, style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface, maxLines = 2)
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        RarityChip(card.rarity)
+                        Text(card.setCode, style = MaterialTheme.typography.bodySmall,
+                            fontFamily = MonoFontFamily, color = Muted)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    ValueText(card.price, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            IconButton(onClick = onDec) {
+                Icon(Icons.Default.Remove, "−", tint = MaterialTheme.colorScheme.primary)
+            }
+            Text("${card.quantity}", fontFamily = MonoFontFamily,
+                color = MaterialTheme.colorScheme.onSurface)
+            IconButton(onClick = onInc) {
+                Icon(Icons.Default.Add, "+", tint = MaterialTheme.colorScheme.primary)
+            }
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error)
             }
         }
-        IconButton(onClick = onDec) { Icon(Icons.Default.Remove, "−") }
-        Text("${card.quantity}")
-        IconButton(onClick = onInc) { Icon(Icons.Default.Add, "+") }
-        IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Löschen") }
     }
 }

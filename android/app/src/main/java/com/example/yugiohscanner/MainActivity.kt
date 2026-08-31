@@ -73,7 +73,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -93,6 +92,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.yugiohscanner.cloud.SupabaseCloud
+import com.example.yugiohscanner.ui.theme.AppTheme
 import com.example.yugiohscanner.ui.CloudLoginScreen
 import com.example.yugiohscanner.ui.CollectionScreen
 import com.example.yugiohscanner.ui.DealsScreen
@@ -112,13 +112,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme(
-                colorScheme = darkColorScheme(
-                    primary = Color(0xFF9D00FF),
-                    background = Color(0xFF121212),
-                    onBackground = Color(0xFFE0E0E0)
-                )
-            ) {
+            AppTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

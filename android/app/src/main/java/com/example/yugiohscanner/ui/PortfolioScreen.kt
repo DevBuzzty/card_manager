@@ -18,6 +18,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.ui.components.SectionHeader
+import com.example.yugiohscanner.ui.components.SpaceCard
+import com.example.yugiohscanner.ui.components.ValueText
+import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.MonoFontFamily
+import com.example.yugiohscanner.ui.theme.Muted
 
 @Composable
 fun PortfolioScreen() {
@@ -37,16 +43,25 @@ fun PortfolioScreen() {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
         }
-        Text("Gesamtwert", style = MaterialTheme.typography.titleMedium)
-        Text("%.2f €".format(d.totalValue), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-        Text("${d.totalCards} Karten · ${d.entries} Einträge", style = MaterialTheme.typography.bodySmall)
+        SpaceCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                SectionHeader("Gesamtwert")
+                Spacer(Modifier.height(4.dp))
+                Text("%.2f €".format(d.totalValue), style = MaterialTheme.typography.displaySmall,
+                    fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
+                Text("${d.totalCards} Karten · ${d.entries} Einträge",
+                    style = MaterialTheme.typography.bodySmall, color = Muted)
+            }
+        }
 
         Spacer(Modifier.height(16.dp))
-        Text("Teuerste Karten", style = MaterialTheme.typography.titleMedium)
+        SectionHeader("Teuerste Karten")
+        Spacer(Modifier.height(4.dp))
         d.top.forEach { c ->
             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                Text(c.name ?: c.id, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                Text("%.2f €".format((c.price ?: 0.0) * c.quantity), style = MaterialTheme.typography.bodySmall)
+                Text(c.name ?: c.id, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface)
+                ValueText((c.price ?: 0.0) * c.quantity, style = MaterialTheme.typography.bodySmall)
             }
         }
 
@@ -60,9 +75,10 @@ fun PortfolioScreen() {
 @Composable
 private fun StatSection(title: String, groups: List<StatGroup>) {
     Spacer(Modifier.height(16.dp))
-    Text(title, style = MaterialTheme.typography.titleMedium)
+    SectionHeader(title)
+    Spacer(Modifier.height(4.dp))
     if (groups.isEmpty()) {
-        Text("Keine Daten", style = MaterialTheme.typography.bodySmall)
+        Text("Keine Daten", style = MaterialTheme.typography.bodySmall, color = Muted)
         return
     }
     val maxCount = groups.maxOf { it.count }.coerceAtLeast(1)

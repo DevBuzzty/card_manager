@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CardRow
+import com.example.yugiohscanner.ui.theme.Line
 
 // One row of a breakdown: a label with its card count and summed value.
 data class StatGroup(val label: String, val count: Int, val value: Double)
@@ -91,10 +93,10 @@ fun StatBar(label: String, count: Int, value: Double, fraction: Float) {
             Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
             Text("$count · %.2f €".format(value), style = MaterialTheme.typography.bodySmall)
         }
-        Box(Modifier.fillMaxWidth().height(6.dp).background(MaterialTheme.colorScheme.surfaceVariant)) {
+        Box(Modifier.fillMaxWidth().height(6.dp).background(Line, RoundedCornerShape(3.dp))) {
             Box(
                 Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).height(6.dp)
-                    .background(MaterialTheme.colorScheme.primary)
+                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp))
             )
         }
     }

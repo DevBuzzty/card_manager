@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -12,12 +13,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CardSearchRepository
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.ui.components.SpaceCard
+import com.example.yugiohscanner.ui.components.TypeChip
 import kotlinx.coroutines.launch
 
 @Composable
@@ -80,14 +84,18 @@ fun SearchScreen(onClose: () -> Unit, onAdded: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(results, key = { it.id }) { card ->
-                Row(Modifier.fillMaxWidth().clickable { error = null; selected = card }.padding(4.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(model = card.imageUrl, contentDescription = card.name,
-                        modifier = Modifier.width(40.dp).height(58.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(card.name ?: card.id, style = MaterialTheme.typography.bodyLarge)
-                        Text(card.type ?: "", style = MaterialTheme.typography.bodySmall)
+                SpaceCard(Modifier.fillMaxWidth()) {
+                    Row(Modifier.clickable { error = null; selected = card }.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        AsyncImage(model = card.imageUrl, contentDescription = card.name,
+                            modifier = Modifier.width(40.dp).height(58.dp).clip(RoundedCornerShape(6.dp)))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(card.name ?: card.id, style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface, maxLines = 2)
+                            Spacer(Modifier.height(4.dp))
+                            TypeChip(card.type)
+                        }
                     }
                 }
             }
