@@ -98,7 +98,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge } 
               .run(hit.trend, url, String(cards[i].id), p.set_code, p.language, p.rarity);
             updated++;
           } else {
-            db.prepare("UPDATE cards SET cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ? AND cm_url IS NULL")
+            db.prepare("UPDATE cards SET cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
               .run(String(cards[i].id), p.set_code, p.language, p.rarity); // mark attempted (no match)
             noMatch++;
           }

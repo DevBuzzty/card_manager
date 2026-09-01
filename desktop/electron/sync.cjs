@@ -114,7 +114,7 @@ function startSync(db, getWindow) {
     const changed = db.prepare('SELECT * FROM cards WHERE updated_at > ?').all(cursor);
     if (changed.length > 0) {
       const { data, error } = await c.from('cards')
-        .upsert(changed.map(rowToRemote), { onConflict: 'id,set_code,language' })
+        .upsert(changed.map(rowToRemote), { onConflict: 'id,set_code,language,rarity' })
         .select('id,set_code,language,updated_at');
       if (error) throw new Error('Push failed: ' + error.message);
       const maxTs = changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor);

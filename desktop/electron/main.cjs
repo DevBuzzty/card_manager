@@ -701,7 +701,7 @@ ipcMain.handle('update-all-cards', async (event) => {
 
         const updateStmt = db.prepare(`UPDATE cards SET name=@name, type=@type, desc=@desc, image_url=@image_url,
             atk=@atk, def=@def, level=@level, race=@race, attribute=@attribute, price=@price, last_updated=CURRENT_TIMESTAMP
-            WHERE id=@id AND set_code=@set_code AND language=@language`);
+            WHERE id=@id AND set_code=@set_code AND language=@language AND (price_locked IS NULL OR price_locked = 0)`);
 
         let updatedCount = 0;
         db.transaction(() => {
