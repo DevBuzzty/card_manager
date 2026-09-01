@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   getPortfolio: () => ipcRenderer.invoke('get-portfolio'),
   getPriceHistory: () => ipcRenderer.invoke('get-price-history'),
   updateCardMeta: (data) => ipcRenderer.invoke('update-card-meta', data),
+  setCardPrice: (data) => ipcRenderer.invoke('set-card-price', data),
   deleteCard: (data) => ipcRenderer.invoke('delete-card', data),
   onUpdateProgress: (callback) => {
     const subscription = (_event, value) => callback(value);
