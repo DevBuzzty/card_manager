@@ -98,7 +98,6 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
         if (!url) { noMatch++; continue; }
         if (!(await loadPage(win, url, onChallenge))) { errors++; continue; }
         const rows = await win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []);
-        console.log('[cm]', cards[i].name, '->', url, '| rows=', rows.length, rows[0] ? JSON.stringify(rows[0]) : '');
         for (const p of stale) {
           // Match primarily by set-code prefix ↔ Cardmarket expansion symbol (e.g. "25LP-DE085" ->
           // "25LP") + rarity — far more reliable than the expansion name. Some expansions list the
