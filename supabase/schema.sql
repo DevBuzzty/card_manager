@@ -17,6 +17,9 @@ create table if not exists public.cards (
   price       double precision,
   deleted     boolean not null default false,
   updated_at  timestamptz not null default now(),
+  cm_url      text,
+  cm_updated_at timestamptz,
+  price_locked boolean not null default false,
   -- rarity is part of the identity: the same set code in two rarities are two printings.
   primary key (id, set_code, language, rarity)
 );
