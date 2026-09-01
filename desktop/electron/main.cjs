@@ -7,6 +7,7 @@ const { initDatabase, getDb } = require('./database.cjs');
 const { fetchCardData, fetchYugipediaSets, fetchJapaneseSets } = require('./api-handler.cjs');
 const { startSync } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
+const { runCardmarketScrape } = require('./cardmarket-scraper.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -509,6 +510,20 @@ ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price
       .run(Number(price) || 0, String(id), set_code, language || 'DE', rarity || 'Unknown');
     return { success: true };
   } catch (e) { return { success: false, error: e.message }; }
+});
+
+let cmAbort = false;
+ipcMain.handle('abort-cardmarket-scrape', () => { cmAbort = true; return { success: true }; });
+ipcMain.handle('scrape-cardmarket-prices', async (event) => {
+  cmAbort = false;
+  const send = (p) => { try { event.sender.send('update-progress', p); } catch (e) {} };
+  const res = await runCardmarketScrape(db, {
+    onProgress: (p) => send({ current: p.current, total: p.total }),
+    shouldAbort: () => cmAbort,
+    onChallenge: () => { try { event.sender.send('cm-challenge'); } catch (e) {} },
+  });
+  send({ current: 1, total: 1 }); // clears the bar
+  return res;
 });
 
 ipcMain.handle('check-card-exists', (event, passcode) => {
