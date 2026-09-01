@@ -69,9 +69,12 @@ Everything downstream is unchanged: the main loop still applies the `price <= ma
     - `buyingOptions:{FIXED_PRICE}`
     - `price:[..<max_price>],priceCurrency:EUR`
     - `deliveryCountry:DE`
-    - condition (only when not `any`): `conditionIds:{<ids>}` where
-      - `new`  → `1000|1500`  (New, New other)
-      - `used` → `3000|4000|5000`  (Used, Very Good, Good)
+    - condition:
+      - `new`  → request filter `conditionIds:{1000|1500}` (New, New other)
+      - `used` → **no** condition filter in the request; the adapter instead **drops** any item whose
+        `conditionId` is `1000` or `1500` (i.e. keep everything non-new: used, refurbished, for-parts).
+        This avoids brittle enumeration of every non-new conditionId and matches "alles Nicht-Neue".
+      - `any`  → no condition filter, no post-filter
 - Headers:
   - `Authorization: Bearer <token>`
   - `X-EBAY-C-MARKETPLACE-ID: EBAY_DE`
