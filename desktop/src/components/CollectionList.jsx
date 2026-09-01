@@ -46,8 +46,22 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [filterRarity, setFilterRarity] = useState('All');
   const [segment, setSegment] = useState('all'); // all | unknown | incomplete | foils
   const [segmentBusy, setSegmentBusy] = useState(false);
+  const [cmRunning, setCmRunning] = useState(false);
+  const [cmProgress, setCmProgress] = useState(null);
 
   const updating = isUpdating || localUpdating;
+
+  useEffect(() => {
+    const off = window.api?.onUpdateProgress?.((p) => setCmProgress(p));
+    const offCh = window.api?.onCmChallenge?.(() => alert('Cardmarket: bitte kurz das Captcha/Cloudflare im geöffneten Fenster lösen — es läuft dann automatisch weiter.'));
+    return () => { off && off(); offCh && offCh(); };
+  }, []);
+
+  const runCardmarket = async () => {
+    setCmRunning(true);
+    try { const r = await window.api.scrapeCardmarketPrices(); alert(`Cardmarket fertig: ${r.updated} aktualisiert, ${r.noMatch} ohne Treffer, ${r.errors} Fehler.`); }
+    finally { setCmRunning(false); setCmProgress(null); }
+  };
 
   const loadCollection = async () => {
     if (window.api) {
@@ -227,6 +241,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                     </button>
                     <button onClick={() => handleUpdate('all')} disabled={updating} className="p-2 bg-gray-800 hover:bg-space-violet text-gray-400 hover:text-white rounded-full">
                         <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}
+                            className="px-3 py-1.5 rounded bg-space-violet/80 hover:bg-space-violet text-white text-sm">
+                      {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Cardmarket-Preise'}
                     </button>
                 </div>
             </div>

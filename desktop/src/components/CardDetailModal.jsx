@@ -181,6 +181,20 @@ export default function CardDetailModal({ card, onClose }) {
                             </div>
 
                             <div className="flex items-center gap-3">
+                                <input
+                                  type="number" step="0.01" min="0"
+                                  defaultValue={variant.price ?? 0}
+                                  onBlur={async (e) => {
+                                    const price = parseFloat(e.target.value);
+                                    if (isNaN(price)) return;
+                                    await window.api.setCardPrice({ id: card.id, set_code: variant.set_code, language: variant.language || 'DE', rarity: variant.rarity, price });
+                                  }}
+                                  className="w-16 bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white"
+                                  title="Preis manuell setzen (überschreibt Auto-Preis)"
+                                />
+                                {variant.cm_updated_at && !variant.cm_url && (
+                                  <span className="text-[9px] text-yellow-500/80" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
+                                )}
                                 <div className="flex items-center bg-[#1E1E1E] rounded border border-gray-600">
                                     <button
                                         onClick={() => handleUpdateQuantity(variant, -1)}
