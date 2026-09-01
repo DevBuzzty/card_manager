@@ -76,7 +76,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
         >
           <ul className="overflow-auto custom-scrollbar p-1" style={{ maxHeight: listMaxH }}>
             {options.map((option) => (
-              <li key={option.value}>
+              <li key={option.value} className={option.divider ? "mt-1 pt-1 border-t border-gray-700/70" : ""}>
                 <button
                   type="button"
                   onClick={() => {

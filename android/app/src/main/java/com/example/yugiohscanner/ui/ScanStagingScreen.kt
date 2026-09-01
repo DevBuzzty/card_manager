@@ -38,6 +38,14 @@ class ScanStagingEntry(val id: Long, val passcode: String) {
     var selectedSet by mutableStateOf<SetOption?>(null)
     var quantity by mutableIntStateOf(1)
     var loading by mutableStateOf(true)
+    // Additional printings of the SAME scanned card (e.g. you also have the English print), so you
+    // can record them here instead of re-adding them from the collection later.
+    val extraPrintings = mutableStateListOf<ExtraPrinting>()
+}
+
+class ExtraPrinting {
+    var selectedSet by mutableStateOf<SetOption?>(null)
+    var quantity by mutableIntStateOf(1)
 }
 
 @Composable
@@ -101,6 +109,13 @@ fun ScanStagingScreen(
                                     language = s?.language ?: "DE",
                                     quantity = e.quantity,
                                 )
+                                // Commit each extra printing the user added (skip ones left unpicked).
+                                for (ep in e.extraPrintings) {
+                                    val es = ep.selectedSet ?: continue
+                                    CollectionRepository.addScanned(
+                                        b, es.setCode, es.rarity, es.language, ep.quantity,
+                                    )
+                                }
                             }
                             entries.clear()
                             error = null
@@ -147,30 +162,59 @@ private fun StagingRow(entry: ScanStagingEntry, onDelete: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(8.dp))
+            // Primary printing.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SetPicker(entry, Modifier.weight(1f))
+                SetPicker(entry.knownSets, entry.selectedSet, { entry.selectedSet = it }, Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                IconButton(onClick = { if (entry.quantity > 1) entry.quantity-- }) {
-                    Icon(Icons.Default.Remove, "−", tint = MaterialTheme.colorScheme.primary)
+                QtyStepper(entry.quantity) { entry.quantity = it }
+            }
+            // Extra printings of the same card.
+            entry.extraPrintings.forEach { ep ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SetPicker(entry.knownSets, ep.selectedSet, { ep.selectedSet = it }, Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
+                    QtyStepper(ep.quantity) { ep.quantity = it }
+                    IconButton(onClick = { entry.extraPrintings.remove(ep) }) {
+                        Icon(Icons.Default.Delete, "Entfernen", tint = Muted)
+                    }
                 }
-                Text("${entry.quantity}", fontFamily = MonoFontFamily, color = OnSurface)
-                IconButton(onClick = { entry.quantity++ }) {
-                    Icon(Icons.Default.Add, "+", tint = MaterialTheme.colorScheme.primary)
-                }
+            }
+            TextButton(onClick = { entry.extraPrintings.add(ExtraPrinting()) }) {
+                Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(4.dp))
+                Text("Weitere Druckvariante", color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelLarge)
             }
         }
     }
 }
 
 @Composable
-private fun SetPicker(entry: ScanStagingEntry, modifier: Modifier = Modifier) {
+private fun QtyStepper(qty: Int, onChange: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { if (qty > 1) onChange(qty - 1) }) {
+            Icon(Icons.Default.Remove, "−", tint = MaterialTheme.colorScheme.primary)
+        }
+        Text("$qty", fontFamily = MonoFontFamily, color = OnSurface)
+        IconButton(onClick = { onChange(qty + 1) }) {
+            Icon(Icons.Default.Add, "+", tint = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+@Composable
+private fun SetPicker(
+    knownSets: List<SetOption>,
+    current: SetOption?,
+    onSelect: (SetOption?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var expanded by remember { mutableStateOf(false) }
-    val current = entry.selectedSet
-    val label = current?.let { "[${it.language}] ${it.setCode} · ${it.rarity}" } ?: "Unbekannt (bitte wählen)"
+    val label = current?.let { "${langFlag(it.language)} ${it.setCode} · ${it.rarity}" } ?: "Unbekannt (bitte wählen)"
 
     Box(modifier) {
         Row(
-            Modifier.fillMaxWidth().clickable(enabled = entry.knownSets.isNotEmpty()) { expanded = true }
+            Modifier.fillMaxWidth().clickable(enabled = knownSets.isNotEmpty()) { expanded = true }
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -181,12 +225,14 @@ private fun SetPicker(entry: ScanStagingEntry, modifier: Modifier = Modifier) {
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 text = { Text("Unbekannt") },
-                onClick = { entry.selectedSet = null; expanded = false },
+                onClick = { onSelect(null); expanded = false },
             )
-            entry.knownSets.forEach { s ->
+            knownSets.forEachIndexed { i, s ->
+                // Thin divider between the language groups (DE | EN | JP).
+                if (i > 0 && knownSets[i - 1].language != s.language) HorizontalDivider()
                 DropdownMenuItem(
-                    text = { Text("[${s.language}] ${s.setCode} · ${s.rarity}") },
-                    onClick = { entry.selectedSet = s; expanded = false },
+                    text = { Text("${langFlag(s.language)} ${s.setCode} · ${s.rarity}") },
+                    onClick = { onSelect(s); expanded = false },
                 )
             }
         }

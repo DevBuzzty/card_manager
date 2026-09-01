@@ -1,11 +1,65 @@
 import { useEffect, useCallback, useState, useRef } from 'react';
-import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus, HelpCircle, Edit, Globe } from 'lucide-react';
+import { Check, X, Loader2, AlertCircle, FileSpreadsheet, Minus, Plus, HelpCircle, Edit } from 'lucide-react';
 import { playScanSound } from '../utils/sound';
 import CustomSelect from './CustomSelect';
 import RarityGuide from './RarityGuide';
 import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
 import { matchCandidates } from '../utils/setCodeMatch';
+import Flag from './Flag';
+
+// Merge a card's printings from all sources into ONE flagged list: German (wiki+Konami) + English
+// (YGOPRODeck, with prices) + Japanese (wiki+Konami). Each entry carries its language so the picker
+// can show a flag and the commit knows the language. Deduped by code+rarity+language.
+function mergePrintings(cardSets, germanSets, japaneseSets) {
+    const de = (germanSets || []).map(s => ({ set_code: s.set_code, set_rarity: s.set_rarity, set_price: s.set_price || 0, language: 'DE', isYugipedia: true }));
+    const en = (cardSets || []).map(s => ({ set_code: s.set_code, set_rarity: s.set_rarity, set_price: s.set_price, language: 'EN' }));
+    const jp = (japaneseSets || []).map(s => ({ set_code: s.set_code, set_rarity: s.set_rarity, set_price: s.set_price || 0, language: 'JP', isYugipedia: true }));
+    const seen = new Set();
+    const out = [];
+    for (const s of [...de, ...en, ...jp]) {
+        const key = `${s.set_code}|${s.set_rarity}|${s.language}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(s);
+    }
+    return out;
+}
+
+const printingKey = (s) => s ? `${s.set_code}|${s.set_rarity}|${s.language}` : '';
+
+// One dropdown listing EVERY printing of the card, each prefixed with its country flag — no
+// separate language selector. Shared by a card's primary printing and its extra printings.
+function PrintingPicker({ printings, selectedSet, onSelect, loading }) {
+    if (!printings || printings.length === 0) {
+        return (
+            <div className="flex-1 bg-gray-800 rounded px-2 py-1 text-xs text-gray-400 border border-gray-700 flex items-center justify-center">
+                {loading ? 'Lade Druckvarianten…' : 'Keine Druckvarianten gefunden'}
+            </div>
+        );
+    }
+    return (
+        <div className="flex-1">
+            <CustomSelect
+                value={printingKey(selectedSet)}
+                onChange={(val) => onSelect(printings.find(s => printingKey(s) === val))}
+                placeholder="Druckvariante wählen"
+                options={printings.map((s, i) => ({
+                    value: printingKey(s),
+                    // Separate the language groups (DE | EN | JP) with a thin divider + spacing.
+                    divider: i > 0 && printings[i - 1].language !== s.language,
+                    label: (
+                        <span className="inline-flex items-center gap-1.5">
+                            <Flag lang={s.language} />
+                            {`${s.set_code} - ${s.set_rarity}${s.language === 'EN' && s.set_price ? ` ($${s.set_price})` : ''}`}
+                        </span>
+                    )
+                }))}
+                className="w-full"
+            />
+        </div>
+    );
+}
 
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
   const [showRarityGuide, setShowRarityGuide] = useState(false);
@@ -40,62 +94,50 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             return;
         }
 
-        // Show the card immediately with API sets as the initial fallback; German sets load after.
+        // Show the card immediately with the English printings; German + Japanese load right after.
         setScannedCards(prev => prev.map(c => {
             if (c.tempId !== tempId) return c;
             const apiMatch = matchCandidates(c.scannedSetCandidates, data.card_sets);
+            const enPrintings = mergePrintings(data.card_sets, [], []);
             return {
                 ...c,
                 status: 'loaded',
                 data,
-                germanSets: [],
+                allPrintings: enPrintings,
                 loadingSets: true,
                 inCollection: result.exists,
                 ownedQuantity: result.quantity,
-                language: c.language || 'DE',
-                selectedSet: c.selectedSet || apiMatch.set || (data.card_sets ? data.card_sets[0] : null),
+                selectedSet: c.selectedSet || (apiMatch.set ? { ...apiMatch.set, language: 'EN' } : (enPrintings[0] || null)),
                 setAutoDetected: apiMatch.confidence !== 'none',
                 setMatchConfidence: apiMatch.confidence
             };
         }));
         playScanSound();
 
-        // Fetch German (Yugipedia) rarities in the background so the scan feels instant.
-        window.api.fetchYugipediaSets(passcode).then(germanSets => {
-            const hasSets = germanSets && germanSets.length > 0;
+        // Fetch German + Japanese printings in the background and merge into one flagged list.
+        Promise.all([
+            window.api.fetchYugipediaSets(passcode).then(s => s || []).catch(() => []),
+            window.api.fetchJapaneseSets(passcode).then(s => s || []).catch(() => []),
+        ]).then(([germanSets, japaneseSets]) => {
             setScannedCards(prev => prev.map(c => {
                 if (c.tempId !== tempId) return c;
-                // Don't clobber a set the user already picked or a manual entry.
+                const allPrintings = mergePrintings(c.data.card_sets, germanSets, japaneseSets);
                 const keepSelection = c.setTouched || c.isManualEntry;
-                const applyDE = hasSets && !keepSelection && (c.language || 'DE') === 'DE';
-                const deMatch = applyDE ? matchCandidates(c.scannedSetCandidates, germanSets) : null;
                 let chosen = c.selectedSet;
                 let auto = c.setAutoDetected;
                 let confidence = c.setMatchConfidence;
-                if (applyDE) {
+                if (!keepSelection) {
+                    // Prefer the German printing that matches the scanned set code (collection is DE-first).
+                    const deMatch = matchCandidates(c.scannedSetCandidates, germanSets);
                     if (deMatch && deMatch.set) {
-                        // Prefer the localized German printing when a candidate matches it.
-                        chosen = { ...deMatch.set, isYugipedia: true };
+                        chosen = { ...deMatch.set, language: 'DE', isYugipedia: true };
                         auto = true;
                         confidence = deMatch.confidence;
-                    } else if (c.setAutoDetected) {
-                        // The API path already matched the scanned code — keep it, don't clobber.
-                        chosen = c.selectedSet;
-                        auto = true;
-                    } else {
-                        chosen = { ...germanSets[0], isYugipedia: true };
-                        auto = false;
-                        confidence = 'none';
+                    } else if (germanSets.length > 0 && !c.setAutoDetected) {
+                        chosen = { ...germanSets[0], language: 'DE', isYugipedia: true };
                     }
                 }
-                return {
-                    ...c,
-                    loadingSets: false,
-                    germanSets: hasSets ? germanSets : [],
-                    selectedSet: chosen,
-                    setAutoDetected: auto,
-                    setMatchConfidence: confidence
-                };
+                return { ...c, loadingSets: false, allPrintings, selectedSet: chosen, setAutoDetected: auto, setMatchConfidence: confidence };
             }));
         }).catch(() => {
             setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, loadingSets: false } : c));
@@ -129,41 +171,55 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
        if (committingRef.current.has(tempId)) return;
        committingRef.current.add(tempId);
        try {
-           // Prepare data
-           const cardData = {
-               ...card.data,
+           // Commit the primary printing plus any extra printings the user added on this card.
+           // Each printing's language comes from the picked set (its flag), so there's no separate
+           // language field to track.
+           const primary = {
                quantity: card.quantity || 1,
-               language: card.language || 'DE'
+               selectedSet: card.selectedSet,
+               isManualEntry: card.isManualEntry,
+               manualSetCode: card.manualSetCode,
+               manualRarity: card.manualRarity,
+           };
+           const printings = [primary, ...(card.extraPrintings || [])];
+
+           const buildCardData = (p, isPrimary) => {
+               const cardData = { ...card.data, quantity: p.quantity || 1 };
+               if (p.isManualEntry) {
+                   cardData.set_code = p.manualSetCode || 'Unknown';
+                   cardData.rarity = p.manualRarity || 'Unknown';
+                   cardData.price = 0;
+                   cardData.language = 'DE'; // manual codes are German-first
+               } else if (p.selectedSet) {
+                   cardData.set_code = p.selectedSet.set_code;
+                   cardData.rarity = p.selectedSet.set_rarity;
+                   // Yugipedia/Konami sets have no price -> 0 (the API fallback fills it from card_prices).
+                   cardData.price = parseFloat(p.selectedSet.set_price) || 0;
+                   cardData.language = p.selectedSet.language || 'DE';
+               } else if (isPrimary && card.data.card_sets && card.data.card_sets.length > 0) {
+                   const first = card.data.card_sets[0];
+                   cardData.set_code = first.set_code;
+                   cardData.rarity = first.set_rarity;
+                   cardData.price = parseFloat(first.set_price) || 0;
+                   cardData.language = 'EN';
+               } else {
+                   return null; // an extra line with nothing picked — skip it rather than guess a wrong code
+               }
+               return cardData;
            };
 
-           if (card.isManualEntry) {
-               cardData.set_code = card.manualSetCode || 'Unknown';
-               cardData.rarity = card.manualRarity || 'Unknown';
-               cardData.price = 0;
-           } else if (card.selectedSet) {
-               cardData.set_code = card.selectedSet.set_code;
-               cardData.rarity = card.selectedSet.set_rarity;
-               // If it's a Yugipedia set, it has no price, so we rely on 0 (fallback to generic) or we should map it?
-               // The API fallback logic handles 0 prices by checking card_prices.
-               cardData.price = parseFloat(card.selectedSet.set_price) || 0;
-           } else if (card.data.card_sets && card.data.card_sets.length > 0) {
-               // Default to first set if not selected
-               const first = card.data.card_sets[0];
-               cardData.set_code = first.set_code;
-               cardData.rarity = first.set_rarity;
-               cardData.price = parseFloat(first.set_price) || 0;
-           }
-
            if (window.api) {
-                const result = await window.api.addCardToDb(cardData);
-                if (result.success) {
-                    setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
-                } else {
-                    alert("Failed to save: " + result.error);
+                for (let i = 0; i < printings.length; i++) {
+                    const data = buildCardData(printings[i], i === 0);
+                    if (!data) continue;
+                    const result = await window.api.addCardToDb(data);
+                    if (!result.success) {
+                        alert("Failed to save: " + result.error);
+                        return; // keep the card in staging so nothing is silently lost
+                    }
                 }
-           } else {
-                setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
            }
+           setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
        } finally {
            committingRef.current.delete(tempId);
        }
@@ -203,21 +259,44 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
       }));
   };
 
+  // Extra printings: let the user record several printings of the SAME scanned card (e.g. 2× the
+  // German one + 1× the English) right here, instead of re-adding them from the collection later.
+  // The user picks each printing (incl. its language) from the one flagged dropdown.
+  const addPrinting = (tempId) => {
+      setScannedCards(prev => prev.map(c => {
+          if (c.tempId !== tempId) return c;
+          const printing = { id: `${Date.now()}-${Math.random()}`, quantity: 1, selectedSet: null };
+          return { ...c, extraPrintings: [...(c.extraPrintings || []), printing] };
+      }));
+  };
+
+  const updatePrinting = (tempId, pid, updates) => {
+      setScannedCards(prev => prev.map(c => c.tempId === tempId
+          ? { ...c, extraPrintings: (c.extraPrintings || []).map(p => p.id === pid ? { ...p, ...updates } : p) }
+          : c));
+  };
+
+  const removePrinting = (tempId, pid) => {
+      setScannedCards(prev => prev.map(c => c.tempId === tempId
+          ? { ...c, extraPrintings: (c.extraPrintings || []).filter(p => p.id !== pid) }
+          : c));
+  };
+
   const handleImportCsv = async () => {
     if (window.api) {
         try {
             const result = await window.api.importCsv();
             if (result && !result.canceled && result.cards) {
-                // Add to staging
+                // Add to staging (append so the list stays oldest-first)
                 setScannedCards(prev => [
+                    ...prev,
                     ...result.cards.map(c => ({
                         tempId: Date.now() + Math.random(), // Unique temp ID
                         passcode: c.passcode,
                         status: 'pending',
                         data: null,
                         language: 'DE' // Default to DE for imports
-                    })),
-                    ...prev
+                    }))
                 ]);
             }
         } catch (error) {
@@ -305,13 +384,13 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             <CardSearchModal
                 onClose={() => setShowSearch(false)}
                 onSelect={(card) => {
-                   setScannedCards(prev => [{
+                   setScannedCards(prev => [...prev, {
                        tempId: Date.now() + Math.random(),
                        passcode: String(card.id),
                        status: 'pending',
                        data: null,
                        language: 'DE'
-                   }, ...prev]);
+                   }]);
                    setShowSearch(false);
                 }}
             />
@@ -378,21 +457,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                         </button>
                                     </div>
 
-                                    {/* Language Selector */}
-                                    <div className="flex items-center bg-black/40 rounded-lg border border-gray-700 p-0.5 h-8 px-2">
-                                        <Globe className="w-3 h-3 text-gray-400 mr-2" />
-                                        <select
-                                            value={card.language || 'DE'}
-                                            onChange={(e) => handleUpdateCard(card.tempId, { language: e.target.value })}
-                                            className="bg-transparent text-xs text-white outline-none cursor-pointer"
-                                        >
-                                            <option value="DE">German (DE)</option>
-                                            <option value="EN">English (EN)</option>
-                                            <option value="JP">Japanese (JP)</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Rarity/Set Selection */}
+                                    {/* Printing (set code) — one flagged dropdown, no separate language selector */}
                                     <div className="flex-1 flex gap-2">
                                         {card.isManualEntry ? (
                                             <div className="flex gap-2 flex-1 animate-in fade-in zoom-in duration-200">
@@ -412,57 +477,12 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                 />
                                             </div>
                                         ) : (
-                                            (card.language === 'DE' && card.germanSets && card.germanSets.length > 0) ? (
-                                                // Yugipedia German Sets Dropdown
-                                                <div className="flex-1">
-                                                    <CustomSelect
-                                                        value={card.selectedSet ? `${card.selectedSet.set_code}|${card.selectedSet.set_rarity}` : ''}
-                                                        onChange={(val) => {
-                                                            const [code, rarity] = val.split('|');
-                                                            const selected = card.germanSets.find(s => s.set_code === code && s.set_rarity === rarity);
-                                                            handleUpdateCard(card.tempId, { selectedSet: { ...selected, isYugipedia: true }, setTouched: true });
-                                                        }}
-                                                        placeholder="Select German Rarity"
-                                                        options={card.germanSets.map(set => ({
-                                                            value: `${set.set_code}|${set.set_rarity}`,
-                                                            label: `${set.set_code} - ${set.set_rarity}`
-                                                        }))}
-                                                        className="w-full"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                // Fallback English/Localized API Sets
-                                                card.data.card_sets ? (
-                                                    <div className="flex-1">
-                                                        <CustomSelect
-                                                            value={card.selectedSet ? `${card.selectedSet.set_code}|${card.selectedSet.set_rarity}` : ''}
-                                                            onChange={(val) => {
-                                                                const [code, rarity] = val.split('|');
-                                                                const selected = card.data.card_sets.find(s => s.set_code === code && s.set_rarity === rarity);
-                                                                handleUpdateCard(card.tempId, { selectedSet: selected, setTouched: true });
-                                                            }}
-                                                            placeholder={card.data.card_sets[0] ? `${card.data.card_sets[0].set_code} - ${card.data.card_sets[0].set_rarity}` : "Select Rarity"}
-                                                            options={(() => {
-                                                                const unique = new Map();
-                                                                card.data.card_sets.forEach(s => {
-                                                                    const key = `${s.set_code}|${s.set_rarity}`;
-                                                                    if (!unique.has(key)) unique.set(key, s);
-                                                                });
-                                                                return Array.from(unique.values()).map(set => ({
-                                                                    value: `${set.set_code}|${set.set_rarity}`,
-                                                                    label: `${set.set_code} - ${set.set_rarity} ($${set.set_price || '0.00'})`
-                                                                }));
-                                                            })()}
-                                                            className="w-full"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex-1 bg-gray-800 rounded px-2 py-1 text-xs text-yellow-500 border border-yellow-500/30 flex items-center justify-center">
-                                                        <AlertCircle className="w-3 h-3 mr-1" />
-                                                        No sets found via API
-                                                    </div>
-                                                )
-                                            )
+                                            <PrintingPicker
+                                                printings={card.allPrintings}
+                                                selectedSet={card.selectedSet}
+                                                onSelect={(s) => handleUpdateCard(card.tempId, { selectedSet: s, setTouched: true })}
+                                                loading={card.loadingSets}
+                                            />
                                         )}
 
                                         {card.setMatchConfidence === 'exact' && !card.isManualEntry && (
@@ -485,6 +505,34 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                         </button>
                                     </div>
                                 </div>
+
+                                    {/* Extra printings of the same card (e.g. you also have the English print) */}
+                                    {(card.extraPrintings || []).map((p) => (
+                                        <div key={p.id} className="flex gap-2 items-center mt-2">
+                                            <div className="flex items-center bg-black/40 rounded-lg border border-gray-700 p-0.5 h-8">
+                                                <button onClick={() => updatePrinting(card.tempId, p.id, { quantity: Math.max(1, (p.quantity || 1) - 1) })} className="p-1 hover:bg-gray-700 rounded text-gray-400"><Minus className="w-3 h-3" /></button>
+                                                <span className="w-6 text-center text-xs font-mono">{p.quantity || 1}</span>
+                                                <button onClick={() => updatePrinting(card.tempId, p.id, { quantity: (p.quantity || 1) + 1 })} className="p-1 hover:bg-gray-700 rounded text-gray-400"><Plus className="w-3 h-3" /></button>
+                                            </div>
+                                            <PrintingPicker
+                                                printings={card.allPrintings}
+                                                selectedSet={p.selectedSet}
+                                                onSelect={(s) => updatePrinting(card.tempId, p.id, { selectedSet: s })}
+                                                loading={card.loadingSets}
+                                            />
+                                            <button onClick={() => removePrinting(card.tempId, p.id)} className="p-1.5 rounded bg-gray-800 text-gray-400 hover:text-red-400 transition-colors" title="Druckvariante entfernen">
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+
+                                    <button
+                                        onClick={() => addPrinting(card.tempId)}
+                                        className="mt-2 flex items-center gap-1 text-xs text-gray-400 hover:text-space-violet transition-colors"
+                                        title="Weitere Druckvariante dieser Karte hinzufügen"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" /> Weitere Druckvariante
+                                    </button>
                             </>
                         ) : (
                              <p className="text-space-white font-mono">{card.passcode}</p>

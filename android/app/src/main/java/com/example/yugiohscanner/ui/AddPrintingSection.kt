@@ -2,7 +2,7 @@ package com.example.yugiohscanner.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,10 +42,12 @@ fun AddPrintingSection(base: CardRow, owned: List<CardRow>, onError: (String) ->
             Text("Keine weiteren Sets gefunden.", style = MaterialTheme.typography.bodySmall)
         } else {
             LazyColumn(Modifier.heightIn(max = 240.dp)) {
-                items(sets, key = { "${it.setCode}|${it.rarity}" }) { s ->
+                itemsIndexed(sets, key = { _, s -> "${s.setCode}|${s.rarity}" }) { i, s ->
+                    // Thin divider between the language groups (DE | EN | JP).
+                    if (i > 0 && sets[i - 1].language != s.language) HorizontalDivider(Modifier.padding(vertical = 4.dp))
                     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("[${s.language}] ${s.setCode} · ${s.rarity}", style = MaterialTheme.typography.bodyMedium)
+                            Text("${langFlag(s.language)} ${s.setCode} · ${s.rarity}", style = MaterialTheme.typography.bodyMedium)
                             Text(if (s.price > 0) "%.2f €".format(s.price) else "—", style = MaterialTheme.typography.bodySmall)
                         }
                         Button(enabled = !adding, onClick = {

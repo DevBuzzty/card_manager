@@ -25,20 +25,21 @@ function App() {
       // Listen for scans
       const removeScanListener = window.api.onCardScanned((data) => {
         console.log('Received scan:', data);
-        // Add to beginning of list with a unique temp ID
+        // Append to the END so the first-scanned card stays at the top (a newly-added card grows
+        // the list downward, so its expanded rows can't get clipped off the bottom).
         setScannedCards(prev => {
             // Check for duplicates in current staging
             if (prev.some(c => c.passcode === data.passcode)) {
                 return prev;
             }
 
-            return [{
+            return [...prev, {
                 tempId: Date.now() + Math.random(),
                 passcode: data.passcode,
                 scannedSetCandidates: data.setCodeCandidates || (data.setCode ? [data.setCode] : []),
                 status: 'pending',
                 data: null
-            }, ...prev];
+            }];
         });
       });
 
