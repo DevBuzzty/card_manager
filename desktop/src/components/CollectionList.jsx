@@ -49,14 +49,29 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [cmRunning, setCmRunning] = useState(false);
   const [cmProgress, setCmProgress] = useState(null);
   const [cmMinRank, setCmMinRank] = useState(5); // default: from Secret Rare up (skip cheap commons)
+  const [cmAuto, setCmAuto] = useState(false); // background auto-refresh toggle
 
   const updating = isUpdating || localUpdating;
 
   useEffect(() => {
     const off = window.api?.onUpdateProgress?.((p) => setCmProgress(p));
     const offCh = window.api?.onCmChallenge?.(() => alert('Cardmarket: bitte kurz das Captcha/Cloudflare im geöffneten Fenster lösen — es läuft dann automatisch weiter.'));
+    (async () => {
+      const s = await window.api?.getSettings?.();
+      if (s) {
+        setCmAuto(s.cm_auto_enabled === 'true');
+        if (s.cm_auto_min_rank) setCmMinRank(Number(s.cm_auto_min_rank));
+      }
+    })();
     return () => { off && off(); offCh && offCh(); };
   }, []);
+
+  const toggleCmAuto = async () => {
+    const next = !cmAuto;
+    setCmAuto(next);
+    await window.api?.saveSetting?.({ key: 'cm_auto_enabled', value: next ? 'true' : 'false' });
+    await window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(cmMinRank) });
+  };
 
   const runCardmarket = async () => {
     setCmRunning(true);
@@ -252,7 +267,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                         <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
                     </button>
                     {!cmRunning && (
-                      <select value={cmMinRank} onChange={(e) => setCmMinRank(Number(e.target.value))}
+                      <select value={cmMinRank} onChange={(e) => {
+                                const v = Number(e.target.value);
+                                setCmMinRank(v);
+                                if (cmAuto) window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(v) });
+                              }}
                               title="Ab welcher Rarity aufwärts scrapen (günstige Commons überspringen)"
                               className="px-2 py-1.5 rounded bg-black/40 border border-gray-700 text-white text-sm">
                         <option value={1}>Alle Rarities</option>
@@ -265,6 +284,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                         <option value={8}>Nur Quarter Century</option>
                       </select>
                     )}
+                    <label title="Preise automatisch im Hintergrund aktualisieren (alle 10 Min. ein paar fällige Karten)"
+                           className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-black/40 border border-gray-700 text-gray-300 text-sm cursor-pointer select-none">
+                      <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-space-violet" />
+                      Auto
+                    </label>
                     <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}
                             className="px-3 py-1.5 rounded bg-space-violet/80 hover:bg-space-violet text-white text-sm">
                       {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Cardmarket-Preise'}

@@ -68,12 +68,19 @@ function startSocketServer() {
 }
 
 let priceUpdateInterval;
+let cmPollInterval;
 let sync;   // { ensureClient } handle from startSync, for cloud deal handlers
+
+const getSetting = (key) => {
+  try { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? r.value : null; }
+  catch { return null; }
+};
 
 app.whenReady().then(() => {
   createWindow();
   startSocketServer();
   startPricePoller();
+  startCardmarketPoller();
   sync = startSync(db, () => mainWindow);
   // Deals now live in Supabase (the cloud Edge Function scrapes, shared with the phone).
   // The old local SQLite poller is disabled — the desktop reads/writes the cloud tables.
@@ -513,19 +520,48 @@ ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price
 });
 
 let cmAbort = false;
+let cmRunning = false; // guards against manual + background scrape opening two windows at once
 ipcMain.handle('abort-cardmarket-scrape', () => { cmAbort = true; return { success: true }; });
 ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
-  cmAbort = false;
+  if (cmRunning) return { updated: 0, noMatch: 0, errors: 0, noMatchList: [], busy: true };
+  cmAbort = false; cmRunning = true;
   const send = (p) => { try { event.sender.send('update-progress', p); } catch (e) {} };
-  const res = await runCardmarketScrape(db, {
-    minRank: Number(minRank) || 1,
-    onProgress: (p) => send({ current: p.current, total: p.total }),
-    shouldAbort: () => cmAbort,
-    onChallenge: () => { try { event.sender.send('cm-challenge'); } catch (e) {} },
-  });
-  send({ current: 1, total: 1 }); // clears the bar
-  return res;
+  try {
+    const res = await runCardmarketScrape(db, {
+      minRank: Number(minRank) || 1,
+      onProgress: (p) => send({ current: p.current, total: p.total }),
+      shouldAbort: () => cmAbort,
+      onChallenge: () => { try { event.sender.send('cm-challenge'); } catch (e) {} },
+    });
+    send({ current: 1, total: 1 }); // clears the bar
+    return res;
+  } finally { cmRunning = false; }
 });
+
+// Background Cardmarket poller: every 10 min, trickle-scrape a few of the stalest qualifying cards
+// (rarity >= cm_auto_min_rank, priced > 7 days ago), so per-rarity prices refresh on their own.
+// Only the desktop can scrape (real browser + residential IP); the fresh prices then sync to Supabase.
+function startCardmarketPoller() {
+  if (cmPollInterval) clearInterval(cmPollInterval);
+  cmPollInterval = setInterval(async () => {
+    if (!mainWindow || cmRunning) return;
+    if (getSetting('cm_auto_enabled') !== 'true') return;
+    cmAbort = false; cmRunning = true;
+    try {
+      const res = await runCardmarketScrape(db, {
+        minRank: Number(getSetting('cm_auto_min_rank')) || 5,
+        maxCards: 4, // small polite batch per tick
+        shouldAbort: () => cmAbort,
+        onChallenge: () => { try { mainWindow.webContents.send('cm-challenge'); } catch (e) {} },
+      });
+      if (res.updated > 0 && mainWindow) {
+        const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards WHERE deleted = 0').get();
+        mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+      }
+    } catch (e) { console.error('Cardmarket poller error:', e); }
+    finally { cmRunning = false; }
+  }, 10 * 60 * 1000);
+}
 
 ipcMain.handle('check-card-exists', (event, passcode) => {
     const p = String(passcode);

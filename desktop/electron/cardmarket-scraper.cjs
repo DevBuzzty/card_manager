@@ -73,18 +73,21 @@ function resolveUrl(name) {
   return slug ? `${BASE}/en/YuGiOh/Cards/${slug}/Versions` : null;
 }
 
-async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1 } = {}) {
-  // Distinct owned cards (one page scrape covers all their printings).
+async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity } = {}) {
+  // Distinct owned cards (one page scrape covers all their printings). Oldest-scraped first so the
+  // background poller (which passes a small maxCards) works through the collection round-robin.
   const cards = db.prepare(
-    "SELECT DISTINCT id, name FROM cards WHERE deleted = 0 AND quantity > 0"
+    "SELECT c.id, c.name FROM cards c WHERE c.deleted = 0 AND c.quantity > 0 " +
+    "GROUP BY c.id ORDER BY MIN(COALESCE(c.cm_updated_at, '1970-01-01')) ASC"
   ).all();
   const now = Date.now();
-  let updated = 0, noMatch = 0, errors = 0;
+  let updated = 0, noMatch = 0, errors = 0, scraped = 0;
   const noMatchList = []; // card names/set codes that couldn't be matched -> user sets them manually
   const win = await makeWindow();
   try {
     for (let i = 0; i < cards.length; i++) {
       if (shouldAbort && shouldAbort()) break;
+      if (scraped >= maxCards) break; // background poller: stop after a small batch per tick
       onProgress && onProgress({ current: i + 1, total: cards.length, name: cards[i].name });
       const printings = db.prepare(
         "SELECT set_code, language, rarity, cm_updated_at FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0"
@@ -102,6 +105,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
         const url = resolveUrl(name);
         if (!url) { noMatch++; continue; }
         if (!(await loadPage(win, url, onChallenge))) { errors++; continue; }
+        scraped++; // a page was actually loaded — counts toward the poller's per-tick budget
         const rows = await win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []);
         for (const p of stale) {
           // Match primarily by set-code prefix ↔ Cardmarket expansion symbol (e.g. "25LP-DE085" ->
