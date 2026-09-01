@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('api', {
   deleteCard: (data) => ipcRenderer.invoke('delete-card', data),
   scrapeCardmarketPrices: (minRank) => ipcRenderer.invoke('scrape-cardmarket-prices', { minRank }),
   abortCardmarketScrape: () => ipcRenderer.invoke('abort-cardmarket-scrape'),
+  revealCmWindow: () => ipcRenderer.invoke('reveal-cm-window'),
   onCmChallenge: (cb) => { const l = () => cb(); ipcRenderer.on('cm-challenge', l); return () => ipcRenderer.removeListener('cm-challenge', l); },
   onUpdateProgress: (callback) => {
     const subscription = (_event, value) => callback(value);

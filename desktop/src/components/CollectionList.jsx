@@ -55,7 +55,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
   useEffect(() => {
     const off = window.api?.onUpdateProgress?.((p) => setCmProgress(p));
-    const offCh = window.api?.onCmChallenge?.(() => alert('Cardmarket: bitte kurz das Captcha/Cloudflare im geöffneten Fenster lösen — es läuft dann automatisch weiter.'));
+    const offCh = window.api?.onCmChallenge?.(() => {
+      if (confirm('Cardmarket verlangt eine kurze Cloudflare-Prüfung. Prüf-Fenster jetzt öffnen und lösen? (Danach läuft es automatisch weiter.)')) {
+        window.api?.revealCmWindow?.();
+      }
+    });
     (async () => {
       const s = await window.api?.getSettings?.();
       if (s) {

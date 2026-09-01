@@ -44,7 +44,7 @@ function looksLikeChallenge(html, title) {
 
 async function makeWindow() {
   const ses = session.fromPartition('persist:cardmarket'); // cookies survive between runs
-  const win = new BrowserWindow({ show: false, width: 1200, height: 900, webPreferences: { session: ses, sandbox: true } });
+  const win = new BrowserWindow({ show: false, skipTaskbar: true, width: 1200, height: 900, webPreferences: { session: ses, sandbox: true } });
   return win;
 }
 
@@ -59,7 +59,7 @@ async function loadPage(win, url, onChallenge, headless = false) {
     const title = win.webContents.getTitle();
     const html = await win.webContents.executeJavaScript('document.documentElement.outerHTML').catch(() => '');
     if (!looksLikeChallenge(html, title)) return true;
-    if (i === 0 && !headless) { win.show(); onChallenge && onChallenge(); }
+    if (i === 0 && !headless) { onChallenge && onChallenge(win); } // notify; window is revealed only if the user opts in
     await sleep(2000);
   }
   return false; // still challenged after timeout (headless: skip quietly, retry next tick)
@@ -77,7 +77,7 @@ function resolveUrl(name) {
   return slug ? `${BASE}/en/YuGiOh/Cards/${slug}/Versions` : null;
 }
 
-async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity, headless = false } = {}) {
+async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity, headless = false, force = false } = {}) {
   // Distinct owned cards (one page scrape covers all their printings). Oldest-scraped first so the
   // background poller (which passes a small maxCards) works through the collection round-robin.
   const cards = db.prepare(
@@ -101,7 +101,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
       // large collection fast: e.g. "from Secret Rare up" never touches the cheap Commons.
       const stale = printings.filter(p =>
         rarityRank(p.rarity) >= minRank
-        && (!p.cm_updated_at || (now - new Date(p.cm_updated_at + 'Z').getTime()) > FRESH_MS));
+        && (force || !p.cm_updated_at || (now - new Date(p.cm_updated_at + 'Z').getTime()) > FRESH_MS));
       if (stale.length === 0) continue;
       try {
         const name = cards[i].name || (await fetchCardData(cards[i].id))?.data?.[0]?.name;

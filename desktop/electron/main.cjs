@@ -521,7 +521,13 @@ ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price
 
 let cmAbort = false;
 let cmRunning = false; // guards against manual + background scrape opening two windows at once
+let cmWin = null;      // the in-flight scrape window, revealed only when the user opts to solve a challenge
 ipcMain.handle('abort-cardmarket-scrape', () => { cmAbort = true; return { success: true }; });
+// Reveal the hidden scrape window so the user can solve a Cloudflare challenge (user-triggered only).
+ipcMain.handle('reveal-cm-window', () => {
+  try { if (cmWin && !cmWin.isDestroyed()) { cmWin.show(); cmWin.focus(); } } catch (e) {}
+  return { success: true };
+});
 ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
   if (cmRunning) return { updated: 0, noMatch: 0, errors: 0, noMatchList: [], busy: true };
   cmAbort = false; cmRunning = true;
@@ -529,13 +535,14 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
   try {
     const res = await runCardmarketScrape(db, {
       minRank: Number(minRank) || 1,
+      force: true, // a manual click means "re-fetch now" — ignore the 7-day freshness window
       onProgress: (p) => send({ current: p.current, total: p.total }),
       shouldAbort: () => cmAbort,
-      onChallenge: () => { try { event.sender.send('cm-challenge'); } catch (e) {} },
+      onChallenge: (win) => { cmWin = win; try { event.sender.send('cm-challenge'); } catch (e) {} },
     });
     send({ current: 1, total: 1 }); // clears the bar
     return res;
-  } finally { cmRunning = false; }
+  } finally { cmRunning = false; cmWin = null; }
 });
 
 // Background Cardmarket poller: every 10 min, trickle-scrape a few of the stalest qualifying cards
