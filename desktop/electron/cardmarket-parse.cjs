@@ -41,4 +41,4 @@ function matchRow(rows, setName, rarity) {
   return hit.length === 1 ? hit[0] : null;
 }
 
-module.exports = { normRarity, normName, RARITY_SYNONYMS, matchRow };
+module.exports = { normRarity, normName, rarityKey, RARITY_SYNONYMS, matchRow };

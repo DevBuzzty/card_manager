@@ -3,7 +3,7 @@
 // (real Chromium on the user's residential IP). Sequential + polite; the user solves the rare
 // Cloudflare/captcha challenge manually, then the run resumes.
 const { BrowserWindow, session } = require('electron');
-const { matchRow } = require('./cardmarket-parse.cjs');
+const { matchRow, normName, rarityKey } = require('./cardmarket-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 
 const BASE = 'https://www.cardmarket.com';
@@ -12,20 +12,26 @@ const FRESH_MS = 7 * 24 * 3600 * 1000; // skip printings priced < 7 days ago
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// In-page DOM extraction. Cardmarket renders each printing as a row in the versions/offer table;
-// this reads expansion name, rarity (from the rarity icon's title/aria-label), and the Trend price.
-// NOTE: selectors are pinned against a live page during Step 3 and adjusted there.
+// In-page DOM extraction — pinned against the real /Cards/{name}/Versions grid (2026-09-01).
+// Each printing is a `.card-column` in `#ReprintSection` carrying the expansion name + symbol code,
+// the rarity (inside the image alt parenthetical, e.g. "... (V.4 - Secret Rare)"), and the "Ab"
+// (from) price. `trend` here holds that from-price (the user chose the pure-scrape from-price).
 const EXTRACT_JS = `(() => {
   const num = (t) => { const m = (t||'').replace(/\\./g,'').replace(',', '.').match(/[0-9]+(?:\\.[0-9]+)?/); return m ? parseFloat(m[0]) : null; };
   const rows = [];
-  // Versions table rows (adjust selector against the real page in Step 3):
-  document.querySelectorAll('.table-body > .row, table tbody tr').forEach(tr => {
-    const exp = (tr.querySelector('[data-expansion], .expansion-name, a[href*="/Products/Singles/"]')?.textContent || '').trim();
-    const rar = (tr.querySelector('[aria-label*="Rare"], [title*="Rare"], .icon[title]')?.getAttribute('title')
-              || tr.querySelector('[aria-label]')?.getAttribute('aria-label') || '').trim();
-    const trendCell = Array.from(tr.querySelectorAll('td, .col')).map(c => c.textContent).join(' ');
-    const trend = num(trendCell);
-    if (exp || rar) rows.push({ expansion: exp, rarity: rar, trend });
+  document.querySelectorAll('#ReprintSection .card-column').forEach(col => {
+    if (!col.querySelector('a[href*="/Products/Singles/"]')) return;
+    const exp = (col.querySelector('h3 .text-start')?.textContent || '').trim();
+    const code = (col.querySelector('.expansion-symbol span')?.textContent || '').trim();
+    const alt = col.querySelector('img')?.getAttribute('alt') || '';
+    let rarity = '';
+    const pm = alt.match(/\\(([^)]+)\\)\\s*$/);
+    if (pm) { const parts = pm[1].split(' - '); rarity = parts[parts.length - 1].trim(); }
+    let price = null;
+    col.querySelectorAll('p').forEach(p => {
+      if (/\\b(Ab|From)\\b/i.test(p.textContent)) { const b = p.querySelector('b'); price = num(b ? b.textContent : p.textContent); }
+    });
+    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price });
   });
   return rows;
 })()`;
@@ -55,14 +61,12 @@ async function loadPage(win, url, onChallenge) {
   return false; // still challenged after timeout
 }
 
-// Resolve a card's Cardmarket product/metacard URL via search (first Singles result).
-async function resolveUrl(win, name, onChallenge) {
-  const url = `${BASE}/en/YuGiOh/Products/Search?searchString=${encodeURIComponent(name)}`;
-  if (!(await loadPage(win, url, onChallenge))) return null;
-  const href = await win.webContents.executeJavaScript(
-    `(document.querySelector('a[href*="/en/YuGiOh/Products/Singles/"]')||{}).href || null`
-  ).catch(() => null);
-  return href || null;
+// Build the card's "all versions" page URL directly from its English name. The Cardmarket URL slug
+// is the English name regardless of site locale: punctuation stripped, words joined with hyphens
+// (e.g. "Ash Blossom & Joyous Spring" -> "Ash-Blossom-Joyous-Spring").
+function resolveUrl(name) {
+  const slug = String(name || '').trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+  return slug ? `${BASE}/en/YuGiOh/Cards/${slug}/Versions` : null;
 }
 
 async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge } = {}) {
@@ -86,13 +90,24 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge } 
       try {
         const name = cards[i].name || (await fetchCardData(cards[i].id))?.data?.[0]?.name;
         if (!name) { noMatch++; continue; }
-        const url = await resolveUrl(win, name, onChallenge);
+        const url = resolveUrl(name);
         if (!url) { noMatch++; continue; }
         if (!(await loadPage(win, url, onChallenge))) { errors++; continue; }
         const rows = await win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []);
         for (const p of stale) {
-          const setName = await setNameFor(cards[i].id, p.set_code);
-          const hit = setName ? matchRow(rows, setName, p.rarity) : null;
+          // Match primarily by set-code prefix ↔ Cardmarket expansion symbol (e.g. "25LP-DE085" ->
+          // "25LP") + rarity — far more reliable than the expansion name. Some expansions list the
+          // same rarity twice (alt-art versions we can't tell apart from the set code); take the
+          // cheapest of those. Fall back to fuzzy expansion-name matching when no code matches.
+          const codePrefix = (p.set_code || '').split('-')[0];
+          const wantRar = rarityKey(p.rarity), wantCode = normName(codePrefix);
+          const codeHits = rows.filter(r => r.code && r.trend != null
+            && normName(r.code) === wantCode && rarityKey(r.rarity) === wantRar);
+          let hit = codeHits.length ? codeHits.reduce((a, b) => (b.trend < a.trend ? b : a)) : null;
+          if (!hit) {
+            const setName = await setNameFor(cards[i].id, p.set_code);
+            hit = setName ? matchRow(rows, setName, p.rarity) : null;
+          }
           if (hit && hit.trend != null) {
             db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
               .run(hit.trend, url, String(cards[i].id), p.set_code, p.language, p.rarity);
