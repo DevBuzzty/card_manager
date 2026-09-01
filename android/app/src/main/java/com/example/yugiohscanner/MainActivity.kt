@@ -78,6 +78,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
@@ -429,40 +431,54 @@ fun ScannerScreen(
     var cameraControl by remember { mutableStateOf<CameraControl?>(null) }
     var cameraInfo by remember { mutableStateOf<CameraInfo?>(null) }
 
-    // Feedback Helper (Empty as per requirement)
     val triggerFeedback = remember { {} }
     val scope = rememberCoroutineScope()
 
-    // Phone-side scan staging: recognised cards land here (NOT straight into the cloud) so the
-    // user can review/correct the set code before committing. Works fully without the desktop.
+    // Full-screen "capture" flash — the screen blinks each time a card is recognised, so you can
+    // just keep panning without watching the status text.
+    val flash = remember { Animatable(0f) }
+    // Passcodes already captured this session (phone-staged OR sent to desktop). Dedup so panning
+    // over a card captures it once and re-detections don't spam. Cleared by the Reset button.
+    val seen = remember { mutableSetOf<String>() }
+
+    // Phone-side scan staging (used when NO desktop is connected).
     val stagingCards = remember { mutableStateListOf<ScanStagingEntry>() }
     var showStaging by remember { mutableStateOf(false) }
 
-    // Artwork scanner confirm: resolve the card, fuzzy-match the OCR'd set code against its known
-    // printings, and stage it for review. Dedup by passcode so one card is staged once.
+    // Continuous scanning: each newly-seen card is captured automatically (screen blinks) — no
+    // per-card Reset/Prüfen. If the desktop is connected it goes straight to the DESKTOP staging
+    // area (easier to edit there); otherwise to the phone staging. Review once at the end.
     val onConfirmed = rememberUpdatedState<(Int, List<String>) -> Unit> { passcode, codes ->
         val pc = passcode.toString()
-        if (passcode > 0 && stagingCards.none { it.passcode == pc }) {
-            // Stage immediately (feels instant); resolve details + known printings in the background.
-            val entry = ScanStagingEntry(System.nanoTime(), pc)
-            stagingCards.add(entry)
-            scanStatus = "＋ $pc — Prüfen (${stagingCards.size})"
-            scope.launch {
-                try {
-                    val base = CardSearchRepository.search(pc).firstOrNull()
-                    if (base == null) {
-                        stagingCards.remove(entry)
-                        scanStatus = "Karte $pc nicht gefunden"
-                    } else {
-                        entry.base = base
-                        val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
-                        entry.knownSets = known
-                        entry.selectedSet = SetCodeMatch.best(codes, known)
+        if (passcode > 0 && seen.add(pc)) {
+            scope.launch { flash.snapTo(0.8f); flash.animateTo(0f, animationSpec = tween(300)) }
+            if (connected && socket != null) {
+                val data = JSONObject().put("passcode", pc)
+                val best = codes.firstOrNull()
+                if (best != null) { data.put("setCode", best); data.put("setCodeCandidates", JSONArray(codes)) }
+                socket.emit("card_scanned", data)
+                scanStatus = "→ Desktop: $pc"
+            } else {
+                val entry = ScanStagingEntry(System.nanoTime(), pc)
+                stagingCards.add(entry)
+                scanStatus = "＋ $pc — Prüfen (${stagingCards.size})"
+                scope.launch {
+                    try {
+                        val base = CardSearchRepository.search(pc).firstOrNull()
+                        if (base == null) {
+                            stagingCards.remove(entry); seen.remove(pc)   // allow a later re-scan
+                            scanStatus = "Karte $pc nicht gefunden"
+                        } else {
+                            entry.base = base
+                            val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
+                            entry.knownSets = known
+                            entry.selectedSet = SetCodeMatch.best(codes, known)
+                            entry.loading = false
+                        }
+                    } catch (e: Exception) {
                         entry.loading = false
+                        scanStatus = "Fehler: ${e.message}"
                     }
-                } catch (e: Exception) {
-                    entry.loading = false
-                    scanStatus = "Fehler: ${e.message}"
                 }
             }
         }
@@ -701,9 +717,10 @@ fun ScannerScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Scan → Prüfen → Übernehmen (kein Desktop nötig)",
+                text = if (connected) "● Desktop verbunden — Karten gehen direkt ins Desktop-Staging"
+                       else "Einfach über die Karten fahren — jede wird automatisch übernommen",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF9A90B0)
+                color = if (connected) Color(0xFF39D98A) else Color(0xFF9A90B0)
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -713,15 +730,19 @@ fun ScannerScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Reset the session so the same cards can be scanned again.
                 Button(
-                    onClick = { lastScannedCode = null; scanStatus = "Scanning..." },
+                    onClick = { lastScannedCode = null; seen.clear(); scanStatus = "Scanning..." },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-                ) { Text("Reset") }
-                Button(
-                    onClick = { showStaging = true },
-                    enabled = stagingCards.isNotEmpty(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Primary)
-                ) { Text("Prüfen (${stagingCards.size})") }
+                ) { Text("Neu") }
+                // Only relevant for phone staging (desktop-connected cards go to the desktop).
+                if (!connected) {
+                    Button(
+                        onClick = { showStaging = true },
+                        enabled = stagingCards.isNotEmpty(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                    ) { Text("Prüfen (${stagingCards.size})") }
+                }
             }
         }
 
@@ -929,6 +950,11 @@ fun ScannerScreen(
                     }
                 }
             }
+        }
+
+        // Capture flash — a quick white blink over the whole screen on each recognition.
+        if (flash.value > 0.01f) {
+            Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = flash.value)))
         }
 
         // Phone-side staging overlay: full-screen opaque surface (rendered LAST so it covers the
