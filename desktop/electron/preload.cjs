@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('api', {
   convertUnknownsToDefault: () => ipcRenderer.invoke('convert-unknowns-to-default'),
   downgradeToLowestRarity: () => ipcRenderer.invoke('downgrade-to-lowest-rarity'),
   fetchYugipediaSets: (passcode) => ipcRenderer.invoke('fetch-yugipedia-sets', passcode),
+  fetchJapaneseSets: (passcode) => ipcRenderer.invoke('fetch-japanese-sets', passcode),
 
   // Deals (price-alert scraper)
   addDealWatch: (data) => ipcRenderer.invoke('add-deal-watch', data),
