@@ -11,6 +11,7 @@
 // scraping regexes and the matchesQuery logic in sync with those files.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { scrapeEbay } from "./ebay.ts";
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
@@ -37,7 +38,7 @@ function parsePrice(raw: string): number | null {
   return val;
 }
 
-type Item = {
+export type Item = {
   source: string; listingId: string; title: string;
   price: number | null; url: string; imageUrl?: string;
 };
@@ -72,8 +73,9 @@ async function scrapeKleinanzeigen(query: string): Promise<Item[]> {
   return items;
 }
 
-const ADAPTERS: Record<string, (q: string) => Promise<Item[]>> = {
-  kleinanzeigen: scrapeKleinanzeigen,
+const ADAPTERS: Record<string, (q: string, w: any) => Promise<Item[]>> = {
+  kleinanzeigen: scrapeKleinanzeigen, // ignores the 2nd arg
+  ebay: scrapeEbay,
 };
 
 const STOPWORDS = new Set(["of", "the", "und", "der", "die", "das", "de", "en", "für", "mit"]);
@@ -126,7 +128,7 @@ Deno.serve(async (req) => {
       const adapter = ADAPTERS[src];
       if (!adapter) continue;
       let items: Item[] = [];
-      try { items = await adapter(w.query); }
+      try { items = await adapter(w.query, w); }
       catch (e) { console.error(`[scrape] ${src} failed:`, (e as Error).message); continue; }
 
       for (const it of items) {
