@@ -516,7 +516,7 @@ function startPricePoller() {
         if (!mainWindow) return;
         try {
             // Prioritize cards updated longest ago
-            const cards = db.prepare('SELECT id, set_code, language, rarity, price FROM cards WHERE deleted = 0 ORDER BY last_updated ASC LIMIT 50').all();
+            const cards = db.prepare('SELECT id, set_code, language, rarity, price FROM cards WHERE deleted = 0 AND (price_locked IS NULL OR price_locked = 0) ORDER BY last_updated ASC LIMIT 50').all();
             if (cards.length === 0) return;
 
             const uniqueIds = [...new Set(cards.map(c => c.id))].join(',');
