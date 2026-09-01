@@ -60,7 +60,15 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
   const runCardmarket = async () => {
     setCmRunning(true);
-    try { const r = await window.api.scrapeCardmarketPrices(cmMinRank); alert(`Cardmarket fertig: ${r.updated} aktualisiert, ${r.noMatch} ohne Treffer, ${r.errors} Fehler.`); }
+    try {
+      const r = await window.api.scrapeCardmarketPrices(cmMinRank);
+      let msg = `Cardmarket fertig: ${r.updated} aktualisiert, ${r.noMatch} ohne Treffer, ${r.errors} Fehler.`;
+      if (r.noMatchList && r.noMatchList.length) {
+        msg += `\n\nOhne Treffer (bitte manuell setzen):\n` + r.noMatchList.slice(0, 40).join('\n')
+             + (r.noMatchList.length > 40 ? `\n… +${r.noMatchList.length - 40} weitere` : '');
+      }
+      alert(msg);
+    }
     finally { setCmRunning(false); setCmProgress(null); }
   };
 
@@ -248,10 +256,13 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                               title="Ab welcher Rarity aufwärts scrapen (günstige Commons überspringen)"
                               className="px-2 py-1.5 rounded bg-black/40 border border-gray-700 text-white text-sm">
                         <option value={1}>Alle Rarities</option>
+                        <option value={2}>Ab Rare</option>
                         <option value={3}>Ab Super Rare</option>
                         <option value={4}>Ab Ultra Rare</option>
                         <option value={5}>Ab Secret Rare</option>
-                        <option value={9}>Nur Quarter Century</option>
+                        <option value={6}>Ab Ultimate Rare</option>
+                        <option value={7}>Ab Ghost / Collector's</option>
+                        <option value={8}>Nur Quarter Century</option>
                       </select>
                     )}
                     <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}

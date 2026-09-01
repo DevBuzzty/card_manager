@@ -76,6 +76,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
   ).all();
   const now = Date.now();
   let updated = 0, noMatch = 0, errors = 0;
+  const noMatchList = []; // card names/set codes that couldn't be matched -> user sets them manually
   const win = await makeWindow();
   try {
     for (let i = 0; i < cards.length; i++) {
@@ -125,13 +126,14 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
             db.prepare("UPDATE cards SET cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
               .run(String(cards[i].id), p.set_code, p.language, p.rarity); // mark attempted (no match)
             noMatch++;
+            if (noMatchList.length < 100) noMatchList.push(`${cards[i].name} — ${p.set_code} (${p.rarity})`);
           }
         }
       } catch (e) { errors++; }
       await sleep(DELAY_MIN_MS + Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS));
     }
   } finally { win.destroy(); }
-  return { updated, noMatch, errors };
+  return { updated, noMatch, errors, noMatchList };
 }
 
 // Set NAME for a (passcode, set_code) via YGOPRODeck card_sets (cached in api-handler).
