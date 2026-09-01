@@ -56,13 +56,33 @@ async function scrapeKleinanzeigen(query: string): Promise<Item[]> {
   }
   const html = await res.text();
   const items: Item[] = [];
-  for (const b of html.split('<article class="aditem"').slice(1)) {
-    const adid = (b.match(/data-adid="(\d+)"/) || [])[1];
-    const href = (b.match(/data-href="([^"]+)"/) || [])[1];
-    const title = decodeEntities((b.match(/class="ellipsis"[^>]*>([^<]+)</) || [])[1]);
-    const priceRaw = decodeEntities((b.match(/--price-shipping--price[^>]*>([^<]+)</) || [])[1]);
-    let img: string | undefined = (b.match(/<img[^>]+(?:data-imgsrc|src)="([^"]+)"/) || [])[1];
+  // Kleinanzeigen redesigned their results (2026-09): listings are now generic
+  // `<article ... data-adid="..." data-href="...">` blocks (the old `aditem` class is gone),
+  // each embedding a per-listing JSON-LD ImageObject with the title + image, and showing the
+  // price as a plain "NN €" text node. Split on `<article` and keep blocks carrying a data-adid.
+  for (const raw of html.split("<article").slice(1)) {
+    const adid = (raw.match(/data-adid="(\d+)"/) || [])[1];
+    const href = (raw.match(/data-href="([^"]+)"/) || [])[1];
+    if (!adid || !href) continue;
+    const end = raw.indexOf("</article>");
+    const block = end >= 0 ? raw.slice(0, end) : raw;
+    // Title + image: the embedded JSON-LD is the most stable source.
+    const ld = (block.match(/<script type="application\/ld\+json">([^<]+)<\/script>/) || [])[1];
+    let title = "";
+    let img: string | undefined;
+    if (ld) {
+      title = decodeEntities((ld.match(/"title":"((?:[^"\\]|\\.)*)"/) || [])[1]);
+      img = (ld.match(/"contentUrl":"([^"]+)"/) || [])[1];
+    }
+    if (!title) title = decodeEntities((block.match(/alt="([^"]+)"/) || [])[1]);
     if (img && img.startsWith("data:")) img = undefined;
+    // Price: first visible text node with a € amount (strip the JSON-LD first so the
+    // description's € never leaks in); falls back to the give-away placeholder.
+    const visible = block.replace(/<script[^>]*>[\s\S]*?<\/script>/g, "");
+    const priceRaw = decodeEntities(
+      (visible.match(/>\s*([^<>]*\d[^<>]*€[^<>]*)</) ||
+        visible.match(/>\s*(Zu verschenken)\s*</i) || [])[1],
+    );
     if (!adid || !title || !href) continue;
     items.push({
       source: "kleinanzeigen", listingId: adid, title, price: parsePrice(priceRaw),
