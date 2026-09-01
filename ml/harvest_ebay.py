@@ -18,6 +18,7 @@ Then:  python ml/label_photos.py
 import base64
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -61,6 +62,7 @@ def search(tok, q, limit=200, offset=0):
 
 
 def get_img(url):
+    url = re.sub(r"s-l\d+", "s-l1600", url)   # upgrade eBay thumbnail -> full-res
     req = urllib.request.Request(url, headers={"User-Agent": "harvest/1.0"})
     return urllib.request.urlopen(req, timeout=20).read()
 
