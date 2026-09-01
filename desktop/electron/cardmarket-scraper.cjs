@@ -7,7 +7,7 @@ const { matchRow } = require('./cardmarket-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 
 const BASE = 'https://www.cardmarket.com';
-const DELAY_MS = 3000;                 // polite delay between pages
+const DELAY_MIN_MS = 2000, DELAY_MAX_MS = 4000; // jittered polite delay per page
 const FRESH_MS = 7 * 24 * 3600 * 1000; // skip printings priced < 7 days ago
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -104,7 +104,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge } 
           }
         }
       } catch (e) { errors++; }
-      await sleep(DELAY_MS);
+      await sleep(DELAY_MIN_MS + Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS));
     }
   } finally { win.destroy(); }
   return { updated, noMatch, errors };
