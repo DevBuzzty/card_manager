@@ -215,6 +215,52 @@ function runMigrations() {
             transaction();
             console.log("Migration complete.");
         }
+
+        // PK Migration 2: (id, set_code, language) -> (id, set_code, language, rarity), so the SAME
+        // set code held in two rarities (e.g. Secret Rare + Ultra Rare) are two distinct printings
+        // with their own quantity and price, instead of collapsing into one.
+        const pk2 = db.pragma("table_info(cards)").filter(c => c.pk > 0).map(c => c.name).sort().join(',');
+        if (pk2 === 'id,language,set_code') {
+            console.log("Migrating cards table to include RARITY in PRIMARY KEY...");
+            const tx = db.transaction(() => {
+                db.exec("ALTER TABLE cards RENAME TO cards_temp_v3");
+                db.exec(`
+                    CREATE TABLE cards (
+                        id TEXT,
+                        name TEXT,
+                        type TEXT,
+                        desc TEXT,
+                        image_url TEXT,
+                        atk INTEGER,
+                        def INTEGER,
+                        level INTEGER,
+                        race TEXT,
+                        attribute TEXT,
+                        quantity INTEGER DEFAULT 1,
+                        rarity TEXT DEFAULT 'Unknown',
+                        set_code TEXT,
+                        price REAL,
+                        language TEXT DEFAULT 'DE',
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        last_updated DATETIME,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        deleted INTEGER DEFAULT 0,
+                        PRIMARY KEY (id, set_code, language, rarity)
+                    )
+                `);
+                db.exec(`
+                    INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
+                        rarity, set_code, price, language, created_at, last_updated, updated_at, deleted)
+                    SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity,
+                        COALESCE(rarity, 'Unknown'), COALESCE(set_code, 'Unknown'), price, COALESCE(language, 'DE'),
+                        created_at, last_updated, COALESCE(updated_at, CURRENT_TIMESTAMP), COALESCE(deleted, 0)
+                    FROM cards_temp_v3
+                `);
+                db.exec("DROP TABLE cards_temp_v3");
+            });
+            tx();
+            console.log("Rarity PK migration complete.");
+        }
     } catch (e) {
         console.log("Migration check failed or not needed", e);
     }

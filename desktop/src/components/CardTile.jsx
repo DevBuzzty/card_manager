@@ -70,7 +70,10 @@ export default function CardTile({ card, onClick }) {
         <div className="space-y-0.5">
           {shown.map((v, i) => (
             <div key={i} className="flex items-center justify-between gap-1.5 text-[9.5px]">
-              <span className="font-mono text-ink-faint truncate">{v.set_code || '—'}</span>
+              <span className="font-mono text-ink-faint truncate">
+                {v.set_code || '—'}
+                {v.rarity && v.rarity !== 'Unknown' && <span className="text-ink-faint/70"> · {v.rarity}</span>}
+              </span>
               <span className="font-mono text-ink-muted shrink-0">×{v.quantity || 1}</span>
               <span className="font-mono text-gold/80 shrink-0 w-12 text-right">€{(v.price || 0).toFixed(2)}</span>
             </div>

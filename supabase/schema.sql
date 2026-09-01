@@ -13,11 +13,12 @@ create table if not exists public.cards (
   race        text,
   attribute   text,
   quantity    integer default 1,
-  rarity      text,
+  rarity      text not null default 'Unknown',
   price       double precision,
   deleted     boolean not null default false,
   updated_at  timestamptz not null default now(),
-  primary key (id, set_code, language)
+  -- rarity is part of the identity: the same set code in two rarities are two printings.
+  primary key (id, set_code, language, rarity)
 );
 
 -- Server-stamped updated_at on every write, so PC and phone clocks never disagree.

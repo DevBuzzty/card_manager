@@ -1,6 +1,7 @@
 import { X, Minus, Plus, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import CustomSelect from './CustomSelect';
+import Flag from './Flag';
 
 export default function CardDetailModal({ card, onClose }) {
   const [localVariants, setLocalVariants] = useState(card.variants || []);
@@ -11,15 +12,17 @@ export default function CardDetailModal({ card, onClose }) {
   useEffect(() => {
       setLocalVariants(card.variants || []);
       if (window.api) {
-          // Same sources as the phone: German printings from Yugipedia, English/international
-          // from YGOPRODeck (YGOPRODeck has no -DE- set codes). German first, deduped by code+rarity.
+          // Full picture across languages: German + Japanese printings come from the wiki+Konami
+          // union; English/international from YGOPRODeck. German first, then EN, then JP.
           Promise.all([
               window.api.fetchYugipediaSets(card.id).then(s => s || []).catch(() => []),
               window.api.fetchCardData(card.id).then(d => (d && d.card_sets) || []).catch(() => []),
-          ]).then(([deSets, enSets]) => {
+              window.api.fetchJapaneseSets(card.id).then(s => s || []).catch(() => []),
+          ]).then(([deSets, enSets, jpSets]) => {
               const tagged = [
                   ...deSets.map(s => ({ ...s, language: 'DE' })),
                   ...enSets.map(s => ({ ...s, language: 'EN' })),
+                  ...jpSets.map(s => ({ ...s, language: 'JP' })),
               ];
               const seen = new Set();
               const merged = [];
@@ -46,7 +49,8 @@ export default function CardDetailModal({ card, onClose }) {
       const result = await window.api.deleteCard({
           id: card.id,
           set_code: variant.set_code,
-          language: variant.language || 'DE'
+          language: variant.language || 'DE',
+          rarity: variant.rarity
       });
       if (result.success) removeVariantLocal(variant);
   };
@@ -221,12 +225,19 @@ export default function CardDetailModal({ card, onClose }) {
                                         if (!unique.has(key)) unique.set(key, s);
                                     });
 
-                                    return Array.from(unique.values())
-                                        .filter(s => !localVariants.some(v => v.set_code === s.set_code && v.rarity === s.set_rarity))
-                                        .map(set => ({
-                                            value: `${set.set_code}|${set.set_rarity}`,
-                                            label: `[${set.language}] ${set.set_code} - ${set.set_rarity}${set.set_price ? ` ($${set.set_price})` : ''}`
-                                        }));
+                                    const list = Array.from(unique.values())
+                                        .filter(s => !localVariants.some(v => v.set_code === s.set_code && v.rarity === s.set_rarity));
+                                    return list.map((set, i) => ({
+                                        value: `${set.set_code}|${set.set_rarity}`,
+                                        // Separate the language groups (DE | EN | JP) with a thin divider + spacing.
+                                        divider: i > 0 && list[i - 1].language !== set.language,
+                                        label: (
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <Flag lang={set.language} />
+                                                {`${set.set_code} - ${set.set_rarity}${set.set_price ? ` ($${set.set_price})` : ''}`}
+                                            </span>
+                                        )
+                                    }));
                                 })()}
                             />
                         </div>

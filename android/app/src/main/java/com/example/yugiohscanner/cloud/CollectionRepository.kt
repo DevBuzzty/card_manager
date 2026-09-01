@@ -68,7 +68,7 @@ object CollectionRepository {
     // Autonomous scan flow: add one copy of a scanned card under its (validated) printing. If that
     // printing already exists, bump its quantity (and un-delete it); otherwise insert a new row.
     suspend fun addScanned(base: CardRow, setCode: String, rarity: String, language: String, quantity: Int = 1): String = withContext(Dispatchers.IO) {
-        val existing = getRow(base.id, setCode, language)
+        val existing = getRow(base.id, setCode, language, rarity)
         val label = base.name ?: base.id
         if (existing != null) {
             val newQty = existing.quantity + quantity
@@ -80,13 +80,15 @@ object CollectionRepository {
         }
     }
 
-    // Fetches a single row by composite key (no deleted/quantity filter), or null if absent.
-    private suspend fun getRow(id: String, setCode: String, language: String): CardRow? = withContext(Dispatchers.IO) {
+    // Fetches a single row by composite key (id, set_code, language, rarity), or null if absent.
+    // rarity is part of the identity — the same set code in two rarities are distinct printings.
+    private suspend fun getRow(id: String, setCode: String, language: String, rarity: String?): CardRow? = withContext(Dispatchers.IO) {
         val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
             .addQueryParameter("select", "*")
             .addQueryParameter("id", "eq.$id")
             .addQueryParameter("set_code", "eq.$setCode")
             .addQueryParameter("language", "eq.$language")
+            .addQueryParameter("rarity", "eq.${rarity ?: "Unknown"}")
             .build()
         executeWithReauth {
             Request.Builder().url(url)
@@ -105,6 +107,7 @@ object CollectionRepository {
             .addQueryParameter("id", "eq.${row.id}")
             .addQueryParameter("set_code", "eq.${row.setCode}")
             .addQueryParameter("language", "eq.${row.language}")
+            .addQueryParameter("rarity", "eq.${row.rarity ?: "Unknown"}")
             .build()
         executeWithReauth {
             Request.Builder()

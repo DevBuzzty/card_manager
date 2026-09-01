@@ -4,7 +4,7 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 const os = require('os');
 const { initDatabase, getDb } = require('./database.cjs');
-const { fetchCardData, fetchYugipediaSets } = require('./api-handler.cjs');
+const { fetchCardData, fetchYugipediaSets, fetchJapaneseSets } = require('./api-handler.cjs');
 const { startSync } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 
@@ -227,18 +227,25 @@ ipcMain.handle('fetch-yugipedia-sets', async (event, passcode) => {
     return await fetchYugipediaSets(passcode);
 });
 
+ipcMain.handle('fetch-japanese-sets', async (event, passcode) => {
+    return await fetchJapaneseSets(passcode);
+});
+
 ipcMain.handle('add-card-to-db', (event, card) => {
   try {
     const id = String(card.id);
     const setCode = card.set_code || 'Unknown';
     const language = card.language || 'DE';
+    const rarity = card.rarity || 'Unknown';
 
-    const existing = db.prepare('SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND language = ?').get(id, setCode, language);
+    // Identity includes rarity: the same set code in two rarities (e.g. Secret Rare + Ultra Rare)
+    // are distinct printings, each with its own quantity/price.
+    const existing = db.prepare('SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?').get(id, setCode, language, rarity);
 
     if (existing) {
         const newQty = existing.quantity + (card.quantity || 1);
-        db.prepare('UPDATE cards SET quantity = @qty, price = @price, deleted = 0 WHERE id = @id AND set_code = @set_code AND language = @language').run({
-            qty: newQty, price: card.price || 0, id, set_code: setCode, language
+        db.prepare('UPDATE cards SET quantity = @qty, price = @price, deleted = 0 WHERE id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity').run({
+            qty: newQty, price: card.price || 0, id, set_code: setCode, language, rarity
         });
         return { success: true, updated: true };
     } else {
@@ -269,11 +276,18 @@ ipcMain.handle('get-collection', () => {
     return db.prepare('SELECT * FROM cards WHERE quantity > 0 AND deleted = 0 ORDER BY created_at DESC').all();
 });
 
-ipcMain.handle('delete-card', (event, { id, set_code, language }) => {
+ipcMain.handle('delete-card', (event, { id, set_code, language, rarity }) => {
     try {
         if (!id || !set_code) return { success: false, error: 'Missing id or set_code' };
-        db.prepare('UPDATE cards SET deleted = 1 WHERE id = ? AND set_code = ? AND language = ?')
-          .run(String(id), set_code, language || 'DE');
+        // Delete only the given rarity when specified; without it, remove every rarity of the code
+        // (legacy callers). rarity is part of a printing's identity.
+        if (rarity !== undefined && rarity !== null) {
+            db.prepare('UPDATE cards SET deleted = 1 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?')
+              .run(String(id), set_code, language || 'DE', rarity);
+        } else {
+            db.prepare('UPDATE cards SET deleted = 1 WHERE id = ? AND set_code = ? AND language = ?')
+              .run(String(id), set_code, language || 'DE');
+        }
         return { success: true };
     } catch (e) {
         return { success: false, error: e.message };
@@ -472,13 +486,17 @@ ipcMain.handle('update-card-meta', (event, data) => {
     // Expects { id, set_code, quantity, ... }
     // This is a generic update.
     try {
-        const { id, set_code, quantity, language } = data;
+        const { id, set_code, quantity, language, rarity } = data;
         if (!id || !set_code) return { success: false };
 
-        // Construct update query dynamically? Or just update quantity for now?
-        // Usually mostly for quantity.
+        // Target the specific printing (incl. rarity) when the caller provides it, so editing the
+        // quantity of one rarity doesn't touch the other rarities of the same set code.
         if (quantity !== undefined) {
-             db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ? AND language = ?").run(quantity, id, set_code, language || 'DE');
+            if (rarity !== undefined && rarity !== null) {
+                db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?").run(quantity, id, set_code, language || 'DE', rarity);
+            } else {
+                db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ? AND language = ?").run(quantity, id, set_code, language || 'DE');
+            }
         }
         return { success: true };
     } catch (e) { return { success: false, error: e.message }; }
@@ -498,7 +516,7 @@ function startPricePoller() {
         if (!mainWindow) return;
         try {
             // Prioritize cards updated longest ago
-            const cards = db.prepare('SELECT id, set_code, language, price FROM cards WHERE deleted = 0 ORDER BY last_updated ASC LIMIT 50').all();
+            const cards = db.prepare('SELECT id, set_code, language, rarity, price FROM cards WHERE deleted = 0 ORDER BY last_updated ASC LIMIT 50').all();
             if (cards.length === 0) return;
 
             const uniqueIds = [...new Set(cards.map(c => c.id))].join(',');
@@ -521,7 +539,7 @@ function startPricePoller() {
             const sourceMap = { 'cardmarket': 'cardmarket_price', 'tcgplayer': 'tcgplayer_price', 'ebay': 'ebay_price', 'amazon': 'amazon_price' };
             const apiField = sourceMap[priceSource] || 'cardmarket_price';
 
-            const updateStmt = db.prepare('UPDATE cards SET price = @price, last_updated = CURRENT_TIMESTAMP WHERE id = @id AND set_code = @set_code AND language = @language');
+            const updateStmt = db.prepare('UPDATE cards SET price = @price, last_updated = CURRENT_TIMESTAMP WHERE id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity');
 
             db.transaction(() => {
                 cards.forEach(localCard => {
@@ -531,7 +549,10 @@ function startPricePoller() {
                     let newPrice = 0;
                     let foundSetPrice = false;
                     if (localCard.set_code && localCard.set_code !== 'Unknown' && apiData.card_sets) {
-                        const matchedSet = apiData.card_sets.find(s => s.set_code === localCard.set_code);
+                        // Prefer the exact (set_code + rarity) price so different rarities of the
+                        // same code are priced correctly; fall back to any entry for that set_code.
+                        const matchedSet = apiData.card_sets.find(s => s.set_code === localCard.set_code && s.set_rarity === localCard.rarity)
+                            || apiData.card_sets.find(s => s.set_code === localCard.set_code);
                         if (matchedSet && matchedSet.set_price && parseFloat(matchedSet.set_price) > 0) {
                             newPrice = parseFloat(matchedSet.set_price);
                             foundSetPrice = true;
@@ -542,12 +563,12 @@ function startPricePoller() {
                     }
 
                     if (Math.abs(newPrice - (localCard.price || 0)) > 0.01) {
-                        updateStmt.run({ price: newPrice, id: localCard.id, set_code: localCard.set_code, language: localCard.language });
+                        updateStmt.run({ price: newPrice, id: localCard.id, set_code: localCard.set_code, language: localCard.language, rarity: localCard.rarity });
                         updates.push({ id: localCard.id, newPrice });
                         totalValueChange += (newPrice - (localCard.price || 0));
                     } else {
                         // Still update timestamp
-                        db.prepare('UPDATE cards SET last_updated = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ?').run(localCard.id, localCard.set_code, localCard.language);
+                        db.prepare('UPDATE cards SET last_updated = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?').run(localCard.id, localCard.set_code, localCard.language, localCard.rarity);
                     }
                 });
             })();
@@ -590,10 +611,10 @@ ipcMain.handle('convert-unknowns-to-default', async () => {
                         const newRarity = bestSet.set_rarity;
                         const newPrice = parseFloat(bestSet.set_price) || (parseFloat(apiCard.card_prices[0][apiField]) || 0);
 
-                        // Check existing
-                        const existing = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND language = 'DE'").get(unknown.id, newSetCode);
+                        // Check existing (same printing incl. rarity)
+                        const existing = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND language = 'DE' AND rarity = ?").get(unknown.id, newSetCode, newRarity);
                         if (existing) {
-                            db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ? AND language = 'DE'").run(existing.quantity + unknown.quantity, unknown.id, newSetCode);
+                            db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ? AND language = 'DE' AND rarity = ?").run(existing.quantity + unknown.quantity, unknown.id, newSetCode, newRarity);
                             db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
                         } else {
                             db.prepare(`INSERT OR IGNORE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language, deleted)
@@ -616,9 +637,9 @@ ipcMain.handle('merge-unknown-cards', async () => {
         let mergedCount = 0;
         db.transaction(() => {
             unknowns.forEach(u => {
-                const specific = db.prepare("SELECT id, set_code, quantity FROM cards WHERE id = ? AND set_code != 'Unknown' AND deleted = 0 ORDER BY quantity DESC LIMIT 1").get(u.id);
+                const specific = db.prepare("SELECT id, set_code, rarity, language, quantity FROM cards WHERE id = ? AND set_code != 'Unknown' AND deleted = 0 ORDER BY quantity DESC LIMIT 1").get(u.id);
                 if (specific) {
-                    db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ?").run(specific.quantity + u.quantity, specific.id, specific.set_code);
+                    db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").run(specific.quantity + u.quantity, specific.id, specific.set_code, specific.rarity, specific.language);
                     db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = 'Unknown'").run(u.id);
                     mergedCount++;
                 }
@@ -841,7 +862,7 @@ ipcMain.handle('reset-database', async () => {
 ipcMain.handle('downgrade-to-lowest-rarity', async (event) => {
     // Re-implemented fully
     try {
-        const allCards = db.prepare("SELECT id, set_code, quantity FROM cards WHERE deleted = 0").all();
+        const allCards = db.prepare("SELECT id, set_code, rarity, language, quantity FROM cards WHERE deleted = 0").all();
         let changedCount = 0;
         const total = allCards.length;
         if (event.sender) event.sender.send('update-progress', { current: 0, total });
@@ -854,7 +875,7 @@ ipcMain.handle('downgrade-to-lowest-rarity', async (event) => {
              const card = allCards[i];
              if (event.sender && i % 10 === 0) event.sender.send('update-progress', { current: i + 1, total });
 
-             const current = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND deleted = 0").get(card.id, card.set_code);
+             const current = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND rarity = ? AND language = ? AND deleted = 0").get(card.id, card.set_code, card.rarity, card.language);
              if (!current) continue;
 
              try {
@@ -869,15 +890,15 @@ ipcMain.handle('downgrade-to-lowest-rarity', async (event) => {
                         const newRarity = bestSet.set_rarity;
                         const newPrice = parseFloat(bestSet.set_price) || (parseFloat(apiCard.card_prices[0][apiField]) || 0);
 
-                        const existingTarget = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ?").get(card.id, newSetCode);
+                        const existingTarget = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").get(card.id, newSetCode, newRarity, card.language);
                         if (existingTarget) {
-                            db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ?").run(existingTarget.quantity + current.quantity, card.id, newSetCode);
-                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = ?").run(card.id, card.set_code);
+                            db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").run(existingTarget.quantity + current.quantity, card.id, newSetCode, newRarity, card.language);
+                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").run(card.id, card.set_code, card.rarity, card.language);
                         } else {
                             db.prepare(`INSERT OR IGNORE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language, deleted)
   SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, ?, ?, ?, language, 0
-  FROM cards WHERE id = ? AND set_code = ?`).run(newRarity, newSetCode, newPrice, card.id, card.set_code);
-                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = ?").run(card.id, card.set_code);
+  FROM cards WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?`).run(newRarity, newSetCode, newPrice, card.id, card.set_code, card.rarity, card.language);
+                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").run(card.id, card.set_code, card.rarity, card.language);
                         }
                         changedCount++;
                     }
