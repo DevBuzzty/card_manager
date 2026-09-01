@@ -27,8 +27,11 @@ def _paste_rgba(scene: np.ndarray, patch: np.ndarray, ox: int, oy: int) -> None:
 
 def augment_card(art_bgr, rng):
     x = augment.jitter_lighting(art_bgr, rng)
-    if rng.random() < 0.7:
-        x = augment.add_foil_glare(x, rng)
+    if rng.random() < 0.5:
+        x = augment.add_holo_foil(x, rng)       # realistic holographic/foil sheen
+    if rng.random() < 0.5:
+        x = augment.add_foil_glare(x, rng)      # bright specular streak (flash reflection)
+    x = augment.photo_domain(x, rng)            # white balance / gamma / vignette / JPEG
     x = augment.add_blur_noise(x, rng)
     bgra = cv2.cvtColor(x, cv2.COLOR_BGR2BGRA)
     return augment.perspective_warp(bgra, rng)
