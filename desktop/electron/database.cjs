@@ -171,14 +171,6 @@ function runMigrations() {
         // rejects non-constant defaults), so it is added without a default and backfilled here.
         db.exec("UPDATE cards SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL");
 
-        // Cardmarket price-lock columns: cm_url/cm_updated_at record the scraped listing,
-        // price_locked lets the poller (and manual price entry) skip overwriting a locked price.
-        const priceLockCols = { cm_url: 'TEXT', cm_updated_at: 'DATETIME', price_locked: 'INTEGER DEFAULT 0' };
-        const existingCols = db.prepare("PRAGMA table_info(cards)").all().map(c => c.name);
-        for (const [name, type] of Object.entries(priceLockCols)) {
-            if (!existingCols.includes(name)) db.exec(`ALTER TABLE cards ADD COLUMN ${name} ${type}`);
-        }
-
         // PK Migration (id, set_code -> id, set_code, language)
         const pkColumns = columns.filter(c => c.pk > 0);
         const pkNames = pkColumns.map(c => c.name).sort().join(',');
@@ -268,6 +260,14 @@ function runMigrations() {
             });
             tx();
             console.log("Rarity PK migration complete.");
+        }
+
+        // Cardmarket price-lock columns: cm_url/cm_updated_at record the scraped listing,
+        // price_locked lets the poller (and manual price entry) skip overwriting a locked price.
+        const priceLockCols = { cm_url: 'TEXT', cm_updated_at: 'DATETIME', price_locked: 'INTEGER DEFAULT 0' };
+        const existingCols = db.prepare("PRAGMA table_info(cards)").all().map(c => c.name);
+        for (const [name, type] of Object.entries(priceLockCols)) {
+            if (!existingCols.includes(name)) db.exec(`ALTER TABLE cards ADD COLUMN ${name} ${type}`);
         }
     } catch (e) {
         console.log("Migration check failed or not needed", e);
