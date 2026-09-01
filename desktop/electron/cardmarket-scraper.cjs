@@ -65,7 +65,11 @@ async function loadPage(win, url, onChallenge) {
 // is the English name regardless of site locale: punctuation stripped, words joined with hyphens
 // (e.g. "Ash Blossom & Joyous Spring" -> "Ash-Blossom-Joyous-Spring").
 function resolveUrl(name) {
-  const slug = String(name || '').trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+  const slug = String(name || '').trim()
+    .replace(/[^\w\s-]/g, '')  // drop punctuation (apostrophes, colons, &, commas)
+    .replace(/\s+/g, '-')      // spaces -> hyphens
+    .replace(/-+/g, '-')       // collapse runs (archetype names "X - Y" would give "X---Y" -> "X-Y")
+    .replace(/^-+|-+$/g, '');   // trim stray hyphens
   return slug ? `${BASE}/en/YuGiOh/Cards/${slug}/Versions` : null;
 }
 
