@@ -6,6 +6,7 @@ export default function Deals() {
   const [alerts, setAlerts] = useState([]);
   const [query, setQuery] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+  const [condition, setCondition] = useState('any');
   const [error, setError] = useState(null);
   const [scraping, setScraping] = useState(false);
 
@@ -41,7 +42,7 @@ export default function Deals() {
   const addWatch = async () => {
     if (!query.trim() || !maxPrice) return;
     try {
-      await window.api.addDealWatch({ query: query.trim(), maxPrice: parseFloat(maxPrice) });
+      await window.api.addDealWatch({ query: query.trim(), maxPrice: parseFloat(maxPrice), condition });
       setQuery(''); setMaxPrice('');
       await scrapeAndRefresh();
     } catch (e) {
@@ -102,6 +103,15 @@ export default function Deals() {
             />
             <span className="text-ink-faint text-sm ml-1">€</span>
           </div>
+          <select
+            value={condition} onChange={(e) => setCondition(e.target.value)}
+            title="Zustand (nur eBay wertet das aus)"
+            className="bg-obsidian border border-line rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:border-space-violet"
+          >
+            <option value="any">Zustand: Egal</option>
+            <option value="new">Neu</option>
+            <option value="used">Gebraucht</option>
+          </select>
           <button
             onClick={addWatch}
             className="flex items-center gap-1.5 bg-space-violet/20 border border-space-violet/40 text-violet-soft hover:bg-space-violet/30 rounded-lg px-4 py-2 text-sm font-medium"

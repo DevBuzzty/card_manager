@@ -172,10 +172,15 @@ function triggerCloudScrape(c) {
     // Fire the scrape-deals Edge Function so new watches get results immediately. Best-effort.
     try { c.functions.invoke('scrape-deals').catch(() => {}); } catch (e) {}
 }
-ipcMain.handle('add-deal-watch', async (event, { query, maxPrice, sources }) => {
+ipcMain.handle('add-deal-watch', async (event, { query, maxPrice, sources, condition }) => {
     const c = await dealsClient();
     const { data, error } = await c.from('deal_watches')
-        .insert({ query: String(query || ''), max_price: Number(maxPrice) || 0, sources: sources ? JSON.stringify(sources) : null })
+        .insert({
+            query: String(query || ''),
+            max_price: Number(maxPrice) || 0,
+            sources: sources ? JSON.stringify(sources) : null,
+            condition: ['new', 'used', 'any'].includes(condition) ? condition : 'any',
+        })
         .select('id').single();
     if (error) throw new Error(error.message);
     triggerCloudScrape(c);
