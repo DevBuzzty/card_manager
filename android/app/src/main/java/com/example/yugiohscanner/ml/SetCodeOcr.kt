@@ -17,11 +17,8 @@ class SetCodeOcr {
     private val pattern = Pattern.compile("\\b[A-Z0-9]{2,5}-[A-Z]{2}\\d{2,4}\\b")
 
     fun read(crop: Bitmap, onResult: (List<String>) -> Unit) {
-        // Upscale small crops so ML Kit can resolve the tiny set-code text (target ~720px wide).
-        val up = if (crop.width in 1 until 720) {
-            val s = (720f / crop.width).coerceAtMost(4f)
-            Bitmap.createScaledBitmap(crop, (crop.width * s).toInt(), (crop.height * s).toInt(), true)
-        } else crop
+        // Grayscale + contrast + upscale so ML Kit can resolve the tiny set-code text.
+        val up = OcrPrep.enhance(crop, targetWidth = 1000)
         recognizer.process(InputImage.fromBitmap(up, 0))
             .addOnSuccessListener { visionText ->
                 val codes = LinkedHashSet<String>()

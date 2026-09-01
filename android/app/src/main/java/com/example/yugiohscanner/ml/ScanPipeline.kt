@@ -21,20 +21,22 @@ class ScanPipeline(context: Context, private val minSim: Float = 0.5f) : CardPip
     private val embedder = EmbedderModel(context)
     private val index = IndexSearcher(context)
 
-    override fun process(frame: Bitmap): List<Detection> {
-        val out = ArrayList<Detection>()
-        for (b in detector.detect(frame)) {
-            val x = b.x1.toInt().coerceIn(0, frame.width - 1)
-            val y = b.y1.toInt().coerceIn(0, frame.height - 1)
-            val w = (b.x2 - b.x1).toInt().coerceIn(1, frame.width - x)
-            val h = (b.y2 - b.y1).toInt().coerceIn(1, frame.height - y)
-            val crop = Bitmap.createBitmap(frame, x, y, w, h)
-            val square = ImagePrep.padToSquare224(crop)
-            val (pc, sim) = index.search(embedder.embed(square))
-            if (sim >= minSim) out.add(Detection(b, pc, sim))
-        }
-        return out
+    /** Just the detector boxes (robust — finds foils/angled cards the embedder can't match). */
+    fun detectBoxes(frame: Bitmap): List<Box> = detector.detect(frame)
+
+    /** Embed one detector box and match it against the index; null if below [minSim]. */
+    fun embedBox(frame: Bitmap, b: Box): Detection? {
+        val x = b.x1.toInt().coerceIn(0, frame.width - 1)
+        val y = b.y1.toInt().coerceIn(0, frame.height - 1)
+        val w = (b.x2 - b.x1).toInt().coerceIn(1, frame.width - x)
+        val h = (b.y2 - b.y1).toInt().coerceIn(1, frame.height - y)
+        val crop = Bitmap.createBitmap(frame, x, y, w, h)
+        val (pc, sim) = index.search(embedder.embed(ImagePrep.padToSquare224(crop)))
+        return if (sim >= minSim) Detection(b, pc, sim) else null
     }
+
+    override fun process(frame: Bitmap): List<Detection> =
+        detectBoxes(frame).mapNotNull { embedBox(frame, it) }
 
     override fun close() {
         detector.close()
