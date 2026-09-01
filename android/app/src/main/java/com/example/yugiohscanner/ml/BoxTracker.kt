@@ -1,68 +1,56 @@
 package com.example.yugiohscanner.ml
 
 /**
- * Stabilises live detections across frames. Associates each detection to a track by IoU;
- * a track confirms (emitted once) after the same passcode has been seen [need] times.
- * Tracks not matched in a frame are dropped so a card leaving + re-entering re-scans.
+ * Confirms a card once its passcode has been seen in [need] recent frames. Tracking is
+ * per-PASSCODE (not per box position), so a new card that appears where a previous one just
+ * was still confirms on its own — the earlier fix tracked by IoU, which let a lingering
+ * confirmed box "swallow" the next card at the same spot.
+ *
+ * A passcode is emitted once per presence; after it's been gone for [maxMisses] frames it's
+ * forgotten, so re-showing the same card can confirm it again. (Global "stage once" dedup is
+ * handled by the caller's `seen` set.)
  */
-class BoxTracker(
-    private val need: Int = 2,
-    private val iouThresh: Float = 0.4f,
-    private val maxMisses: Int = 12,
-) {
+class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
 
-    private data class Track(
-        var box: Box,
-        val votes: HashMap<Int, Int> = HashMap(),
-        var emitted: Boolean = false,
-        var misses: Int = 0,
-    )
-
-    private val tracks = ArrayList<Track>()
+    private val votes = HashMap<Int, Int>()
+    private val misses = HashMap<Int, Int>()
+    private val emitted = HashSet<Int>()
 
     /** Feed one frame's detections; returns the detections that JUST reached confirmation. */
     fun update(dets: List<Detection>): List<Detection> {
         val newlyConfirmed = ArrayList<Detection>()
-        val matched = BooleanArray(tracks.size)
+        val present = HashSet<Int>()
 
         for (d in dets) {
-            var best = -1
-            var bestIoU = iouThresh
-            for (i in tracks.indices) {
-                val u = iou(d.box, tracks[i].box)
-                if (u >= bestIoU) { bestIoU = u; best = i }
-            }
-            val tr = if (best >= 0) { matched[best] = true; tracks[best] }
-                     else Track(d.box).also { tracks.add(it) }
-            tr.box = d.box
-            tr.misses = 0
-            // passcode < 0 means "not read this frame" — keep the track alive (box updated
-            // above) but don't let it vote or confirm.
-            if (d.passcode >= 0) {
-                val c = (tr.votes[d.passcode] ?: 0) + 1
-                tr.votes[d.passcode] = c
-                if (!tr.emitted && c >= need) { tr.emitted = true; newlyConfirmed.add(d) }
+            if (d.passcode < 0) continue           // "not read this frame" — ignore
+            present.add(d.passcode)
+            misses[d.passcode] = 0
+            if (d.passcode in emitted) continue    // already captured while still in view
+            val c = (votes[d.passcode] ?: 0) + 1
+            votes[d.passcode] = c
+            if (c >= need) {
+                emitted.add(d.passcode)
+                votes.remove(d.passcode)
+                newlyConfirmed.add(d)
             }
         }
 
-        // Age tracks not seen this frame; drop only after maxMisses consecutive misses. This lets
-        // votes accumulate across a sporadically-firing detector instead of resetting every gap.
-        // `matched` is sized to the pre-loop track count, so tracks added this frame are untouched.
-        for (m in matched.indices.reversed()) {
-            if (!matched[m]) {
-                if (++tracks[m].misses > maxMisses) tracks.removeAt(m)
+        // Age passcodes not seen this frame; forget them after maxMisses so a card that leaves
+        // and comes back can confirm again.
+        for (pc in (votes.keys + emitted).toList()) {
+            if (pc !in present) {
+                val m = (misses[pc] ?: 0) + 1
+                misses[pc] = m
+                if (m > maxMisses) {
+                    votes.remove(pc); emitted.remove(pc); misses.remove(pc)
+                }
             }
         }
-
         return newlyConfirmed
     }
 
-    private fun iou(a: Box, b: Box): Float {
-        val ix1 = maxOf(a.x1, b.x1); val iy1 = maxOf(a.y1, b.y1)
-        val ix2 = minOf(a.x2, b.x2); val iy2 = minOf(a.y2, b.y2)
-        val iw = maxOf(0f, ix2 - ix1); val ih = maxOf(0f, iy2 - iy1)
-        val inter = iw * ih
-        val union = (a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - inter
-        return if (union <= 0f) 0f else inter / union
+    /** Forget all state (used by the Reset/"Neu" button so the same cards can be re-scanned). */
+    fun reset() {
+        votes.clear(); misses.clear(); emitted.clear()
     }
 }

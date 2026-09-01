@@ -529,7 +529,7 @@ fun ScannerScreen(
     // Identification is by ARTWORK embedding: each detector crop -> pad-to-square 224 -> embedder
     // -> nearest-neighbour over the on-device index (production model, TOP-1 ~0.998).
     val pipeline = remember { com.example.yugiohscanner.ml.HybridPipeline(context, minSim = 0.6f) }
-    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 3) }
+    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 2) }
     val setCodeOcr = remember { com.example.yugiohscanner.ml.SetCodeOcr() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
@@ -732,7 +732,7 @@ fun ScannerScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Reset the session so the same cards can be scanned again.
                 Button(
-                    onClick = { lastScannedCode = null; seen.clear(); scanStatus = "Scanning..." },
+                    onClick = { lastScannedCode = null; seen.clear(); tracker.reset(); scanStatus = "Scanning..." },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
                 ) { Text("Neu") }
                 // Only relevant for phone staging (desktop-connected cards go to the desktop).
