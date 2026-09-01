@@ -48,17 +48,21 @@ async function makeWindow() {
   return win;
 }
 
-// Navigate; if a Cloudflare/captcha challenge is up, surface the window and wait for the real page.
-async function loadPage(win, url, onChallenge) {
+// Navigate; wait for the real page. On a Cloudflare/captcha challenge:
+//  - interactive (manual run): surface the window and give a human up to ~2 min to solve;
+//  - headless (background poller): stay invisible, wait ~10s for a non-interactive auto-clear,
+//    then give up on this card silently and let a later tick / manual run refresh the session.
+async function loadPage(win, url, onChallenge, headless = false) {
   await win.loadURL(url);
-  for (let i = 0; i < 60; i++) { // up to ~2 min for a human to solve
+  const maxTries = headless ? 5 : 60; // ~10s silent vs ~2 min human-solvable
+  for (let i = 0; i < maxTries; i++) {
     const title = win.webContents.getTitle();
     const html = await win.webContents.executeJavaScript('document.documentElement.outerHTML').catch(() => '');
     if (!looksLikeChallenge(html, title)) return true;
-    if (i === 0) { win.show(); onChallenge && onChallenge(); }
+    if (i === 0 && !headless) { win.show(); onChallenge && onChallenge(); }
     await sleep(2000);
   }
-  return false; // still challenged after timeout
+  return false; // still challenged after timeout (headless: skip quietly, retry next tick)
 }
 
 // Build the card's "all versions" page URL directly from its English name. The Cardmarket URL slug
@@ -73,7 +77,7 @@ function resolveUrl(name) {
   return slug ? `${BASE}/en/YuGiOh/Cards/${slug}/Versions` : null;
 }
 
-async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity } = {}) {
+async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity, headless = false } = {}) {
   // Distinct owned cards (one page scrape covers all their printings). Oldest-scraped first so the
   // background poller (which passes a small maxCards) works through the collection round-robin.
   const cards = db.prepare(
@@ -104,7 +108,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
         if (!name) { noMatch++; continue; }
         const url = resolveUrl(name);
         if (!url) { noMatch++; continue; }
-        if (!(await loadPage(win, url, onChallenge))) { errors++; continue; }
+        if (!(await loadPage(win, url, onChallenge, headless))) { errors++; continue; }
         scraped++; // a page was actually loaded — counts toward the poller's per-tick budget
         const rows = await win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []);
         for (const p of stale) {

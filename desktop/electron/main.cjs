@@ -550,9 +550,9 @@ function startCardmarketPoller() {
     try {
       const res = await runCardmarketScrape(db, {
         minRank: Number(getSetting('cm_auto_min_rank')) || 5,
-        maxCards: 4, // small polite batch per tick
+        maxCards: 4,      // small polite batch per tick
+        headless: true,   // never surface a window; skip challenged cards silently, retry next tick
         shouldAbort: () => cmAbort,
-        onChallenge: () => { try { mainWindow.webContents.send('cm-challenge'); } catch (e) {} },
       });
       if (res.updated > 0 && mainWindow) {
         const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards WHERE deleted = 0').get();
