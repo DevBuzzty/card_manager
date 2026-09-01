@@ -10,7 +10,10 @@ import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class DealWatch(val id: Long, val query: String, val maxPrice: Double, val active: Boolean)
+data class DealWatch(
+    val id: Long, val query: String, val maxPrice: Double,
+    val active: Boolean, val condition: String = "any",
+)
 data class DealAlert(
     val id: Long, val watchId: Long, val source: String, val title: String,
     val price: Double?, val url: String, val imageUrl: String?, val foundAt: String,
@@ -37,8 +40,9 @@ object DealsRepository {
         getArray(url).let { arr -> (0 until arr.length()).map { parseWatch(arr.getJSONObject(it)) } }
     }
 
-    suspend fun addWatch(query: String, maxPrice: Double) = withContext(Dispatchers.IO) {
-        val body = JSONObject().put("query", query).put("max_price", maxPrice).toString()
+    suspend fun addWatch(query: String, maxPrice: Double, condition: String = "any") = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("query", query).put("max_price", maxPrice).put("condition", condition).toString()
         executeWithReauth {
             base("${SupabaseCloud.base()}/rest/v1/deal_watches".toHttpUrl())
                 .addHeader("Content-Type", "application/json")
@@ -112,5 +116,6 @@ object DealsRepository {
     private fun parseWatch(o: JSONObject) = DealWatch(
         id = o.optLong("id"), query = o.optString("query"),
         maxPrice = o.optDouble("max_price"), active = o.optBoolean("active", true),
+        condition = o.optString("condition", "any"),
     )
 }

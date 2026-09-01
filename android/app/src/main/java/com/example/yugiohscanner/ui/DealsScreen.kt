@@ -57,6 +57,7 @@ fun DealsScreen() {
     val watches = remember { mutableStateListOf<DealWatch>() }
     var query by remember { mutableStateOf("") }
     var maxPrice by remember { mutableStateOf("") }
+    var condition by remember { mutableStateOf("any") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -83,11 +84,12 @@ fun DealsScreen() {
         val p = maxPrice.toDoubleOrNull()
         if (query.isNotBlank() && p != null) {
             val q = query.trim()
-            query = ""; maxPrice = ""
+            val cond = condition
+            query = ""; maxPrice = ""; condition = "any"
             scope.launch {
                 loading = true
                 try {
-                    DealsRepository.addWatch(q, p)
+                    DealsRepository.addWatch(q, p, cond)
                     DealsRepository.triggerScrape()
                     reloadFromCloud()
                     error = null
@@ -129,6 +131,17 @@ fun DealsScreen() {
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.width(96.dp)
                 )
+                Spacer(Modifier.width(8.dp))
+                var condMenu by remember { mutableStateOf(false) }
+                val condLabel = when (condition) { "new" -> "Neu"; "used" -> "Gebraucht"; else -> "Egal" }
+                Box {
+                    AssistChip(onClick = { condMenu = true }, label = { Text(condLabel) })
+                    DropdownMenu(expanded = condMenu, onDismissRequest = { condMenu = false }) {
+                        DropdownMenuItem(text = { Text("Egal") }, onClick = { condition = "any"; condMenu = false })
+                        DropdownMenuItem(text = { Text("Neu") }, onClick = { condition = "new"; condMenu = false })
+                        DropdownMenuItem(text = { Text("Gebraucht") }, onClick = { condition = "used"; condMenu = false })
+                    }
+                }
                 Spacer(Modifier.width(8.dp))
                 FilledIconButton(onClick = addWatch) { Icon(Icons.Default.Add, "Watch") }
             }
@@ -217,6 +230,7 @@ private fun DealRow(d: DealAlert, context: android.content.Context, onDismiss: (
 private fun SourceBadge(source: String) {
     val label = when (source.lowercase()) {
         "kleinanzeigen" -> "Kleinanzeigen"
+        "ebay" -> "eBay"
         else -> source.replaceFirstChar { it.uppercase() }
     }
     Box(
