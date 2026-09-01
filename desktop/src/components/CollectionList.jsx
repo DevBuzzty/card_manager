@@ -48,6 +48,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [segmentBusy, setSegmentBusy] = useState(false);
   const [cmRunning, setCmRunning] = useState(false);
   const [cmProgress, setCmProgress] = useState(null);
+  const [cmMinRank, setCmMinRank] = useState(5); // default: from Secret Rare up (skip cheap commons)
 
   const updating = isUpdating || localUpdating;
 
@@ -59,7 +60,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
   const runCardmarket = async () => {
     setCmRunning(true);
-    try { const r = await window.api.scrapeCardmarketPrices(); alert(`Cardmarket fertig: ${r.updated} aktualisiert, ${r.noMatch} ohne Treffer, ${r.errors} Fehler.`); }
+    try { const r = await window.api.scrapeCardmarketPrices(cmMinRank); alert(`Cardmarket fertig: ${r.updated} aktualisiert, ${r.noMatch} ohne Treffer, ${r.errors} Fehler.`); }
     finally { setCmRunning(false); setCmProgress(null); }
   };
 
@@ -242,6 +243,17 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                     <button onClick={() => handleUpdate('all')} disabled={updating} className="p-2 bg-gray-800 hover:bg-space-violet text-gray-400 hover:text-white rounded-full">
                         <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
                     </button>
+                    {!cmRunning && (
+                      <select value={cmMinRank} onChange={(e) => setCmMinRank(Number(e.target.value))}
+                              title="Ab welcher Rarity aufwärts scrapen (günstige Commons überspringen)"
+                              className="px-2 py-1.5 rounded bg-black/40 border border-gray-700 text-white text-sm">
+                        <option value={1}>Alle Rarities</option>
+                        <option value={3}>Ab Super Rare</option>
+                        <option value={4}>Ab Ultra Rare</option>
+                        <option value={5}>Ab Secret Rare</option>
+                        <option value={9}>Nur Quarter Century</option>
+                      </select>
+                    )}
                     <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}
                             className="px-3 py-1.5 rounded bg-space-violet/80 hover:bg-space-violet text-white text-sm">
                       {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Cardmarket-Preise'}

@@ -514,10 +514,11 @@ ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price
 
 let cmAbort = false;
 ipcMain.handle('abort-cardmarket-scrape', () => { cmAbort = true; return { success: true }; });
-ipcMain.handle('scrape-cardmarket-prices', async (event) => {
+ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
   cmAbort = false;
   const send = (p) => { try { event.sender.send('update-progress', p); } catch (e) {} };
   const res = await runCardmarketScrape(db, {
+    minRank: Number(minRank) || 1,
     onProgress: (p) => send({ current: p.current, total: p.total }),
     shouldAbort: () => cmAbort,
     onChallenge: () => { try { event.sender.send('cm-challenge'); } catch (e) {} },

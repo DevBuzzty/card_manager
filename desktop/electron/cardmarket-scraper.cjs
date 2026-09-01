@@ -3,7 +3,7 @@
 // (real Chromium on the user's residential IP). Sequential + polite; the user solves the rare
 // Cloudflare/captcha challenge manually, then the run resumes.
 const { BrowserWindow, session } = require('electron');
-const { matchRow, normName, rarityKey } = require('./cardmarket-parse.cjs');
+const { matchRow, normName, rarityKey, rarityRank } = require('./cardmarket-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 
 const BASE = 'https://www.cardmarket.com';
@@ -69,7 +69,7 @@ function resolveUrl(name) {
   return slug ? `${BASE}/en/YuGiOh/Cards/${slug}/Versions` : null;
 }
 
-async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge } = {}) {
+async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1 } = {}) {
   // Distinct owned cards (one page scrape covers all their printings).
   const cards = db.prepare(
     "SELECT DISTINCT id, name FROM cards WHERE deleted = 0 AND quantity > 0"
@@ -84,8 +84,12 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge } 
       const printings = db.prepare(
         "SELECT set_code, language, rarity, cm_updated_at FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0"
       ).all(String(cards[i].id));
-      // Skip if every printing was priced recently.
-      const stale = printings.filter(p => !p.cm_updated_at || (now - new Date(p.cm_updated_at + 'Z').getTime()) > FRESH_MS);
+      // Only printings at/above the chosen rarity threshold, and not priced recently. Cards with no
+      // qualifying printing are skipped entirely (no page load, no delay) — this is what keeps a
+      // large collection fast: e.g. "from Secret Rare up" never touches the cheap Commons.
+      const stale = printings.filter(p =>
+        rarityRank(p.rarity) >= minRank
+        && (!p.cm_updated_at || (now - new Date(p.cm_updated_at + 'Z').getTime()) > FRESH_MS));
       if (stale.length === 0) continue;
       try {
         const name = cards[i].name || (await fetchCardData(cards[i].id))?.data?.[0]?.name;
@@ -94,6 +98,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge } 
         if (!url) { noMatch++; continue; }
         if (!(await loadPage(win, url, onChallenge))) { errors++; continue; }
         const rows = await win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []);
+        console.log('[cm]', cards[i].name, '->', url, '| rows=', rows.length, rows[0] ? JSON.stringify(rows[0]) : '');
         for (const p of stale) {
           // Match primarily by set-code prefix ↔ Cardmarket expansion symbol (e.g. "25LP-DE085" ->
           // "25LP") + rarity — far more reliable than the expansion name. Some expansions list the
@@ -101,9 +106,14 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge } 
           // cheapest of those. Fall back to fuzzy expansion-name matching when no code matches.
           const codePrefix = (p.set_code || '').split('-')[0];
           const wantRar = rarityKey(p.rarity), wantCode = normName(codePrefix);
-          const codeHits = rows.filter(r => r.code && r.trend != null
-            && normName(r.code) === wantCode && rarityKey(r.rarity) === wantRar);
-          let hit = codeHits.length ? codeHits.reduce((a, b) => (b.trend < a.trend ? b : a)) : null;
+          const codeRows = rows.filter(r => r.code && r.trend != null && normName(r.code) === wantCode);
+          let hit = null;
+          if (codeRows.length === 1) {
+            hit = codeRows[0];               // one printing in that set -> unambiguous (Cardmarket omits the rarity label)
+          } else if (codeRows.length > 1) {  // multiple in the set -> Cardmarket DOES label rarity; disambiguate, cheapest wins
+            const rarHits = codeRows.filter(r => rarityKey(r.rarity) === wantRar);
+            if (rarHits.length) hit = rarHits.reduce((a, b) => (b.trend < a.trend ? b : a));
+          }
           if (!hit) {
             const setName = await setNameFor(cards[i].id, p.set_code);
             hit = setName ? matchRow(rows, setName, p.rarity) : null;
