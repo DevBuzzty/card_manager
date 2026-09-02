@@ -36,20 +36,28 @@ function remoteToLocalFull(r) {
     atk: r.atk ?? null, def: r.def ?? null, level: r.level ?? null, race: r.race ?? null,
     attribute: r.attribute ?? null, quantity: r.quantity ?? 1, rarity: r.rarity ?? null,
     price: r.price ?? null, deleted: r.deleted ? 1 : 0,
+    cm_product_id: r.cm_product_id ?? null, price_locked: Number(r.price_locked) || 0,
   };
 }
 
 // Apply one pulled remote row: existing local row -> patch quantity+deleted (desktop stays
 // authoritative for detail columns); missing local row -> insert the full row.
 function applyRemoteRow(db, r) {
-  const info = db.prepare(`UPDATE cards SET quantity = @quantity, deleted = @deleted
-    WHERE id = @id AND set_code = @set_code AND language = @language`).run(remoteToLocalPatch(r));
-  if (info.changes === 0) {
+  const p = remoteToLocalPatch(r);
+  const exists = db.prepare('SELECT 1 FROM cards WHERE id = @id AND set_code = @set_code AND language = @language LIMIT 1').get(p);
+  if (!exists) {
     db.prepare(`INSERT OR IGNORE INTO cards
-      (id, set_code, language, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, price, deleted)
-      VALUES (@id,@set_code,@language,@name,@type,@desc,@image_url,@atk,@def,@level,@race,@attribute,@quantity,@rarity,@price,@deleted)`)
+      (id, set_code, language, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, price, deleted, cm_product_id, price_locked)
+      VALUES (@id,@set_code,@language,@name,@type,@desc,@image_url,@atk,@def,@level,@race,@attribute,@quantity,@rarity,@price,@deleted,@cm_product_id,@price_locked)`)
       .run(remoteToLocalFull(r));
+    return;
   }
+  // Only touch rows whose phone-owned fields really changed: an unconditional UPDATE would fire the
+  // local updated_at trigger, mark the row dirty, and push the desktop's stale price back over a
+  // price the cloud refresh just wrote.
+  db.prepare(`UPDATE cards SET quantity = @quantity, deleted = @deleted
+    WHERE id = @id AND set_code = @set_code AND language = @language
+      AND (quantity IS NOT @quantity OR deleted IS NOT @deleted)`).run(p);
 }
 
 function getSetting(db, key) {

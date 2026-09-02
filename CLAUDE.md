@@ -48,6 +48,7 @@ The `cards` table primary key is composite: **`(id, set_code, language)`**. A si
 - **"Best default set"** (`findBestDefaultSet` in `main.cjs`) picks a card's cheapest/lowest-rarity printing (Common < Short Print < Rare < … < Secret Rare, then by price). This is the app's opinion of the "canonical" printing when the exact one isn't known.
 - **Price source** is user-configurable via `settings` (`price_source` ∈ cardmarket/tcgplayer/ebay/amazon); handlers map it to the matching YGOPRODeck `*_price` field. Prefer a card's `set_price` when the exact `set_code` matches, else fall back to the card-level price.
   Per-rarity **Cardmarket EUR** prices come from `electron/cardmarket-bulk.cjs`: a daily bulk refresh reads Cardmarket's free `price_guide_3.json` (`trend`) for every printing with a known `cm_product_id`, resolving ids from `products_singles_3.json` + `products_nonsingles_3.json` where unambiguous. `electron/cardmarket-scraper.cjs` only scrapes printings whose `cm_product_id` is still NULL (several rarities of one card in one expansion) and stores the id it finds. Rows with `price_locked = 1` are skipped by the YGOPRODeck poller.
+  The Supabase Edge Function `refresh-cardmarket-prices` (pg_cron, daily 05:00 UTC; see `supabase/README_cardmarket_cloud.md`) applies the same `trend` to the cloud rows so the phone stays current without the desktop; `cm_product_id` and `price_locked` (0/1/2) are mirrored via `sync.cjs`.
 
 ## Conventions & gotchas
 
