@@ -1,15 +1,19 @@
 const { createClient } = require('@supabase/supabase-js');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
+// cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
+// phone's rows and skip manual prices (price_locked = 2) without the desktop being on.
 const MIRROR_COLS = ['id', 'set_code', 'language', 'name', 'type', 'desc',
   'image_url', 'atk', 'def', 'level', 'race', 'attribute', 'quantity',
-  'rarity', 'price', 'deleted'];
+  'rarity', 'price', 'deleted', 'cm_product_id', 'price_locked'];
 
 // Local SQLite row -> remote upsert payload. `updated_at` is server-stamped, never sent.
 function rowToRemote(row) {
   const out = {};
   for (const c of MIRROR_COLS) {
     if (c === 'deleted') out.deleted = !!row.deleted;
+    else if (c === 'price_locked') out.price_locked = Number(row.price_locked) || 0; // cloud column is smallint 0/1/2
+    else if (c === 'cm_product_id') out.cm_product_id = row.cm_product_id ?? null;
     else out[c] = row[c];
   }
   return out;
@@ -64,6 +68,19 @@ const recentlyPushed = new Map();
 function startSync(db, getWindow) {
   let client = null;
   let running = false;
+
+  // One-time backfill (2026-09-02): rows resolved before cm_product_id/price_locked were mirrored
+  // were already pushed without them. Touch them once so the normal dirty-row push re-uploads
+  // them with the new columns. Guarded by a setting so it never runs twice.
+  if (getSetting(db, 'cm_cloud_backfill_done') !== 'true') {
+    try {
+      const info = db.prepare(
+        "UPDATE cards SET updated_at = CURRENT_TIMESTAMP WHERE cm_product_id IS NOT NULL OR price_locked = 2"
+      ).run();
+      setSetting(db, 'cm_cloud_backfill_done', 'true');
+      console.log(`[sync] cloud backfill: marked ${info.changes} rows dirty for cm_product_id/price_locked`);
+    } catch (e) { console.error('[sync] cloud backfill failed:', e.message); }
+  }
 
   const emit = (state, message) => {
     const w = getWindow();
