@@ -47,6 +47,7 @@ The `cards` table primary key is composite: **`(id, set_code, language)`**. A si
 - **`set_code = 'Unknown'`** is a deliberate holding bucket for cards scanned before their printing is known. Several handlers exist to resolve it: `merge-unknown-cards`, `convert-unknowns-to-default`, and `downgrade-to-lowest-rarity`. These merge quantities into the correct printing and delete the `Unknown` row.
 - **"Best default set"** (`findBestDefaultSet` in `main.cjs`) picks a card's cheapest/lowest-rarity printing (Common < Short Print < Rare < … < Secret Rare, then by price). This is the app's opinion of the "canonical" printing when the exact one isn't known.
 - **Price source** is user-configurable via `settings` (`price_source` ∈ cardmarket/tcgplayer/ebay/amazon); handlers map it to the matching YGOPRODeck `*_price` field. Prefer a card's `set_price` when the exact `set_code` matches, else fall back to the card-level price.
+  Per-rarity **Cardmarket EUR** prices come from `electron/cardmarket-bulk.cjs`: a daily bulk refresh reads Cardmarket's free `price_guide_3.json` (`trend`) for every printing with a known `cm_product_id`, resolving ids from `products_singles_3.json` + `products_nonsingles_3.json` where unambiguous. `electron/cardmarket-scraper.cjs` only scrapes printings whose `cm_product_id` is still NULL (several rarities of one card in one expansion) and stores the id it finds. Rows with `price_locked = 1` are skipped by the YGOPRODeck poller.
 
 ## Conventions & gotchas
 

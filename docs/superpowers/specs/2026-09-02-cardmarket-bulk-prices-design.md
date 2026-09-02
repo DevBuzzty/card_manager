@@ -1,7 +1,7 @@
 # Cardmarket Bulk Prices (Hybrid) — Design
 
 **Date:** 2026-09-02
-**Status:** Approved (brainstorm), pending implementation plan
+**Status:** Implemented 2026-09-02 (plus Task 8 resolver normalisation)
 **Supersedes in part:** `2026-09-01-cardmarket-scraper-design.md` (the scraper stays, but becomes a fallback)
 
 ## Purpose
