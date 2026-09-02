@@ -11,7 +11,7 @@ import java.nio.FloatBuffer
 class EmbedderModel(context: Context) {
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
     private val session: OrtSession =
-        env.createSession(context.assets.open("embedder.onnx").readBytes())
+        env.createSession(context.assets.open("embedder.onnx").readBytes(), OrtTuning.sessionOptions())
     private val inputName: String = session.inputNames.iterator().next()
 
     /** Returns the 128-d L2-normalised embedding for a 224x224 RGB bitmap. */

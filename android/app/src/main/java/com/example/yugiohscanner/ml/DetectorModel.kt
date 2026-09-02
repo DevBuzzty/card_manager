@@ -19,9 +19,14 @@ data class Box(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val s
  */
 class DetectorModel(context: Context, private val imgsz: Int = 640, private val conf: Float = 0.6f) {
     private val env: OrtEnvironment = OrtEnvironment.getEnvironment()
+    // Tuned CPU EP (fp32). Accelerator EPs don't pay off for THIS detector: the in-graph NMS
+    // (nms=True export) forces the graph to partition, so NNAPI fails to build it at all and
+    // XNNPACK gave no speedup. int8 quantization was also a wash on the CPU EP (~same ms) for a
+    // ~10% recall loss. The real lever is re-exporting WITHOUT in-graph NMS (NMS in Kotlin).
     private val session: OrtSession =
-        env.createSession(context.assets.open("detector.onnx").readBytes())
+        env.createSession(context.assets.open("detector.onnx").readBytes(), OrtTuning.sessionOptions())
     private val inputName: String = session.inputNames.iterator().next()
+    private var inferCount = 0
 
     fun detect(frame: Bitmap): List<Box> {
         // Letterbox the frame into an imgsz square with gray(114) padding, preserving aspect.
@@ -38,6 +43,7 @@ class DetectorModel(context: Context, private val imgsz: Int = 640, private val 
 
         val input = toRgbChw01(letter)
         val boxes = ArrayList<Box>()
+        val t0 = System.nanoTime()
         OnnxTensor.createTensor(
             env, FloatBuffer.wrap(input), longArrayOf(1, 3, imgsz.toLong(), imgsz.toLong())
         ).use { t ->
@@ -54,6 +60,9 @@ class DetectorModel(context: Context, private val imgsz: Int = 640, private val 
                     boxes.add(Box(x1, y1, x2, y2, score))
                 }
             }
+        }
+        if (++inferCount % 30 == 0) {
+            android.util.Log.i("OrtPerf", "detector infer=${(System.nanoTime() - t0) / 1_000_000}ms")
         }
         return boxes
     }

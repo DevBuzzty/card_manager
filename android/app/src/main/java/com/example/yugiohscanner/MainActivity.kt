@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.util.Size
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
@@ -25,6 +26,8 @@ import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
@@ -125,12 +128,15 @@ import io.socket.client.Socket
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Per-passcode disk cache for card lookups + the set-code union, so re-scanning is instant.
+        com.example.yugiohscanner.cloud.ScanCache.init(this)
         setContent {
             AppTheme {
                 Surface(
@@ -448,14 +454,22 @@ fun ScannerScreen(
     // Continuous scanning: each newly-seen card is captured automatically (screen blinks) — no
     // per-card Reset/Prüfen. If the desktop is connected it goes straight to the DESKTOP staging
     // area (easier to edit there); otherwise to the phone staging. Review once at the end.
-    val onConfirmed = rememberUpdatedState<(Int, List<String>) -> Unit> { passcode, codes ->
+    // `evidence` is the pooled raw OCR text of this card's bottom band across the frames it was
+    // visible (see SetCodeEvidence). The set code is resolved from it by constrained matching
+    // against the card's known printings, not by trusting a single clean OCR token.
+    val onConfirmed = rememberUpdatedState<(Int, List<String>) -> Unit> { passcode, evidence ->
         val pc = passcode.toString()
         if (passcode > 0 && seen.add(pc)) {
             scope.launch { flash.snapTo(0.8f); flash.animateTo(0f, animationSpec = tween(300)) }
             if (connected && socket != null) {
                 val data = JSONObject().put("passcode", pc)
-                val best = codes.firstOrNull()
-                if (best != null) { data.put("setCode", best); data.put("setCodeCandidates", JSONArray(codes)) }
+                // Send clean set-code candidates pulled from the pooled evidence; the desktop
+                // matches them against its own known-printings list.
+                val cand = com.example.yugiohscanner.ml.SetCodeOcr.extract(evidence.joinToString(" "))
+                if (cand.isNotEmpty()) {
+                    data.put("setCode", cand.first())
+                    data.put("setCodeCandidates", JSONArray(cand))
+                }
                 socket.emit("card_scanned", data)
                 scanStatus = "→ Desktop: $pc"
             } else {
@@ -472,7 +486,7 @@ fun ScannerScreen(
                             entry.base = base
                             val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
                             entry.knownSets = known
-                            entry.selectedSet = SetCodeMatch.best(codes, known)
+                            entry.selectedSet = SetCodeMatch.best(evidence, known)
                             entry.loading = false
                         }
                     } catch (e: Exception) {
@@ -530,32 +544,24 @@ fun ScannerScreen(
     // -> nearest-neighbour over the on-device index (production model, TOP-1 ~0.998).
     val pipeline = remember { com.example.yugiohscanner.ml.HybridPipeline(context, minSim = 0.6f) }
     val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 2) }
-    val setCodeOcr = remember { com.example.yugiohscanner.ml.SetCodeOcr() }
+    // Pools each card's bottom-band OCR text across frames so the set code is voted, not read once.
+    val setEvidence = remember { com.example.yugiohscanner.ml.SetCodeEvidence() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
     val mlAnalyzer = remember {
-        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, frame, w, h, ms ->
+        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms ->
             mlDetections = dets
             mlFrameW = w
             mlFrameH = h
-            // Stabilise across frames; on confirm, OCR the set code (region below the artwork
-            // where it's printed) for rarity, then emit passcode + set codes.
+            // Pool each visible card's bottom-band OCR text (set-code voting across frames).
+            for (d in dets) setEvidence.record(d.passcode, d.bandText)
+            // On confirmation, resolve the set code from ALL pooled evidence for that card, then
+            // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
             for (d in tracker.update(dets)) {
                 Log.i("MlScan", "confirmed card ${d.passcode}")
-                val bw = d.box.x2 - d.box.x1
-                val bh = d.box.y2 - d.box.y1
-                // The set code is printed on the card frame just BELOW the artwork. OCR a narrow
-                // strip there (not the whole artwork, which is just noise) — SetCodeOcr upscales it
-                // so the tiny text is legible.
-                val cx = (d.box.x1 - bw * 0.05f).toInt().coerceIn(0, frame.width - 1)
-                val cy = (d.box.y2 - bh * 0.05f).toInt().coerceIn(0, frame.height - 1)
-                val cw = (bw * 1.10f).toInt().coerceIn(1, frame.width - cx)
-                val ch = (bh * 0.45f).toInt().coerceIn(1, frame.height - cy)
-                val crop = android.graphics.Bitmap.createBitmap(frame, cx, cy, cw, ch)
-                setCodeOcr.read(crop) { codes ->
-                    onConfirmed.value(d.passcode, codes)
-                }
+                onConfirmed.value(d.passcode, setEvidence.textsFor(d.passcode))
+                setEvidence.forget(d.passcode)
             }
             if (dets.isNotEmpty()) {
                 val top = dets.maxByOrNull { it.sim }
@@ -567,10 +573,12 @@ fun ScannerScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            executor.shutdown()
-            analyzer.close()
-            pipeline.close()
-            setCodeOcr.close()
+            // Order matters. Stop new frames FIRST (unbind the camera), then drain the analysis
+            // thread, and only THEN free native resources. pipeline.close()/analyzer.close() free
+            // the ONNX detector+embedder sessions and the ML Kit recognizer; a frame may still be
+            // mid-inference on `executor` (MlScanAnalyzer runs pipeline.process() synchronously).
+            // Closing a native session underneath a running inference is an UNCATCHABLE native
+            // crash — the one seen when leaving the scanner while a card is highlighted.
             if (cameraProviderFuture.isDone) {
                 try {
                     cameraProviderFuture.get().unbindAll()
@@ -578,6 +586,14 @@ fun ScannerScreen(
                     Log.e("Scanner", "Error unbinding camera on dispose", e)
                 }
             }
+            executor.shutdown()
+            try {
+                executor.awaitTermination(2, TimeUnit.SECONDS)
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+            analyzer.close()
+            pipeline.close()
         }
     }
 
@@ -625,7 +641,21 @@ fun ScannerScreen(
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
 
+                    // Request ~1080p analysis frames. The default is 640x480, on which a card
+                    // that fills half the height leaves the passcode digits only ~5-7 px tall —
+                    // too small for OCR to recover. The detector still runs on a 640 letterbox
+                    // (its input size is fixed), so higher analysis resolution costs no extra
+                    // detector time; only the OCR crops, taken from this full-res frame, benefit.
+                    val resolutionSelector = ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            ResolutionStrategy(
+                                Size(1920, 1080),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                            )
+                        )
+                        .build()
                     val imageAnalyzer = ImageAnalysis.Builder()
+                        .setResolutionSelector(resolutionSelector)
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build()
                         .also {
@@ -732,7 +762,7 @@ fun ScannerScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 // Reset the session so the same cards can be scanned again.
                 Button(
-                    onClick = { lastScannedCode = null; seen.clear(); tracker.reset(); scanStatus = "Scanning..." },
+                    onClick = { lastScannedCode = null; seen.clear(); tracker.reset(); setEvidence.reset(); scanStatus = "Scanning..." },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
                 ) { Text("Neu") }
                 // Only relevant for phone staging (desktop-connected cards go to the desktop).

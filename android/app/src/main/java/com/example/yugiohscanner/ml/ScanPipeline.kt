@@ -3,8 +3,17 @@ package com.example.yugiohscanner.ml
 import android.content.Context
 import android.graphics.Bitmap
 
-/** One recognised card: its detector box, matched passcode, and cosine similarity. */
-data class Detection(val box: Box, val passcode: Int, val sim: Float)
+/**
+ * One recognised card: its detector box, matched passcode, cosine similarity, and the raw OCR
+ * text of this card's bottom code band (passcode + set code live there). [bandText] is empty only
+ * when no band was read this frame; the caller votes over it across frames to resolve the set code.
+ */
+data class Detection(
+    val box: Box,
+    val passcode: Int,
+    val sim: Float,
+    val bandText: String = ""
+)
 
 /** A per-frame card recogniser: detect boxes and attach a passcode to each. */
 interface CardPipeline {

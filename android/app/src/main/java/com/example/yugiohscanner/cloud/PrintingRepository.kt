@@ -36,6 +36,11 @@ object PrintingRepository {
     // The independent lookups run CONCURRENTLY (the phone has no request cache, so parallelism is
     // what keeps this fast) — total latency ≈ the slowest source, not the sum.
     suspend fun fetchAllSets(passcode: String): List<SetOption> = coroutineScope {
+        // Disk cache: the 3-source union is the scan flow's slowest step (seconds). It's
+        // deterministic per passcode, so a cached result makes a re-scanned card instant.
+        ScanCache.read("sets", passcode)?.let { cached ->
+            runCatching { deserializeSets(cached) }.getOrNull()?.let { return@coroutineScope it }
+        }
         val enD = async(Dispatchers.IO) { runCatching { fetchSets(passcode) }.getOrDefault(emptyList()) }
         val titleD = async(Dispatchers.IO) { resolveYugipediaTitle(passcode) }
         val en = enD.await()
@@ -48,7 +53,29 @@ object PrintingRepository {
         val jpD = async(Dispatchers.IO) { localizedUnion(title, cid, "jp", "JP") }
 
         val seen = HashSet<String>()
-        (deD.await() + en + jpD.await()).filter { seen.add("${it.setCode}|${it.rarity}") }
+        val result = (deD.await() + en + jpD.await()).filter { seen.add("${it.setCode}|${it.rarity}") }
+        // Only cache a real, non-empty union so a transient failure can't poison it for 14 days.
+        if (result.isNotEmpty()) ScanCache.write("sets", passcode, serializeSets(result))
+        result
+    }
+
+    // JSON (de)serialization for the disk cache. SetOption is a flat 4-field record.
+    private fun serializeSets(sets: List<SetOption>): String {
+        val arr = org.json.JSONArray()
+        for (s in sets) {
+            arr.put(JSONObject().put("c", s.setCode).put("r", s.rarity).put("p", s.price).put("l", s.language))
+        }
+        return arr.toString()
+    }
+
+    private fun deserializeSets(text: String): List<SetOption> {
+        val arr = org.json.JSONArray(text)
+        val out = ArrayList<SetOption>(arr.length())
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            out.add(SetOption(o.getString("c"), o.getString("r"), o.optDouble("p", 0.0), o.optString("l", "EN")))
+        }
+        return out
     }
 
     // A code is German if its region infix is DE (incl. Speed Duel DES/DEA) or the old German "G"
