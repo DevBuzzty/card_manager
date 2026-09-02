@@ -4,6 +4,7 @@
 // Cloudflare/captcha challenge manually, then the run resumes.
 const { BrowserWindow, session } = require('electron');
 const { matchRow, normName, rarityKey, rarityRank } = require('./cardmarket-parse.cjs');
+const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 
 const BASE = 'https://www.cardmarket.com';
@@ -23,7 +24,9 @@ const EXTRACT_JS = `(() => {
     if (!col.querySelector('a[href*="/Products/Singles/"]')) return;
     const exp = (col.querySelector('h3 .text-start')?.textContent || '').trim();
     const code = (col.querySelector('.expansion-symbol span')?.textContent || '').trim();
-    const alt = col.querySelector('img')?.getAttribute('alt') || '';
+    const imgEl = col.querySelector('img');
+    const alt = imgEl?.getAttribute('alt') || '';
+    const imgSrc = imgEl ? (imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || imgEl.getAttribute('data-echo') || '') : '';
     let rarity = '';
     const pm = alt.match(/\\(([^)]+)\\)\\s*$/);
     if (pm) { const parts = pm[1].split(' - '); rarity = parts[parts.length - 1].trim(); }
@@ -31,7 +34,7 @@ const EXTRACT_JS = `(() => {
     col.querySelectorAll('p').forEach(p => {
       if (/\\b(Ab|From)\\b/i.test(p.textContent)) { const b = p.querySelector('b'); price = num(b ? b.textContent : p.textContent); }
     });
-    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price });
+    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc });
   });
   return rows;
 })()`;
@@ -81,11 +84,11 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
   // Distinct owned cards (one page scrape covers all their printings). Oldest-scraped first so the
   // background poller (which passes a small maxCards) works through the collection round-robin.
   const cards = db.prepare(
-    "SELECT c.id, c.name FROM cards c WHERE c.deleted = 0 AND c.quantity > 0 " +
+    "SELECT c.id, c.name FROM cards c WHERE c.deleted = 0 AND c.quantity > 0 AND c.cm_product_id IS NULL " +
     "GROUP BY c.id ORDER BY MIN(COALESCE(c.cm_updated_at, '1970-01-01')) ASC"
   ).all();
   const now = Date.now();
-  let updated = 0, noMatch = 0, errors = 0, scraped = 0;
+  let updated = 0, noMatch = 0, errors = 0, scraped = 0, idLogged = false;
   const noMatchList = []; // card names/set codes that couldn't be matched -> user sets them manually
   const win = await makeWindow();
   try {
@@ -94,11 +97,13 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
       if (scraped >= maxCards) break; // background poller: stop after a small batch per tick
       onProgress && onProgress({ current: i + 1, total: cards.length, name: cards[i].name });
       const printings = db.prepare(
-        "SELECT set_code, language, rarity, cm_updated_at FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0"
+        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL"
       ).all(String(cards[i].id));
       // Only printings at/above the chosen rarity threshold, and not priced recently. Cards with no
       // qualifying printing are skipped entirely (no page load, no delay) — this is what keeps a
       // large collection fast: e.g. "from Secret Rare up" never touches the cheap Commons.
+      // Printings that already carry a cm_product_id are excluded above — the daily bulk refresh
+      // (cardmarket-bulk.cjs) prices those from the price-guide file; scraping is only for the rest.
       const stale = printings.filter(p =>
         rarityRank(p.rarity) >= minRank
         && (force || !p.cm_updated_at || (now - new Date(p.cm_updated_at + 'Z').getTime()) > FRESH_MS));
@@ -131,8 +136,10 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
             hit = setName ? matchRow(rows, setName, p.rarity) : null;
           }
           if (hit && hit.trend != null) {
-            db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
-              .run(hit.trend, url, String(cards[i].id), p.set_code, p.language, p.rarity);
+            const pid = idProductFromImageUrl(hit.imgSrc);
+            if (!pid && !idLogged) { idLogged = true; console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc); }
+            db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_product_id = COALESCE(?, cm_product_id), cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
+              .run(hit.trend, url, pid, String(cards[i].id), p.set_code, p.language, p.rarity);
             updated++;
           } else {
             db.prepare("UPDATE cards SET cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
