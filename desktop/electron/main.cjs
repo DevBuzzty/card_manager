@@ -8,6 +8,7 @@ const { fetchCardData, fetchYugipediaSets, fetchJapaneseSets } = require('./api-
 const { startSync } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape } = require('./cardmarket-scraper.cjs');
+const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -69,6 +70,7 @@ function startSocketServer() {
 
 let priceUpdateInterval;
 let cmPollInterval;
+let cmBulkInterval;
 let sync;   // { ensureClient } handle from startSync, for cloud deal handlers
 
 const getSetting = (key) => {
@@ -81,6 +83,7 @@ app.whenReady().then(() => {
   startSocketServer();
   startPricePoller();
   startCardmarketPoller();
+  startCardmarketBulkScheduler();
   sync = startSync(db, () => mainWindow);
   // Deals now live in Supabase (the cloud Edge Function scrapes, shared with the phone).
   // The old local SQLite poller is disabled — the desktop reads/writes the cloud tables.
@@ -574,6 +577,43 @@ function startCardmarketPoller() {
     finally { cmRunning = false; }
   }, 10 * 60 * 1000);
 }
+
+// Daily Cardmarket bulk refresh (no scraping): 30 s after start if the last run is older than 24 h,
+// re-checked hourly so "daily" survives the app not being open at a fixed time. A failed download
+// leaves cm_bulk_last_run untouched, so the next hourly tick simply retries.
+function bulkDue() {
+  const last = getSetting('cm_bulk_last_run');
+  return !last || (Date.now() - new Date(last).getTime()) > 24 * 60 * 60 * 1000;
+}
+function notifyBulk(res) {
+  if (res && res.priced > 0 && mainWindow) {
+    const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards WHERE deleted = 0').get();
+    mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+  }
+}
+function startCardmarketBulkScheduler() {
+  const tick = async () => {
+    if (!mainWindow || cmRunning || !bulkDue()) return;
+    cmRunning = true;
+    try { notifyBulk(await runBulkRefresh(db, { userDataPath })); }
+    catch (e) { console.error('Cardmarket bulk error:', e); }
+    finally { cmRunning = false; }
+  };
+  setTimeout(tick, 30 * 1000);
+  if (cmBulkInterval) clearInterval(cmBulkInterval);
+  cmBulkInterval = setInterval(tick, 60 * 60 * 1000);
+}
+
+ipcMain.handle('cardmarket-bulk-refresh', async () => {
+  if (cmRunning) return { busy: true };
+  cmRunning = true;
+  try { const res = await runBulkRefresh(db, { userDataPath, force: true }); notifyBulk(res); return res; }
+  catch (e) { console.error('Cardmarket bulk error:', e); return { error: 'internal', message: String(e && e.message || e) }; }
+  finally { cmRunning = false; }
+});
+ipcMain.handle('cardmarket-bulk-status', () => {
+  try { return getBulkStatus(db); } catch (e) { return { lastRun: null, resolvedCount: 0, unresolvedCount: 0 }; }
+});
 
 ipcMain.handle('check-card-exists', (event, passcode) => {
     const p = String(passcode);
