@@ -53,10 +53,6 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [cmBulkBusy, setCmBulkBusy] = useState(false);
   const [cmStatus, setCmStatus] = useState(null); // { lastRun, resolvedCount, unresolvedCount }
 
-  const loadCmStatus = async () => {
-    const s = await window.api?.cardmarketBulkStatus?.();
-    if (s) setCmStatus(s);
-  };
   const relTime = (iso) => {
     if (!iso) return 'noch nie';
     const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -97,6 +93,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     setCmRunning(true);
     try {
       const r = await window.api.scrapeCardmarketPrices(cmMinRank);
+      if (r?.busy) { alert('Cardmarket läuft gerade schon (Scraper oder Update). Bitte kurz warten.'); return; }
       let msg = `Cardmarket fertig: ${r.updated} aktualisiert, ${r.noMatch} ohne Treffer, ${r.errors} Fehler.`;
       if (r.noMatchList && r.noMatchList.length) {
         msg += `\n\nOhne Treffer (bitte manuell setzen):\n` + r.noMatchList.slice(0, 40).join('\n')
@@ -122,7 +119,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     if (window.api) {
       const result = await window.api.getCollection();
       setRawCards(result);
-      loadCmStatus();
+      const s = await window.api?.cardmarketBulkStatus?.();
+      if (s) setCmStatus(s);
     }
   };
 

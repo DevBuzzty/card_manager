@@ -521,7 +521,7 @@ ipcMain.handle('update-card-meta', (event, data) => {
 ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price }) => {
   try {
     if (!id || !set_code) return { success: false, error: 'Missing id or set_code' };
-    db.prepare("UPDATE cards SET price = ?, price_locked = 1 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
+    db.prepare("UPDATE cards SET price = ?, price_locked = 2 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
       .run(Number(price) || 0, String(id), set_code, language || 'DE', rarity || 'Unknown');
     return { success: true };
   } catch (e) { return { success: false, error: e.message }; }

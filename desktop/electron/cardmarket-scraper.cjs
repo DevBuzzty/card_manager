@@ -26,7 +26,8 @@ const EXTRACT_JS = `(() => {
     const code = (col.querySelector('.expansion-symbol span')?.textContent || '').trim();
     const imgEl = col.querySelector('img');
     const alt = imgEl?.getAttribute('alt') || '';
-    const imgSrc = imgEl ? (imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || imgEl.getAttribute('data-echo') || '') : '';
+    const srcset = imgEl ? (imgEl.getAttribute('srcset') || '').split(/[ ,]/)[0] : '';
+    const imgSrc = imgEl ? (imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || imgEl.getAttribute('data-echo') || srcset || '') : '';
     let rarity = '';
     const pm = alt.match(/\\(([^)]+)\\)\\s*$/);
     if (pm) { const parts = pm[1].split(' - '); rarity = parts[parts.length - 1].trim(); }
@@ -85,10 +86,10 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
   // background poller (which passes a small maxCards) works through the collection round-robin.
   const cards = db.prepare(
     "SELECT c.id, c.name FROM cards c WHERE c.deleted = 0 AND c.quantity > 0 AND c.cm_product_id IS NULL " +
-    "GROUP BY c.id ORDER BY MIN(COALESCE(c.cm_updated_at, '1970-01-01')) ASC"
+    "AND COALESCE(c.price_locked, 0) != 2 GROUP BY c.id ORDER BY MIN(COALESCE(c.cm_updated_at, '1970-01-01')) ASC"
   ).all();
   const now = Date.now();
-  let updated = 0, noMatch = 0, errors = 0, scraped = 0, idLogged = false;
+  let updated = 0, noMatch = 0, errors = 0, scraped = 0, idMissed = 0;
   const noMatchList = []; // card names/set codes that couldn't be matched -> user sets them manually
   const win = await makeWindow();
   try {
@@ -97,7 +98,8 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
       if (scraped >= maxCards) break; // background poller: stop after a small batch per tick
       onProgress && onProgress({ current: i + 1, total: cards.length, name: cards[i].name });
       const printings = db.prepare(
-        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL"
+        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL " +
+        "AND COALESCE(price_locked, 0) != 2"
       ).all(String(cards[i].id));
       // Only printings at/above the chosen rarity threshold, and not priced recently. Cards with no
       // qualifying printing are skipped entirely (no page load, no delay) — this is what keeps a
@@ -137,7 +139,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
           }
           if (hit && hit.trend != null) {
             const pid = idProductFromImageUrl(hit.imgSrc);
-            if (!pid && !idLogged) { idLogged = true; console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc); }
+            if (!pid) { if (idMissed === 0) console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc); idMissed++; }
             db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_product_id = COALESCE(?, cm_product_id), cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
               .run(hit.trend, url, pid, String(cards[i].id), p.set_code, p.language, p.rarity);
             updated++;
@@ -152,7 +154,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
       await sleep(DELAY_MIN_MS + Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS));
     }
   } finally { win.destroy(); }
-  return { updated, noMatch, errors, noMatchList };
+  return { updated, noMatch, errors, noMatchList, idMissed };
 }
 
 // Set NAME for a (passcode, set_code) via YGOPRODeck card_sets (cached in api-handler).

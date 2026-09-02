@@ -96,3 +96,39 @@ test('runBulkRefresh reports a download error and writes no last-run stamp', asy
   assert.equal(res.priced, 0);
   assert.equal(getBulkStatus(db).lastRun, null);
 });
+
+test('applyPrices does not overwrite a manually-locked price (price_locked = 2)', async () => {
+  const db = makeDb();
+  db.prepare("UPDATE cards SET price_locked = 2 WHERE set_code = 'RA01-DE001'").run();
+  const res = await runBulkRefresh(db, { userDataPath: null, files });
+  const ra = db.prepare("SELECT price, price_locked FROM cards WHERE set_code = 'RA01-DE001'").get();
+  assert.equal(ra.price, 3.0);       // untouched despite guide trend 12.5 for its idProduct
+  assert.equal(ra.price_locked, 2);
+  assert.equal(res.priced, 1);       // only MRD (newly resolved); RA01 locked out, ghost not in guide
+});
+
+test('applyPrices treats guide trend: 0 as no-trend (price unchanged, counted skipped)', async () => {
+  const db = makeDb();
+  const filesZeroTrend = { ...files, guide: files.guide.map(g => g.idProduct === 741145 ? { ...g, trend: 0 } : g) };
+  const res = await runBulkRefresh(db, { userDataPath: null, files: filesZeroTrend });
+  const ra = db.prepare("SELECT price FROM cards WHERE set_code = 'RA01-DE001'").get();
+  assert.equal(ra.price, 3.0);  // trend 0 is not a real price -> not applied
+  assert.equal(res.skipped, 2); // RA01 (trend 0) + ghost (not in guide)
+});
+
+test('running runBulkRefresh twice with unchanged data prices nothing on the second run', async () => {
+  const db = makeDb();
+  await runBulkRefresh(db, { userDataPath: null, files });
+  const res2 = await runBulkRefresh(db, { userDataPath: null, files });
+  assert.equal(res2.priced, 0);
+  assert.equal(res2.unchanged, 2); // MRD + RA01 already carry the same guide price
+});
+
+test('countUnresolved / getBulkStatus exclude set_code = Unknown rows', async () => {
+  const db = makeDb();
+  db.prepare("INSERT INTO cards (id, name, set_code, rarity, price, cm_product_id) VALUES (?, ?, ?, ?, ?, ?)")
+    .run('11112222', 'Mystery Card', 'Unknown', 'Common', 0, null);
+  const res = await runBulkRefresh(db, { userDataPath: null, files });
+  assert.equal(res.unresolved, 1); // still just the ambiguous LOB Dark Magician
+  assert.equal(getBulkStatus(db).unresolvedCount, 1);
+});
