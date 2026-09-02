@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {
   expansionNameFromProduct, buildExpansionIndex, buildSinglesIndex, resolveProduct, idProductFromImageUrl,
+  expansionNameVariants, decodeEntities, tokenKey,
 } = require('./cardmarket-bulk-parse.cjs');
 
 test('expansionNameFromProduct strips sealed-product suffixes', () => {
@@ -75,6 +76,47 @@ test('resolveProduct: unknown set name -> no-expansion; card missing in set -> n
   assert.deepEqual(resolveProduct({ cardName: 'Dark Magician', setNames: ['Some Unknown Set'] }, idx), { idProduct: null, reason: 'no-expansion' });
   assert.deepEqual(resolveProduct({ cardName: 'Lava Golem', setNames: ['Metal Raiders'] }, idx), { idProduct: null, reason: 'no-candidate' });
   assert.deepEqual(resolveProduct({ cardName: 'Dark Magician', setNames: [] }, idx), { idProduct: null, reason: 'no-expansion' });
+});
+
+test('expansionNameVariants keeps every intermediate form and strips Box Set / Card Pack / (YYYY Reprint)', () => {
+  assert.deepEqual(expansionNameVariants('25th Anniversary Tin: Dueling Heroes Mega Pack Booster'), [
+    '25th Anniversary Tin: Dueling Heroes Mega Pack Booster',
+    '25th Anniversary Tin: Dueling Heroes Mega Pack',
+    '25th Anniversary Tin: Dueling Heroes Mega',
+  ]);
+  assert.equal(expansionNameFromProduct("Yugi's Legendary Decks Box Set (2021 Reprint)"), "Yugi's Legendary Decks");
+  assert.equal(expansionNameFromProduct('Structure Deck: Synchron Extreme Card Pack'), 'Structure Deck: Synchron Extreme');
+  assert.deepEqual(expansionNameVariants(''), []);
+});
+
+test('decodeEntities and tokenKey', () => {
+  assert.equal(decodeEntities('Legendary 5D&apos;s Decks'), "Legendary 5D's Decks");
+  assert.equal(decodeEntities('Yuya &amp; Declan'), 'Yuya & Declan');
+  assert.equal(tokenKey('Synchron Extreme Structure Deck'), tokenKey('Structure Deck: Synchron Extreme'));
+  assert.equal(tokenKey('Metal Raiders'), 'metal|raiders');
+  assert.equal(tokenKey('Booster'), ''); // single token: exact key already covers it
+});
+
+// Fixtures from the real files (2026-09-02) for the four measured gaps.
+const nonsingles2 = [
+  { name: "Yugi's Legendary Decks Box Set", idExpansion: 1674 },
+  { name: "Legendary 5D's Decks Box Set", idExpansion: 3001 },
+  { name: 'Structure Deck: Synchron Extreme', idExpansion: 1664 },
+  { name: '25th Anniversary Tin: Dueling Heroes Mega Pack Booster', idExpansion: 5465 },
+];
+const singles2 = [
+  { idProduct: 1, name: 'Dark Magician', idExpansion: 1674 },
+  { idProduct: 2, name: 'Junk Synchron', idExpansion: 3001 },
+  { idProduct: 3, name: 'Junk Synchron', idExpansion: 1664 },
+  { idProduct: 4, name: 'Dark Magician', idExpansion: 5465 },
+];
+const idx2 = { expansionIndex: buildExpansionIndex(nonsingles2), singlesIndex: buildSinglesIndex(singles2) };
+
+test('resolveProduct handles Box Set suffix, HTML entity, word order and intermediate variants', () => {
+  assert.equal(resolveProduct({ cardName: 'Dark Magician', setNames: ["Yugi's Legendary Decks"] }, idx2).idProduct, 1);
+  assert.equal(resolveProduct({ cardName: 'Junk Synchron', setNames: ['Legendary 5D&apos;s Decks'] }, idx2).idProduct, 2);
+  assert.equal(resolveProduct({ cardName: 'Junk Synchron', setNames: ['Synchron Extreme Structure Deck'] }, idx2).idProduct, 3);
+  assert.equal(resolveProduct({ cardName: 'Dark Magician', setNames: ['25th Anniversary Tin: Dueling Heroes Mega Pack'] }, idx2).idProduct, 4);
 });
 
 test('idProductFromImageUrl reads the doubled id from the product image URL', () => {

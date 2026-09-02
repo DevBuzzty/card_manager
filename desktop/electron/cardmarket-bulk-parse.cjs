@@ -4,19 +4,42 @@
 const { normName } = require('./cardmarket-parse.cjs');
 
 // Cardmarket names sealed products "<Expansion> Booster", "<Expansion> Booster Box",
-// "<Expansion> Case (12 Booster Boxes)", "<Expansion> Mini Box (5 Boosters)", … — strip the
-// product-type tail to recover the expansion name. Structure/Starter Deck products carry the bare
-// expansion name and pass through unchanged.
-const SUFFIX_RE = /\s+(Booster Box|Booster|Special Edition|Tin|Pack|Set|Display|Bundle|Deck|Mini Box\b.*|Case\b.*)$/i;
+// "<Expansion> Box Set", "<Expansion> Card Pack", "<Expansion> Case (12 Booster Boxes)",
+// "<Expansion> (2021 Reprint)" … — strip the product-type tail to recover the expansion name.
+const SUFFIX_RE = /\s+(Booster Box|Booster|Box Set|Card Pack|Special Edition|Tin|Pack|Set|Display|Bundle|Deck|Mini Box\b.*|Case\b.*|\(\d{4} Reprint\))$/i;
 
-function expansionNameFromProduct(name) {
+// Every name a sealed product may stand for: the raw name and each successive suffix strip
+// ("X Mega Pack Booster" -> "X Mega Pack" -> "X Mega"). Indexing every step keeps the right
+// intermediate form (here "X Mega Pack" is the YGOPRODeck set name) without knowing where to stop.
+function expansionNameVariants(name) {
+  const out = [];
   let s = String(name || '').trim();
-  for (let i = 0; i < 3; i++) {            // "X Booster Box" -> "X Booster" -> "X"
+  for (let i = 0; i < 4 && s; i++) {
+    const clean = s.replace(/[:\-–\s]+$/, '').trim();
+    if (clean && !out.includes(clean)) out.push(clean);
     const t = s.replace(SUFFIX_RE, '').trim();
     if (t === s) break;
     s = t;
   }
-  return s.replace(/[:\-–\s]+$/, '').trim();
+  return out;
+}
+
+function expansionNameFromProduct(name) {
+  const v = expansionNameVariants(name);
+  return v.length ? v[v.length - 1] : '';
+}
+
+// YGOPRODeck set names carry HTML entities ("Legendary 5D&apos;s Decks").
+function decodeEntities(s) {
+  return String(s || '').replace(/&apos;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+}
+
+// Order-insensitive key so "Synchron Extreme Structure Deck" == "Structure Deck: Synchron Extreme".
+// Empty for single-token names (the exact normName key already covers those). Contains '|', so it
+// can never collide with a normName key in the same Map.
+function tokenKey(s) {
+  const toks = decodeEntities(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean).sort();
+  return toks.length > 1 ? toks.join('|') : '';
 }
 
 // normName(expansion name) -> Set<idExpansion>. Several product variants of one expansion collapse
@@ -31,8 +54,7 @@ function buildExpansionIndex(nonsingles) {
   for (const p of nonsingles || []) {
     if (p.idExpansion == null) continue;
     const id = Number(p.idExpansion);
-    add(normName(expansionNameFromProduct(p.name)), id);
-    add(normName(p.name), id); // raw name too: set names that legitimately end in "Set"/"Pack" ("2-Player Starter Set") still match
+    for (const v of expansionNameVariants(p.name)) { add(normName(v), id); add(tokenKey(v), id); }
   }
   return idx;
 }
@@ -55,7 +77,8 @@ function buildSinglesIndex(singles) {
 function resolveProduct({ cardName, setNames }, { expansionIndex, singlesIndex }) {
   const expIds = new Set();
   for (const sn of setNames || []) {
-    const ids = expansionIndex.get(normName(sn));
+    const clean = decodeEntities(sn);
+    const ids = expansionIndex.get(normName(clean)) || expansionIndex.get(tokenKey(clean));
     if (ids) for (const id of ids) expIds.add(id);
   }
   if (expIds.size === 0) return { idProduct: null, reason: 'no-expansion' };
@@ -71,4 +94,7 @@ function idProductFromImageUrl(url) {
   return m ? Number(m[1]) : null;
 }
 
-module.exports = { expansionNameFromProduct, buildExpansionIndex, buildSinglesIndex, resolveProduct, idProductFromImageUrl };
+module.exports = {
+  expansionNameFromProduct, buildExpansionIndex, buildSinglesIndex, resolveProduct, idProductFromImageUrl,
+  expansionNameVariants, decodeEntities, tokenKey,
+};
