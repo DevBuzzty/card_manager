@@ -36,6 +36,7 @@ Deno.serve(async (req) => {
       .not("cm_product_id", "is", null)
       .eq("deleted", false)
       .neq("price_locked", 2)
+      .order("id", { ascending: true }).order("set_code").order("language").order("rarity")
       .range(from, from + PAGE - 1);
     if (error) return json({ error: `select: ${error.message}` }, 500);
     for (const r of data ?? []) if (r.cm_product_id != null) ids.add(Number(r.cm_product_id));
@@ -44,7 +45,9 @@ Deno.serve(async (req) => {
   if (ids.size === 0) return json({ needed: 0, found: 0, updated: 0 });
 
   // 2. Today's price guide (≈17 MB; parses in well under the 2 s CPU limit).
-  const res = await fetch(GUIDE_URL, { headers: { "User-Agent": UA } });
+  let res: Response;
+  try { res = await fetch(GUIDE_URL, { headers: { "User-Agent": UA } }); }
+  catch (e) { return json({ error: `guide fetch: ${(e as Error).message}` }, 502); }
   if (!res.ok) return json({ error: `guide HTTP ${res.status}` }, 502);
   let guide: unknown;
   try { guide = await res.json(); } catch (e) { return json({ error: `guide parse: ${(e as Error).message}` }, 502); }

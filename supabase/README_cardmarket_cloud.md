@@ -9,6 +9,9 @@ Design: `docs/superpowers/specs/2026-09-02-cardmarket-cloud-prices-design.md`.
 SQL editor → paste `supabase/cardmarket_cloud_prices_migration.sql` → Run.
 Check: `select column_name, data_type from information_schema.columns where table_name = 'cards' and column_name in ('cm_product_id','price_locked');`
 → `cm_product_id integer`, `price_locked smallint`.
+If a desktop with the new sync code runs before this SQL is applied, its push fails wholesale
+(`column cards.cm_product_id does not exist` / `invalid input syntax for type boolean`) and ALL
+card sync pauses; it resumes by itself once the SQL has run.
 
 ## 2. Deploy the Edge Function
 
@@ -52,3 +55,5 @@ Unschedule: `select cron.unschedule('refresh-cardmarket-prices');`
 Cloud writes `trend` → desktop pull only applies quantity/deleted (no-op). Desktop bulk computes
 the same `trend` → its "only if changed" guard skips the row → nothing is pushed. Manual prices
 (`price_locked = 2`) are skipped everywhere.
+Prices are per Cardmarket product (`cm_product_id`), i.e. per printing+rarity as resolved on the
+desktop; the cloud never changes the mapping.

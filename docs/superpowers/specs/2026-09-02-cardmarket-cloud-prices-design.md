@@ -1,7 +1,7 @@
 # Cardmarket Cloud Price Refresh — Design
 
 **Date:** 2026-09-02
-**Status:** Approved (brainstorm), pending implementation plan
+**Status:** Implemented 2026-09-02
 **Builds on:** `2026-09-02-cardmarket-bulk-prices-design.md` (desktop bulk refresh, merged to main at 1c088af)
 
 ## Purpose

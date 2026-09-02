@@ -33,5 +33,5 @@ Deno.test("pickTrends: malformed guide -> []", () => {
 });
 
 Deno.test("pickTrends: non-numeric trend is skipped", () => {
-  assertEquals(pickTrends({ priceGuides: [{ idProduct: 1, trend: "0.5" }, { idProduct: 2, trend: NaN }] }, new Set([1, 2])), []);
+  assertEquals(pickTrends({ priceGuides: [{ idProduct: 1, trend: "0.5" }, { idProduct: 2, trend: NaN }, { idProduct: 3, trend: -1 }] }, new Set([1, 2, 3])), []);
 });

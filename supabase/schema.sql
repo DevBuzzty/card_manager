@@ -19,10 +19,13 @@ create table if not exists public.cards (
   updated_at  timestamptz not null default now(),
   cm_url      text,
   cm_updated_at timestamptz,
-  price_locked boolean not null default false,
+  cm_product_id integer,
+  price_locked smallint not null default 0,  -- 0 unlocked, 1 Cardmarket-priced, 2 manual
   -- rarity is part of the identity: the same set code in two rarities are two printings.
   primary key (id, set_code, language, rarity)
 );
+
+create index if not exists cards_cm_product_id_idx on public.cards (cm_product_id) where cm_product_id is not null;
 
 -- Server-stamped updated_at on every write, so PC and phone clocks never disagree.
 create or replace function public.set_updated_at()
