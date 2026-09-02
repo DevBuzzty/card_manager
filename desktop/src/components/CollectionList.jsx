@@ -50,6 +50,22 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [cmProgress, setCmProgress] = useState(null);
   const [cmMinRank, setCmMinRank] = useState(5); // default: from Secret Rare up (skip cheap commons)
   const [cmAuto, setCmAuto] = useState(false); // background auto-refresh toggle
+  const [cmBulkBusy, setCmBulkBusy] = useState(false);
+  const [cmStatus, setCmStatus] = useState(null); // { lastRun, resolvedCount, unresolvedCount }
+
+  const loadCmStatus = async () => {
+    const s = await window.api?.cardmarketBulkStatus?.();
+    if (s) setCmStatus(s);
+  };
+  const relTime = (iso) => {
+    if (!iso) return 'noch nie';
+    const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (m < 1) return 'gerade eben';
+    if (m < 60) return `vor ${m} Min.`;
+    const h = Math.round(m / 60);
+    if (h < 48) return `vor ${h} Std.`;
+    return `vor ${Math.round(h / 24)} Tagen`;
+  };
 
   const updating = isUpdating || localUpdating;
 
@@ -91,10 +107,22 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     finally { setCmRunning(false); setCmProgress(null); }
   };
 
+  const runBulk = async () => {
+    setCmBulkBusy(true);
+    try {
+      const r = await window.api.cardmarketBulkRefresh();
+      if (r?.busy) { alert('Cardmarket läuft gerade schon (Scraper oder Update). Bitte kurz warten.'); return; }
+      if (r?.error) { alert(`Cardmarket-Update fehlgeschlagen: ${r.message || r.error}`); return; }
+      alert(`Cardmarket-Update fertig: ${r.priced} Preise aus der Datei gesetzt, ${r.resolved} neu zugeordnet, ${r.unresolved} offen (per Scraper).`);
+      loadCollection();
+    } finally { setCmBulkBusy(false); }
+  };
+
   const loadCollection = async () => {
     if (window.api) {
       const result = await window.api.getCollection();
       setRawCards(result);
+      loadCmStatus();
     }
   };
 
@@ -288,17 +316,29 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                         <option value={8}>Nur Quarter Century</option>
                       </select>
                     )}
-                    <label title="Preise automatisch im Hintergrund aktualisieren (alle 10 Min. ein paar fällige Karten)"
+                    <label title="Offene Printings automatisch im Hintergrund scrapen (alle 10 Min. ein paar)"
                            className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-black/40 border border-gray-700 text-gray-300 text-sm cursor-pointer select-none">
                       <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-space-violet" />
-                      Auto
+                      Auto (Rest per Scraper)
                     </label>
                     <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}
-                            className="px-3 py-1.5 rounded bg-space-violet/80 hover:bg-space-violet text-white text-sm">
-                      {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Cardmarket-Preise'}
+                            title="Nur die noch nicht zugeordneten Printings per Cardmarket-Seite nachladen"
+                            className="px-3 py-1.5 rounded bg-gray-800 hover:bg-space-violet text-gray-300 hover:text-white text-sm border border-gray-700">
+                      {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Rest scrapen'}
+                    </button>
+                    <button onClick={runBulk} disabled={cmBulkBusy || cmRunning}
+                            title="Preise aller zugeordneten Printings aus Cardmarkets täglicher Preisdatei (Trend) übernehmen"
+                            className="px-3 py-1.5 rounded bg-space-violet/80 hover:bg-space-violet text-white text-sm disabled:opacity-50">
+                      {cmBulkBusy ? 'Aktualisiere…' : 'Jetzt aktualisieren'}
                     </button>
                 </div>
             </div>
+
+            {cmStatus && (
+              <div className="text-xs text-gray-500 -mt-2">
+                Cardmarket: Letztes Update {relTime(cmStatus.lastRun)} · {cmStatus.resolvedCount} per Datei · {cmStatus.unresolvedCount} offen
+              </div>
+            )}
 
             {/* Segment control */}
             <div className="flex flex-wrap items-center gap-2">
