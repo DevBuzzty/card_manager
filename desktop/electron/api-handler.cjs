@@ -273,4 +273,4 @@ async function fetchCardData(passcode) {
     return await cachedFetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${passcode}`, 'ygoprodeck', 24);
 }
 
-module.exports = { fetchJson, fetchYugipediaSets, fetchJapaneseSets, fetchCardData };
+module.exports = { fetchJson, cachedFetch, fetchYugipediaSets, fetchJapaneseSets, fetchCardData };
