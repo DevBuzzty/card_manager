@@ -989,3 +989,176 @@ rtk git commit -m "docs: Cardmarket bulk price refresh (hybrid) — CLAUDE.md + 
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 8: Resolver coverage — set-name normalisation (added after the first live run)
+
+**Why (measured on the real collection, 2026-09-02):** the first bulk run resolved 918 of 1164 printings; 180 were `no-expansion`. Simulation against the real files shows four normalisation gaps that account for ~135 of them:
+
+| Gap | Example (YGOPRODeck `set_name` ↔ Cardmarket product) | Printings |
+|---|---|---|
+| Suffix `Box Set` / `Card Pack` / `(2021 Reprint)` not stripped | "Yugi's Legendary Decks" ↔ "Yugi's Legendary Decks Box Set" | 53 |
+| HTML entity in YGOPRODeck names | "Legendary 5D&amp;apos;s Decks" ↔ "Legendary 5D's Decks Box Set" | 49 |
+| Word order differs | "Synchron Extreme Structure Deck" ↔ "Structure Deck: Synchron Extreme" | 21 |
+| Multi-strip overshoots the right form | "25th Anniversary Tin: Dueling Heroes Mega Pack" ↔ "… Mega Pack Booster" (stripping "Booster" then "Pack" gives "… Mega") | 24 |
+
+The remainder (`STAS` not in `cardsets.php`, `DP10` only Japanese on Cardmarket) is out of reach for the file resolver and stays with the scraper.
+
+**Files:**
+- Modify: `electron/cardmarket-bulk-parse.cjs`
+- Modify: `electron/cardmarket-bulk-parse.test.cjs`
+
+**Interfaces:**
+- Unchanged exports and shapes: `expansionNameFromProduct`, `buildExpansionIndex` (still returns `Map<string, Set<number>>`), `buildSinglesIndex`, `resolveProduct`, `idProductFromImageUrl`. `cardmarket-bulk.cjs` needs no change.
+- New exports: `expansionNameVariants(name): string[]`, `decodeEntities(s): string`, `tokenKey(s): string`.
+
+- [ ] **Step 1: Add the failing tests**
+
+Append to `electron/cardmarket-bulk-parse.test.cjs` (and extend the `require` at the top to also import `expansionNameVariants, decodeEntities, tokenKey`):
+
+```js
+test('expansionNameVariants keeps every intermediate form and strips Box Set / Card Pack / (YYYY Reprint)', () => {
+  assert.deepEqual(expansionNameVariants('25th Anniversary Tin: Dueling Heroes Mega Pack Booster'), [
+    '25th Anniversary Tin: Dueling Heroes Mega Pack Booster',
+    '25th Anniversary Tin: Dueling Heroes Mega Pack',
+    '25th Anniversary Tin: Dueling Heroes Mega',
+  ]);
+  assert.equal(expansionNameFromProduct("Yugi's Legendary Decks Box Set (2021 Reprint)"), "Yugi's Legendary Decks");
+  assert.equal(expansionNameFromProduct('Structure Deck: Synchron Extreme Card Pack'), 'Structure Deck: Synchron Extreme');
+  assert.deepEqual(expansionNameVariants(''), []);
+});
+
+test('decodeEntities and tokenKey', () => {
+  assert.equal(decodeEntities('Legendary 5D&apos;s Decks'), "Legendary 5D's Decks");
+  assert.equal(decodeEntities('Yuya &amp; Declan'), 'Yuya & Declan');
+  assert.equal(tokenKey('Synchron Extreme Structure Deck'), tokenKey('Structure Deck: Synchron Extreme'));
+  assert.equal(tokenKey('Metal Raiders'), 'metal|raiders');
+  assert.equal(tokenKey('Booster'), ''); // single token: exact key already covers it
+});
+
+// Fixtures from the real files (2026-09-02) for the four measured gaps.
+const nonsingles2 = [
+  { name: "Yugi's Legendary Decks Box Set", idExpansion: 1674 },
+  { name: "Legendary 5D's Decks Box Set", idExpansion: 3001 },
+  { name: 'Structure Deck: Synchron Extreme', idExpansion: 1664 },
+  { name: '25th Anniversary Tin: Dueling Heroes Mega Pack Booster', idExpansion: 5465 },
+];
+const singles2 = [
+  { idProduct: 1, name: 'Dark Magician', idExpansion: 1674 },
+  { idProduct: 2, name: 'Junk Synchron', idExpansion: 3001 },
+  { idProduct: 3, name: 'Junk Synchron', idExpansion: 1664 },
+  { idProduct: 4, name: 'Dark Magician', idExpansion: 5465 },
+];
+const idx2 = { expansionIndex: buildExpansionIndex(nonsingles2), singlesIndex: buildSinglesIndex(singles2) };
+
+test('resolveProduct handles Box Set suffix, HTML entity, word order and intermediate variants', () => {
+  assert.equal(resolveProduct({ cardName: 'Dark Magician', setNames: ["Yugi's Legendary Decks"] }, idx2).idProduct, 1);
+  assert.equal(resolveProduct({ cardName: 'Junk Synchron', setNames: ['Legendary 5D&apos;s Decks'] }, idx2).idProduct, 2);
+  assert.equal(resolveProduct({ cardName: 'Junk Synchron', setNames: ['Synchron Extreme Structure Deck'] }, idx2).idProduct, 3);
+  assert.equal(resolveProduct({ cardName: 'Dark Magician', setNames: ['25th Anniversary Tin: Dueling Heroes Mega Pack'] }, idx2).idProduct, 4);
+});
+```
+
+- [ ] **Step 2: Run the tests to verify the new ones fail**
+
+Run: `ELECTRON_RUN_AS_NODE=1 ./node_modules/.bin/electron --test electron/cardmarket-bulk-parse.test.cjs`
+Expected: the three new tests FAIL (`expansionNameVariants is not a function` etc.); the existing eight still pass.
+
+- [ ] **Step 3: Implement**
+
+In `electron/cardmarket-bulk-parse.cjs` replace the `SUFFIX_RE` constant and the `expansionNameFromProduct` function with:
+
+```js
+// Cardmarket names sealed products "<Expansion> Booster", "<Expansion> Booster Box",
+// "<Expansion> Box Set", "<Expansion> Card Pack", "<Expansion> Case (12 Booster Boxes)",
+// "<Expansion> (2021 Reprint)" … — strip the product-type tail to recover the expansion name.
+const SUFFIX_RE = /\s+(Booster Box|Booster|Box Set|Card Pack|Special Edition|Tin|Pack|Set|Display|Bundle|Deck|Mini Box\b.*|Case\b.*|\(\d{4} Reprint\))$/i;
+
+// Every name a sealed product may stand for: the raw name and each successive suffix strip
+// ("X Mega Pack Booster" -> "X Mega Pack" -> "X Mega"). Indexing every step keeps the right
+// intermediate form (here "X Mega Pack" is the YGOPRODeck set name) without knowing where to stop.
+function expansionNameVariants(name) {
+  const out = [];
+  let s = String(name || '').trim();
+  for (let i = 0; i < 4 && s; i++) {
+    const clean = s.replace(/[:\-–\s]+$/, '').trim();
+    if (clean && !out.includes(clean)) out.push(clean);
+    const t = s.replace(SUFFIX_RE, '').trim();
+    if (t === s) break;
+    s = t;
+  }
+  return out;
+}
+
+function expansionNameFromProduct(name) {
+  const v = expansionNameVariants(name);
+  return v.length ? v[v.length - 1] : '';
+}
+
+// YGOPRODeck set names carry HTML entities ("Legendary 5D&apos;s Decks").
+function decodeEntities(s) {
+  return String(s || '').replace(/&apos;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+}
+
+// Order-insensitive key so "Synchron Extreme Structure Deck" == "Structure Deck: Synchron Extreme".
+// Empty for single-token names (the exact normName key already covers those). Contains '|', so it
+// can never collide with a normName key in the same Map.
+function tokenKey(s) {
+  const toks = decodeEntities(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean).sort();
+  return toks.length > 1 ? toks.join('|') : '';
+}
+```
+
+Replace the body of `buildExpansionIndex` so every variant is indexed under both keys:
+
+```js
+function buildExpansionIndex(nonsingles) {
+  const idx = new Map();
+  const add = (key, id) => {
+    if (!key) return;
+    if (!idx.has(key)) idx.set(key, new Set());
+    idx.get(key).add(id);
+  };
+  for (const p of nonsingles || []) {
+    if (p.idExpansion == null) continue;
+    const id = Number(p.idExpansion);
+    for (const v of expansionNameVariants(p.name)) { add(normName(v), id); add(tokenKey(v), id); }
+  }
+  return idx;
+}
+```
+
+In `resolveProduct`, replace the set-name loop with:
+
+```js
+  for (const sn of setNames || []) {
+    const clean = decodeEntities(sn);
+    const ids = expansionIndex.get(normName(clean)) || expansionIndex.get(tokenKey(clean));
+    if (ids) for (const id of ids) expIds.add(id);
+  }
+```
+
+Extend `module.exports` with `expansionNameVariants, decodeEntities, tokenKey`.
+
+- [ ] **Step 4: Run all parse + bulk tests**
+
+Run: `ELECTRON_RUN_AS_NODE=1 ./node_modules/.bin/electron --test electron/cardmarket-bulk-parse.test.cjs electron/cardmarket-bulk.test.cjs`
+Expected: `fail 0` (existing expectations such as `expansionNameFromProduct('Legend of Blue Eyes White Dragon Booster Box') === 'Legend of Blue Eyes White Dragon'` and the raw key `metalraidersbooster` must still hold).
+
+- [ ] **Step 5: Live re-run against the real collection (no app needed)**
+
+From `desktop/`:
+```bash
+ELECTRON_RUN_AS_NODE=1 ./node_modules/.bin/electron -e "const {initDatabase}=require('./electron/database.cjs'); const ud=process.env.APPDATA+'/yugioh-card-manager'; const db=initDatabase(ud); require('./electron/cardmarket-bulk.cjs').runBulkRefresh(db,{userDataPath:ud}).then(r=>{console.log(JSON.stringify(r));process.exit(0)})"
+```
+Expected: `unresolved` drops from 246 to roughly 110–135 and `reasons['no-expansion']` to roughly 30 (STAS + DP10 + a few). Paste the line into the report.
+
+- [ ] **Step 6: Commit**
+
+```bash
+rtk git add electron/cardmarket-bulk-parse.cjs electron/cardmarket-bulk-parse.test.cjs
+rtk git commit -m "feat(prices): resolver normalisation — Box Set/Card Pack suffixes, HTML entities, word order, intermediate variants
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
