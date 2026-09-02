@@ -264,7 +264,9 @@ function runMigrations() {
 
         // Cardmarket price-lock columns: cm_url/cm_updated_at record the scraped listing,
         // price_locked lets the poller (and manual price entry) skip overwriting a locked price.
-        const priceLockCols = { cm_url: 'TEXT', cm_updated_at: 'DATETIME', price_locked: 'INTEGER DEFAULT 0' };
+        // cm_product_id: Cardmarket idProduct of this exact printing (NULL = not yet resolved);
+        // lets the daily bulk price refresh work from the free price-guide download without scraping.
+        const priceLockCols = { cm_url: 'TEXT', cm_updated_at: 'DATETIME', price_locked: 'INTEGER DEFAULT 0', cm_product_id: 'INTEGER' };
         const existingCols = db.prepare("PRAGMA table_info(cards)").all().map(c => c.name);
         for (const [name, type] of Object.entries(priceLockCols)) {
             if (!existingCols.includes(name)) db.exec(`ALTER TABLE cards ADD COLUMN ${name} ${type}`);

@@ -24,3 +24,20 @@ test('adds cm columns idempotently', () => {
   assert.ok(cols.includes('cm_updated_at'));
   assert.ok(cols.includes('price_locked'));
 });
+
+// Mirrors the extended priceLockCols block in database.cjs (cm_product_id added 2026-09-02).
+function addCmProductIdColumn(db) {
+  const cols = db.prepare("PRAGMA table_info(cards)").all().map(c => c.name);
+  if (!cols.includes('cm_product_id')) db.exec("ALTER TABLE cards ADD COLUMN cm_product_id INTEGER");
+}
+
+test('adds cm_product_id idempotently and defaults to NULL', () => {
+  const db = new Database(':memory:');
+  db.exec("CREATE TABLE cards (id TEXT, set_code TEXT, language TEXT, rarity TEXT, price REAL)");
+  db.exec("INSERT INTO cards VALUES ('46986414', 'LOB-DE005', 'DE', 'Ultra Rare', 1.5)");
+  addCmProductIdColumn(db);
+  addCmProductIdColumn(db); // second call must not throw
+  const cols = db.prepare("PRAGMA table_info(cards)").all().map(c => c.name);
+  assert.ok(cols.includes('cm_product_id'));
+  assert.equal(db.prepare("SELECT cm_product_id FROM cards").get().cm_product_id, null);
+});
