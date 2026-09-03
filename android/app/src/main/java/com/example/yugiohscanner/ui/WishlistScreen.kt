@@ -110,7 +110,7 @@ fun WishlistScreen(onClose: () -> Unit) {
                     Text("Noch keine Wunschkarten.", color = Muted)
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(items, key = { it.id }) { item ->
                         WishlistRow(item, onDelete = {
                             scope.launch {

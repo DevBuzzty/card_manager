@@ -110,7 +110,7 @@ fun DecksScreen(onClose: () -> Unit) {
                     Text("Noch keine Decks.", color = Muted)
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(decks, key = { it.id }) { deck ->
                         DeckRow(
                             deck,
@@ -271,7 +271,7 @@ private fun DeckEditor(deck: Deck, onBack: () -> Unit) {
             } else {
                 val main = cards.filter { it.section == "main" }
                 val extra = cards.filter { it.section == "extra" }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
                         SectionHeader("Main · ${main.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))

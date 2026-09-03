@@ -113,6 +113,7 @@ fun CollectionScreen() {
             }
             if (loading) { CircularProgressIndicator(); return@Column }
             LazyColumn(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 88.dp), // clear the "+" FAB
             ) {
