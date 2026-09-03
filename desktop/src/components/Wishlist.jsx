@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, Plus, Trash2, ExternalLink, Heart } from 'lucide-react';
+import { fmtEUR } from '../utils/format';
 
 export default function Wishlist() {
     const [wishlist, setWishlist] = useState([]);
@@ -107,7 +108,7 @@ export default function Wishlist() {
                                     <h3 className="font-bold text-sm text-gray-200 truncate mb-1" title={card.name}>{card.name}</h3>
                                     <div className="flex justify-between items-center">
                                         <span className="text-xs text-space-violet font-mono">
-                                            ${card.card_prices?.[0]?.cardmarket_price || '0.00'}
+                                            {fmtEUR(card.card_prices?.[0]?.cardmarket_price)}
                                         </span>
                                         <button
                                             onClick={() => addToWishlist(card)}
@@ -150,7 +151,7 @@ export default function Wishlist() {
                                     </div>
                                     <h3 className="font-bold text-sm text-gray-200 truncate mb-1" title={item.name}>{item.name}</h3>
                                     <div className="text-xs text-gray-500 font-mono">Added: {new Date(item.created_at).toLocaleDateString()}</div>
-                                    <div className="mt-2 text-xs text-space-violet font-bold">${(item.price || 0).toFixed(2)}</div>
+                                    <div className="mt-2 text-xs text-space-violet font-bold">{fmtEUR(item.price)}</div>
                                 </div>
                             ))}
                         </div>

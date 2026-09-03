@@ -177,7 +177,7 @@ fun DealsScreen() {
                     )
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(alerts, key = { it.id }) { d -> DealRow(d, context, onDismiss = {
                         scope.launch {
                             try { DealsRepository.dismissAlert(d.id); alerts.remove(d) }

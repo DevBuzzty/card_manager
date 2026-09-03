@@ -82,7 +82,7 @@ fun SearchScreen(onClose: () -> Unit, onAdded: () -> Unit) {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.height(8.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(results, key = { it.id }) { card ->
                 SpaceCard(Modifier.fillMaxWidth()) {
                     Row(Modifier.clickable { error = null; selected = card }.padding(10.dp),

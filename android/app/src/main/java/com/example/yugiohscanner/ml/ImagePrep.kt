@@ -20,7 +20,9 @@ object ImagePrep {
         val c = Canvas(square)
         c.drawColor(Color.rgb(127, 127, 127))
         c.drawBitmap(src, (side - src.width) / 2f, (side - src.height) / 2f, null)
-        return Bitmap.createScaledBitmap(square, 224, 224, true)
+        val scaled = Bitmap.createScaledBitmap(square, 224, 224, true)
+        if (scaled != square) square.recycle()  // guard: returns `square` when side already == 224
+        return scaled
     }
 
     /** 224x224 RGB bitmap -> ImageNet-normalised CHW float[1*3*224*224]. */

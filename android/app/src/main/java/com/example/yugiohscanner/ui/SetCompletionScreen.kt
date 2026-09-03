@@ -103,7 +103,7 @@ fun SetCompletionScreen(onClose: () -> Unit) {
                 rows.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Noch keine Sets — scanne oder importiere Karten.", color = Muted)
                 }
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                else -> LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(rows, key = { it.prefix }) { SetRow(it) }
                 }
             }

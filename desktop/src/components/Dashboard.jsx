@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning } from 'lucide-react';
 import CardTile from './CardTile';
 import SetCompletion from './SetCompletion';
+import { fmtEUR } from '../utils/format';
 
 export default function Dashboard({ setActiveTab, onOpenPalette }) {
   const [stats, setStats] = useState({ totalValue: 0, totalCards: 0, uniqueCards: 0 });
@@ -56,7 +57,7 @@ export default function Dashboard({ setActiveTab, onOpenPalette }) {
     }
   };
 
-  const money = v => `€${(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const money = fmtEUR;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">

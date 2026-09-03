@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Tag, Plus, Trash2, ExternalLink, X, RefreshCw } from 'lucide-react';
+import { fmtEUR } from '../utils/format';
 
 export default function Deals() {
   const [watches, setWatches] = useState([]);
@@ -158,7 +159,7 @@ export default function Deals() {
                   <span>{fmtTime(a.found_at)}</span>
                 </div>
               </div>
-              <div className="font-mono text-lg text-gold shrink-0">{a.price != null ? `${a.price}€` : '—'}</div>
+              <div className="font-mono text-lg text-gold shrink-0">{a.price != null ? fmtEUR(a.price) : '—'}</div>
               <button onClick={() => window.api.openExternal(a.url)}
                 className="p-2 text-ink-muted hover:text-space-violet" title="Angebot öffnen">
                 <ExternalLink className="w-4.5 h-4.5" />
