@@ -23,7 +23,8 @@ class MlScanAnalyzer(
             val rot = image.imageInfo.rotationDegrees
             val upright = if (rot == 0) raw else {
                 val m = Matrix().apply { postRotate(rot.toFloat()) }
-                Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, m, true)
+                // The rotated copy supersedes `raw`; free it now (only allocated when rot != 0).
+                Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, m, true).also { raw.recycle() }
             }
             val t0 = System.currentTimeMillis()
             val dets = pipeline.process(upright)

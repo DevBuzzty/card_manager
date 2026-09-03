@@ -60,7 +60,10 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
     private fun readBand(frame: Bitmap, b: Box): String {
         val strip = CardStrip.bottomBand(frame, b) ?: return ""
         val enhanced = OcrPrep.enhance(strip, targetWidth = 1000)
-        return Tasks.await(recognizer.process(InputImage.fromBitmap(enhanced, 0))).text
+        strip.recycle()  // enhance() has copied it into `enhanced`
+        val text = Tasks.await(recognizer.process(InputImage.fromBitmap(enhanced, 0))).text
+        enhanced.recycle()  // ML Kit is done once Tasks.await returns
+        return text
     }
 
     override fun close() {

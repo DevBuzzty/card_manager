@@ -36,12 +36,15 @@ class DetectorModel(context: Context, private val imgsz: Int = 640, private val 
         val padX = (imgsz - nw) / 2f
         val padY = (imgsz - nh) / 2f
         val letter = Bitmap.createBitmap(imgsz, imgsz, Bitmap.Config.ARGB_8888)
+        val scaled = Bitmap.createScaledBitmap(frame, nw, nh, true)
         Canvas(letter).apply {
             drawColor(Color.rgb(114, 114, 114))
-            drawBitmap(Bitmap.createScaledBitmap(frame, nw, nh, true), padX, padY, null)
+            drawBitmap(scaled, padX, padY, null)
         }
+        if (scaled != frame) scaled.recycle()  // guard: createScaledBitmap may return `frame` unchanged
 
         val input = toRgbChw01(letter)
+        letter.recycle()  // consumed into `input`; no longer needed
         val boxes = ArrayList<Box>()
         val t0 = System.nanoTime()
         OnnxTensor.createTensor(
