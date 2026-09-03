@@ -34,7 +34,12 @@ _valid_cache: dict[str, bool] = {}
 def reader():
     global _reader
     if _reader is None:
-        _reader = easyocr.Reader(["en"], gpu=True)
+        try:
+            import torch
+            gpu = torch.cuda.is_available()
+        except Exception:
+            gpu = False
+        _reader = easyocr.Reader(["en"], gpu=gpu, verbose=False)
     return _reader
 
 
@@ -82,11 +87,21 @@ def read_passcode(path: Path):
 
 def main():
     OUT.mkdir(exist_ok=True)
-    manifest, kept, dropped = [], 0, 0
-    for p in sorted(HARVEST.rglob("*.jpg")):
+    mpath = OUT / "labeled_manifest.json"
+    manifest = json.loads(mpath.read_text()) if mpath.exists() else []
+    done = {m["from_search"] + "/" + Path(m["file"]).name for m in manifest}  # resume: skip already-kept
+    kept, dropped = len(manifest), 0
+    for i, p in enumerate(sorted(HARVEST.rglob("*.jpg"))):
         if OUT in p.parents:
             continue
-        pc = read_passcode(p)
+        if p.parent.name + "/" + p.name in done:
+            continue
+        try:
+            pc = read_passcode(p)
+        except Exception as e:
+            dropped += 1
+            print(f"  ERR   {p.parent.name}/{p.name} ({e})")
+            continue
         if not pc:
             dropped += 1
             print(f"  drop  {p.parent.name}/{p.name} (no passcode)")
@@ -98,7 +113,10 @@ def main():
         kept += 1
         tag = "OK" if pc == p.parent.name else f"RELABEL (search was {p.parent.name})"
         print(f"  keep  {p.name} -> {pc}  {tag}")
-    (OUT / "labeled_manifest.json").write_text(json.dumps(manifest, indent=1))
+        if kept % 200 == 0:  # crash-safe: flush periodically
+            mpath.write_text(json.dumps(manifest, indent=1))
+            print(f"  ... checkpoint {kept} kept (idx {i})")
+    mpath.write_text(json.dumps(manifest, indent=1))
     print(f"\nLABELED: kept {kept}, dropped {dropped} -> {OUT}")
 
 
