@@ -66,7 +66,9 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   const [showRarityGuide, setShowRarityGuide] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [defaults, setDefaults] = useState({ edition: 'unknown', condition: 'NM' });
+  const [ipAddress, setIpAddress] = useState('Loading...');
   useEffect(() => { window.api?.getDefaults?.().then(d => d && setDefaults(d)); }, []);
+  useEffect(() => { if (window.api) window.api.getIpAddress().then(setIpAddress); }, []);
 
   const fetchCard = useCallback(async (tempId, passcode) => {
     // Set loading immediately to prevent double fetch
@@ -222,7 +224,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                     if (!data) continue;
                     const result = await window.api.addCardToDb(data);
                     if (!result.success) {
-                        alert("Failed to save: " + result.error);
+                        alert("Speichern fehlgeschlagen: " + result.error);
                         return; // keep the card in staging so nothing is silently lost
                     }
                 }
@@ -253,7 +255,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   };
 
   const handleClearAll = () => {
-      if (confirm("Clear all scanned cards? This cannot be undone.")) {
+      if (confirm("Alle gescannten Karten verwerfen? Dies kann nicht rückgängig gemacht werden.")) {
           setScannedCards([]);
       }
   };
@@ -311,10 +313,10 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             }
         } catch (error) {
             console.error(error);
-            alert("Error importing CSV");
+            alert("Fehler beim CSV-Import");
         }
     } else {
-        alert("CSV Import is only available in the desktop app.");
+        alert("CSV-Import ist nur in der Desktop-App verfügbar.");
     }
   };
 
@@ -322,7 +324,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
     <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-space-white flex items-center">
-                Incoming Scans
+                Scannen
                 <span className="ml-3 text-sm font-normal text-gray-500 bg-gray-900 px-2 py-1 rounded-full">{scannedCards.length}</span>
             </h2>
             <div className="flex space-x-2">
@@ -332,7 +334,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         className="flex items-center px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 rounded-lg transition-colors text-sm border border-red-500/30"
                     >
                         <X className="w-4 h-4 mr-2" />
-                        Clear All
+                        Alles verwerfen
                     </button>
                 )}
                 {scannedCards.some(c => c.status === 'loaded' && c.setMatchConfidence === 'exact') && (
@@ -346,7 +348,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         className="flex items-center px-4 py-2 bg-good/20 hover:bg-good/30 text-good rounded-lg transition-colors text-sm border border-good/30 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Check className="w-4 h-4 mr-2" />
-                        Add All Detected
+                        Erkannte übernehmen
                     </button>
                 )}
                 {scannedCards.some(c => c.status === 'loaded') && (
@@ -359,7 +361,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors text-sm shadow-[0_0_10px_rgba(157,0,255,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Check className="w-4 h-4 mr-2" />
-                        Add All
+                        Alle übernehmen
                     </button>
                 )}
                 <button
@@ -367,21 +369,21 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                     className="flex items-center px-4 py-2 bg-[#2d2d2d] hover:bg-[#3d3d3d] text-white rounded-lg transition-colors text-sm border border-gray-700"
                 >
                     <FileSpreadsheet className="w-4 h-4 mr-2 text-green-400" />
-                    Import CSV
+                    CSV importieren
                 </button>
                 <button
                     onClick={() => setShowRarityGuide(true)}
                     className="flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg transition-colors text-sm border border-gray-700"
                 >
                     <HelpCircle className="w-4 h-4 mr-2" />
-                    Guide
+                    Anleitung
                 </button>
                 <button
                     onClick={() => setShowSearch(true)}
                     className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors text-sm shadow-[0_0_10px_rgba(157,0,255,0.3)] hover:shadow-[0_0_20px_rgba(157,0,255,0.5)]"
                 >
                     <Search className="w-4 h-4 mr-2" />
-                    Search
+                    Suchen
                 </button>
             </div>
         </div>
@@ -407,9 +409,12 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
         )}
 
         {scannedCards.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl bg-gray-900/50">
-                <p className="text-lg font-medium">Ready to Scan</p>
-                <p className="text-sm mt-2 opacity-60">Scanned cards from the app will appear here.</p>
+            <div className="flex flex-col items-center justify-center h-64 text-ink-muted border-2 border-dashed border-line rounded-xl bg-obsidian-800/50 gap-2">
+                <p className="text-lg font-medium text-ink">Bereit zum Scannen</p>
+                <p className="text-sm">Gescannte Karten erscheinen hier.</p>
+                <code className="mt-2 bg-obsidian border border-line rounded-lg px-3 py-1.5 font-mono text-[13px] text-ink select-all cursor-pointer"
+                      title="Zum Kopieren klicken" onClick={() => navigator.clipboard.writeText(ipAddress)}>{ipAddress}</code>
+                <p className="text-[11px] text-ink-faint">Handy-App mit dieser Adresse verbinden</p>
             </div>
         )}
 
@@ -440,7 +445,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     )}
                                     {card.inCollection && (
                                         <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-[10px] font-bold uppercase rounded border border-yellow-500/30">
-                                            Owned: x{card.ownedQuantity}
+                                            Vorhanden: x{card.ownedQuantity}
                                         </span>
                                     )}
                                 </div>
@@ -473,7 +478,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             <div className="flex gap-2 flex-1 animate-in fade-in zoom-in duration-200">
                                                 <input
                                                     type="text"
-                                                    placeholder="Set Code"
+                                                    placeholder="Set-Code"
                                                     className="w-1/2 bg-black/40 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:border-space-violet outline-none"
                                                     value={card.manualSetCode || ''}
                                                     onChange={(e) => handleUpdateCard(card.tempId, { manualSetCode: e.target.value })}
@@ -512,7 +517,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                         <button
                                             onClick={() => handleUpdateCard(card.tempId, { isManualEntry: !card.isManualEntry })}
                                             className={`p-1.5 rounded transition-colors ${card.isManualEntry ? 'bg-space-violet text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-                                            title="Toggle Manual Entry"
+                                            title="Manuelle Eingabe umschalten"
                                         >
                                             <Edit className="w-3 h-3" />
                                         </button>
@@ -552,7 +557,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         ) : (
                              <p className="text-space-white font-mono">{card.passcode}</p>
                         )}
-                        {card.status === 'error' && <p className="text-red-400 text-sm">Failed to fetch details.</p>}
+                        {card.status === 'error' && <p className="text-red-400 text-sm">Details konnten nicht geladen werden.</p>}
                     </div>
 
                     {/* Actions */}
@@ -560,7 +565,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         <button
                             onClick={() => handleDiscard(card.tempId)}
                             className="p-2 rounded-full hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
-                            title="Discard"
+                            title="Verwerfen"
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -571,7 +576,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                 className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium text-sm shadow-[0_0_15px_rgba(157,0,255,0.3)] hover:shadow-[0_0_20px_rgba(157,0,255,0.5)] disabled:opacity-50 disabled:cursor-not-allowed"
                              >
                                 <Check className="w-4 h-4 mr-2" />
-                                Add
+                                Übernehmen
                              </button>
                         )}
                     </div>

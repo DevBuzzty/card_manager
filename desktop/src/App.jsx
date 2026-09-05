@@ -8,7 +8,7 @@ import CollectionList from './components/CollectionList';
 import Wishlist from './components/Wishlist';
 import SetCompletion from './components/SetCompletion';
 import Settings from './components/Settings';
-import Dashboard from './components/Dashboard';
+import Start from './components/Start';
 import Deals from './components/Deals';
 import ErrorBoundary from './components/ErrorBoundary';
 import CardDetailPanel from './components/CardDetailPanel';
@@ -103,7 +103,7 @@ function App() {
                 <Suspense fallback={<div className="flex items-center justify-center h-full text-space-violet"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
                   <Routes location={background || (panelOpen ? { ...location, pathname: '/sammlung/karten' } : location)}>
                     <Route path="/" element={<Navigate to="/start" replace />} />
-                    <Route path="/start" element={<Dashboard onOpenPalette={() => setPaletteOpen(true)} />} />
+                    <Route path="/start" element={<Start onOpenPalette={() => setPaletteOpen(true)} />} />
                     <Route path="/scannen" element={<StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />} />
                     <Route path="/sammlung" element={<SammlungLayout />}>
                       <Route index element={<Navigate to="/sammlung/karten" replace />} />

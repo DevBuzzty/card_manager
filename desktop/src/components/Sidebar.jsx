@@ -36,11 +36,9 @@ const NavItem = ({ to, icon, label, match }) => {
 };
 
 export default function Sidebar() {
-  const [ipAddress, setIpAddress] = useState('Loading...');
+  const [phoneOnline, setPhoneOnline] = useState(false);
 
-  useEffect(() => {
-    if (window.api) window.api.getIpAddress().then(setIpAddress);
-  }, []);
+  useEffect(() => window.api?.onPhoneStatus?.(setPhoneOnline), []);
 
   return (
     <div className="w-64 bg-obsidian-800 border-r border-line flex flex-col p-3.5 shrink-0">
@@ -58,17 +56,12 @@ export default function Sidebar() {
 
       <NavItem to="/einstellungen" icon={SettingsIcon} label={T.einstellungen} />
 
-      <div className="mt-3 bg-gradient-to-br from-obsidian-700 to-obsidian-800 border border-line rounded-[13px] p-3.5">
-        <div className="flex items-center gap-2 font-display text-[10px] tracking-[0.14em] uppercase text-good">
-          <Wifi className="w-4 h-4" strokeWidth={1.8} /> Scanner-Server aktiv
-        </div>
-        <code
-          className="block bg-obsidian border border-line rounded-lg px-2.5 py-2 text-center font-mono text-[13px] text-ink mt-2.5 select-all cursor-pointer hover:bg-black/60 transition-colors"
-          title="Zum Kopieren klicken"
-          onClick={() => navigator.clipboard.writeText(ipAddress)}
-        >{ipAddress}</code>
-        <div className="text-[10px] text-ink-faint mt-1.5 text-center">Handy-App mit dieser Adresse verbinden</div>
-      </div>
+      <NavLink to="/einstellungen"
+        className="mt-3 flex items-center gap-2.5 bg-obsidian-700 border border-line rounded-xl px-3 py-2.5 hover:border-space-violet/40 transition-colors">
+        <span className={clsx('w-2 h-2 rounded-full', phoneOnline ? 'bg-good shadow-[0_0_8px_#39d98a]' : 'bg-ink-faint')} />
+        <span className="text-[12px] text-ink-muted">{phoneOnline ? 'Handy verbunden' : 'Kein Handy'}</span>
+        <Wifi className="w-3.5 h-3.5 ml-auto text-ink-faint" strokeWidth={1.8} />
+      </NavLink>
     </div>
   );
 }

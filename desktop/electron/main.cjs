@@ -62,8 +62,12 @@ function startSocketServer() {
 
   io.on('connection', (socket) => {
     console.log('New client connected:', socket.id);
+    if (mainWindow) mainWindow.webContents.send('phone-connected');
     socket.on('card_scanned', (data) => {
       if (mainWindow) mainWindow.webContents.send('card-scanned', data);
+    });
+    socket.on('disconnect', () => {
+      if (mainWindow) mainWindow.webContents.send('phone-disconnected');
     });
     // (Removed stale pre-cloud deal socket handlers: the phone now reads/writes the shared
     // Supabase deal tables directly, so add_deal_watch/request_deals over the socket — which

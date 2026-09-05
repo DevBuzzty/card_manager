@@ -7,6 +7,13 @@ contextBridge.exposeInMainWorld('api', {
     // Return a cleanup function
     return () => ipcRenderer.removeListener('card-scanned', subscription);
   },
+  onPhoneStatus: (cb) => {
+    const on = () => cb(true);
+    const off = () => cb(false);
+    ipcRenderer.on('phone-connected', on);
+    ipcRenderer.on('phone-disconnected', off);
+    return () => { ipcRenderer.removeListener('phone-connected', on); ipcRenderer.removeListener('phone-disconnected', off); };
+  },
   fetchCardData: (passcode) => ipcRenderer.invoke('fetch-card-data', passcode),
   addCardToDb: (card) => ipcRenderer.invoke('add-card-to-db', card),
   getDefaults: () => ipcRenderer.invoke('get-defaults'),
