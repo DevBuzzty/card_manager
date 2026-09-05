@@ -1,0 +1,5 @@
+# Copy to local.properties (git-ignored) and fill in.
+sdk.dir=C\:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
+# Supabase project (Settings -> Data API). The publishable/anon key is fine here.
+supabase.url=https://<project-ref>.supabase.co
+supabase.key=sb_publishable_...
