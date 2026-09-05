@@ -103,7 +103,7 @@ export default function Start({ onOpenPalette }) {
           >
             <Search className="w-4 h-4" strokeWidth={1.8} />
             Karte, Set oder Aktion suchen…
-            <span className="ml-auto font-mono text-[10px] text-ink-muted border border-line rounded px-1.5 py-0.5">Ctrl K</span>
+            <span className="ml-auto font-mono text-[10px] text-ink-muted border border-line rounded px-1.5 py-0.5">Strg K</span>
           </button>
           <form onSubmit={handleQuickAdd} className="flex bg-obsidian-700 border border-line rounded-xl overflow-hidden focus-within:border-space-violet transition-colors">
             <input

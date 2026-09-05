@@ -504,12 +504,12 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             onChange={(v) => handleUpdateCard(card.tempId, v)} />
 
                                         {card.setMatchConfidence === 'exact' && !card.isManualEntry && (
-                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-good bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set code read from the card">
+                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-good bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set-Code aus der Karte gelesen">
                                                 Erkannt
                                             </span>
                                         )}
                                         {card.setMatchConfidence === 'fuzzy' && !card.isManualEntry && (
-                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 rounded px-1.5 py-1" title="Set code recovered from an imperfect scan — please verify">
+                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 rounded px-1.5 py-1" title="Set-Code aus unscharfem Scan wiederhergestellt — bitte überprüfen">
                                                 Prüfen?
                                             </span>
                                         )}
