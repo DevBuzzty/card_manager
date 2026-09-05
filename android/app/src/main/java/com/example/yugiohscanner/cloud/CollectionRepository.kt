@@ -111,6 +111,12 @@ object CollectionRepository {
 
     suspend fun addCopies(printing: CardRow, edition: String, condition: String, count: Int = 1) = withContext(Dispatchers.IO) {
         ensureMigrated(printing)
+        insertCopies(printing, edition, condition, count)
+    }
+
+    // POSTs the copy rows with no migration guard. Only safe right after the printing row
+    // itself was just created (addPrinting) — there is nothing to double-count against yet.
+    private suspend fun insertCopies(printing: CardRow, edition: String, condition: String, count: Int = 1) = withContext(Dispatchers.IO) {
         val arr = JSONArray()
         repeat(maxOf(1, count)) {
             arr.put(JSONObject()
@@ -159,10 +165,12 @@ object CollectionRepository {
 
     suspend fun softDelete(row: CardRow) = withContext(Dispatchers.IO) {
         for (c in copiesOf(row)) patchCopy(c.copyId, JSONObject().put("deleted", true))
-        patch(row, JSONObject().put("deleted", true).put("quantity", 0))
+        patch(row, JSONObject().put("deleted", true))
     }
 
     // Creates the printing row (quantity 0; the cloud trigger counts the copies) + its copies.
+    // Uses insertCopies (not addCopies) because the fresh row has quantity = 1 and no copies yet,
+    // which would otherwise trip the NotMigratedException guard in ensureMigrated.
     suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double, language: String = "DE",
                             edition: String, condition: String, count: Int = 1) = withContext(Dispatchers.IO) {
         val body = JSONObject()
@@ -171,7 +179,7 @@ object CollectionRepository {
             .put("image_url", base.imageUrl).put("atk", base.atk ?: JSONObject.NULL)
             .put("def", base.def ?: JSONObject.NULL).put("level", base.level ?: JSONObject.NULL)
             .put("race", base.race).put("attribute", base.attribute)
-            .put("quantity", 0).put("rarity", rarity).put("price", price).put("deleted", false)
+            .put("rarity", rarity).put("price", price).put("deleted", false)
             .toString()
         executeWithReauth {
             auth(Request.Builder().url("${SupabaseCloud.base()}/rest/v1/cards"))
@@ -182,7 +190,7 @@ object CollectionRepository {
             if (!resp.isSuccessful) throw RuntimeException("Hinzufügen fehlgeschlagen (${resp.code}): ${resp.body?.string()}")
         }
         val printing = CardRow(base.id, setCode, language, base.name, base.imageUrl, rarity, 0, price)
-        addCopies(printing, edition, condition, count)
+        insertCopies(printing, edition, condition, count)
     }
 
     // Autonomous scan flow: add `count` copies under the (validated) printing; the printing row is
