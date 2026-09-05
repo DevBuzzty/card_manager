@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, RefreshCw, LayoutGrid, List as ListIcon, Database, FilterX } from 'lucide-react';
 import { Grid } from 'react-window';
-import CardDetailModal from './CardDetailModal';
 import CustomSelect from './CustomSelect';
 import CardTile from './CardTile';
 import { getRarityInfo } from '../utils/rarity.js';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
+import { cardRoute } from '../utils/routes';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -31,9 +32,10 @@ const AutoSizer = ({ children }) => {
 };
 
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [rawCards, setRawCards] = useState([]);
   const [filter, setFilter] = useState('');
-  const [selectedCard, setSelectedCard] = useState(null);
   const [localUpdating, setLocalUpdating] = useState(false);
   const [viewMode, setViewMode] = useState('grid');
   const [sortType, setSortType] = useState('newest');
@@ -134,6 +136,14 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     if (!window.api || !window.api.onCollectionChanged) return;
     const cleanup = window.api.onCollectionChanged(() => loadCollection());
     return () => cleanup && cleanup();
+  }, []);
+
+  // The detail panel dispatches this after a mutation (it can't carry an onClose callback
+  // through a route), so reload here instead.
+  useEffect(() => {
+    const onDirty = () => loadCollection();
+    window.addEventListener('collection-dirty', onDirty);
+    return () => window.removeEventListener('collection-dirty', onDirty);
   }, []);
 
   const handleUpdate = async (mode) => {
@@ -249,6 +259,13 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       });
   }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, segment]);
 
+  // The panel walks the list with the arrow buttons, so it gets the current order handed over.
+  const openCard = (card) => {
+    const first = (card.variants && card.variants[0]) || card;
+    const list = filtered.map(c => cardRoute((c.variants && c.variants[0]) || c));
+    navigate(cardRoute(first), { state: { background: location, list } });
+  };
+
   const clearFilters = () => {
       setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All'); setFilterRarity('All'); setFilterCondition('All'); setFilterEdition('All');
   };
@@ -268,7 +285,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
       return (
           <div style={{ ...style, padding: 8 }}>
-              <CardTile card={card} onClick={() => setSelectedCard(card)} />
+              <CardTile card={card} onClick={() => openCard(card)} />
           </div>
       );
   };
@@ -422,8 +439,6 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 </AutoSizer>
             )}
         </div>
-
-        {selectedCard && <CardDetailModal card={selectedCard} onClose={() => { setSelectedCard(null); loadCollection(); }} />}
     </div>
   );
 }

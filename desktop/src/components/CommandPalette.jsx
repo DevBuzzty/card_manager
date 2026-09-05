@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Layers, Library, TrendingUp, BookOpen, Heart, CornerDownLeft } from 'lucide-react';
-import CardDetailModal from './CardDetailModal';
-import { ROUTES } from '../utils/routes';
+import { ROUTES, cardRoute } from '../utils/routes';
 
 export default function CommandPalette({ open, onClose }) {
   const [query, setQuery] = useState('');
   const [cards, setCards] = useState([]);
   const [sel, setSel] = useState(0);
-  const [detail, setDetail] = useState(null);
   const inputRef = useRef(null);
 
   // The palette mounts fresh each time it opens (conditional render in App), so initial
@@ -31,6 +29,7 @@ export default function CommandPalette({ open, onClose }) {
   const grouped = Object.values(groupedMap);
 
   const navigate = useNavigate();
+  const location = useLocation();
   const go = (to) => { navigate(to); onClose(); };
   const actions = [
     { id: 'a-scan', label: 'Scannen', icon: Layers, run: () => go(ROUTES.scannen) },
@@ -53,14 +52,12 @@ export default function CommandPalette({ open, onClose }) {
   const runItem = (item) => {
     if (!item) return;
     if (item.type === 'action') item.run();
-    else setDetail(item.card);
+    else { navigate(cardRoute(item.card.variants?.[0] || item.card), { state: { background: location } }); onClose(); }
   };
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
-      // While a card's detail modal is open, only Escape (which closes the modal) applies.
-      if (detail) { if (e.key === 'Escape') setDetail(null); return; }
       if (e.key === 'Escape') { onClose(); }
       else if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s + 1, flat.length - 1)); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); setSel(s => Math.max(s - 1, 0)); }
@@ -68,7 +65,7 @@ export default function CommandPalette({ open, onClose }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, flat, sel, detail]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, flat, sel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 
@@ -78,7 +75,7 @@ export default function CommandPalette({ open, onClose }) {
   return (
     <div
       className="fixed inset-0 z-40 flex items-start justify-center pt-[12vh] px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
-      onClick={() => { if (!detail) onClose(); }}
+      onClick={onClose}
     >
       <div className="w-full max-w-xl bg-obsidian-800 border border-line rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 py-4 border-b border-line">
@@ -131,8 +128,6 @@ export default function CommandPalette({ open, onClose }) {
           )}
         </div>
       </div>
-
-      {detail && <CardDetailModal card={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }

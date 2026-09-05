@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
@@ -11,6 +11,7 @@ import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import Deals from './components/Deals';
 import ErrorBoundary from './components/ErrorBoundary';
+import CardDetailPanel from './components/CardDetailPanel';
 
 // Heavy tabs are code-split so the initial load stays light.
 const Insights = lazy(() => import('./components/Insights'));
@@ -22,6 +23,9 @@ function App() {
   const [updateProgress, setUpdateProgress] = useState(null); // { current, total } or null
   const [paletteOpen, setPaletteOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const background = location.state?.background;
+  const panelOpen = /^\/karte\//.test(location.pathname);
 
   useEffect(() => {
     if (window.api) {
@@ -93,27 +97,34 @@ function App() {
                 <span>{updateProgress.current} / {updateProgress.total}</span>
             </div>
         )}
-        <div className="flex-1 overflow-auto">
-            <ErrorBoundary>
-              <Suspense fallback={<div className="flex items-center justify-center h-full text-space-violet"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
-                <Routes>
-                  <Route path="/" element={<Navigate to="/start" replace />} />
-                  <Route path="/start" element={<Dashboard onOpenPalette={() => setPaletteOpen(true)} />} />
-                  <Route path="/scannen" element={<StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />} />
-                  <Route path="/sammlung" element={<SammlungLayout />}>
-                    <Route index element={<Navigate to="/sammlung/karten" replace />} />
-                    <Route path="karten" element={<CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />} />
-                    <Route path="wunschliste" element={<Wishlist />} />
-                    <Route path="sets" element={<SetCompletion />} />
-                    <Route path="decks" element={<DeckBuilder />} />
-                  </Route>
-                  <Route path="/deals" element={<Deals />} />
-                  <Route path="/insights" element={<Insights />} />
-                  <Route path="/einstellungen" element={<Settings />} />
-                  <Route path="*" element={<Navigate to="/start" replace />} />
-                </Routes>
-              </Suspense>
-            </ErrorBoundary>
+        <div className="flex-1 overflow-hidden flex gap-6 min-h-0">
+            <div className="flex-1 min-w-0 overflow-auto">
+              <ErrorBoundary>
+                <Suspense fallback={<div className="flex items-center justify-center h-full text-space-violet"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
+                  <Routes location={background || (panelOpen ? { ...location, pathname: '/sammlung/karten' } : location)}>
+                    <Route path="/" element={<Navigate to="/start" replace />} />
+                    <Route path="/start" element={<Dashboard onOpenPalette={() => setPaletteOpen(true)} />} />
+                    <Route path="/scannen" element={<StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />} />
+                    <Route path="/sammlung" element={<SammlungLayout />}>
+                      <Route index element={<Navigate to="/sammlung/karten" replace />} />
+                      <Route path="karten" element={<CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />} />
+                      <Route path="wunschliste" element={<Wishlist />} />
+                      <Route path="sets" element={<SetCompletion />} />
+                      <Route path="decks" element={<DeckBuilder />} />
+                    </Route>
+                    <Route path="/deals" element={<Deals />} />
+                    <Route path="/insights" element={<Insights />} />
+                    <Route path="/einstellungen" element={<Settings />} />
+                    <Route path="*" element={<Navigate to="/start" replace />} />
+                  </Routes>
+                </Suspense>
+              </ErrorBoundary>
+            </div>
+            {panelOpen && (
+              <ErrorBoundary>
+                <CardDetailPanel />
+              </ErrorBoundary>
+            )}
         </div>
       </main>
       <Suspense fallback={null}>
