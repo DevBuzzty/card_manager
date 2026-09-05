@@ -107,13 +107,14 @@ fun ScanStagingScreen(
                                     setCode = s?.setCode ?: "Unknown",
                                     rarity = s?.rarity ?: "",
                                     language = s?.language ?: "DE",
-                                    quantity = e.quantity,
+                                    edition = "unknown", condition = "NM",
+                                    count = e.quantity,
                                 )
                                 // Commit each extra printing the user added (skip ones left unpicked).
                                 for (ep in e.extraPrintings) {
                                     val es = ep.selectedSet ?: continue
                                     CollectionRepository.addScanned(
-                                        b, es.setCode, es.rarity, es.language, ep.quantity,
+                                        b, es.setCode, es.rarity, es.language, "unknown", "NM", ep.quantity,
                                     )
                                 }
                             }

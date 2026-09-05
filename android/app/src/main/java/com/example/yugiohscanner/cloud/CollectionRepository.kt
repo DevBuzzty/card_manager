@@ -8,10 +8,18 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
-// Reads and mutates the Supabase `cards` table over REST. The phone only ever reads,
-// changes quantity, or soft-deletes existing rows — it never inserts new cards.
+// A printing has quantity > 0 in `cards` but no live rows in `card_copies` yet — the desktop
+// hasn't pushed its backfill of that printing's copies. Adding copies now would double-count
+// once it does, so callers must retry after the desktop syncs.
+class NotMigratedException(message: String) : RuntimeException(message)
+
+// Reads and mutates the Supabase `cards` / `card_copies` tables over REST. Every physical card
+// is a row in `card_copies`; a cloud trigger recounts `cards.quantity`/`deleted` from live copies,
+// so the phone inserts or soft-deletes copies rather than PATCHing quantity directly.
 object CollectionRepository {
+    private const val PAGE = 1000
 
     suspend fun loadCards(): List<CardRow> = withContext(Dispatchers.IO) {
         val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
@@ -33,49 +41,146 @@ object CollectionRepository {
         }
     }
 
-    suspend fun setQuantity(row: CardRow, qty: Int) =
-        patch(row, JSONObject().put("quantity", qty))
+    private fun auth(b: Request.Builder) = b
+        .addHeader("apikey", SupabaseCloud.key())
+        .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
 
-    suspend fun softDelete(row: CardRow) =
-        patch(row, JSONObject().put("deleted", true))
+    suspend fun loadCopies(): List<CopyRow> = withContext(Dispatchers.IO) {
+        val out = ArrayList<CopyRow>()
+        var offset = 0
+        while (true) {
+            val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
+                .addQueryParameter("select", "copy_id,card_id,set_code,language,rarity,edition,condition,deleted")
+                .addQueryParameter("deleted", "eq.false")
+                .addQueryParameter("order", "copy_id.asc")
+                .addQueryParameter("limit", PAGE.toString())
+                .addQueryParameter("offset", offset.toString())
+                .build()
+            val page = executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
+                val text = resp.body?.string() ?: "[]"
+                if (!resp.isSuccessful) throw RuntimeException("Exemplare laden fehlgeschlagen (${resp.code}): $text")
+                parseCopies(JSONArray(text))
+            }
+            out.addAll(page)
+            if (page.size < PAGE) break
+            offset += PAGE
+        }
+        out
+    }
 
-    // Creates a new printing row in the cloud, reusing the base card's shared detail fields.
-    // Only for a printing the user does NOT already own (the picker excludes owned ones).
-    suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double, language: String = "DE", quantity: Int = 1) = withContext(Dispatchers.IO) {
+    private suspend fun copiesOf(p: CardRow, edition: String? = null, condition: String? = null): List<CopyRow> = withContext(Dispatchers.IO) {
+        val b = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "copy_id,card_id,set_code,language,rarity,edition,condition,deleted")
+            .addQueryParameter("card_id", "eq.${p.id}")
+            .addQueryParameter("set_code", "eq.${p.setCode}")
+            .addQueryParameter("language", "eq.${p.language}")
+            .addQueryParameter("rarity", "eq.${p.rarity ?: "Unknown"}")
+            .addQueryParameter("deleted", "eq.false")
+            .addQueryParameter("order", "created_at.desc")
+        if (edition != null) b.addQueryParameter("edition", "eq.$edition")
+        if (condition != null) b.addQueryParameter("condition", "eq.$condition")
+        executeWithReauth { auth(Request.Builder().url(b.build())).get().build() }.use { resp ->
+            val text = resp.body?.string() ?: "[]"
+            if (!resp.isSuccessful) throw RuntimeException("Exemplare laden fehlgeschlagen (${resp.code}): $text")
+            parseCopies(JSONArray(text))
+        }
+    }
+
+    // A printing that still has quantity > 0 but no copies was not backfilled yet (desktop-only step).
+    // Adding copies now would double-count once the desktop pushes its backfill -> refuse.
+    private suspend fun ensureMigrated(p: CardRow) {
+        val row = getRow(p.id, p.setCode, p.language, p.rarity) ?: return
+        if (row.quantity > 0 && copiesOf(p).isEmpty())
+            throw NotMigratedException("Sammlung noch nicht migriert – bitte die Desktop-App einmal starten (Sync).")
+    }
+
+    suspend fun addCopies(printing: CardRow, edition: String, condition: String, count: Int = 1) = withContext(Dispatchers.IO) {
+        ensureMigrated(printing)
+        val arr = JSONArray()
+        repeat(maxOf(1, count)) {
+            arr.put(JSONObject()
+                .put("copy_id", UUID.randomUUID().toString())
+                .put("card_id", printing.id).put("set_code", printing.setCode)
+                .put("language", printing.language).put("rarity", printing.rarity ?: "Unknown")
+                .put("edition", edition).put("condition", condition).put("deleted", false))
+        }
+        executeWithReauth {
+            auth(Request.Builder().url("${SupabaseCloud.base()}/rest/v1/card_copies"))
+                .addHeader("Content-Type", "application/json").addHeader("Prefer", "return=minimal")
+                .post(arr.toString().toRequestBody(SupabaseCloud.jsonMedia)).build()
+        }.use { resp -> if (!resp.isSuccessful) throw RuntimeException("Exemplar anlegen fehlgeschlagen (${resp.code}): ${resp.body?.string()}") }
+    }
+
+    suspend fun removeCopies(printing: CardRow, edition: String, condition: String, count: Int = 1): Int = withContext(Dispatchers.IO) {
+        val victims = copiesOf(printing, edition, condition).take(maxOf(1, count))
+        for (c in victims) patchCopy(c.copyId, JSONObject().put("deleted", true))
+        victims.size
+    }
+
+    suspend fun updateCopyGroup(printing: CardRow, fromEdition: String, fromCondition: String, toEdition: String, toCondition: String): Int = withContext(Dispatchers.IO) {
+        val rows = copiesOf(printing, fromEdition, fromCondition)
+        for (c in rows) patchCopy(c.copyId, JSONObject().put("edition", toEdition).put("condition", toCondition))
+        rows.size
+    }
+
+    private suspend fun patchCopy(copyId: String, body: JSONObject) = withContext(Dispatchers.IO) {
+        val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
+            .addQueryParameter("copy_id", "eq.$copyId").build()
+        executeWithReauth {
+            auth(Request.Builder().url(url)).addHeader("Content-Type", "application/json")
+                .patch(body.toString().toRequestBody(SupabaseCloud.jsonMedia)).build()
+        }.use { resp -> if (!resp.isSuccessful) throw RuntimeException("Exemplar ändern fehlgeschlagen (${resp.code}): ${resp.body?.string()}") }
+    }
+
+    private fun parseCopies(arr: JSONArray): List<CopyRow> = (0 until arr.length()).map { i ->
+        val o = arr.getJSONObject(i)
+        CopyRow(
+            copyId = o.getString("copy_id"), cardId = o.getString("card_id"),
+            setCode = o.optString("set_code", "Unknown"), language = o.optString("language", "DE"),
+            rarity = o.optString("rarity", "Unknown"), edition = o.optString("edition", "unknown"),
+            condition = o.optString("condition", "NM"), deleted = o.optBoolean("deleted", false),
+        )
+    }
+
+    suspend fun softDelete(row: CardRow) = withContext(Dispatchers.IO) {
+        for (c in copiesOf(row)) patchCopy(c.copyId, JSONObject().put("deleted", true))
+        patch(row, JSONObject().put("deleted", true).put("quantity", 0))
+    }
+
+    // Creates the printing row (quantity 0; the cloud trigger counts the copies) + its copies.
+    suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double, language: String = "DE",
+                            edition: String, condition: String, count: Int = 1) = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("id", base.id).put("set_code", setCode).put("language", language)
             .put("name", base.name).put("type", base.type).put("desc", base.desc)
             .put("image_url", base.imageUrl).put("atk", base.atk ?: JSONObject.NULL)
             .put("def", base.def ?: JSONObject.NULL).put("level", base.level ?: JSONObject.NULL)
             .put("race", base.race).put("attribute", base.attribute)
-            .put("quantity", quantity).put("rarity", rarity).put("price", price).put("deleted", false)
+            .put("quantity", 0).put("rarity", rarity).put("price", price).put("deleted", false)
             .toString()
         executeWithReauth {
-            Request.Builder()
-                .url("${SupabaseCloud.base()}/rest/v1/cards")
-                .addHeader("apikey", SupabaseCloud.key())
-                .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
+            auth(Request.Builder().url("${SupabaseCloud.base()}/rest/v1/cards"))
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Prefer", "return=minimal")
-                .post(body.toRequestBody(SupabaseCloud.jsonMedia))
-                .build()
+                .addHeader("Prefer", "resolution=merge-duplicates,return=minimal")
+                .post(body.toRequestBody(SupabaseCloud.jsonMedia)).build()
         }.use { resp ->
-            if (!resp.isSuccessful)
-                throw RuntimeException("Hinzufügen fehlgeschlagen (${resp.code}): ${resp.body?.string()}")
+            if (!resp.isSuccessful) throw RuntimeException("Hinzufügen fehlgeschlagen (${resp.code}): ${resp.body?.string()}")
         }
+        val printing = CardRow(base.id, setCode, language, base.name, base.imageUrl, rarity, 0, price)
+        addCopies(printing, edition, condition, count)
     }
 
-    // Autonomous scan flow: add one copy of a scanned card under its (validated) printing. If that
-    // printing already exists, bump its quantity (and un-delete it); otherwise insert a new row.
-    suspend fun addScanned(base: CardRow, setCode: String, rarity: String, language: String, quantity: Int = 1): String = withContext(Dispatchers.IO) {
+    // Autonomous scan flow: add `count` copies under the (validated) printing; the printing row is
+    // created when missing. Un-deleting a tombstoned printing happens through the cloud trigger.
+    suspend fun addScanned(base: CardRow, setCode: String, rarity: String, language: String,
+                           edition: String, condition: String, count: Int = 1): String = withContext(Dispatchers.IO) {
         val existing = getRow(base.id, setCode, language, rarity)
         val label = base.name ?: base.id
         if (existing != null) {
-            val newQty = existing.quantity + quantity
-            patch(existing, JSONObject().put("quantity", newQty).put("deleted", false))
-            "$label → ${newQty}× ($setCode)"
+            addCopies(existing, edition, condition, count)
+            "$label → +$count× ($setCode)"
         } else {
-            addPrinting(base, setCode, rarity, 0.0, language, quantity)
+            addPrinting(base, setCode, rarity, 0.0, language, edition, condition, count)
             "$label hinzugefügt ($setCode)"
         }
     }

@@ -53,7 +53,7 @@ fun AddPrintingSection(base: CardRow, owned: List<CardRow>, onError: (String) ->
                         Button(enabled = !adding, onClick = {
                             adding = true
                             scope.launch {
-                                try { CollectionRepository.addPrinting(base, s.setCode, s.rarity, s.price, s.language); onAdded(); expanded = false }
+                                try { CollectionRepository.addPrinting(base, s.setCode, s.rarity, s.price, s.language, edition = "unknown", condition = "NM"); onAdded(); expanded = false } // STOPGAP(Task 13)
                                 catch (e: Exception) { onError(e.message ?: "Hinzufügen fehlgeschlagen") }
                                 adding = false
                             }

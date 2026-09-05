@@ -115,7 +115,7 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, onClose: () -> Unit
                     }
                     IconButton(onClick = {
                         if (v.quantity > 1) scope.launch {
-                            try { CollectionRepository.setQuantity(v, v.quantity - 1); error = null; refresh() }
+                            try { CollectionRepository.removeCopies(v, "unknown", "NM"); error = null; refresh() }
                             catch (e: Exception) { error = e.message }
                         }
                     }) { Icon(Icons.Default.Remove, "−", tint = MaterialTheme.colorScheme.primary) }
@@ -123,7 +123,7 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, onClose: () -> Unit
                         color = MaterialTheme.colorScheme.onSurface)
                     IconButton(onClick = {
                         scope.launch {
-                            try { CollectionRepository.setQuantity(v, v.quantity + 1); error = null; refresh() }
+                            try { CollectionRepository.addCopies(v, "unknown", "NM"); error = null; refresh() }
                             catch (e: Exception) { error = e.message }
                         }
                     }) { Icon(Icons.Default.Add, "+", tint = MaterialTheme.colorScheme.primary) }
