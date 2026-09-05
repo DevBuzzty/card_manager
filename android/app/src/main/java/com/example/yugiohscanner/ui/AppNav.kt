@@ -28,7 +28,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
-import com.example.yugiohscanner.MainScreen
 import com.example.yugiohscanner.cloud.SupabaseCloud
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
@@ -97,9 +96,7 @@ fun AppNav() {
                     onOpenSuche = { nav.navigate(Routes.SUCHE) },
                 ) else CloudLoginScreen(prefs) { cloudReady = true }
             }
-            // Task 3 swaps this for ScanScreen(onClose = …); the existing MainScreen already
-            // owns the permission gate, the socket and the camera, so nothing regresses here.
-            composable(Routes.SCAN) { MainScreen() }
+            composable(Routes.SCAN) { ScanScreen(onClose = { nav.popBackStack() }) }
             composable(Routes.DEALS) {
                 if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { cloudReady = true }
             }
