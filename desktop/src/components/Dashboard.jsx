@@ -1,10 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning } from 'lucide-react';
 import CardTile from './CardTile';
 import SetCompletion from './SetCompletion';
 import { fmtEUR } from '../utils/format';
+import { ROUTES } from '../utils/routes';
 
-export default function Dashboard({ setActiveTab, onOpenPalette }) {
+export default function Dashboard({ onOpenPalette }) {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({ totalValue: 0, totalCards: 0, uniqueCards: 0 });
   const [cards, setCards] = useState([]);
   const [history, setHistory] = useState([]);
@@ -53,7 +56,7 @@ export default function Dashboard({ setActiveTab, onOpenPalette }) {
     if (quickAddCode.length >= 4 && window.api) {
       window.api.manualScan(quickAddCode);
       setQuickAddCode('');
-      setActiveTab('staging');
+      navigate(ROUTES.scannen);
     }
   };
 
@@ -124,16 +127,16 @@ export default function Dashboard({ setActiveTab, onOpenPalette }) {
             <div><div className="text-sm font-bold text-ink">Ready to scan</div><div className="text-xs text-ink-muted">Point your phone camera at a card</div></div>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setActiveTab('collection')} className="flex-1 text-left rounded-xl p-3 border border-space-violet/30 bg-space-violet/5 hover:bg-space-violet/10 transition-colors">
+            <button onClick={() => navigate(ROUTES.karten)} className="flex-1 text-left rounded-xl p-3 border border-space-violet/30 bg-space-violet/5 hover:bg-space-violet/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-violet-soft"><TriangleAlert className="w-4 h-4" />{unknownCount}</div>
               <div className="text-[11px] text-ink-muted mt-0.5">Unknown set</div>
             </button>
-            <button onClick={() => setActiveTab('collection')} className="flex-1 text-left rounded-xl p-3 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors">
+            <button onClick={() => navigate(ROUTES.karten)} className="flex-1 text-left rounded-xl p-3 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-gold"><FileWarning className="w-4 h-4" />{incompleteCount}</div>
               <div className="text-[11px] text-ink-muted mt-0.5">Incomplete</div>
             </button>
           </div>
-          <button onClick={() => setActiveTab('staging')} className="mt-auto flex items-center justify-center gap-2 bg-gradient-to-br from-space-violet to-space-violet-dark text-white font-display font-semibold text-sm py-3 rounded-xl shadow-[0_10px_24px_-10px_#9D00FF]">
+          <button onClick={() => navigate(ROUTES.scannen)} className="mt-auto flex items-center justify-center gap-2 bg-gradient-to-br from-space-violet to-space-violet-dark text-white font-display font-semibold text-sm py-3 rounded-xl shadow-[0_10px_24px_-10px_#9D00FF]">
             <Plus className="w-4 h-4" strokeWidth={2} /> Start Scanning
           </button>
         </div>
@@ -143,14 +146,14 @@ export default function Dashboard({ setActiveTab, onOpenPalette }) {
       <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display text-sm tracking-[0.12em] uppercase text-ink-muted flex items-center gap-2"><Clock className="w-4 h-4" strokeWidth={1.8} /> Recently Added</h3>
-          <button onClick={() => setActiveTab('collection')} className="text-xs text-violet-soft hover:underline flex items-center gap-1">View all <ArrowRight className="w-3 h-3" /></button>
+          <button onClick={() => navigate(ROUTES.karten)} className="text-xs text-violet-soft hover:underline flex items-center gap-1">View all <ArrowRight className="w-3 h-3" /></button>
         </div>
         {recent.length === 0 ? (
           <div className="text-center text-ink-faint py-8">No cards yet — start scanning to build your collection.</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {recent.map((card, idx) => (
-              <CardTile key={`${card.id}-${card.set_code}-${idx}`} card={card} onClick={() => setActiveTab('collection')} />
+              <CardTile key={`${card.id}-${card.set_code}-${idx}`} card={card} onClick={() => navigate(ROUTES.karten)} />
             ))}
           </div>
         )}

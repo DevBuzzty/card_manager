@@ -1,9 +1,11 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
 import CollectionList from './components/CollectionList';
 import Wishlist from './components/Wishlist';
+import SetCompletion from './components/SetCompletion';
 import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import Deals from './components/Deals';
@@ -15,10 +17,10 @@ const DeckBuilder = lazy(() => import('./components/DeckBuilder'));
 const CommandPalette = lazy(() => import('./components/CommandPalette'));
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [scannedCards, setScannedCards] = useState([]);
   const [updateProgress, setUpdateProgress] = useState(null); // { current, total } or null
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (window.api) {
@@ -61,60 +63,57 @@ function App() {
     }
   }, []);
 
+  // Cmd/Ctrl+K opens the palette; Alt+Arrow walks the history like a browser (Electron's
+  // mouse back/forward buttons already drive the same history).
   useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
         setPaletteOpen(o => !o);
-      }
+      } else if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); navigate(-1); }
+      else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); navigate(1); }
+    };
+    const onMouse = (e) => {
+      if (e.button === 3) { e.preventDefault(); navigate(-1); }
+      if (e.button === 4) { e.preventDefault(); navigate(1); }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+    window.addEventListener('mouseup', onMouse);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('mouseup', onMouse); };
+  }, [navigate]);
 
   return (
     <div className="flex h-screen bg-obsidian text-ink overflow-hidden font-sans">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar />
       <main className="flex-1 overflow-auto bg-obsidian p-6 flex flex-col">
         {updateProgress && (
             <div className="bg-gray-900 border-b border-gray-800 px-6 py-2 flex items-center justify-between text-xs text-space-violet animate-pulse">
-                <span className="font-bold uppercase tracking-wider">Updating Card Database...</span>
+                <span className="font-bold uppercase tracking-wider">Kartendaten werden aktualisiert…</span>
                 <span>{updateProgress.current} / {updateProgress.total}</span>
             </div>
         )}
         <div className="flex-1 overflow-auto">
             <ErrorBoundary>
               <Suspense fallback={<div className="flex items-center justify-center h-full text-space-violet"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
-                {activeTab === 'dashboard' && (
-                <Dashboard setActiveTab={setActiveTab} onOpenPalette={() => setPaletteOpen(true)} />
-                )}
-                {activeTab === 'staging' && (
-                <StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />
-                )}
-                {activeTab === 'collection' && (
-                <CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />
-                )}
-                {activeTab === 'insights' && (
-                <Insights />
-                )}
-                {activeTab === 'deckbuilder' && (
-                <DeckBuilder />
-                )}
-                {activeTab === 'wishlist' && (
-                <Wishlist />
-                )}
-                {activeTab === 'deals' && (
-                <Deals />
-                )}
-                {activeTab === 'settings' && (
-                <Settings />
-                )}
+                <Routes>
+                  <Route path="/" element={<Navigate to="/start" replace />} />
+                  <Route path="/start" element={<Dashboard onOpenPalette={() => setPaletteOpen(true)} />} />
+                  <Route path="/scannen" element={<StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />} />
+                  <Route path="/sammlung/karten" element={<CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />} />
+                  <Route path="/sammlung/wunschliste" element={<Wishlist />} />
+                  <Route path="/sammlung/sets" element={<div className="h-full"><SetCompletion /></div>} />
+                  <Route path="/sammlung/decks" element={<DeckBuilder />} />
+                  <Route path="/deals" element={<Deals />} />
+                  <Route path="/insights" element={<Insights />} />
+                  <Route path="/einstellungen" element={<Settings />} />
+                  <Route path="*" element={<Navigate to="/start" replace />} />
+                </Routes>
               </Suspense>
             </ErrorBoundary>
         </div>
       </main>
       <Suspense fallback={null}>
-        {paletteOpen && <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} setActiveTab={setActiveTab} />}
+        {paletteOpen && <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />}
       </Suspense>
     </div>
   );

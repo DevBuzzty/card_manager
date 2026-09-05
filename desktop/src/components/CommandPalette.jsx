@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, Layers, Library, TrendingUp, BookOpen, Heart, CornerDownLeft } from 'lucide-react';
 import CardDetailModal from './CardDetailModal';
+import { ROUTES } from '../utils/routes';
 
-export default function CommandPalette({ open, onClose, setActiveTab }) {
+export default function CommandPalette({ open, onClose }) {
   const [query, setQuery] = useState('');
   const [cards, setCards] = useState([]);
   const [sel, setSel] = useState(0);
@@ -28,13 +30,14 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
   });
   const grouped = Object.values(groupedMap);
 
-  const go = (tab) => { setActiveTab(tab); onClose(); };
+  const navigate = useNavigate();
+  const go = (to) => { navigate(to); onClose(); };
   const actions = [
-    { id: 'a-scan', label: 'Start Scanning', icon: Layers, run: () => go('staging') },
-    { id: 'a-collection', label: 'Open Collection', icon: Library, run: () => go('collection') },
-    { id: 'a-insights', label: 'Open Insights', icon: TrendingUp, run: () => go('insights') },
-    { id: 'a-decks', label: 'Open Deck Builder', icon: BookOpen, run: () => go('deckbuilder') },
-    { id: 'a-wishlist', label: 'Open Wishlist', icon: Heart, run: () => go('wishlist') },
+    { id: 'a-scan', label: 'Scannen', icon: Layers, run: () => go(ROUTES.scannen) },
+    { id: 'a-collection', label: 'Sammlung öffnen', icon: Library, run: () => go(ROUTES.karten) },
+    { id: 'a-insights', label: 'Insights öffnen', icon: TrendingUp, run: () => go(ROUTES.insights) },
+    { id: 'a-decks', label: 'Decks öffnen', icon: BookOpen, run: () => go(ROUTES.decks) },
+    { id: 'a-wishlist', label: 'Wunschliste öffnen', icon: Heart, run: () => go(ROUTES.wunschliste) },
   ];
 
   const q = query.trim().toLowerCase();
@@ -84,7 +87,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
             ref={inputRef}
             value={query}
             onChange={e => { setQuery(e.target.value); setSel(0); }}
-            placeholder="Jump to a card, set or action…"
+            placeholder="Karte, Set oder Aktion suchen…"
             className="flex-1 bg-transparent outline-none text-ink text-base"
           />
           <span className="font-mono text-[10px] text-ink-faint border border-line rounded px-1.5 py-0.5">ESC</span>
@@ -92,7 +95,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
 
         <div className="max-h-[52vh] overflow-y-auto custom-scrollbar py-2">
           {actionResults.length > 0 && (
-            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-2 pb-1">Actions</div>
+            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-2 pb-1">Aktionen</div>
           )}
           {actionResults.map((a, i) => (
             <button key={a.id} onMouseEnter={() => setSel(i)} onClick={() => runItem({ type: 'action', ...a })} className={rowClass(i === sel)}>
@@ -102,7 +105,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
           ))}
 
           {cardResults.length > 0 && (
-            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-3 pb-1">Cards</div>
+            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-3 pb-1">Karten</div>
           )}
           {cardResults.map((c, ci) => {
             const i = actionResults.length + ci;
@@ -121,10 +124,10 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
           })}
 
           {q && flat.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-ink-faint">No matches.</div>
+            <div className="px-4 py-8 text-center text-sm text-ink-faint">Keine Treffer.</div>
           )}
           {!q && (
-            <div className="px-4 py-2 text-[11px] text-ink-faint">Type to search your collection…</div>
+            <div className="px-4 py-2 text-[11px] text-ink-faint">Tippen, um die Sammlung zu durchsuchen…</div>
           )}
         </div>
       </div>
