@@ -68,3 +68,15 @@ desktop; the cloud never changes the mapping.
 3. `price_history_schema.sql`
 
 The desktop backfills copies and pushes them on its next sync.
+
+**Rollout order:** apply the cloud SQL first (steps 1-3 above), then run the updated desktop
+build — it backfills `card_copies` locally and pushes them on its next sync — then install the
+updated phone build. An old phone build still PATCHes `cards.quantity` directly; the new desktop
+and cloud triggers simply ignore that field, so an out-of-order phone update is harmless, just
+inert until the phone is updated too.
+
+**Restoring an old backup:** restoring a pre-Spec-A `cards.db` (no `card_copies` rows) makes the
+desktop re-run the backfill on next launch. If the cloud already holds copies for that
+collection (e.g. sync had already delivered the Spec A migration before the restore), the next
+pull would double them up. Restore only with sync disabled, and clear `card_copies` in the cloud
+first — or ask for a reconcile before re-enabling sync.
