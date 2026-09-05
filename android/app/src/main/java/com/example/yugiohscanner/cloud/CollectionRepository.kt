@@ -56,6 +56,36 @@ object CollectionRepository {
         out
     }
 
+    // Single-page fetch of one card's printings, for the detail screen — avoids paging through
+    // (and re-parsing) the whole collection just to refresh one card.
+    suspend fun loadCardsFor(cardId: String): List<CardRow> = withContext(Dispatchers.IO) {
+        val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "*")
+            .addQueryParameter("id", "eq.$cardId")
+            .addQueryParameter("deleted", "eq.false")
+            .addQueryParameter("quantity", "gt.0")
+            .build()
+        executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
+            val text = resp.body?.string() ?: "[]"
+            if (!resp.isSuccessful) throw RuntimeException("Laden fehlgeschlagen (${resp.code}): $text")
+            parse(JSONArray(text))
+        }
+    }
+
+    // Single-page fetch of one card's live copies, for the detail screen.
+    suspend fun loadCopiesFor(cardId: String): List<CopyRow> = withContext(Dispatchers.IO) {
+        val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "copy_id,card_id,set_code,language,rarity,edition,condition,deleted")
+            .addQueryParameter("card_id", "eq.$cardId")
+            .addQueryParameter("deleted", "eq.false")
+            .build()
+        executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
+            val text = resp.body?.string() ?: "[]"
+            if (!resp.isSuccessful) throw RuntimeException("Exemplare laden fehlgeschlagen (${resp.code}): $text")
+            parseCopies(JSONArray(text))
+        }
+    }
+
     private fun auth(b: Request.Builder) = b
         .addHeader("apikey", SupabaseCloud.key())
         .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")

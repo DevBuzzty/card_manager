@@ -45,8 +45,8 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
 
     // Reload this card's printings and copies from the cloud after a mutation, and tell the parent to refresh.
     suspend fun refresh() {
-        printings = CollectionRepository.loadCards().filter { it.id == cardId }
-        copies = CollectionRepository.loadCopies().filter { it.cardId == cardId }
+        printings = CollectionRepository.loadCardsFor(cardId)
+        copies = CollectionRepository.loadCopiesFor(cardId)
         onChanged()
     }
 
@@ -117,7 +117,7 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
                         RarityChip(v.rarity)
                         Text(v.setCode, style = MaterialTheme.typography.bodyMedium, fontFamily = MonoFontFamily, color = Muted, modifier = Modifier.weight(1f))
                         ValueText(Valuation.valueOf(v.price, mine), style = MaterialTheme.typography.bodyMedium)
-                        IconButton(onClick = { scope.launch { try { CollectionRepository.softDelete(v); error = null; refresh() } catch (e: Exception) { error = e.message } } }) {
+                        IconButton(enabled = migrated, onClick = { scope.launch { try { CollectionRepository.softDelete(v); error = null; refresh() } catch (e: Exception) { error = e.message } } }) {
                             Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error)
                         }
                     }
