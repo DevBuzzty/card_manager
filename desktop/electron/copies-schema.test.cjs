@@ -85,3 +85,13 @@ test('backfill creates quantity copies once, with defaults, and is guarded', () 
   assert.deepStrictEqual(second, { created: 0, skipped: true });
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM card_copies').get().n, 3);
 });
+
+test('backfill skips (rather than double-counting) when card_copies already has rows', () => {
+  const db = freshDb(); ensureCopiesSchema(db);
+  db.exec("INSERT INTO cards (id, set_code, language, rarity, quantity, deleted) VALUES ('1','LOB-DE001','DE','Ultra Rare',3,0)");
+  db.prepare("INSERT INTO card_copies (copy_id, card_id, set_code, language, rarity, edition, condition) VALUES ('pre-existing','1','LOB-DE001','DE','Ultra Rare','unknown','NM')").run();
+  const result = backfillCopies(db);
+  assert.deepStrictEqual(result, { created: 0, skipped: true, reason: 'copies_present' });
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM card_copies').get().n, 1, 'no new copies were created');
+  assert.equal(db.prepare("SELECT value FROM settings WHERE key='copies_migrated'").get().value, '1');
+});

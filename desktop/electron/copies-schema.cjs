@@ -85,6 +85,16 @@ function ensureCopiesSchema(db) {
 // One-time, desktop-only: `quantity` copies per live printing with the defaults. Guarded.
 function backfillCopies(db) {
   if (getSetting(db, 'copies_migrated') === '1') return { created: 0, skipped: true };
+  // A restored pre-Spec-A cards.db (or a machine whose sync already pulled copies from the
+  // cloud before this backfill ran locally) can already have card_copies rows even though the
+  // copies_migrated flag is unset. Backfilling on top would double-count every printing, so
+  // bail out and just mark the flag instead.
+  const existing = db.prepare('SELECT COUNT(*) AS n FROM card_copies').get().n;
+  if (existing > 0) {
+    console.warn(`[copies-schema] skipping backfill: card_copies already has ${existing} row(s)`);
+    setSetting(db, 'copies_migrated', '1');
+    return { created: 0, skipped: true, reason: 'copies_present' };
+  }
   const rows = db.prepare('SELECT id, set_code, language, rarity, quantity FROM cards WHERE deleted = 0 AND quantity > 0').all();
   const ins = db.prepare(`INSERT INTO card_copies (copy_id, card_id, set_code, language, rarity, edition, condition, updated_at)
     VALUES (@copy_id, @card_id, @set_code, @language, @rarity, 'unknown', 'NM', CURRENT_TIMESTAMP)`);
