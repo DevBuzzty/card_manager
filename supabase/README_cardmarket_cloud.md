@@ -57,3 +57,7 @@ the same `trend` → its "only if changed" guard skips the row → nothing is pu
 (`price_locked = 2`) are skipped everywhere.
 Prices are per Cardmarket product (`cm_product_id`), i.e. per printing+rarity as resolved on the
 desktop; the cloud never changes the mapping.
+
+## Spec A (2026-09): price history
+
+`apply_cardmarket_prices` now also upserts one `price_history` row (source `cloud`, variant `base`, today) per card whose price changed. Apply `card_copies_schema.sql` then `price_history_schema.sql` once; the desktop backfills copies and pushes them on its next sync.
