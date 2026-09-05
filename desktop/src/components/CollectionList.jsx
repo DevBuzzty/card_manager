@@ -5,6 +5,7 @@ import CardDetailModal from './CardDetailModal';
 import CustomSelect from './CustomSelect';
 import CardTile from './CardTile';
 import { getRarityInfo } from '../utils/rarity.js';
+import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -44,6 +45,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [filterSet, setFilterSet] = useState('All');
   const [filterLang, setFilterLang] = useState('All');
   const [filterRarity, setFilterRarity] = useState('All');
+  const [filterCondition, setFilterCondition] = useState('All');
+  const [filterEdition, setFilterEdition] = useState('All');
   const [segment, setSegment] = useState('all'); // all | unknown | incomplete | foils
   const [segmentBusy, setSegmentBusy] = useState(false);
   const [cmRunning, setCmRunning] = useState(false);
@@ -151,12 +154,15 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       rawCards.forEach(card => {
           if (!groups[card.id]) {
               groups[card.id] = {
-                  ...card, quantity: 0, totalValue: 0, variants: [], maxPrice: 0, newestDate: new Date(0), sets: new Set(), languages: new Set(), rarities: new Set()
+                  ...card, quantity: 0, totalValue: 0, variants: [], maxPrice: 0, newestDate: new Date(0), sets: new Set(), languages: new Set(), rarities: new Set(), conditions: new Set(), editions: new Set(), nonstandard: 0
               };
           }
           const g = groups[card.id];
           g.quantity += (card.quantity || 1);
-          g.totalValue += (card.price || 0) * (card.quantity || 1);
+          g.totalValue += (card.value != null ? card.value : (card.price || 0) * (card.quantity || 1));
+          g.nonstandard = (g.nonstandard || 0) + (card.nonstandard || 0);
+          (card.conditions || '').split(',').filter(Boolean).forEach(x => g.conditions.add(x));
+          (card.editions || '').split(',').filter(Boolean).forEach(x => g.editions.add(x));
           g.variants.push(card);
           if (card.set_code) g.sets.add(card.set_code.split('-')[0]);
           if (card.language) g.languages.add(card.language);
@@ -226,6 +232,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
         if (filterSet !== 'All' && !Array.from(c.sets).includes(filterSet)) return false;
         if (filterLang !== 'All' && !Array.from(c.languages).includes(filterLang)) return false;
         if (filterRarity !== 'All' && !Array.from(c.rarities).includes(filterRarity)) return false;
+        if (filterCondition !== 'All' && !c.conditions.has(filterCondition)) return false;
+        if (filterEdition !== 'All' && !c.editions.has(filterEdition)) return false;
         return true;
       }).sort((a, b) => {
           switch (sortType) {
@@ -239,10 +247,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               default: return 0;
           }
       });
-  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, sortType, segment]);
+  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, segment]);
 
   const clearFilters = () => {
-      setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All'); setFilterRarity('All');
+      setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All'); setFilterRarity('All'); setFilterCondition('All'); setFilterEdition('All');
   };
 
   // Virtualized Grid Cell Renderer
@@ -378,6 +386,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 <CustomSelect value={filterAttribute} onChange={setFilterAttribute} placeholder="Attr" className="w-[120px]" options={[{ value: "All", label: "Attr" }, ...attributes]} />
                 <CustomSelect value={filterRace} onChange={setFilterRace} placeholder="Race" className="w-[130px]" options={[{ value: "All", label: "Race/Type" }, ...races]} />
                 <CustomSelect value={filterRarity} onChange={setFilterRarity} placeholder="Rarity" className="w-[130px]" options={[{ value: "All", label: "Rarity" }, ...rarities]} />
+                <CustomSelect value={filterCondition} onChange={setFilterCondition} placeholder="Zustand" className="w-[110px]" options={[{ value: 'All', label: 'Zustand' }, ...CONDITIONS.map(c => ({ value: c, label: c }))]} />
+                <CustomSelect value={filterEdition} onChange={setFilterEdition} placeholder="Edition" className="w-[120px]" options={[{ value: 'All', label: 'Edition' }, ...EDITIONS.map(e => ({ value: e, label: EDITION_LABELS[e] }))]} />
                 <CustomSelect value={filterSet} onChange={setFilterSet} placeholder="Set" className="w-[120px]" options={[{ value: "All", label: "Set" }, ...sets]} />
                 <CustomSelect value={sortType} onChange={setSortType} placeholder="Sort" className="w-[160px]" options={[{ value: "newest", label: "Neueste" }, { value: "total", label: "Wert (gesamt)" }, { value: "price", label: "Preis (Einzel)" }, { value: "name", label: "Name" }, { value: "atk", label: "ATK" }, { value: "def", label: "DEF" }, { value: "level", label: "Level" }]} />
                 <button onClick={clearFilters} className="p-2 text-gray-500 hover:text-red-400"><FilterX className="w-4 h-4" /></button>

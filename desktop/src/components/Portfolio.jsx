@@ -43,7 +43,7 @@ export default function Portfolio() {
 
         // Process Top Assets (Equity = Price * Quantity)
         const assets = collection
-            .map(c => ({ ...c, equity: (c.price || 0) * (c.quantity || 1) }))
+            .map(c => ({ ...c, equity: c.value != null ? c.value : (c.price || 0) * (c.quantity || 1) }))
             .sort((a, b) => b.equity - a.equity)
             .slice(0, 100);
         setTopAssets(assets);
@@ -56,7 +56,7 @@ export default function Portfolio() {
                        : c.type?.includes('Trap') ? 'Trap'
                        : 'Other';
             if (!typeMap[type]) typeMap[type] = 0;
-            typeMap[type] += (c.price || 0) * (c.quantity || 1);
+            typeMap[type] += c.value != null ? c.value : (c.price || 0) * (c.quantity || 1);
         });
 
         const allocData = Object.keys(typeMap).map(k => ({ name: k, value: typeMap[k] }));

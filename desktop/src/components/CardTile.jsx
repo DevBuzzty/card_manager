@@ -1,9 +1,11 @@
 import { getFrameColor, getRarityInfo } from '../utils/rarity.js';
+import { fmtEUR } from '../utils/format';
 
 export default function CardTile({ card, onClick }) {
   const frame = getFrameColor(card.type);
   const qty = card.quantity || 1;
-  const total = card.totalValue != null ? card.totalValue : (card.price || 0) * qty;
+  const total = card.totalValue != null ? card.totalValue
+              : (card.value != null ? card.value : (card.price || 0) * qty);
 
   // Per-printing breakdown (the grouped collection view passes `variants`); fall back to a
   // single synthetic row so the tile still works if fed an ungrouped card.
@@ -40,6 +42,9 @@ export default function CardTile({ card, onClick }) {
             ×{qty}
           </span>
         )}
+        {card.nonstandard > 0 && (
+          <span className="absolute top-2 left-2 z-10 w-2 h-2 rounded-full bg-gold shadow-[0_0_6px_#F5C542]" title={`${card.nonstandard} Exemplar(e) mit abweichendem Zustand/Edition`} />
+        )}
 
         {/* All owned rarities */}
         <div className="absolute bottom-2 left-2 right-2 z-10 flex flex-wrap gap-1">
@@ -64,7 +69,7 @@ export default function CardTile({ card, onClick }) {
         <h4 className="text-xs font-bold text-ink leading-tight truncate">{card.name}</h4>
         <div className="flex justify-between items-center mt-1 mb-1.5">
           <span className="text-[9px] uppercase tracking-wide text-ink-faint font-display">Gesamt</span>
-          <span className="font-mono text-[12px] font-bold text-gold">€{total.toFixed(2)}</span>
+          <span className="font-mono text-[12px] font-bold text-gold">{fmtEUR(total)}</span>
         </div>
         {/* Per-set breakdown: set code · quantity · unit price */}
         <div className="space-y-0.5">
