@@ -111,4 +111,38 @@ function backfillCopies(db) {
   return { created, skipped: false };
 }
 
-module.exports = { ensureCopiesSchema, backfillCopies };
+// Repair pass for printings whose cached `quantity` is higher than their live copy count. That
+// gap can only come from a pre-Spec-A writer: a scan committed by an older desktop build, an old
+// phone build PATCHing `quantity`, or a cloud row pulled before the copies stream existed. Those
+// cards would otherwise be worth nothing in the valuation and be uneditable on the phone (the
+// not-migrated guard). Creates the missing copies with the migration defaults.
+//
+// One-time and guarded, like the backfill: re-running it against a cloud that already holds those
+// copies would double-count them.
+function reconcileCopies(db) {
+  if (getSetting(db, 'copies_reconciled') === '1') return { created: 0, skipped: true };
+  const gaps = db.prepare(`
+    SELECT c.id, c.set_code, c.language, c.rarity, c.quantity,
+           (SELECT COUNT(*) FROM card_copies cp
+             WHERE cp.card_id = c.id AND cp.set_code = c.set_code
+               AND cp.language = c.language AND cp.rarity = c.rarity AND cp.deleted = 0) AS copies
+      FROM cards c WHERE c.deleted = 0 AND c.quantity > 0`).all()
+    .filter(r => r.quantity > r.copies);
+  const ins = db.prepare(`INSERT INTO card_copies (copy_id, card_id, set_code, language, rarity, edition, condition, updated_at)
+    VALUES (@copy_id, @card_id, @set_code, @language, @rarity, 'unknown', 'NM', CURRENT_TIMESTAMP)`);
+  let created = 0;
+  db.transaction(() => {
+    for (const r of gaps) {
+      // The recount trigger rewrites cards.quantity after every insert, so the number of copies to
+      // create comes from the snapshot taken above, never from the live row.
+      for (let i = 0; i < r.quantity - r.copies; i++) {
+        ins.run({ copy_id: crypto.randomUUID(), card_id: String(r.id), set_code: r.set_code, language: r.language || 'DE', rarity: r.rarity || 'Unknown' });
+        created++;
+      }
+    }
+    setSetting(db, 'copies_reconciled', '1');
+  })();
+  return { created, skipped: false, printings: gaps.length };
+}
+
+module.exports = { ensureCopiesSchema, backfillCopies, reconcileCopies };

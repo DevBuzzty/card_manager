@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const Database = require('better-sqlite3');
-const { ensureCopiesSchema, backfillCopies } = require('./copies-schema.cjs');
+const { ensureCopiesSchema, backfillCopies, reconcileCopies } = require('./copies-schema.cjs');
 
 // Minimal replica of the live cards/settings tables (4-col PK, as after the rarity migration).
 function freshDb() {
@@ -94,4 +94,28 @@ test('backfill skips (rather than double-counting) when card_copies already has 
   assert.deepStrictEqual(result, { created: 0, skipped: true, reason: 'copies_present' });
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM card_copies').get().n, 1, 'no new copies were created');
   assert.equal(db.prepare("SELECT value FROM settings WHERE key='copies_migrated'").get().value, '1');
+});
+
+test('reconcile creates only the missing copies of a printing, once', () => {
+  const db = freshDb(); ensureCopiesSchema(db);
+  // Two printings written by a pre-Spec-A build: one partially covered (qty 3, 1 copy),
+  // one not covered at all (qty 2, no copies). A third is already consistent.
+  db.exec(`INSERT INTO cards (id, set_code, language, rarity, quantity, deleted) VALUES
+           ('1','LOB-DE001','DE','Ultra Rare',3,0), ('2','SDK-DE002','DE','Common',2,0), ('3','X-3','DE','Common',0,0)`);
+  db.prepare("INSERT INTO card_copies (copy_id, card_id, set_code, language, rarity, edition, condition) VALUES ('a','1','LOB-DE001','DE','Ultra Rare','first','GD')").run();
+  db.prepare("UPDATE cards SET quantity = 3 WHERE id = '1'").run();   // the trigger recount is what a legacy writer overrode
+  db.prepare("INSERT INTO card_copies (copy_id, card_id, set_code, language, rarity, edition, condition) VALUES ('c','3','X-3','DE','Common','unknown','NM')").run();
+
+  const first = reconcileCopies(db);
+  assert.equal(first.created, 4, '2 missing on the partial printing + 2 on the uncovered one');
+  assert.equal(first.printings, 2);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM card_copies WHERE card_id='1' AND deleted=0").get().n, 3);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM card_copies WHERE card_id='2' AND deleted=0").get().n, 2);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM card_copies WHERE card_id='1' AND edition='first'").get().n, 1, 'the existing copy keeps its edition/condition');
+  assert.equal(db.prepare("SELECT quantity FROM cards WHERE id='1'").get().quantity, 3, 'quantity ends up matching the copies');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM card_copies WHERE card_id='3'").get().n, 1, 'a consistent printing is untouched');
+
+  const second = reconcileCopies(db);
+  assert.deepStrictEqual(second, { created: 0, skipped: true }, 'guarded: never runs twice');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM card_copies').get().n, 6);
 });

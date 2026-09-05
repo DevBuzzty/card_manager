@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
-const { ensureCopiesSchema, backfillCopies } = require('./copies-schema.cjs');
+const { ensureCopiesSchema, backfillCopies, reconcileCopies } = require('./copies-schema.cjs');
 
 let db;
 
@@ -277,6 +277,8 @@ function runMigrations() {
         ensureCopiesSchema(db);
         const bf = backfillCopies(db);
         if (!bf.skipped) console.log(`Copies backfill: created ${bf.created} copies from quantities.`);
+        const rc = reconcileCopies(db);
+        if (!rc.skipped && rc.created > 0) console.log(`Copies reconcile: created ${rc.created} missing copies across ${rc.printings} printing(s).`);
     } catch (e) {
         console.log("Migration check failed or not needed", e);
     }
