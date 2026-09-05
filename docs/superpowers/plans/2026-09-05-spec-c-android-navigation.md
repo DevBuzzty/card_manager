@@ -17,7 +17,7 @@
 - Kotlin 2.0.0 / AGP 8.2.2 / compileSdk 34: add no dependency other than the navigation artifact named above.
 - Verification for every task: `./gradlew :app:compileDebugKotlin` and `./gradlew :app:testDebugUnitTest` from `android/` must both be BUILD SUCCESSFUL. There is no Compose UI test harness in this project — behaviour is verified on the device by the controller/user at the end of each task, not by the implementer.
 - `adb devices` may list a phone (`22X0219322003405`). Run `./gradlew :app:installDebug` only when a task's step says so.
-- Secrets: `android/local.properties` is git-ignored and holds `sdk.dir`; Task A2 adds `supabase.url` / `supabase.key` there. Never commit real values; `local.properties.example` documents the keys.
+- Secrets: `android/local.properties` is git-ignored and holds `sdk.dir`; Task 2 adds `supabase.url` / `supabase.key` there. Never commit real values; `local.properties.example` documents the keys.
 - Commit style: `feat(android): …` / `refactor(android): …`, one commit per task, message ending with the trailer `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 
 ## File Structure
@@ -35,11 +35,11 @@
 | `.../ui/CardDetailScreen.kt` | Order per Spec C §5.7 (image, name, printing line, price, Deine Exemplare, weiteres Printing, collapsed text/stats), heart in the top bar. |
 | `.../ui/SettingsScreen.kt` | Konto · Desktop-Verbindung · Preise · Standards · Über. |
 | `.../ui/WishlistScreen.kt`, `SetCompletionScreen.kt`, `DecksScreen.kt` | `onClose` becomes optional so they can render inside a segment without a back arrow. |
-| `android/app/build.gradle.kts` | navigation-compose; `buildConfigField`s (Task A2). |
+| `android/app/build.gradle.kts` | navigation-compose; `buildConfigField`s (Task 2). |
 
 ---
 
-### Task A1: NavHost, four tabs, Sammlung segments, no more "Mehr"
+### Task 1: NavHost, four tabs, Sammlung segments, no more "Mehr"
 
 **Files:**
 - Create: `.../ui/AppNav.kt`, `.../ui/SammlungScreen.kt`
@@ -49,7 +49,7 @@
 **Interfaces:**
 - Produces `object Routes { const val START = "start"; const val SAMMLUNG = "sammlung/{segment}"; const val SCAN = "scan"; const val DEALS = "deals"; const val EINSTELLUNGEN = "einstellungen"; const val SUCHE = "suche"; fun sammlung(segment: String) = "sammlung/$segment" }` — segments: `karten`, `wunschliste`, `sets`, `decks`.
 - Produces `@Composable fun AppNav()` — the whole shell; `MainActivity.setContent { YuGiOhScannerTheme { AppNav() } }`.
-- Card detail, set detail and deck detail stay **inside** their hosting screens for now (they are already implemented that way after Spec A); Task A6 does not change that either. Only the top-level structure becomes routed.
+- Card detail, set detail and deck detail stay **inside** their hosting screens for now (they are already implemented that way after Spec A); Task 6 does not change that either. Only the top-level structure becomes routed.
 - `CollectionScreen`, `WishlistScreen`, `SetCompletionScreen`, `DecksScreen` render inside the Sammlung segment host and must not draw their own page title or back arrow.
 
 - [ ] **Step 1: Dependency**
@@ -140,7 +140,7 @@ fun AppNav() {
             startDestination = Routes.START,
             modifier = Modifier.padding(if (showBar) padding else PaddingValues(0.dp)),
         ) {
-            // Task A4 replaces this with StartScreen and drops the temporary "wert" destination;
+            // Task 4 replaces this with StartScreen and drops the temporary "wert" destination;
             // until then the existing Übersicht keeps working and Wert stays reachable from it.
             composable(Routes.START) {
                 if (cloudReady) UebersichtScreen(
@@ -161,13 +161,13 @@ fun AppNav() {
                     onOpenSuche = { nav.navigate(Routes.SUCHE) },
                 ) else CloudLoginScreen(prefs) { cloudReady = true }
             }
-            // Task A3 swaps this for ScanScreen(onClose = …); the existing MainScreen already
+            // Task 3 swaps this for ScanScreen(onClose = …); the existing MainScreen already
             // owns the permission gate, the socket and the camera, so nothing regresses here.
             composable(Routes.SCAN) { MainScreen() }
             composable(Routes.DEALS) {
                 if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { cloudReady = true }
             }
-            // Task A6 gives SettingsScreen its own back arrow (onBack); today it has none.
+            // Task 6 gives SettingsScreen its own back arrow (onBack); today it has none.
             composable(Routes.EINSTELLUNGEN) {
                 SettingsScreen(prefs) { cloudReady = false; nav.popBackStack() }
             }
@@ -285,7 +285,7 @@ In `WishlistScreen.kt`, `SetCompletionScreen.kt` and `DecksScreen.kt`: change th
 
 - [ ] **Step 5: MainActivity shrinks**
 
-Delete only the old shell from `MainActivity.kt`: `enum class Tab`, `MainScaffold`, its private `AppBottomBar` and `NavItem`. `MainScreen`, `ConfigScreen`, `ScannerScreen` and `CardAnalyzer` stay exactly as they are — Task A3 moves the camera into its own file and deletes them there. Delete `ui/MoreScreen.kt`.
+Delete only the old shell from `MainActivity.kt`: `enum class Tab`, `MainScaffold`, its private `AppBottomBar` and `NavItem`. `MainScreen`, `ConfigScreen`, `ScannerScreen` and `CardAnalyzer` stay exactly as they are — Task 3 moves the camera into its own file and deletes them there. Delete `ui/MoreScreen.kt`.
 
 Set the activity's content to the new shell:
 ```kotlin
@@ -311,7 +311,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task A2: Login with e-mail and password only
+### Task 2: Login with e-mail and password only
 
 **Files:**
 - Modify: `android/app/build.gradle.kts`, `.../ui/CloudLoginScreen.kt`, `.../cloud/SupabaseCloud.kt`
@@ -428,11 +428,11 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task A3: Scan screen — camera chrome and the review sheet
+### Task 3: Scan screen — camera chrome and the review sheet
 
 **Files:**
 - Create: `.../ui/ScanScreen.kt` (the camera composable moves here from `MainActivity.kt`)
-- Modify: `.../MainActivity.kt` (delete `ScannerScreen`, the history state and the bridge from Task A1), `.../ui/ScanStagingScreen.kt` (becomes the sheet's content)
+- Modify: `.../MainActivity.kt` (delete `ScannerScreen`, the history state and the bridge from Task 1), `.../ui/ScanStagingScreen.kt` (becomes the sheet's content)
 
 **Interfaces:**
 - `@Composable fun ScanScreen(onClose: () -> Unit)` — owns the camera permission gate, the socket auto-connect, the ML pipeline wiring (all moved verbatim), the staging list and the sheet.
@@ -566,7 +566,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task A4: Start screen
+### Task 4: Start screen
 
 **Files:**
 - Create: `.../ui/StartScreen.kt`
@@ -615,7 +615,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task A5: Sammlung › Karten — search, filters, grid
+### Task 5: Sammlung › Karten — search, filters, grid
 
 **Files:**
 - Modify: `.../ui/CollectionScreen.kt`
@@ -720,13 +720,13 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task A6: Card detail order, settings sections, vocabulary sweep
+### Task 6: Card detail order, settings sections, vocabulary sweep
 
 **Files:**
 - Modify: `.../ui/CardDetailScreen.kt`, `.../ui/SettingsScreen.kt`, plus every screen still holding an English string
 
 **Interfaces:**
-- `SettingsScreen(prefs, onBack: () -> Unit, onLoggedOut: () -> Unit)` — gains the back arrow it needs as a routed destination (Task A1 already calls it that way).
+- `SettingsScreen(prefs, onBack: () -> Unit, onLoggedOut: () -> Unit)` — gains the back arrow it needs as a routed destination (Task 1 already calls it that way).
 - Card detail order per Spec C §5.7: image → name → `Set-Code · Rarity · Sprache` → price → **Deine Exemplare** → **Weiteres Printing hinzufügen** → collapsed **Kartentext** and **Stats**; back arrow left, wishlist heart right.
 
 - [ ] **Step 1: Card detail**
