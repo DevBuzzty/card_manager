@@ -54,7 +54,7 @@ private fun groupCards(cards: List<CardRow>, byKey: Map<String, List<CopyRow>>):
     }
 
 @Composable
-fun CollectionScreen() {
+fun CollectionScreen(onOpenSuche: () -> Unit) {
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
     var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
     var query by remember { mutableStateOf("") }
@@ -62,7 +62,6 @@ fun CollectionScreen() {
     var loading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var detailId by remember { mutableStateOf<String?>(null) }
-    var showSearch by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     suspend fun reload() {
@@ -74,11 +73,7 @@ fun CollectionScreen() {
         try { reload() } catch (e: Exception) { errorMsg = e.message ?: "Laden fehlgeschlagen"; loading = false }
     }
 
-    // Full-screen sub-views take over the whole tab.
-    if (showSearch) {
-        SearchScreen(onClose = { showSearch = false }, onAdded = { scope.launch { runCatching { reload() } } })
-        return
-    }
+    // Full-screen sub-view takes over the whole tab.
     detailId?.let { id ->
         CardDetailScreen(
             cardId = id,
@@ -131,7 +126,7 @@ fun CollectionScreen() {
             }
         }
         FloatingActionButton(
-            onClick = { showSearch = true },
+            onClick = onOpenSuche,
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),

@@ -48,7 +48,7 @@ import com.example.yugiohscanner.ui.theme.ErrorColor
 private data class SetProgress(val name: String, val prefix: String, val owned: Int, val total: Int)
 
 @Composable
-fun SetCompletionScreen(onClose: () -> Unit) {
+fun SetCompletionScreen(onClose: (() -> Unit)? = null) {
     var rows by remember { mutableStateOf<List<SetProgress>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -80,19 +80,20 @@ fun SetCompletionScreen(onClose: () -> Unit) {
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück", tint = OnSurface)
+            if (onClose != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück", tint = OnSurface)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "Set-Vervollständigung",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = OnSurface,
+                    )
                 }
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    "Set-Vervollständigung",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = OnSurface,
-                )
+                Spacer(Modifier.height(12.dp))
             }
-
-            Spacer(Modifier.height(12.dp))
             when {
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Primary)

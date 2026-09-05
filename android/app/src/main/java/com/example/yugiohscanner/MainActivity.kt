@@ -47,7 +47,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.CenterFocusWeak
 import androidx.compose.material.icons.filled.Close
@@ -56,10 +55,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
@@ -71,8 +67,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -98,28 +92,15 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.yugiohscanner.cloud.CardSearchRepository
 import com.example.yugiohscanner.cloud.PrintingRepository
 import com.example.yugiohscanner.cloud.SetCodeMatch
-import com.example.yugiohscanner.cloud.SupabaseCloud
+import com.example.yugiohscanner.ui.AppNav
 import com.example.yugiohscanner.ui.ScanStagingEntry
 import com.example.yugiohscanner.ui.ScanStagingScreen
 import com.example.yugiohscanner.ui.theme.AppTheme
 import kotlinx.coroutines.launch
-import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
-import com.example.yugiohscanner.ui.theme.SurfaceColor
-import com.example.yugiohscanner.ui.CloudLoginScreen
-import com.example.yugiohscanner.ui.CollectionScreen
-import com.example.yugiohscanner.ui.DealsScreen
-import com.example.yugiohscanner.ui.PortfolioScreen
-import com.example.yugiohscanner.ui.MoreScreen
-import com.example.yugiohscanner.ui.UebersichtScreen
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -137,93 +118,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Per-passcode disk cache for card lookups + the set-code union, so re-scanning is instant.
         com.example.yugiohscanner.cloud.ScanCache.init(this)
-        setContent {
-            AppTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    MainScaffold()
-                }
-            }
-        }
-    }
-}
-
-enum class Tab { HOME, SCANNER, COLLECTION, PORTFOLIO, DEALS, SETTINGS }
-
-@Composable
-fun MainScaffold() {
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE) }
-    var tab by remember { mutableStateOf(Tab.HOME) }   // land on the Übersicht dashboard
-    var cloudReady by remember { mutableStateOf(false) }
-
-    // Auto-init cloud if already configured from a previous session.
-    LaunchedEffect(Unit) {
-        if (SupabaseCloud.isConfigured(prefs)) {
-            try { SupabaseCloud.init(prefs); SupabaseCloud.signIn(); cloudReady = true } catch (_: Exception) {}
-        }
-    }
-
-    Scaffold(
-        bottomBar = { AppBottomBar(current = tab, onSelect = { tab = it }) }
-    ) { padding ->
-        Box(Modifier.padding(padding)) {
-            when (tab) {
-                Tab.HOME -> if (cloudReady) UebersichtScreen(
-                        onOpenWert = { tab = Tab.PORTFOLIO }, onOpenScan = { tab = Tab.SCANNER },
-                        onOpenDeals = { tab = Tab.DEALS }, onOpenSammlung = { tab = Tab.COLLECTION })
-                    else CloudLoginScreen(prefs) { cloudReady = true }
-                Tab.SCANNER -> MainScreen() // existing scanner+config flow, untouched
-                Tab.COLLECTION -> if (cloudReady) CollectionScreen()
-                    else CloudLoginScreen(prefs) { cloudReady = true }
-                Tab.PORTFOLIO -> if (cloudReady) PortfolioScreen()
-                    else CloudLoginScreen(prefs) { cloudReady = true }
-                Tab.DEALS -> if (cloudReady) DealsScreen()
-                    else CloudLoginScreen(prefs) { cloudReady = true }
-                Tab.SETTINGS -> MoreScreen(prefs, onOpenWert = { tab = Tab.PORTFOLIO }) { cloudReady = false }
-            }
-        }
-    }
-}
-
-// Bottom bar with a raised center Scan button: Sammlung · Wert · ⦿Scan⦿ · Deals · Mehr.
-@Composable
-private fun AppBottomBar(current: Tab, onSelect: (Tab) -> Unit) {
-    Box(Modifier.fillMaxWidth().height(84.dp)) {
-        Surface(
-            modifier = Modifier.fillMaxWidth().height(64.dp).align(Alignment.BottomCenter),
-            color = SurfaceColor,
-        ) {
-            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                NavItem(Modifier.weight(1f), "Übersicht", Icons.Default.Home, current == Tab.HOME) { onSelect(Tab.HOME) }
-                NavItem(Modifier.weight(1f), "Sammlung", Icons.Default.Style, current == Tab.COLLECTION) { onSelect(Tab.COLLECTION) }
-                Spacer(Modifier.weight(1f))   // gap under the raised Scan button
-                NavItem(Modifier.weight(1f), "Deals", Icons.Default.Sell, current == Tab.DEALS) { onSelect(Tab.DEALS) }
-                NavItem(Modifier.weight(1f), "Mehr", Icons.Default.Settings, current == Tab.SETTINGS) { onSelect(Tab.SETTINGS) }
-            }
-        }
-        Box(
-            modifier = Modifier.align(Alignment.TopCenter).size(60.dp).clip(CircleShape)
-                .background(Primary).clickable { onSelect(Tab.SCANNER) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.CameraAlt, "Scan", tint = Color.White, modifier = Modifier.size(28.dp))
-        }
-    }
-}
-
-@Composable
-private fun NavItem(modifier: Modifier, label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
-    val tint = if (selected) Primary else Muted
-    Column(
-        modifier = modifier.fillMaxHeight().clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(icon, label, tint = tint, modifier = Modifier.size(24.dp))
-        Text(label, color = tint, style = MaterialTheme.typography.labelSmall)
+        setContent { AppTheme { AppNav() } }
     }
 }
 
