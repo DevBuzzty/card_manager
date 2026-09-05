@@ -57,3 +57,26 @@ the same `trend` → its "only if changed" guard skips the row → nothing is pu
 (`price_locked = 2`) are skipped everywhere.
 Prices are per Cardmarket product (`cm_product_id`), i.e. per printing+rarity as resolved on the
 desktop; the cloud never changes the mapping.
+
+## Spec A (2026-09): price history
+
+`apply_cardmarket_prices` now also upserts one `price_history` row (source `cloud`, variant `base`, today) per card whose price changed.
+
+**Apply order (on a fresh project):**
+1. `portfolio_snapshots_schema.sql` (if not yet applied)
+2. `card_copies_schema.sql`
+3. `price_history_schema.sql`
+
+The desktop backfills copies and pushes them on its next sync.
+
+**Rollout order:** apply the cloud SQL first (steps 1-3 above), then run the updated desktop
+build — it backfills `card_copies` locally and pushes them on its next sync — then install the
+updated phone build. An old phone build still PATCHes `cards.quantity` directly; the new desktop
+and cloud triggers simply ignore that field, so an out-of-order phone update is harmless, just
+inert until the phone is updated too.
+
+**Restoring an old backup:** restoring a pre-Spec-A `cards.db` (no `card_copies` rows) makes the
+desktop re-run the backfill on next launch. If the cloud already holds copies for that
+collection (e.g. sync had already delivered the Spec A migration before the restore), the next
+pull would double them up. Restore only with sync disabled, and clear `card_copies` in the cloud
+first — or ask for a reconcile before re-enabling sync.

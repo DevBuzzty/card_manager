@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ui.components.RarityChip
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
@@ -37,14 +39,14 @@ private data class CardGroup(
     val variants: List<CardRow>,
 )
 
-private fun groupCards(cards: List<CardRow>): List<CardGroup> =
+private fun groupCards(cards: List<CardRow>, byKey: Map<String, List<CopyRow>>): List<CardGroup> =
     cards.groupBy { it.id }.map { (id, rows) ->
         CardGroup(
             id = id,
             name = rows.firstOrNull()?.name,
             imageUrl = rows.firstOrNull { !it.imageUrl.isNullOrBlank() }?.imageUrl,
             totalQty = rows.sumOf { it.quantity },
-            totalValue = rows.sumOf { (it.price ?: 0.0) * it.quantity },
+            totalValue = rows.sumOf { printingValue(it, byKey) },
             maxPrice = rows.maxOfOrNull { it.price ?: 0.0 } ?: 0.0,
             rarities = rows.mapNotNull { it.rarity }.distinct(),
             variants = rows.sortedByDescending { it.price ?: 0.0 },
@@ -54,6 +56,7 @@ private fun groupCards(cards: List<CardRow>): List<CardGroup> =
 @Composable
 fun CollectionScreen() {
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
+    var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf("total") } // total | single | name
     var loading by remember { mutableStateOf(true) }
@@ -62,7 +65,11 @@ fun CollectionScreen() {
     var showSearch by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    suspend fun reload() { cards = CollectionRepository.loadCards(); loading = false }
+    suspend fun reload() {
+        cards = CollectionRepository.loadCards()
+        copies = CollectionRepository.loadCopies()
+        loading = false
+    }
     LaunchedEffect(Unit) {
         try { reload() } catch (e: Exception) { errorMsg = e.message ?: "Laden fehlgeschlagen"; loading = false }
     }
@@ -76,14 +83,15 @@ fun CollectionScreen() {
         CardDetailScreen(
             cardId = id,
             initial = cards,
+            initialCopies = copies,
             onClose = { detailId = null },
             onChanged = { scope.launch { runCatching { reload() } } },
         )
         return
     }
 
-    val groups = remember(cards, query, sort) {
-        groupCards(cards)
+    val groups = remember(cards, copies, query, sort) {
+        groupCards(cards, copies.groupBy { it.printingKey() })
             .filter { g ->
                 query.isBlank() || (g.name ?: "").contains(query, true) ||
                     g.variants.any { it.setCode.contains(query, true) }

@@ -64,7 +64,7 @@ export default function Statistics() {
         cards.forEach(c => {
             const q = qty(c);
             totalCards += q;
-            totalValue += (c.price || 0) * q;
+            totalValue += c.value != null ? c.value : (c.price || 0) * q;
 
             const type = c.type?.includes('Monster') ? 'Monster'
                        : c.type?.includes('Spell') ? 'Spell'
@@ -87,7 +87,7 @@ export default function Statistics() {
         });
 
         const topValued = cards
-            .map(c => ({ ...c, equity: (c.price || 0) * qty(c) }))
+            .map(c => ({ ...c, equity: c.value != null ? c.value : (c.price || 0) * qty(c) }))
             .sort((a, b) => b.equity - a.equity)
             .slice(0, 5);
 

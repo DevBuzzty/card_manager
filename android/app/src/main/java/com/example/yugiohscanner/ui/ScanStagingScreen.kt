@@ -38,6 +38,8 @@ class ScanStagingEntry(val id: Long, val passcode: String) {
     var selectedSet by mutableStateOf<SetOption?>(null)
     var quantity by mutableIntStateOf(1)
     var loading by mutableStateOf(true)
+    var edition by mutableStateOf("unknown")
+    var condition by mutableStateOf("NM")
     // Additional printings of the SAME scanned card (e.g. you also have the English print), so you
     // can record them here instead of re-adding them from the collection later.
     val extraPrintings = mutableStateListOf<ExtraPrinting>()
@@ -46,6 +48,8 @@ class ScanStagingEntry(val id: Long, val passcode: String) {
 class ExtraPrinting {
     var selectedSet by mutableStateOf<SetOption?>(null)
     var quantity by mutableIntStateOf(1)
+    var edition by mutableStateOf("unknown")
+    var condition by mutableStateOf("NM")
 }
 
 @Composable
@@ -107,13 +111,14 @@ fun ScanStagingScreen(
                                     setCode = s?.setCode ?: "Unknown",
                                     rarity = s?.rarity ?: "",
                                     language = s?.language ?: "DE",
-                                    quantity = e.quantity,
+                                    edition = e.edition, condition = e.condition,
+                                    count = e.quantity,
                                 )
                                 // Commit each extra printing the user added (skip ones left unpicked).
                                 for (ep in e.extraPrintings) {
                                     val es = ep.selectedSet ?: continue
                                     CollectionRepository.addScanned(
-                                        b, es.setCode, es.rarity, es.language, ep.quantity,
+                                        b, es.setCode, es.rarity, es.language, ep.edition, ep.condition, ep.quantity,
                                     )
                                 }
                             }
@@ -165,6 +170,8 @@ private fun StagingRow(entry: ScanStagingEntry, onDelete: () -> Unit) {
             // Primary printing.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SetPicker(entry.knownSets, entry.selectedSet, { entry.selectedSet = it }, Modifier.weight(1f))
+                Spacer(Modifier.width(6.dp))
+                CopyChip(entry.edition, entry.condition) { e, c -> entry.edition = e; entry.condition = c }
                 Spacer(Modifier.width(8.dp))
                 QtyStepper(entry.quantity) { entry.quantity = it }
             }
@@ -172,6 +179,8 @@ private fun StagingRow(entry: ScanStagingEntry, onDelete: () -> Unit) {
             entry.extraPrintings.forEach { ep ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SetPicker(entry.knownSets, ep.selectedSet, { ep.selectedSet = it }, Modifier.weight(1f))
+                    Spacer(Modifier.width(6.dp))
+                    CopyChip(ep.edition, ep.condition) { e, c -> ep.edition = e; ep.condition = c }
                     Spacer(Modifier.width(8.dp))
                     QtyStepper(ep.quantity) { ep.quantity = it }
                     IconButton(onClick = { entry.extraPrintings.remove(ep) }) {
@@ -179,7 +188,7 @@ private fun StagingRow(entry: ScanStagingEntry, onDelete: () -> Unit) {
                     }
                 }
             }
-            TextButton(onClick = { entry.extraPrintings.add(ExtraPrinting()) }) {
+            TextButton(onClick = { entry.extraPrintings.add(ExtraPrinting().apply { edition = entry.edition; condition = entry.condition }) }) {
                 Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(4.dp))
                 Text("Weitere Druckvariante", color = MaterialTheme.colorScheme.primary,

@@ -14,6 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CardRow
+import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.Valuation
+import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ui.theme.Line
 
 // One row of a breakdown: a label with its card count and summed value.
@@ -47,10 +50,15 @@ private fun typeGroup(type: String?): String = when {
     else -> "Sonstige"
 }
 
+// Value of one printing, from its cached price and the copies actually owned of it.
+internal fun printingValue(c: CardRow, byKey: Map<String, List<CopyRow>>): Double =
+    Valuation.valueOf(c.price, byKey[c.printingKey()] ?: emptyList())
+
 // Groups cards by a key (skipping null keys and cards failing `include`), summing
-// quantity and price*quantity. Returns label -> (count, value), insertion-ordered.
+// quantity and copy-based value. Returns label -> (count, value), insertion-ordered.
 private fun groupCards(
     cards: List<CardRow>,
+    byKey: Map<String, List<CopyRow>>,
     include: (CardRow) -> Boolean = { true },
     keyOf: (CardRow) -> String?,
 ): List<StatGroup> {
@@ -59,28 +67,29 @@ private fun groupCards(
         if (!include(c)) continue
         val k = keyOf(c) ?: continue
         val cur = m[k] ?: (0 to 0.0)
-        m[k] = (cur.first + c.quantity) to (cur.second + (c.price ?: 0.0) * c.quantity)
+        m[k] = (cur.first + c.quantity) to (cur.second + printingValue(c, byKey))
     }
     return m.map { StatGroup(it.key, it.value.first, it.value.second) }
 }
 
 // Pure: derive all dashboard metrics + breakdowns from the loaded collection.
-fun computeDashboard(cards: List<CardRow>): Dashboard {
-    val totalValue = cards.sumOf { (it.price ?: 0.0) * it.quantity }
+fun computeDashboard(cards: List<CardRow>, copies: List<CopyRow>): Dashboard {
+    val byKey = copies.groupBy { it.printingKey() }
+    val totalValue = cards.sumOf { printingValue(it, byKey) }
     val totalCards = cards.sumOf { it.quantity }
-    val top = cards.sortedByDescending { (it.price ?: 0.0) * it.quantity }.take(10)
+    val top = cards.sortedByDescending { printingValue(it, byKey) }.take(10)
 
-    val byRarity = groupCards(cards) { it.rarity ?: "Unbekannt" }
+    val byRarity = groupCards(cards, byKey) { it.rarity ?: "Unbekannt" }
         .sortedBy { rarityRank(if (it.label == "Unbekannt") null else it.label) }
 
     val typeOrder = listOf("Monster", "Zauber", "Falle", "Sonstige")
-    val typeMap = groupCards(cards) { typeGroup(it.type) }.associateBy { it.label }
+    val typeMap = groupCards(cards, byKey) { typeGroup(it.type) }.associateBy { it.label }
     val byType = typeOrder.mapNotNull { typeMap[it] }
 
-    val bySet = groupCards(cards) { it.setCode }
+    val bySet = groupCards(cards, byKey) { it.setCode }
         .sortedByDescending { it.count }.take(10)
 
-    val byAttribute = groupCards(cards, include = { !it.attribute.isNullOrBlank() }) { it.attribute }
+    val byAttribute = groupCards(cards, byKey, include = { !it.attribute.isNullOrBlank() }) { it.attribute }
         .sortedByDescending { it.count }
 
     return Dashboard(totalValue, totalCards, cards.size, top, byRarity, byType, bySet, byAttribute)

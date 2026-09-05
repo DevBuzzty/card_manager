@@ -7,6 +7,7 @@ import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
 import { matchCandidates } from '../utils/setCodeMatch';
 import Flag from './Flag';
+import CopyChip from './CopyChip';
 
 // Merge a card's printings from all sources into ONE flagged list: German (wiki+Konami) + English
 // (YGOPRODeck, with prices) + Japanese (wiki+Konami). Each entry carries its language so the picker
@@ -64,6 +65,8 @@ function PrintingPicker({ printings, selectedSet, onSelect, loading }) {
 export default function StagingArea({ scannedCards, setScannedCards, isUpdating }) {
   const [showRarityGuide, setShowRarityGuide] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [defaults, setDefaults] = useState({ edition: 'unknown', condition: 'NM' });
+  useEffect(() => { window.api?.getDefaults?.().then(d => d && setDefaults(d)); }, []);
 
   const fetchCard = useCallback(async (tempId, passcode) => {
     // Set loading immediately to prevent double fetch
@@ -109,7 +112,9 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 ownedQuantity: result.quantity,
                 selectedSet: c.selectedSet || (apiMatch.set ? { ...apiMatch.set, language: 'EN' } : (enPrintings[0] || null)),
                 setAutoDetected: apiMatch.confidence !== 'none',
-                setMatchConfidence: apiMatch.confidence
+                setMatchConfidence: apiMatch.confidence,
+                edition: c.edition || c.presetEdition || defaults.edition,
+                condition: c.condition || c.presetCondition || defaults.condition,
             };
         }));
         playScanSound();
@@ -145,7 +150,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
     } catch (e) {
         setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
     }
-  }, [setScannedCards]);
+  }, [setScannedCards, defaults]);
 
   // Process pending scans with a concurrency cap so a large CSV import doesn't storm the APIs.
   const MAX_CONCURRENT_FETCHES = 5;
@@ -180,6 +185,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                isManualEntry: card.isManualEntry,
                manualSetCode: card.manualSetCode,
                manualRarity: card.manualRarity,
+               edition: card.edition,
+               condition: card.condition,
            };
            const printings = [primary, ...(card.extraPrintings || [])];
 
@@ -205,6 +212,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                } else {
                    return null; // an extra line with nothing picked — skip it rather than guess a wrong code
                }
+               cardData.copies = [{ edition: p.edition || defaults.edition, condition: p.condition || defaults.condition, count: p.quantity || 1 }];
                return cardData;
            };
 
@@ -265,7 +273,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   const addPrinting = (tempId) => {
       setScannedCards(prev => prev.map(c => {
           if (c.tempId !== tempId) return c;
-          const printing = { id: `${Date.now()}-${Math.random()}`, quantity: 1, selectedSet: null };
+          const printing = { id: `${Date.now()}-${Math.random()}`, quantity: 1, selectedSet: null, edition: defaults.edition, condition: defaults.condition };
           return { ...c, extraPrintings: [...(c.extraPrintings || []), printing] };
       }));
   };
@@ -295,7 +303,9 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         passcode: c.passcode,
                         status: 'pending',
                         data: null,
-                        language: 'DE' // Default to DE for imports
+                        language: 'DE', // Default to DE for imports
+                        presetEdition: c.edition,
+                        presetCondition: c.condition
                     }))
                 ]);
             }
@@ -485,6 +495,9 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             />
                                         )}
 
+                                        <CopyChip edition={card.edition} condition={card.condition}
+                                            onChange={(v) => handleUpdateCard(card.tempId, v)} />
+
                                         {card.setMatchConfidence === 'exact' && !card.isManualEntry && (
                                             <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-good bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set code read from the card">
                                                 Erkannt
@@ -520,6 +533,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                 onSelect={(s) => updatePrinting(card.tempId, p.id, { selectedSet: s })}
                                                 loading={card.loadingSets}
                                             />
+                                            <CopyChip edition={p.edition} condition={p.condition}
+                                                onChange={(v) => updatePrinting(card.tempId, p.id, v)} />
                                             <button onClick={() => removePrinting(card.tempId, p.id)} className="p-1.5 rounded bg-gray-800 text-gray-400 hover:text-red-400 transition-colors" title="Druckvariante entfernen">
                                                 <X className="w-3 h-3" />
                                             </button>

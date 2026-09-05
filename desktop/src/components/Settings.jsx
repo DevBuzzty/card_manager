@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud } from 'lucide-react';
+import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers } from 'lucide-react';
+import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 
 export default function Settings() {
     const [priceSource, setPriceSource] = useState('cardmarket');
@@ -7,6 +8,7 @@ export default function Settings() {
     const [progress, setProgress] = useState({ current: 0, total: 0 });
     const [sync, setSync] = useState({ supabase_url: '', supabase_key: '', supabase_email: '', supabase_password: '', sync_enabled: 'false' });
     const [syncStatus, setSyncStatus] = useState(null);
+    const [defaults, setDefaults] = useState({ edition: 'unknown', condition: 'NM' });
 
     useEffect(() => {
         if (window.api) {
@@ -20,6 +22,7 @@ export default function Settings() {
                     sync_enabled: settings?.sync_enabled ?? 'false',
                 }));
             });
+            window.api.getDefaults?.().then(d => d && setDefaults(d));
 
             const cleanup = window.api.onUpdateProgress((data) => {
                 setProgress(data);
@@ -32,6 +35,11 @@ export default function Settings() {
     const saveSync = async (key, value) => {
         setSync(prev => ({ ...prev, [key]: value }));
         if (window.api) await window.api.saveSetting({ key, value });
+    };
+
+    const saveDefault = async (key, value) => {
+        setDefaults(prev => ({ ...prev, [key]: value }));
+        if (window.api) await window.api.saveSetting({ key: key === 'edition' ? 'default_edition' : 'default_condition', value });
     };
 
     const handleSaveSource = async (e) => {
@@ -154,6 +162,35 @@ export default function Settings() {
                                     <RefreshCw className={`w-5 h-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
                                     {loading ? 'Updating Prices...' : 'Force Price Update'}
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Standards for new copies */}
+                <div className="bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800 shadow-xl">
+                    <div className="flex items-center mb-6 text-gold border-b border-gray-800 pb-4">
+                        <Layers className="w-6 h-6 mr-2" />
+                        <h3 className="text-xl font-bold text-white">Standards für neue Exemplare</h3>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-4">Jeder Scan legt Exemplare mit diesen Werten an. Abweichungen setzt du pro Zeile im Staging oder im Karten-Detail.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Zustand</label>
+                            <div className="flex gap-1 flex-wrap">
+                                {CONDITIONS.map(c => (
+                                    <button key={c} onClick={() => saveDefault('condition', c)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm font-mono ${defaults.condition === c ? 'bg-space-violet text-white' : 'bg-black/40 text-gray-300 border border-gray-700 hover:bg-gray-800'}`}>{c}</button>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Edition</label>
+                            <div className="flex gap-1 flex-wrap">
+                                {EDITIONS.map(e => (
+                                    <button key={e} onClick={() => saveDefault('edition', e)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm ${defaults.edition === e ? 'bg-space-violet text-white' : 'bg-black/40 text-gray-300 border border-gray-700 hover:bg-gray-800'}`}>{EDITION_LABELS[e]}</button>
+                                ))}
                             </div>
                         </div>
                     </div>

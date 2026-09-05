@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
+const { ensureCopiesSchema, backfillCopies } = require('./copies-schema.cjs');
 
 let db;
 
@@ -271,6 +272,11 @@ function runMigrations() {
         for (const [name, type] of Object.entries(priceLockCols)) {
             if (!existingCols.includes(name)) db.exec(`ALTER TABLE cards ADD COLUMN ${name} ${type}`);
         }
+
+        // Spec A: physical copies + price history + cross-spec columns. Backfill is desktop-only and guarded.
+        ensureCopiesSchema(db);
+        const bf = backfillCopies(db);
+        if (!bf.skipped) console.log(`Copies backfill: created ${bf.created} copies from quantities.`);
     } catch (e) {
         console.log("Migration check failed or not needed", e);
     }

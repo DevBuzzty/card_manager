@@ -7,17 +7,17 @@ db.exec(`CREATE TABLE cards (
   id TEXT, name TEXT, type TEXT, desc TEXT, image_url TEXT, atk INTEGER, def INTEGER,
   level INTEGER, race TEXT, attribute TEXT, quantity INTEGER DEFAULT 1, rarity TEXT,
   set_code TEXT, price REAL, language TEXT DEFAULT 'DE', deleted INTEGER DEFAULT 0,
-  cm_product_id INTEGER, price_locked INTEGER DEFAULT 0,
+  cm_product_id INTEGER, price_locked INTEGER DEFAULT 0, price_first_ed REAL,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id, set_code, language)
 )`);
 
-// Existing local row -> only quantity+deleted change; details untouched.
-db.prepare("INSERT INTO cards (id,set_code,language,name,quantity,deleted) VALUES ('111','A-DE001','DE','Local Name',1,0)").run();
-applyRemoteRow(db, { id: '111', set_code: 'A-DE001', language: 'DE', name: 'REMOTE NAME', quantity: 5, deleted: false, updated_at: 'x' });
+// Existing local row -> only deleted changes; quantity is derived from copies, details untouched.
+db.prepare("INSERT INTO cards (id,set_code,language,rarity,name,quantity,deleted) VALUES ('111','A-DE001','DE','Common','Local Name',1,0)").run();
+applyRemoteRow(db, { id: '111', set_code: 'A-DE001', language: 'DE', rarity: 'Common', name: 'REMOTE NAME', quantity: 5, deleted: true, updated_at: 'x' });
 let row = db.prepare("SELECT name, quantity, deleted FROM cards WHERE id='111' AND set_code='A-DE001'").get();
-assert.strictEqual(row.quantity, 5, 'existing row quantity updated');
-assert.strictEqual(row.deleted, 0);
+assert.strictEqual(row.quantity, 1, 'quantity is NOT patched from remote any more');
+assert.strictEqual(row.deleted, 1, 'deleted applied');
 assert.strictEqual(row.name, 'Local Name', 'existing row detail NOT overwritten by pull');
 assert.strictEqual(db.prepare('SELECT COUNT(*) c FROM cards').get().c, 1, 'no duplicate row inserted');
 

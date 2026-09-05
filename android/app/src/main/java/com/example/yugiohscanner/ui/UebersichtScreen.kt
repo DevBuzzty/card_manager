@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.DealAlert
 import com.example.yugiohscanner.cloud.DealsRepository
 import com.example.yugiohscanner.cloud.SetsRepository
@@ -66,6 +67,7 @@ fun UebersichtScreen(
 ) {
     val scope = rememberCoroutineScope()
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
+    var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
     var snapshots by remember { mutableStateOf<List<Snapshot>>(emptyList()) }
     var dealAlertCount by remember { mutableStateOf(0) }
     var topDeals by remember { mutableStateOf<List<DealAlert>>(emptyList()) }
@@ -78,6 +80,7 @@ fun UebersichtScreen(
             try {
                 val c = CollectionRepository.loadCards()
                 cards = c
+                copies = CollectionRepository.loadCopies()
                 try {
                     val sets = SetsRepository.loadSets()
                     val ownedByPrefix = HashMap<String, MutableSet<String>>()
@@ -124,7 +127,7 @@ fun UebersichtScreen(
             return@Surface
         }
 
-        val d = computeDashboard(cards)
+        val d = computeDashboard(cards, copies)
 
         Column(
             Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),

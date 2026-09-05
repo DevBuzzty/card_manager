@@ -2,12 +2,24 @@ import { X, Minus, Plus, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import CustomSelect from './CustomSelect';
 import Flag from './Flag';
+import { groupCopies, valueOf, CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
+import { fmtEUR } from '../utils/format';
 
 export default function CardDetailModal({ card, onClose }) {
   const [localVariants, setLocalVariants] = useState(card.variants || []);
   const [availableSets, setAvailableSets] = useState([]);
   const [selectedNewSet, setSelectedNewSet] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [copiesByKey, setCopiesByKey] = useState({}); // "set|rarity|lang" -> [copy rows]
+  const vKey = (v) => `${v.set_code}|${v.rarity}|${v.language || 'DE'}`;
+  const printingOf = (v) => ({ id: String(card.id), set_code: v.set_code, language: v.language || 'DE', rarity: v.rarity });
+
+  const reloadCopies = async (variants) => {
+      if (!window.api?.listCopies) return;
+      const entries = await Promise.all(variants.map(async v => [vKey(v), await window.api.listCopies(printingOf(v))]));
+      setCopiesByKey(Object.fromEntries(entries));
+  };
+  useEffect(() => { reloadCopies(card.variants || []); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [card]);
 
   useEffect(() => {
       setLocalVariants(card.variants || []);
@@ -55,27 +67,22 @@ export default function CardDetailModal({ card, onClose }) {
       if (result.success) removeVariantLocal(variant);
   };
 
-  const handleUpdateQuantity = async (variant, delta) => {
-      const newQty = (variant.quantity || 0) + delta;
-      if (newQty < 0) return;
-      if (newQty === 0) { await handleDeleteVariant(variant); return; }
-
-      const result = await window.api.updateCardMeta({
-          id: card.id,
-          set_code: variant.set_code,
-          rarity: variant.rarity,
-          quantity: newQty,
-          language: variant.language || 'DE',
-          price: variant.price
-      });
-
-      if (result.success) {
-           setLocalVariants(prev => prev.map(v =>
-               (v.set_code === variant.set_code && v.rarity === variant.rarity && v.language === variant.language)
-               ? { ...v, quantity: newQty }
-               : v
-           ));
-      }
+  const changeGroup = async (variant, group, delta) => {
+      const p = printingOf(variant);
+      if (delta > 0) await window.api.addCopy({ ...p, edition: group.edition, condition: group.condition, count: 1 });
+      else await window.api.removeCopy({ ...p, edition: group.edition, condition: group.condition, count: 1 });
+      await refreshVariant(variant);
+  };
+  const addStandardCopy = async (variant) => { await window.api.addCopy(printingOf(variant)); await refreshVariant(variant); };
+  const moveGroup = async (variant, group, to) => {
+      await window.api.updateCopyGroup({ ...printingOf(variant), from: { edition: group.edition, condition: group.condition }, to });
+      await refreshVariant(variant);
+  };
+  // Re-read one printing's copies; drop the variant locally when it has none left (the trigger tombstoned it).
+  const refreshVariant = async (variant) => {
+      const rows = await window.api.listCopies(printingOf(variant));
+      setCopiesByKey(prev => ({ ...prev, [vKey(variant)]: rows }));
+      setLocalVariants(prev => prev.map(v => vKey(v) === vKey(variant) ? { ...v, quantity: rows.length } : v).filter(v => v.quantity > 0));
   };
 
   const handleAddVariant = async () => {
@@ -114,6 +121,7 @@ export default function CardDetailModal({ card, onClose }) {
               setLocalVariants(prev => [...prev, newVariant]);
           }
           setSelectedNewSet('');
+          await reloadCopies([...localVariants, newVariant]);
       }
       setIsAdding(false);
   };
@@ -164,57 +172,59 @@ export default function CardDetailModal({ card, onClose }) {
             {/* Inventory / Variants Section */}
             <div className="bg-[#2a2a2a] p-4 rounded-xl border border-gray-700 mb-6 flex-shrink-0">
                 <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm font-bold uppercase text-gray-400">Inventory Variants</span>
-                    <span className="text-xs text-gray-500">Total Owned: {localVariants.reduce((sum, v) => sum + v.quantity, 0)}</span>
+                    <span className="text-sm font-bold uppercase text-gray-400">Deine Exemplare</span>
+                    <span className="text-xs text-gray-500">Gesamt: {localVariants.reduce((s, v) => s + (v.quantity || 0), 0)}</span>
                 </div>
 
                 <div className="space-y-3 mb-4">
                     {localVariants.length === 0 && <p className="text-gray-500 text-sm italic">No variants owned.</p>}
                     {localVariants.map((variant, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-black/40 p-2 rounded-lg border border-gray-800">
+                        <div key={idx} className="flex items-start justify-between bg-black/40 p-2 rounded-lg border border-gray-800">
                             <div className="flex flex-col">
                                 <div className="flex items-center gap-2">
                                     <span className="font-mono text-sm text-yellow-500 font-bold">{variant.set_code}</span>
                                     <span className="text-xs text-gray-400 border border-gray-700 px-1 rounded">{variant.rarity}</span>
                                 </div>
-                                <span className="text-xs text-space-violet">${(variant.price || 0).toFixed(2)}</span>
+                                <span className="text-xs text-space-violet">{fmtEUR(variant.price || 0)}</span>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                                <input
-                                  type="number" step="0.01" min="0"
-                                  defaultValue={variant.price ?? 0}
+                            <div className="flex-1 ml-4">
+                                {groupCopies(copiesByKey[vKey(variant)] || []).map(g => (
+                                    <div key={`${g.edition}|${g.condition}`} className="flex items-center gap-2 py-1">
+                                        <div className="flex items-center bg-[#1E1E1E] rounded border border-gray-600">
+                                            <button onClick={() => changeGroup(variant, g, -1)} className="p-1 hover:bg-gray-700 rounded-l text-gray-400 hover:text-white"><Minus className="w-3 h-3" /></button>
+                                            <span className="w-8 text-center font-mono text-sm font-bold">{g.count}×</span>
+                                            <button onClick={() => changeGroup(variant, g, 1)} className="p-1 hover:bg-gray-700 rounded-r text-gray-400 hover:text-white"><Plus className="w-3 h-3" /></button>
+                                        </div>
+                                        <select value={g.condition} onChange={e => moveGroup(variant, g, { edition: g.edition, condition: e.target.value })}
+                                            className="bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white font-mono">
+                                            {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                        <select value={g.edition} onChange={e => moveGroup(variant, g, { edition: e.target.value, condition: g.condition })}
+                                            className="bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white">
+                                            {EDITIONS.map(ed => <option key={ed} value={ed}>{EDITION_LABELS[ed]}</option>)}
+                                        </select>
+                                        <span className="ml-auto font-mono text-xs text-gold">{fmtEUR(valueOf(variant.price, [g]))}</span>
+                                    </div>
+                                ))}
+                                <button onClick={() => addStandardCopy(variant)} className="mt-1 text-xs text-gray-400 hover:text-space-violet flex items-center gap-1">
+                                    <Plus className="w-3 h-3" /> Exemplar hinzufügen
+                                </button>
+                            </div>
+                            <div className="flex flex-col items-end gap-2 ml-3">
+                                <input type="number" step="0.01" min="0" defaultValue={variant.price ?? 0}
                                   onBlur={async (e) => {
                                     const price = parseFloat(e.target.value);
                                     if (isNaN(price)) return;
                                     await window.api.setCardPrice({ id: card.id, set_code: variant.set_code, language: variant.language || 'DE', rarity: variant.rarity, price });
                                   }}
                                   className="w-16 bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white"
-                                  title="Preis manuell setzen (überschreibt Auto-Preis)"
-                                />
+                                  title="Preis manuell setzen (überschreibt Auto-Preis)" />
                                 {variant.cm_updated_at && !variant.cm_url && (
                                   <span className="text-[9px] text-yellow-500/80" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
                                 )}
-                                <div className="flex items-center bg-[#1E1E1E] rounded border border-gray-600">
-                                    <button
-                                        onClick={() => handleUpdateQuantity(variant, -1)}
-                                        className="p-1 hover:bg-gray-700 rounded-l text-gray-400 hover:text-white transition-colors"
-                                    >
-                                        <Minus className="w-3 h-3" />
-                                    </button>
-                                    <span className="w-8 text-center font-mono text-sm font-bold">{variant.quantity}</span>
-                                    <button
-                                        onClick={() => handleUpdateQuantity(variant, 1)}
-                                        className="p-1 hover:bg-gray-700 rounded-r text-gray-400 hover:text-white transition-colors"
-                                    >
-                                        <Plus className="w-3 h-3" />
-                                    </button>
-                                </div>
-                                <button
-                                    onClick={() => { if (confirm(`Delete ${variant.set_code} (${variant.rarity})?`)) handleDeleteVariant(variant); }}
-                                    className="p-1.5 bg-crit/10 hover:bg-crit/20 text-crit rounded transition-colors"
-                                    title="Delete this printing"
-                                >
+                                <button onClick={() => { if (confirm(`${variant.set_code} (${variant.rarity}) mit allen Exemplaren löschen?`)) handleDeleteVariant(variant); }}
+                                    className="p-1.5 bg-crit/10 hover:bg-crit/20 text-crit rounded transition-colors" title="Printing löschen">
                                     <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                             </div>
