@@ -114,7 +114,8 @@ function App() {
                     </Route>
                     <Route path="/deals" element={<Deals />} />
                     <Route path="/insights" element={<Insights />} />
-                    <Route path="/einstellungen" element={<Settings />} />
+                    <Route path="/einstellungen" element={<Navigate to="/einstellungen/konto" replace />} />
+                    <Route path="/einstellungen/:bereich" element={<Settings />} />
                     <Route path="*" element={<Navigate to="/start" replace />} />
                   </Routes>
                 </Suspense>

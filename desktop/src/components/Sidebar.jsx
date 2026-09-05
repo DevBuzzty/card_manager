@@ -56,7 +56,7 @@ export default function Sidebar() {
 
       <NavItem to="/einstellungen" icon={SettingsIcon} label={T.einstellungen} />
 
-      <NavLink to="/einstellungen"
+      <NavLink to="/einstellungen/verbindung"
         className="mt-3 flex items-center gap-2.5 bg-obsidian-700 border border-line rounded-xl px-3 py-2.5 hover:border-space-violet/40 transition-colors">
         <span className={clsx('w-2 h-2 rounded-full', phoneOnline ? 'bg-good shadow-[0_0_8px_#39d98a]' : 'bg-ink-faint')} />
         <span className="text-[12px] text-ink-muted">{phoneOnline ? 'Handy verbunden' : 'Kein Handy'}</span>
