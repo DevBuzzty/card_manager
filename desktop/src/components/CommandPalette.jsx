@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Layers, Library, TrendingUp, BookOpen, Heart, CornerDownLeft } from 'lucide-react';
-import CardDetailModal from './CardDetailModal';
+import { ROUTES, cardRoute } from '../utils/routes';
 
-export default function CommandPalette({ open, onClose, setActiveTab }) {
+export default function CommandPalette({ open, onClose }) {
   const [query, setQuery] = useState('');
   const [cards, setCards] = useState([]);
   const [sel, setSel] = useState(0);
-  const [detail, setDetail] = useState(null);
   const inputRef = useRef(null);
 
   // The palette mounts fresh each time it opens (conditional render in App), so initial
@@ -28,13 +28,19 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
   });
   const grouped = Object.values(groupedMap);
 
-  const go = (tab) => { setActiveTab(tab); onClose(); };
+  const navigate = useNavigate();
+  const location = useLocation();
+  // The palette renders outside <Routes>, so its location is the real one — while the card panel
+  // is open that is the /karte/… route itself. Reuse the background it already carries, otherwise
+  // the next card would get a card route as its background and <Routes> would match nothing.
+  const bg = location.state?.background ?? location;
+  const go = (to) => { navigate(to); onClose(); };
   const actions = [
-    { id: 'a-scan', label: 'Start Scanning', icon: Layers, run: () => go('staging') },
-    { id: 'a-collection', label: 'Open Collection', icon: Library, run: () => go('collection') },
-    { id: 'a-insights', label: 'Open Insights', icon: TrendingUp, run: () => go('insights') },
-    { id: 'a-decks', label: 'Open Deck Builder', icon: BookOpen, run: () => go('deckbuilder') },
-    { id: 'a-wishlist', label: 'Open Wishlist', icon: Heart, run: () => go('wishlist') },
+    { id: 'a-scan', label: 'Scannen', icon: Layers, run: () => go(ROUTES.scannen) },
+    { id: 'a-collection', label: 'Sammlung öffnen', icon: Library, run: () => go(ROUTES.karten) },
+    { id: 'a-insights', label: 'Insights öffnen', icon: TrendingUp, run: () => go(ROUTES.insights) },
+    { id: 'a-decks', label: 'Decks öffnen', icon: BookOpen, run: () => go(ROUTES.decks) },
+    { id: 'a-wishlist', label: 'Wunschliste öffnen', icon: Heart, run: () => go(ROUTES.wunschliste) },
   ];
 
   const q = query.trim().toLowerCase();
@@ -50,14 +56,12 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
   const runItem = (item) => {
     if (!item) return;
     if (item.type === 'action') item.run();
-    else setDetail(item.card);
+    else { navigate(cardRoute(item.card.variants?.[0] || item.card), { state: { background: bg } }); onClose(); }
   };
 
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
-      // While a card's detail modal is open, only Escape (which closes the modal) applies.
-      if (detail) { if (e.key === 'Escape') setDetail(null); return; }
       if (e.key === 'Escape') { onClose(); }
       else if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s + 1, flat.length - 1)); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); setSel(s => Math.max(s - 1, 0)); }
@@ -65,7 +69,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, flat, sel, detail]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, flat, sel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
 
@@ -75,7 +79,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
   return (
     <div
       className="fixed inset-0 z-40 flex items-start justify-center pt-[12vh] px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
-      onClick={() => { if (!detail) onClose(); }}
+      onClick={onClose}
     >
       <div className="w-full max-w-xl bg-obsidian-800 border border-line rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 py-4 border-b border-line">
@@ -84,7 +88,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
             ref={inputRef}
             value={query}
             onChange={e => { setQuery(e.target.value); setSel(0); }}
-            placeholder="Jump to a card, set or action…"
+            placeholder="Karte, Set oder Aktion suchen…"
             className="flex-1 bg-transparent outline-none text-ink text-base"
           />
           <span className="font-mono text-[10px] text-ink-faint border border-line rounded px-1.5 py-0.5">ESC</span>
@@ -92,7 +96,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
 
         <div className="max-h-[52vh] overflow-y-auto custom-scrollbar py-2">
           {actionResults.length > 0 && (
-            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-2 pb-1">Actions</div>
+            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-2 pb-1">Aktionen</div>
           )}
           {actionResults.map((a, i) => (
             <button key={a.id} onMouseEnter={() => setSel(i)} onClick={() => runItem({ type: 'action', ...a })} className={rowClass(i === sel)}>
@@ -102,7 +106,7 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
           ))}
 
           {cardResults.length > 0 && (
-            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-3 pb-1">Cards</div>
+            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-3 pb-1">Karten</div>
           )}
           {cardResults.map((c, ci) => {
             const i = actionResults.length + ci;
@@ -121,15 +125,13 @@ export default function CommandPalette({ open, onClose, setActiveTab }) {
           })}
 
           {q && flat.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-ink-faint">No matches.</div>
+            <div className="px-4 py-8 text-center text-sm text-ink-faint">Keine Treffer.</div>
           )}
           {!q && (
-            <div className="px-4 py-2 text-[11px] text-ink-faint">Type to search your collection…</div>
+            <div className="px-4 py-2 text-[11px] text-ink-faint">Tippen, um die Sammlung zu durchsuchen…</div>
           )}
         </div>
       </div>
-
-      {detail && <CardDetailModal card={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }

@@ -1,44 +1,42 @@
-import { Home, Layers, Library, BarChart3, BookOpen, Settings, Heart, Wifi, Tag } from 'lucide-react';
+import { Home, ScanLine, Library, Tag, BarChart3, Settings as SettingsIcon, Wifi } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
+import { NAV, T } from '../utils/i18n-de';
 
-const NavItem = ({ id, icon, label, badge, badgeTone, activeTab, setActiveTab }) => {
+const ICONS = { start: Home, scannen: ScanLine, sammlung: Library, deals: Tag, insights: BarChart3 };
+
+const NavItem = ({ to, icon, label, match }) => {
+  // eslint in this project doesn't see a destructured `icon: Icon` as used — bind it in the body.
   const Icon = icon;
+  const location = useLocation();
+  // The sidebar renders outside <Routes>, so while the card panel is open its pathname is the
+  // /karte/… overlay route and NavLink's own isActive would light nothing up. The page behind the
+  // panel is the background — highlight that, so the sidebar agrees with the segment bar.
+  const pathname = location.state?.background?.pathname || location.pathname;
+  const base = match || to;
+  const active = pathname === base || pathname.startsWith(`${base}/`);
   return (
-  <button
-    onClick={() => setActiveTab(id)}
-    className={clsx(
-      'flex items-center w-full gap-3 px-3 py-2.5 rounded-[10px] transition-colors cursor-pointer text-[13.5px] font-medium relative',
-      activeTab === id
-        ? 'text-white bg-gradient-to-r from-space-violet/25 to-transparent shadow-[inset_0_0_0_1px_rgba(157,0,255,0.35)]'
-        : 'text-ink-muted hover:bg-obsidian-700 hover:text-ink'
-    )}
-  >
-    {activeTab === id && (
-      <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded bg-violet-soft shadow-[0_0_10px_#9D00FF]" />
-    )}
-    <Icon className="w-[17px] h-[17px] shrink-0" strokeWidth={1.8} />
-    <span>{label}</span>
-    {badge != null && (
-      <span className={clsx(
-        'ml-auto font-mono text-[10px] px-[7px] py-px rounded-full',
-        badgeTone === 'warn' ? 'bg-gold/15 text-gold' : 'bg-obsidian-600 text-ink-muted'
-      )}>{badge}</span>
-    )}
-  </button>
+    <NavLink
+      to={to}
+      className={clsx(
+        'flex items-center w-full gap-3 px-3 py-2.5 rounded-[10px] transition-colors cursor-pointer text-[13.5px] font-medium relative',
+        active
+          ? 'text-white bg-gradient-to-r from-space-violet/25 to-transparent shadow-[inset_0_0_0_1px_rgba(157,0,255,0.35)]'
+          : 'text-ink-muted hover:bg-obsidian-700 hover:text-ink'
+      )}
+    >
+      {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded bg-violet-soft shadow-[0_0_10px_#9D00FF]" />}
+      <Icon className="w-[17px] h-[17px] shrink-0" strokeWidth={1.8} />
+      <span>{label}</span>
+    </NavLink>
   );
 };
 
-const GroupLabel = ({ children }) => (
-  <div className="font-display text-[9.5px] tracking-[0.2em] uppercase text-ink-faint px-2.5 pt-3 pb-1.5">{children}</div>
-);
+export default function Sidebar() {
+  const [phoneOnline, setPhoneOnline] = useState(false);
 
-export default function Sidebar({ activeTab, setActiveTab }) {
-  const [ipAddress, setIpAddress] = useState('Loading...');
-
-  useEffect(() => {
-    if (window.api) window.api.getIpAddress().then(setIpAddress);
-  }, []);
+  useEffect(() => window.api?.onPhoneStatus?.(setPhoneOnline), []);
 
   return (
     <div className="w-64 bg-obsidian-800 border-r border-line flex flex-col p-3.5 shrink-0">
@@ -50,37 +48,18 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto custom-scrollbar">
-        <NavItem id="dashboard" icon={Home} label="Home" activeTab={activeTab} setActiveTab={setActiveTab} />
-
-        <GroupLabel>Sammeln</GroupLabel>
-        <NavItem id="staging" icon={Layers} label="Scan" activeTab={activeTab} setActiveTab={setActiveTab} />
-        <NavItem id="collection" icon={Library} label="Collection" activeTab={activeTab} setActiveTab={setActiveTab} />
-        <NavItem id="wishlist" icon={Heart} label="Wishlist" activeTab={activeTab} setActiveTab={setActiveTab} />
-
-        <GroupLabel>Schnäppchen</GroupLabel>
-        <NavItem id="deals" icon={Tag} label="Deals" activeTab={activeTab} setActiveTab={setActiveTab} />
-
-        <GroupLabel>Analysieren</GroupLabel>
-        <NavItem id="insights" icon={BarChart3} label="Insights" activeTab={activeTab} setActiveTab={setActiveTab} />
-
-        <GroupLabel>Bauen</GroupLabel>
-        <NavItem id="deckbuilder" icon={BookOpen} label="Deck Builder" activeTab={activeTab} setActiveTab={setActiveTab} />
+      <nav className="flex-1 overflow-y-auto custom-scrollbar space-y-0.5">
+        {NAV.map(n => <NavItem key={n.key} to={n.to} icon={ICONS[n.key]} label={n.label} match={n.key === 'sammlung' ? '/sammlung' : undefined} />)}
       </nav>
 
-      <NavItem id="settings" icon={Settings} label="Settings" activeTab={activeTab} setActiveTab={setActiveTab} />
+      <NavItem to="/einstellungen" icon={SettingsIcon} label={T.einstellungen} />
 
-      <div className="mt-3 bg-gradient-to-br from-obsidian-700 to-obsidian-800 border border-line rounded-[13px] p-3.5">
-        <div className="flex items-center gap-2 font-display text-[10px] tracking-[0.14em] uppercase text-good">
-          <Wifi className="w-4 h-4" strokeWidth={1.8} /> Scanner-Server aktiv
-        </div>
-        <code
-          className="block bg-obsidian border border-line rounded-lg px-2.5 py-2 text-center font-mono text-[13px] text-ink mt-2.5 select-all cursor-pointer hover:bg-black/60 transition-colors"
-          title="Zum Kopieren klicken"
-          onClick={() => navigator.clipboard.writeText(ipAddress)}
-        >{ipAddress}</code>
-        <div className="text-[10px] text-ink-faint mt-1.5 text-center">Handy-App mit dieser Adresse verbinden</div>
-      </div>
+      <NavLink to="/einstellungen/verbindung"
+        className="mt-3 flex items-center gap-2.5 bg-obsidian-700 border border-line rounded-xl px-3 py-2.5 hover:border-space-violet/40 transition-colors">
+        <span className={clsx('w-2 h-2 rounded-full', phoneOnline ? 'bg-good shadow-[0_0_8px_#39d98a]' : 'bg-ink-faint')} />
+        <span className="text-[12px] text-ink-muted">{phoneOnline ? 'Handy verbunden' : 'Kein Handy'}</span>
+        <Wifi className="w-3.5 h-3.5 ml-auto text-ink-faint" strokeWidth={1.8} />
+      </NavLink>
     </div>
   );
 }

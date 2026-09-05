@@ -49,7 +49,7 @@ export default function Wishlist() {
                 // Mark as added in local state if needed, or just let re-render handle it
                 setSearchResults(prev => [...prev]);
             } else {
-                alert(result.message || "Failed to add");
+                alert(result.message || "Hinzufügen fehlgeschlagen.");
             }
         }
     };
@@ -65,14 +65,13 @@ export default function Wishlist() {
         <div className="h-full flex flex-col gap-6">
             <div className="flex justify-between items-center bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Wishlist</h1>
-                    <p className="text-gray-400">Track cards you want to acquire.</p>
+                    <p className="text-gray-400">Karten, die du noch suchst.</p>
                 </div>
                 <button
                     onClick={() => setIsSearching(!isSearching)}
                     className={`flex items-center px-4 py-2 rounded-lg font-medium transition-colors ${isSearching ? 'bg-gray-700 text-white' : 'bg-space-violet text-white hover:bg-space-violet-dark'}`}
                 >
-                    {isSearching ? 'View Wishlist' : 'Add Cards'}
+                    {isSearching ? 'Wunschliste ansehen' : 'Karten hinzufügen'}
                     {isSearching ? null : <Plus className="w-4 h-4 ml-2" />}
                 </button>
             </div>
@@ -83,7 +82,7 @@ export default function Wishlist() {
                         <input
                             autoFocus
                             type="text"
-                            placeholder="Search Card Name (min 3 chars)..."
+                            placeholder="Kartenname suchen (mind. 3 Zeichen)…"
                             className="flex-1 bg-black/40 border border-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-space-violet"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
@@ -93,7 +92,7 @@ export default function Wishlist() {
                             disabled={loading || searchQuery.length < 3}
                             className="bg-space-violet hover:bg-space-violet-dark text-white px-6 py-3 rounded-lg font-bold disabled:opacity-50"
                         >
-                            {loading ? 'Searching...' : 'Search'}
+                            {loading ? 'Suche läuft…' : 'Suchen'}
                         </button>
                     </form>
 
@@ -114,7 +113,7 @@ export default function Wishlist() {
                                             onClick={() => addToWishlist(card)}
                                             disabled={inWishlist}
                                             className={`p-1.5 rounded-lg transition-colors ${inWishlist ? 'bg-green-500/20 text-green-500 cursor-default' : 'bg-gray-800 hover:bg-space-violet text-gray-400 hover:text-white'}`}
-                                            title={inWishlist ? "In Wishlist" : "Add to Wishlist"}
+                                            title={inWishlist ? "In der Wunschliste" : "Zur Wunschliste hinzufügen"}
                                         >
                                             {inWishlist ? <Heart className="w-4 h-4 fill-current" /> : <Plus className="w-4 h-4" />}
                                         </button>
@@ -123,7 +122,7 @@ export default function Wishlist() {
                             );
                         })}
                         {searchResults.length === 0 && !loading && searchQuery && (
-                            <div className="col-span-full text-center text-gray-500 py-10">No results found.</div>
+                            <div className="col-span-full text-center text-gray-500 py-10">Keine Treffer.</div>
                         )}
                     </div>
                 </div>
@@ -132,8 +131,8 @@ export default function Wishlist() {
                     {wishlist.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-500">
                             <Heart className="w-16 h-16 mb-4 opacity-20" />
-                            <p className="text-xl font-medium">Your wishlist is empty</p>
-                            <button onClick={() => setIsSearching(true)} className="text-space-violet hover:underline mt-2">Find cards to add</button>
+                            <p className="text-xl font-medium">Deine Wunschliste ist leer</p>
+                            <button onClick={() => setIsSearching(true)} className="text-space-violet hover:underline mt-2">Karten zum Hinzufügen finden</button>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -144,13 +143,13 @@ export default function Wishlist() {
                                         <button
                                             onClick={() => removeFromWishlist(item.id)}
                                             className="absolute top-2 right-2 p-1.5 bg-black/60 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white"
-                                            title="Remove"
+                                            title="Entfernen"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
                                     <h3 className="font-bold text-sm text-gray-200 truncate mb-1" title={item.name}>{item.name}</h3>
-                                    <div className="text-xs text-gray-500 font-mono">Added: {new Date(item.created_at).toLocaleDateString()}</div>
+                                    <div className="text-xs text-gray-500 font-mono">Hinzugefügt: {new Date(item.created_at).toLocaleDateString()}</div>
                                     <div className="mt-2 text-xs text-space-violet font-bold">{fmtEUR(item.price)}</div>
                                 </div>
                             ))}

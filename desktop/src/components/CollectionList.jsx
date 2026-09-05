@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { Search, RefreshCw, LayoutGrid, List as ListIcon, Database, FilterX } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Search, LayoutGrid, List as ListIcon, FilterX, SlidersHorizontal, Coins, X } from 'lucide-react';
+import clsx from 'clsx';
 import { Grid } from 'react-window';
-import CardDetailModal from './CardDetailModal';
 import CustomSelect from './CustomSelect';
 import CardTile from './CardTile';
 import { getRarityInfo } from '../utils/rarity.js';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
+import { cardRoute } from '../utils/routes';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -31,9 +33,10 @@ const AutoSizer = ({ children }) => {
 };
 
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [rawCards, setRawCards] = useState([]);
   const [filter, setFilter] = useState('');
-  const [selectedCard, setSelectedCard] = useState(null);
   const [localUpdating, setLocalUpdating] = useState(false);
   const [viewMode, setViewMode] = useState('grid');
   const [sortType, setSortType] = useState('newest');
@@ -49,6 +52,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [filterEdition, setFilterEdition] = useState('All');
   const [segment, setSegment] = useState('all'); // all | unknown | incomplete | foils
   const [segmentBusy, setSegmentBusy] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [pricesOpen, setPricesOpen] = useState(false);
   const [cmRunning, setCmRunning] = useState(false);
   const [cmProgress, setCmProgress] = useState(null);
   const [cmMinRank, setCmMinRank] = useState(5); // default: from Secret Rare up (skip cheap commons)
@@ -136,16 +141,24 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     return () => cleanup && cleanup();
   }, []);
 
+  // The detail panel dispatches this after a mutation (it can't carry an onClose callback
+  // through a route), so reload here instead.
+  useEffect(() => {
+    const onDirty = () => loadCollection();
+    window.addEventListener('collection-dirty', onDirty);
+    return () => window.removeEventListener('collection-dirty', onDirty);
+  }, []);
+
   const handleUpdate = async (mode) => {
     if (!window.api || updating) return;
-    if (!confirm(mode === 'all' ? "Update ALL cards?" : "Fetch missing details?")) return;
+    if (!confirm(mode === 'all' ? "Alle Karten aktualisieren?" : "Fehlende Daten nachladen?")) return;
     setLocalUpdating(true);
     setUpdateProgress({ current: 0, total: 0 });
     try {
         const result = mode === 'all' ? await window.api.updateAllCards() : await window.api.updateMissingCards();
-        if (result.success) { alert(`Updated ${result.updatedCount} cards.`); loadCollection(); }
-        else alert("Failed: " + result.error);
-    } catch (e) { alert("Update failed."); }
+        if (result.success) { alert(`${result.updatedCount} Karten aktualisiert.`); loadCollection(); }
+        else alert("Fehlgeschlagen: " + result.error);
+    } catch (e) { alert("Update fehlgeschlagen."); }
     finally { setLocalUpdating(false); setUpdateProgress(null); }
   };
 
@@ -249,6 +262,25 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       });
   }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, segment]);
 
+  // Which filters are set, as removable chips.
+  const activeFilters = [
+    filterType !== 'All' && { key: 'type', label: filterType, clear: () => setFilterType('All') },
+    filterLang !== 'All' && { key: 'lang', label: filterLang, clear: () => setFilterLang('All') },
+    filterAttribute !== 'All' && { key: 'attr', label: filterAttribute, clear: () => setFilterAttribute('All') },
+    filterRace !== 'All' && { key: 'race', label: filterRace, clear: () => setFilterRace('All') },
+    filterRarity !== 'All' && { key: 'rarity', label: filterRarity, clear: () => setFilterRarity('All') },
+    filterCondition !== 'All' && { key: 'cond', label: `Zustand ${filterCondition}`, clear: () => setFilterCondition('All') },
+    filterEdition !== 'All' && { key: 'ed', label: EDITION_LABELS[filterEdition] || filterEdition, clear: () => setFilterEdition('All') },
+    filterSet !== 'All' && { key: 'set', label: filterSet, clear: () => setFilterSet('All') },
+  ].filter(Boolean);
+
+  // The panel walks the list with the arrow buttons, so it gets the current order handed over.
+  const openCard = (card) => {
+    const first = (card.variants && card.variants[0]) || card;
+    const list = filtered.map(c => cardRoute((c.variants && c.variants[0]) || c));
+    navigate(cardRoute(first), { state: { background: location, list } });
+  };
+
   const clearFilters = () => {
       setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All'); setFilterRarity('All'); setFilterCondition('All'); setFilterEdition('All');
   };
@@ -268,7 +300,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
       return (
           <div style={{ ...style, padding: 8 }}>
-              <CardTile card={card} onClick={() => setSelectedCard(card)} />
+              <CardTile card={card} onClick={() => openCard(card)} />
           </div>
       );
   };
@@ -276,82 +308,91 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const runUnknownAction = async (kind) => {
       if (!window.api || segmentBusy) return;
       const msg = kind === 'merge'
-          ? "Merge all 'Unknown' cards into their most common owned set variant?"
-          : "Assign all 'Unknown' cards to their cheapest available set (online, may take a while)?";
+          ? "Alle 'Unbekannt'-Karten in ihre häufigste vorhandene Set-Variante zusammenführen?"
+          : "Alle 'Unbekannt'-Karten auf ihr günstigstes verfügbares Set setzen (online, kann dauern)?";
       if (!confirm(msg)) return;
       setSegmentBusy(true);
       try {
           const res = kind === 'merge' ? await window.api.mergeUnknownCards() : await window.api.convertUnknownsToDefault();
-          if (res.success) { alert(kind === 'merge' ? `Merged ${res.merged} cards.` : `Converted ${res.converted} cards.`); loadCollection(); }
-          else alert('Failed: ' + res.error);
-      } catch { alert('Action failed.'); }
+          if (res.success) { alert(kind === 'merge' ? `${res.merged} Karten zusammengeführt.` : `${res.converted} Karten umgestellt.`); loadCollection(); }
+          else alert('Fehlgeschlagen: ' + res.error);
+      } catch { alert('Aktion fehlgeschlagen.'); }
       finally { setSegmentBusy(false); }
   };
 
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
         <div className="flex flex-col gap-4 mb-4 bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 shrink-0">
-            {/* Header Controls (Same as before) */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <h2 className="text-2xl font-bold text-space-white">My Collection</h2>
-                    <span className="text-gray-500 text-sm">({filtered.length} Cards)</span>
+            {/* Row 1: count, search, sort, filter toggle, prices menu */}
+            <div className="flex flex-wrap items-center gap-3">
+                <span className="text-ink-muted text-sm shrink-0">{filtered.length} Karten</span>
+                <div className="relative group flex-1 min-w-[220px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
+                    <input type="text" placeholder="Suchen…" className="bg-obsidian border border-line text-ink pl-10 pr-4 py-2 rounded-lg w-full focus:border-space-violet outline-none"
+                           value={filter} onChange={(e) => setFilter(e.target.value)} />
                 </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => handleUpdate('missing')} disabled={updating} className="flex items-center px-3 py-1.5 bg-gray-800 hover:bg-space-violet text-gray-400 hover:text-white rounded-lg text-xs font-medium border border-gray-700">
-                        <Database className="w-3 h-3 mr-2" /> Fetch Missing
+                <CustomSelect value={sortType} onChange={setSortType} placeholder="Sortierung" className="w-[170px]" options={[
+                    { value: 'newest', label: 'Neueste' }, { value: 'total', label: 'Wert (gesamt)' }, { value: 'price', label: 'Preis (einzeln)' },
+                    { value: 'name', label: 'Name' }, { value: 'atk', label: 'ATK' }, { value: 'def', label: 'DEF' }, { value: 'level', label: 'Level' }]} />
+                <button onClick={() => setFiltersOpen(o => !o)}
+                        className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
+                          filtersOpen || activeFilters.length ? 'bg-space-violet/15 border-space-violet/40 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink')}>
+                    <SlidersHorizontal className="w-4 h-4" /> Filter
+                    {activeFilters.length > 0 && <span className="font-mono text-[10px] bg-space-violet text-white rounded-full px-1.5">{activeFilters.length}</span>}
+                </button>
+                <div className="relative">
+                    <button onClick={() => setPricesOpen(o => !o)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-obsidian-700 border border-line text-ink-muted hover:text-ink">
+                        <Coins className="w-4 h-4" /> Preise
                     </button>
-                    <button onClick={() => handleUpdate('all')} disabled={updating} className="p-2 bg-gray-800 hover:bg-space-violet text-gray-400 hover:text-white rounded-full">
-                        <RefreshCw className={`w-4 h-4 ${updating ? 'animate-spin' : ''}`} />
-                    </button>
-                    {!cmRunning && (
-                      <select value={cmMinRank} onChange={(e) => {
-                                const v = Number(e.target.value);
-                                setCmMinRank(v);
-                                if (cmAuto) window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(v) });
-                              }}
-                              title="Ab welcher Rarity aufwärts scrapen (günstige Commons überspringen)"
-                              className="px-2 py-1.5 rounded bg-black/40 border border-gray-700 text-white text-sm">
-                        <option value={1}>Alle Rarities</option>
-                        <option value={2}>Ab Rare</option>
-                        <option value={3}>Ab Super Rare</option>
-                        <option value={4}>Ab Ultra Rare</option>
-                        <option value={5}>Ab Secret Rare</option>
-                        <option value={6}>Ab Ultimate Rare</option>
-                        <option value={7}>Ab Ghost / Collector's</option>
-                        <option value={8}>Nur Quarter Century</option>
-                      </select>
+                    {pricesOpen && (
+                      <div className="absolute right-0 top-11 z-30 w-[320px] bg-obsidian-800 border border-line rounded-xl shadow-2xl p-3 space-y-2"
+                           onMouseLeave={() => setPricesOpen(false)}>
+                        <button onClick={runBulk} disabled={cmBulkBusy || cmRunning}
+                                className="w-full text-left px-3 py-2 rounded-lg bg-space-violet/80 hover:bg-space-violet text-white text-sm disabled:opacity-50">
+                          {cmBulkBusy ? 'Aktualisiere…' : 'Jetzt aktualisieren (Preisdatei)'}
+                        </button>
+                        <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}
+                                className="w-full text-left px-3 py-2 rounded-lg bg-obsidian-700 border border-line text-ink text-sm hover:border-space-violet/40">
+                          {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Rest scrapen'}
+                        </button>
+                        <label className="flex items-center gap-2 px-3 py-2 text-sm text-ink-muted cursor-pointer select-none">
+                          <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-space-violet" />
+                          Automatisch im Hintergrund
+                        </label>
+                        <div className="px-3">
+                          <div className="text-[10px] uppercase tracking-wider text-ink-faint mb-1">Ab Rarity</div>
+                          <select value={cmMinRank} onChange={(e) => { const v = Number(e.target.value); setCmMinRank(v); if (cmAuto) window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(v) }); }}
+                                  className="w-full px-2 py-1.5 rounded bg-obsidian border border-line text-ink text-sm">
+                            <option value={1}>Alle Rarities</option>
+                            <option value={2}>Ab Rare</option>
+                            <option value={3}>Ab Super Rare</option>
+                            <option value={4}>Ab Ultra Rare</option>
+                            <option value={5}>Ab Secret Rare</option>
+                            <option value={6}>Ab Ultimate Rare</option>
+                            <option value={7}>Ab Ghost / Collector's</option>
+                            <option value={8}>Nur Quarter Century</option>
+                          </select>
+                        </div>
+                        <div className="border-t border-line pt-2 px-3 space-y-1">
+                          <button onClick={() => handleUpdate('missing')} disabled={updating} className="text-sm text-ink-muted hover:text-ink">Fehlende Daten holen</button>
+                          <button onClick={() => handleUpdate('all')} disabled={updating} className="block text-sm text-ink-muted hover:text-ink">Alle Karten aktualisieren</button>
+                          {cmStatus && (
+                            <div className="text-[11px] text-ink-faint pt-1">
+                              Letztes Update {relTime(cmStatus.lastRun)} · {cmStatus.resolvedCount} per Datei · {cmStatus.unresolvedCount} offen
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
-                    <label title="Offene Printings automatisch im Hintergrund scrapen (alle 10 Min. ein paar)"
-                           className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-black/40 border border-gray-700 text-gray-300 text-sm cursor-pointer select-none">
-                      <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-space-violet" />
-                      Auto (Rest per Scraper)
-                    </label>
-                    <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}
-                            title="Nur die noch nicht zugeordneten Printings per Cardmarket-Seite nachladen"
-                            className="px-3 py-1.5 rounded bg-gray-800 hover:bg-space-violet text-gray-300 hover:text-white text-sm border border-gray-700">
-                      {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Rest scrapen'}
-                    </button>
-                    <button onClick={runBulk} disabled={cmBulkBusy || cmRunning}
-                            title="Preise aller zugeordneten Printings aus Cardmarkets täglicher Preisdatei (Trend) übernehmen"
-                            className="px-3 py-1.5 rounded bg-space-violet/80 hover:bg-space-violet text-white text-sm disabled:opacity-50">
-                      {cmBulkBusy ? 'Aktualisiere…' : 'Jetzt aktualisieren'}
-                    </button>
                 </div>
             </div>
 
-            {cmStatus && (
-              <div className="text-xs text-gray-500 -mt-2">
-                Cardmarket: Letztes Update {relTime(cmStatus.lastRun)} · {cmStatus.resolvedCount} per Datei · {cmStatus.unresolvedCount} offen
-              </div>
-            )}
-
-            {/* Segment control */}
+            {/* Row 2: segment control */}
             <div className="flex flex-wrap items-center gap-2">
                 {[
-                    { id: 'all', label: 'All' },
-                    { id: 'unknown', label: 'Unknown' },
-                    { id: 'incomplete', label: 'Incomplete' },
+                    { id: 'all', label: 'Alle' },
+                    { id: 'unknown', label: 'Unbekannt' },
+                    { id: 'incomplete', label: 'Unvollständig' },
                     { id: 'foils', label: 'Foils' },
                 ].map(s => (
                     <button
@@ -370,33 +411,44 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
             {/* Unknown batch actions */}
             {segment === 'unknown' && segmentCounts.unknown > 0 && (
                 <div className="flex items-center gap-3 bg-gold/5 border border-gold/25 rounded-xl px-4 py-3">
-                    <span className="text-xs text-ink-muted flex-1">These cards have no specific set code — resolve them to avoid inflated values.</span>
-                    <button onClick={() => runUnknownAction('convert')} disabled={segmentBusy} className="px-3 py-1.5 bg-obsidian-600 hover:bg-obsidian-700 text-ink rounded-lg text-xs font-medium border border-line disabled:opacity-50">Convert to Default</button>
-                    <button onClick={() => runUnknownAction('merge')} disabled={segmentBusy} className="px-3 py-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg text-xs font-medium disabled:opacity-50">{segmentBusy ? 'Working…' : 'Auto-Merge All'}</button>
+                    <span className="text-xs text-ink-muted flex-1">Diesen Karten fehlt der Set-Code — auflösen, damit der Wert stimmt.</span>
+                    <button onClick={() => runUnknownAction('convert')} disabled={segmentBusy} className="px-3 py-1.5 bg-obsidian-600 hover:bg-obsidian-700 text-ink rounded-lg text-xs font-medium border border-line disabled:opacity-50">Auf Standard-Set setzen</button>
+                    <button onClick={() => runUnknownAction('merge')} disabled={segmentBusy} className="px-3 py-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg text-xs font-medium disabled:opacity-50">{segmentBusy ? 'Läuft…' : 'Alle zusammenführen'}</button>
                 </div>
             )}
 
-            <div className="flex flex-wrap items-center gap-3">
-                <div className="relative group flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input type="text" placeholder="Search..." className="bg-[#1a1a1a] border border-gray-800 text-white pl-10 pr-4 py-2 rounded-lg w-full focus:border-space-violet outline-none" value={filter} onChange={(e) => setFilter(e.target.value)} />
-                </div>
-                <CustomSelect value={filterType} onChange={setFilterType} placeholder="Type" className="w-[120px]" options={[{ value: "All", label: "Type" }, { value: "Monster", label: "Monster" }, { value: "Spell", label: "Spell" }, { value: "Trap", label: "Trap" }, { value: "Link", label: "Link" }, { value: "XYZ", label: "XYZ" }, { value: "Synchro", label: "Synchro" }, { value: "Fusion", label: "Fusion" }]} />
-                <CustomSelect value={filterLang} onChange={setFilterLang} placeholder="Lang" className="w-[90px]" options={[{ value: "All", label: "Lang" }, { value: "DE", label: "DE" }, { value: "EN", label: "EN" }, { value: "JP", label: "JP" }]} />
-                <CustomSelect value={filterAttribute} onChange={setFilterAttribute} placeholder="Attr" className="w-[120px]" options={[{ value: "All", label: "Attr" }, ...attributes]} />
-                <CustomSelect value={filterRace} onChange={setFilterRace} placeholder="Race" className="w-[130px]" options={[{ value: "All", label: "Race/Type" }, ...races]} />
-                <CustomSelect value={filterRarity} onChange={setFilterRarity} placeholder="Rarity" className="w-[130px]" options={[{ value: "All", label: "Rarity" }, ...rarities]} />
-                <CustomSelect value={filterCondition} onChange={setFilterCondition} placeholder="Zustand" className="w-[110px]" options={[{ value: 'All', label: 'Zustand' }, ...CONDITIONS.map(c => ({ value: c, label: c }))]} />
-                <CustomSelect value={filterEdition} onChange={setFilterEdition} placeholder="Edition" className="w-[120px]" options={[{ value: 'All', label: 'Edition' }, ...EDITIONS.map(e => ({ value: e, label: EDITION_LABELS[e] }))]} />
-                <CustomSelect value={filterSet} onChange={setFilterSet} placeholder="Set" className="w-[120px]" options={[{ value: "All", label: "Set" }, ...sets]} />
-                <CustomSelect value={sortType} onChange={setSortType} placeholder="Sort" className="w-[160px]" options={[{ value: "newest", label: "Neueste" }, { value: "total", label: "Wert (gesamt)" }, { value: "price", label: "Preis (Einzel)" }, { value: "name", label: "Name" }, { value: "atk", label: "ATK" }, { value: "def", label: "DEF" }, { value: "level", label: "Level" }]} />
-                <button onClick={clearFilters} className="p-2 text-gray-500 hover:text-red-400"><FilterX className="w-4 h-4" /></button>
-            </div>
+            {/* Row 3: filter dropdowns, only when open */}
+            {filtersOpen && (
+              <div className="flex flex-wrap items-center gap-3">
+                  <CustomSelect value={filterType} onChange={setFilterType} placeholder="Typ" className="w-[120px]" options={[{ value: "All", label: "Typ" }, { value: "Monster", label: "Monster" }, { value: "Spell", label: "Spell" }, { value: "Trap", label: "Trap" }, { value: "Link", label: "Link" }, { value: "XYZ", label: "XYZ" }, { value: "Synchro", label: "Synchro" }, { value: "Fusion", label: "Fusion" }]} />
+                  <CustomSelect value={filterLang} onChange={setFilterLang} placeholder="Sprache" className="w-[90px]" options={[{ value: "All", label: "Sprache" }, { value: "DE", label: "DE" }, { value: "EN", label: "EN" }, { value: "JP", label: "JP" }]} />
+                  <CustomSelect value={filterAttribute} onChange={setFilterAttribute} placeholder="Attribut" className="w-[120px]" options={[{ value: "All", label: "Attribut" }, ...attributes]} />
+                  <CustomSelect value={filterRace} onChange={setFilterRace} placeholder="Rasse/Typ" className="w-[130px]" options={[{ value: "All", label: "Rasse/Typ" }, ...races]} />
+                  <CustomSelect value={filterRarity} onChange={setFilterRarity} placeholder="Rarity" className="w-[130px]" options={[{ value: "All", label: "Rarity" }, ...rarities]} />
+                  <CustomSelect value={filterCondition} onChange={setFilterCondition} placeholder="Zustand" className="w-[110px]" options={[{ value: 'All', label: 'Zustand' }, ...CONDITIONS.map(c => ({ value: c, label: c }))]} />
+                  <CustomSelect value={filterEdition} onChange={setFilterEdition} placeholder="Edition" className="w-[120px]" options={[{ value: 'All', label: 'Edition' }, ...EDITIONS.map(e => ({ value: e, label: EDITION_LABELS[e] }))]} />
+                  <CustomSelect value={filterSet} onChange={setFilterSet} placeholder="Set" className="w-[120px]" options={[{ value: "All", label: "Set" }, ...sets]} />
+                  <button onClick={clearFilters} title="Filter zurücksetzen" className="p-2 text-gray-500 hover:text-red-400"><FilterX className="w-4 h-4" /></button>
+              </div>
+            )}
+
+            {/* Row 4: active-filter chips */}
+            {activeFilters.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                {activeFilters.map(f => (
+                  <button key={f.key} onClick={f.clear}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-space-violet/15 border border-space-violet/30 text-ink text-xs">
+                    {f.label} <X className="w-3 h-3 opacity-60" />
+                  </button>
+                ))}
+                <button onClick={clearFilters} className="text-xs text-ink-faint hover:text-crit">Alle entfernen</button>
+              </div>
+            )}
         </div>
 
         <div className="flex-1 overflow-hidden">
             {filtered.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-gray-600">No cards found.</div>
+                <div className="h-full flex items-center justify-center text-gray-600">Keine Karten gefunden.</div>
             ) : (
                 <AutoSizer>
                     {({ height, width }) => {
@@ -422,8 +474,6 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 </AutoSizer>
             )}
         </div>
-
-        {selectedCard && <CardDetailModal card={selectedCard} onClose={() => { setSelectedCard(null); loadCollection(); }} />}
     </div>
   );
 }
