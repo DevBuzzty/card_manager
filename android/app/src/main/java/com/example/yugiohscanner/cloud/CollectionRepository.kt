@@ -21,24 +21,39 @@ class NotMigratedException(message: String) : RuntimeException(message)
 object CollectionRepository {
     private const val PAGE = 1000
 
+    // PostgREST caps every response at a server-side max (1000 rows by default), so a single
+    // GET silently truncates a large collection — the newest rows fall off the end and never
+    // reach the phone. Page through with limit/offset over a STABLE order (the composite key)
+    // and stitch the pages together until a short page signals the end.
     suspend fun loadCards(): List<CardRow> = withContext(Dispatchers.IO) {
-        val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "*")
-            .addQueryParameter("deleted", "eq.false")
-            .addQueryParameter("quantity", "gt.0")
-            .build()
-        executeWithReauth {
-            Request.Builder()
-                .url(url)
-                .addHeader("apikey", SupabaseCloud.key())
-                .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
-                .get()
+        val out = ArrayList<CardRow>()
+        var offset = 0
+        while (true) {
+            val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
+                .addQueryParameter("select", "*")
+                .addQueryParameter("deleted", "eq.false")
+                .addQueryParameter("quantity", "gt.0")
+                .addQueryParameter("order", "id.asc,set_code.asc,language.asc,rarity.asc")
+                .addQueryParameter("limit", PAGE.toString())
+                .addQueryParameter("offset", offset.toString())
                 .build()
-        }.use { resp ->
-            val text = resp.body?.string() ?: "[]"
-            if (!resp.isSuccessful) throw RuntimeException("Laden fehlgeschlagen (${resp.code}): $text")
-            parse(JSONArray(text))
+            val page = executeWithReauth {
+                Request.Builder()
+                    .url(url)
+                    .addHeader("apikey", SupabaseCloud.key())
+                    .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
+                    .get()
+                    .build()
+            }.use { resp ->
+                val text = resp.body?.string() ?: "[]"
+                if (!resp.isSuccessful) throw RuntimeException("Laden fehlgeschlagen (${resp.code}): $text")
+                parse(JSONArray(text))
+            }
+            out.addAll(page)
+            if (page.size < PAGE) break
+            offset += PAGE
         }
+        out
     }
 
     private fun auth(b: Request.Builder) = b

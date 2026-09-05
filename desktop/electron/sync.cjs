@@ -139,26 +139,43 @@ function startSync(db, getWindow) {
 
   async function pull(c) {
     const cursor = getSetting(db, 'sync_last_pull') || '1970-01-01T00:00:00Z';
-    const { data, error } = await c.from('cards').select('*').gt('updated_at', cursor).order('updated_at');
-    if (error) throw new Error('Pull failed: ' + error.message);
-    if (!data || data.length === 0) return 0;
+    // PostgREST caps each response at ~1000 rows. A single unpaginated select could return
+    // only the first 1000 rows changed since the cursor and then advance the cursor to that
+    // page's last updated_at — permanently skipping the rest (and any row sharing the boundary
+    // timestamp). Page through everything > cursor in this cycle over a STABLE order
+    // (updated_at, then the composite key) and only advance the cursor once fully drained.
+    const PAGE = 1000;
     let appliedCount = 0;
-    db.transaction(() => {
-      for (const r of data) {
-        const key = `${r.id}|${r.set_code}|${r.language}`;
-        if (recentlyPushed.get(key) === r.updated_at) {
-          // Our own echo: the desktop pushed this row and this is the cloud trigger's
-          // re-stamp coming back. Skip applying it so we don't re-dirty local state.
-          recentlyPushed.delete(key);
-          continue;
+    let lastTs = null;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await c.from('cards').select('*')
+        .gt('updated_at', cursor)
+        .order('updated_at', { ascending: true })
+        .order('id', { ascending: true })
+        .order('set_code', { ascending: true })
+        .order('language', { ascending: true })
+        .order('rarity', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error('Pull failed: ' + error.message);
+      if (!data || data.length === 0) break;
+      db.transaction(() => {
+        for (const r of data) {
+          const key = `${r.id}|${r.set_code}|${r.language}`;
+          if (recentlyPushed.get(key) === r.updated_at) {
+            // Our own echo: the desktop pushed this row and this is the cloud trigger's
+            // re-stamp coming back. Skip applying it so we don't re-dirty local state.
+            recentlyPushed.delete(key);
+            continue;
+          }
+          applyRemoteRow(db, r);
+          appliedCount++;
         }
-        applyRemoteRow(db, r);
-        appliedCount++;
-      }
-    })();
-    // Advance past everything fetched (including skipped echoes) — rows are ordered
-    // by updated_at ascending, so the cursor never jumps past a row we didn't see.
-    setSetting(db, 'sync_last_pull', data[data.length - 1].updated_at);
+      })();
+      // updated_at is the primary sort key, so the last row of the last page is the max.
+      lastTs = data[data.length - 1].updated_at;
+      if (data.length < PAGE) break;
+    }
+    if (lastTs) setSetting(db, 'sync_last_pull', lastTs);
     return appliedCount;
   }
 
