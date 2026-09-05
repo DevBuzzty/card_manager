@@ -1,6 +1,9 @@
 const { createClient } = require('@supabase/supabase-js');
 const { totalValue, copyCount } = require('./valuation.cjs');
 
+// Columns mirrored to the cloud (desktop is authoritative for all of them).
+// cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
+// phone's rows and skip manual prices (price_locked = 2) without the desktop being on.
 // quantity is NOT mirrored any more: both sides derive it from card_copies via triggers.
 const MIRROR_COLS = ['id', 'set_code', 'language', 'name', 'type', 'desc',
   'image_url', 'atk', 'def', 'level', 'race', 'attribute',
