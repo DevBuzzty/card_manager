@@ -23,8 +23,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Snapshot
 import com.example.yugiohscanner.cloud.SnapshotsRepository
+import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
@@ -38,6 +40,7 @@ import com.example.yugiohscanner.ui.theme.Primary
 @Composable
 fun PortfolioScreen() {
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
+    var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
     var snapshots by remember { mutableStateOf<List<Snapshot>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -46,7 +49,8 @@ fun PortfolioScreen() {
         try {
             val c = CollectionRepository.loadCards()
             cards = c
-            val dash = computeDashboard(c)
+            copies = CollectionRepository.loadCopies()
+            val dash = computeDashboard(c, copies)
             // Record today's value + read the history for the chart. Non-fatal if the
             // portfolio_snapshots table isn't set up yet.
             try {
@@ -58,7 +62,8 @@ fun PortfolioScreen() {
     }
     if (loading) { CircularProgressIndicator(); return }
 
-    val d = computeDashboard(cards)
+    val d = computeDashboard(cards, copies)
+    val byKey = copies.groupBy { it.printingKey() }
 
     Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
         error?.let {
@@ -119,7 +124,7 @@ fun PortfolioScreen() {
             Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                 Text(c.name ?: c.id, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface)
-                ValueText((c.price ?: 0.0) * c.quantity, style = MaterialTheme.typography.bodySmall)
+                ValueText(printingValue(c, byKey), style = MaterialTheme.typography.bodySmall)
             }
         }
 

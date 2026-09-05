@@ -20,8 +20,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.Valuation
+import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ui.components.RarityChip
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
@@ -33,14 +37,16 @@ import com.example.yugiohscanner.ui.theme.Primary
 import kotlinx.coroutines.launch
 
 @Composable
-fun CardDetailScreen(cardId: String, initial: List<CardRow>, onClose: () -> Unit, onChanged: () -> Unit) {
+fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List<CopyRow>, onClose: () -> Unit, onChanged: () -> Unit) {
     var printings by remember { mutableStateOf(initial.filter { it.id == cardId }) }
+    var copies by remember { mutableStateOf(initialCopies.filter { it.cardId == cardId }) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    // Reload this card's printings from the cloud after a mutation, and tell the parent to refresh.
+    // Reload this card's printings and copies from the cloud after a mutation, and tell the parent to refresh.
     suspend fun refresh() {
         printings = CollectionRepository.loadCards().filter { it.id == cardId }
+        copies = CollectionRepository.loadCopies().filter { it.cardId == cardId }
         onChanged()
     }
 
@@ -98,41 +104,46 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, onClose: () -> Unit
         }
 
         Spacer(Modifier.height(16.dp))
-        SectionHeader("Deine Varianten")
+        SectionHeader("Deine Exemplare")
         Spacer(Modifier.height(8.dp))
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val byKey = copies.groupBy { it.printingKey() }
         printings.forEach { v ->
+            val mine = byKey[v.printingKey()] ?: emptyList()
+            val migrated = mine.isNotEmpty() || v.quantity == 0
             SpaceCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            RarityChip(v.rarity)
-                            Text(v.setCode, style = MaterialTheme.typography.bodyMedium,
-                                fontFamily = MonoFontFamily, color = Muted)
+                Column(Modifier.padding(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        RarityChip(v.rarity)
+                        Text(v.setCode, style = MaterialTheme.typography.bodyMedium, fontFamily = MonoFontFamily, color = Muted, modifier = Modifier.weight(1f))
+                        ValueText(Valuation.valueOf(v.price, mine), style = MaterialTheme.typography.bodyMedium)
+                        IconButton(onClick = { scope.launch { try { CollectionRepository.softDelete(v); error = null; refresh() } catch (e: Exception) { error = e.message } } }) {
+                            Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error)
                         }
-                        Spacer(Modifier.height(4.dp))
-                        ValueText(v.price, style = MaterialTheme.typography.bodySmall)
                     }
-                    IconButton(onClick = {
-                        if (v.quantity > 1) scope.launch {
-                            try { CollectionRepository.removeCopies(v, "unknown", "NM"); error = null; refresh() }
-                            catch (e: Exception) { error = e.message }
+                    if (!migrated) {
+                        Text("${v.quantity}× NM · Unbek. (nicht migriert – Desktop einmal starten)", style = MaterialTheme.typography.bodySmall, color = Muted)
+                    }
+                    Valuation.group(mine).forEach { g ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(enabled = migrated, onClick = { scope.launch { try { CollectionRepository.removeCopies(v, g.edition, g.condition); error = null; refresh() } catch (e: Exception) { error = e.message } } }) {
+                                Icon(Icons.Default.Remove, "−", tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Text("${g.count}×", fontFamily = MonoFontFamily, color = MaterialTheme.colorScheme.onSurface)
+                            IconButton(enabled = migrated, onClick = { scope.launch { try { CollectionRepository.addCopies(v, g.edition, g.condition); error = null; refresh() } catch (e: Exception) { error = e.message } } }) {
+                                Icon(Icons.Default.Add, "+", tint = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            CopyChip(g.edition, g.condition) { e, c ->
+                                scope.launch { try { CollectionRepository.updateCopyGroup(v, g.edition, g.condition, e, c); error = null; refresh() } catch (ex: Exception) { error = ex.message } }
+                            }
+                            Spacer(Modifier.weight(1f))
+                            ValueText(Valuation.valueOf(v.price, mine.filter { it.edition == g.edition && it.condition == g.condition }), style = MaterialTheme.typography.bodySmall)
                         }
-                    }) { Icon(Icons.Default.Remove, "−", tint = MaterialTheme.colorScheme.primary) }
-                    Text("${v.quantity}", fontFamily = MonoFontFamily,
-                        color = MaterialTheme.colorScheme.onSurface)
-                    IconButton(onClick = {
-                        scope.launch {
-                            try { CollectionRepository.addCopies(v, "unknown", "NM"); error = null; refresh() }
-                            catch (e: Exception) { error = e.message }
-                        }
-                    }) { Icon(Icons.Default.Add, "+", tint = MaterialTheme.colorScheme.primary) }
-                    IconButton(onClick = {
-                        scope.launch {
-                            try { CollectionRepository.softDelete(v); error = null; refresh() }
-                            catch (e: Exception) { error = e.message }
-                        }
-                    }) { Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error) }
+                    }
+                    TextButton(enabled = migrated, onClick = {
+                        scope.launch { try { CollectionRepository.addCopies(v, Prefs.defaultEdition(ctx), Prefs.defaultCondition(ctx)); error = null; refresh() } catch (e: Exception) { error = e.message } }
+                    }) { Text("Exemplar hinzufügen", color = MaterialTheme.colorScheme.primary) }
                 }
             }
         }
