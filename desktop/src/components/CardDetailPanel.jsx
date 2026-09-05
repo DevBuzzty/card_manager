@@ -28,7 +28,8 @@ export default function CardDetailPanel() {
     if (!window.api) return;
     const rows = (await window.api.getCollection()).filter(r => String(r.id) === String(printing.id));
     if (rows.length === 0) { setCard(null); return; }
-    const primary = rows.find(r => r.set_code === printing.set_code && r.rarity === printing.rarity) || rows[0];
+    const primary = rows.find(r => r.set_code === printing.set_code && r.rarity === printing.rarity
+      && (r.language || 'DE') === printing.language) || rows[0];
     setCard({ ...primary, variants: rows });
   };
   useEffect(() => { loadCard(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [params.id]);
@@ -210,7 +211,7 @@ export default function CardDetailPanel() {
           </div>
 
           <div className="space-y-3 mb-4">
-              {localVariants.length === 0 && <p className="text-gray-500 text-sm italic">No variants owned.</p>}
+              {localVariants.length === 0 && <p className="text-gray-500 text-sm italic">Noch keine Exemplare.</p>}
               {localVariants.map((variant, idx2) => (
                   <div key={idx2} className="flex flex-col gap-2 bg-black/40 p-2 rounded-lg border border-gray-800">
                       <div className="flex items-start justify-between">
@@ -227,6 +228,7 @@ export default function CardDetailPanel() {
                                   const price = parseFloat(e.target.value);
                                   if (isNaN(price)) return;
                                   await window.api.setCardPrice({ id: card.id, set_code: variant.set_code, language: variant.language || 'DE', rarity: variant.rarity, price });
+                                  window.dispatchEvent(new Event('collection-dirty'));
                                 }}
                                 className="w-16 bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white"
                                 title="Preis manuell setzen (überschreibt Auto-Preis)" />
@@ -274,7 +276,7 @@ export default function CardDetailPanel() {
                    <CustomSelect
                         value={selectedNewSet}
                         onChange={setSelectedNewSet}
-                        placeholder="Select Set..."
+                        placeholder="Printing wählen…"
                         options={(() => {
                             // Deduplicate sets based on set_code + rarity
                             const unique = new Map();
@@ -303,7 +305,7 @@ export default function CardDetailPanel() {
                       disabled={!selectedNewSet || isAdding}
                       className="bg-space-violet hover:bg-violet-600 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                      {isAdding ? 'Adding...' : 'Add'}
+                      {isAdding ? 'Füge hinzu…' : 'Hinzufügen'}
                   </button>
               </div>
           </div>
