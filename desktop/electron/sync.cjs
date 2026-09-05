@@ -181,7 +181,11 @@ function startSync(db, getWindow) {
 
   async function push(c) {
     const cursor = getSetting(db, 'sync_last_push') || '1970-01-01T00:00:00Z';
-    const changed = db.prepare('SELECT * FROM cards WHERE updated_at > ?').all(cursor);
+    // Exclude rows stamped in the current second: a row's updated_at only has second
+    // precision, so a write landing after this SELECT but still within the same second
+    // as `cursor` would advance past it unpushed once the cursor moves to today's max.
+    // Deferring same-second rows to the next cycle keeps every row eventually pushed.
+    const changed = db.prepare("SELECT * FROM cards WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
     if (changed.length > 0) {
       const { data, error } = await c.from('cards')
         .upsert(changed.map(rowToRemote), { onConflict: 'id,set_code,language,rarity' })
@@ -221,7 +225,7 @@ function startSync(db, getWindow) {
 
   async function pushCopies(c) {
     const cursor = getSetting(db, 'sync_copies_last_push') || '1970-01-01T00:00:00Z';
-    const changed = db.prepare('SELECT * FROM card_copies WHERE updated_at > ?').all(cursor);
+    const changed = db.prepare("SELECT * FROM card_copies WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
     if (changed.length === 0) return;
     for (let i = 0; i < changed.length; i += 500) {
       const { data, error } = await c.from('card_copies')
@@ -235,7 +239,7 @@ function startSync(db, getWindow) {
   // Append-only: the desktop pushes price history, never pulls it (phone charts read the cloud table).
   async function pushPriceHistory(c) {
     const cursor = getSetting(db, 'sync_price_history_last_push') || '1970-01-01T00:00:00Z';
-    const rows = db.prepare('SELECT card_id, set_code, language, rarity, variant, day, price, source, recorded_at FROM price_history WHERE recorded_at > ?').all(cursor);
+    const rows = db.prepare("SELECT card_id, set_code, language, rarity, variant, day, price, source, recorded_at FROM price_history WHERE recorded_at > ? AND recorded_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
     if (rows.length === 0) return;
     for (let i = 0; i < rows.length; i += 500) {
       const { error } = await c.from('price_history')
