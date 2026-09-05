@@ -75,17 +75,14 @@ fun AppNav() {
             startDestination = Routes.START,
             modifier = Modifier.padding(if (showBar) padding else PaddingValues(0.dp)),
         ) {
-            // Task 4 replaces this with StartScreen and drops the temporary "wert" destination;
-            // until then the existing Übersicht keeps working and Wert stays reachable from it.
             composable(Routes.START) {
-                if (cloudReady) UebersichtScreen(
-                    onOpenWert = { nav.navigate("wert") },
+                if (cloudReady) StartScreen(
+                    onOpenSammlung = { nav.navigateTop(Routes.sammlung()) },
                     onOpenScan = { nav.navigate(Routes.SCAN) },
                     onOpenDeals = { nav.navigateTop(Routes.DEALS) },
-                    onOpenSammlung = { nav.navigateTop(Routes.sammlung()) },
+                    onOpenEinstellungen = { nav.navigate(Routes.EINSTELLUNGEN) },
                 ) else CloudLoginScreen(prefs) { cloudReady = true }
             }
-            composable("wert") { PortfolioScreen() }
             composable(
                 Routes.SAMMLUNG,
                 arguments = listOf(navArgument("segment") { type = NavType.StringType; defaultValue = "karten" }),

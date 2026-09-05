@@ -16,11 +16,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,11 +43,12 @@ import com.example.yugiohscanner.cloud.DealsRepository
 import com.example.yugiohscanner.cloud.SetsRepository
 import com.example.yugiohscanner.cloud.Snapshot
 import com.example.yugiohscanner.cloud.SnapshotsRepository
-import com.example.yugiohscanner.cloud.WishlistRepository
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Background
+import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Line
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
@@ -55,15 +59,16 @@ import kotlinx.coroutines.launch
 // A couple of sets closest to (but not yet at) 100% completion — owned/total.
 private data class SetProgressRow(val name: String, val owned: Int, val total: Int)
 
-// App landing page: aggregates value, deals, wishlist and set progress from the cloud
-// repositories into one scrollable overview, with quick-action shortcuts. Every source
-// loads in its own try/catch so a missing table or network error just hides that section.
+// App landing page: merges the old Übersicht (quick actions, deal preview, set progress) and
+// Wert (value chart + breakdowns) tabs into one scrollable Start page, plus the profile entry
+// point into Einstellungen. Every source loads in its own try/catch so a missing table or
+// network error just hides that section.
 @Composable
-fun UebersichtScreen(
-    onOpenWert: () -> Unit,
+fun StartScreen(
+    onOpenSammlung: () -> Unit,
     onOpenScan: () -> Unit,
     onOpenDeals: () -> Unit,
-    onOpenSammlung: () -> Unit,
+    onOpenEinstellungen: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
@@ -71,8 +76,8 @@ fun UebersichtScreen(
     var snapshots by remember { mutableStateOf<List<Snapshot>>(emptyList()) }
     var dealAlertCount by remember { mutableStateOf(0) }
     var topDeals by remember { mutableStateOf<List<DealAlert>>(emptyList()) }
-    var wishlistCount by remember { mutableStateOf(0) }
     var setProgress by remember { mutableStateOf<List<SetProgressRow>>(emptyList()) }
+    var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
     var loading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
@@ -102,6 +107,10 @@ fun UebersichtScreen(
             } catch (_: Exception) {}
 
             try {
+                val dash = computeDashboard(cards, copies)
+                // Record today's value + read the history for the chart. Non-fatal if the
+                // portfolio_snapshots table isn't set up yet.
+                SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
                 snapshots = SnapshotsRepository.loadSnapshots()
             } catch (_: Exception) {}
 
@@ -109,10 +118,6 @@ fun UebersichtScreen(
                 val alerts = DealsRepository.loadAlerts()
                 dealAlertCount = alerts.size
                 topDeals = alerts.take(2)
-            } catch (_: Exception) {}
-
-            try {
-                wishlistCount = WishlistRepository.loadWishlist().size
             } catch (_: Exception) {}
 
             loading = false
@@ -129,46 +134,74 @@ fun UebersichtScreen(
 
         val d = computeDashboard(cards, copies)
 
+        // Window the history by the selected timeframe, spacing points by their real date.
+        val nowOrd = System.currentTimeMillis() / 86_400_000L
+        val cutoff = if (timeframe == Int.MAX_VALUE) 0L else nowOrd - timeframe
+        val windowSnaps = snapshots.filter { dayOrdinal(it.day) >= cutoff }
+        val points = windowSnaps.map { dayOrdinal(it.day) to it.totalValue }
+        val startVal = windowSnaps.firstOrNull()?.totalValue ?: d.totalValue
+        val change = d.totalValue - startVal
+        val changePct = if (startVal > 0) change / startVal * 100 else 0.0
+
         Column(
             Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Übersicht", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Start", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
+                IconButton(onClick = onOpenEinstellungen) {
+                    Icon(Icons.Default.AccountCircle, "Einstellungen", tint = Primary)
+                }
+            }
 
-            // Value hero.
-            SpaceCard(Modifier.fillMaxWidth().clickable { onOpenWert() }) {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            // Value hero: total, Δ, timeframe chips, chart.
+            SpaceCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
                     SectionHeader("Gesamtwert")
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        "%.2f €".format(d.totalValue),
-                        style = MaterialTheme.typography.displaySmall,
-                        fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold,
-                    )
-                    Text(
-                        "${d.totalCards} Karten · ${d.entries} Einträge",
-                        style = MaterialTheme.typography.bodySmall, color = Muted,
-                    )
-                    if (snapshots.size >= 2) {
-                        Spacer(Modifier.height(12.dp))
-                        ValueMiniChart(
-                            snapshots.map { it.totalValue },
-                            Modifier.fillMaxWidth().height(48.dp),
+                    Text("%.2f €".format(d.totalValue), style = MaterialTheme.typography.displaySmall,
+                        fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
+                    Text("${d.totalCards} Karten · ${d.entries} Einträge",
+                        style = MaterialTheme.typography.bodySmall, color = Muted)
+                    if (windowSnaps.size >= 2) {
+                        val up = change >= 0
+                        Text(
+                            "${if (up) "+" else ""}%.2f € (%.1f%%)".format(change, changePct),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = MonoFontFamily, color = if (up) Good else ErrorColor,
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Wert ansehen ›",
-                        style = MaterialTheme.typography.labelSmall, color = Primary,
-                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(7 to "1W", 30 to "1M", 90 to "3M", 365 to "1J", Int.MAX_VALUE to "Alles")
+                            .forEach { (days, label) ->
+                                FilterChip(
+                                    selected = timeframe == days,
+                                    onClick = { timeframe = days },
+                                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                )
+                            }
+                    }
+                    if (points.size >= 2) {
+                        Spacer(Modifier.height(12.dp))
+                        ValueChart(points, Modifier.fillMaxWidth().height(64.dp))
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Noch zu wenig Verlauf für diesen Zeitraum.",
+                            style = MaterialTheme.typography.labelSmall, color = Muted)
+                    }
                 }
             }
 
             // Quick actions.
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 QuickAction("Scannen", Icons.Default.CameraAlt, Modifier.weight(1f), onOpenScan)
-                QuickAction("Deals", Icons.Default.Sell, Modifier.weight(1f), onOpenDeals)
                 QuickAction("Sammlung", Icons.Default.Style, Modifier.weight(1f), onOpenSammlung)
+                QuickAction("Deals", Icons.Default.Sell, Modifier.weight(1f), onOpenDeals)
             }
 
             // Deals.
@@ -195,18 +228,6 @@ fun UebersichtScreen(
                             }
                         }
                     }
-                }
-            }
-
-            // Wishlist.
-            SpaceCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    SectionHeader("Wishlist")
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        if (wishlistCount == 0) "Keine Wunschkarten" else "$wishlistCount Wunschkarten",
-                        style = MaterialTheme.typography.bodyMedium, color = OnSurface,
-                    )
                 }
             }
 
@@ -241,6 +262,11 @@ fun UebersichtScreen(
                     }
                 }
             }
+
+            StatSection("Nach Rarität", d.byRarity)
+            StatSection("Nach Typ", d.byType)
+            StatSection("Nach Set", d.bySet)
+            StatSection("Nach Attribut", d.byAttribute)
         }
     }
 }
@@ -259,21 +285,38 @@ private fun QuickAction(label: String, icon: ImageVector, modifier: Modifier, on
     }
 }
 
-// Minimal value-over-time line chart (no chart library) — same approach as PortfolioScreen.
 @Composable
-private fun ValueMiniChart(values: List<Double>, modifier: Modifier) {
+private fun StatSection(title: String, groups: List<StatGroup>) {
+    Spacer(Modifier.height(16.dp))
+    SectionHeader(title)
+    Spacer(Modifier.height(4.dp))
+    if (groups.isEmpty()) {
+        Text("Keine Daten", style = MaterialTheme.typography.bodySmall, color = Muted)
+        return
+    }
+    val maxCount = groups.maxOf { it.count }.coerceAtLeast(1)
+    groups.forEach { g -> StatBar(g.label, g.count, g.value, g.count.toFloat() / maxCount) }
+}
+
+// Minimal value-over-time line chart (no chart library): a violet polyline with a soft fill.
+// Points are (day-ordinal, value) so the x-axis reflects real elapsed time, not just index.
+@Composable
+private fun ValueChart(points: List<Pair<Long, Double>>, modifier: Modifier) {
     Canvas(modifier) {
-        if (values.size < 2) return@Canvas
+        if (points.size < 2) return@Canvas
+        val values = points.map { it.second }
         val min = values.min()
         val max = values.max()
         val range = (max - min).coerceAtLeast(1e-6)
-        val dx = size.width / (values.size - 1)
+        val minOrd = points.first().first
+        val ordRange = (points.last().first - minOrd).coerceAtLeast(1L).toFloat()
         val pad = size.height * 0.12f
         fun y(v: Double): Float = (size.height - pad - ((v - min) / range).toFloat() * (size.height - 2 * pad))
+        fun x(ord: Long): Float = (ord - minOrd).toFloat() / ordRange * size.width
         val line = Path()
-        values.forEachIndexed { i, v ->
-            val x = i * dx; val yy = y(v)
-            if (i == 0) line.moveTo(x, yy) else line.lineTo(x, yy)
+        points.forEachIndexed { i, (ord, v) ->
+            val xx = x(ord); val yy = y(v)
+            if (i == 0) line.moveTo(xx, yy) else line.lineTo(xx, yy)
         }
         val fill = Path().apply {
             addPath(line); lineTo(size.width, size.height); lineTo(0f, size.height); close()
@@ -282,3 +325,8 @@ private fun ValueMiniChart(values: List<Double>, modifier: Modifier) {
         drawPath(line, Primary, style = Stroke(width = 3f))
     }
 }
+
+private val dayFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+private fun dayOrdinal(day: String): Long = try {
+    (dayFmt.parse(day)?.time ?: 0L) / 86_400_000L
+} catch (_: Exception) { 0L }
