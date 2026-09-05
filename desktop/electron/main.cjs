@@ -11,6 +11,8 @@ const { runCardmarketScrape } = require('./cardmarket-scraper.cjs');
 const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { totalValue, copyCount } = require('./valuation.cjs');
+const copies = require('./copies.cjs');
+const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -255,35 +257,34 @@ ipcMain.handle('add-card-to-db', (event, card) => {
     const setCode = card.set_code || 'Unknown';
     const language = card.language || 'DE';
     const rarity = card.rarity || 'Unknown';
+    const printing = { id, set_code: setCode, language, rarity };
+    // Copies to create: explicit groups from the staging chip, else quantity × defaults.
+    const groups = (Array.isArray(card.copies) && card.copies.length) ? card.copies : [{ count: card.quantity || 1 }];
 
-    // Identity includes rarity: the same set code in two rarities (e.g. Secret Rare + Ultra Rare)
-    // are distinct printings, each with its own quantity/price.
     const existing = db.prepare('SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?').get(id, setCode, language, rarity);
-
-    if (existing) {
-        const newQty = existing.quantity + (card.quantity || 1);
-        db.prepare('UPDATE cards SET quantity = @qty, price = @price, deleted = 0 WHERE id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity').run({
-            qty: newQty, price: card.price || 0, id, set_code: setCode, language, rarity
-        });
-        return { success: true, updated: true };
-    } else {
-        const stmt = db.prepare(`
-          INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language)
-          VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute, @quantity, @rarity, @set_code, @price, @language)
-        `);
-        const imageUrl = card.card_images && card.card_images.length > 0 ? card.card_images[0].image_url : '';
+    let inserted = false;
+    const copiesAdded = db.transaction(() => {
+      if (existing) {
+        db.prepare('UPDATE cards SET price = @price, deleted = 0 WHERE id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity')
+          .run({ price: card.price || 0, id, set_code: setCode, language, rarity });
+      } else {
+        const imageUrl = card.card_images && card.card_images.length > 0 ? card.card_images[0].image_url : (card.image_url || '');
         let level = card.level;
         if (card.type && card.type.includes('Link') && card.linkval !== undefined) level = card.linkval;
-
-        stmt.run({
+        db.prepare(`INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language)
+          VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute, 0, @rarity, @set_code, @price, @language)`).run({
           id, name: card.name, type: card.type, desc: card.desc, image_url: imageUrl,
           atk: valOrNull(card.atk), def: valOrNull(card.def), level: valOrNull(level),
           race: card.race || null, attribute: card.attribute || null,
-          quantity: card.quantity || 1, rarity: card.rarity || 'Unknown',
-          set_code: card.set_code || 'Unknown', price: card.price || 0, language
+          rarity, set_code: setCode, price: card.price || 0, language
         });
-        return { success: true, inserted: true };
-    }
+        inserted = true;
+      }
+      let n = 0;
+      for (const g of groups) n += copies.addCopies(db, printing, { edition: g.edition, condition: g.condition, count: g.count || 1 }).length;
+      return n;
+    })();
+    return inserted ? { success: true, inserted: true, copiesAdded } : { success: true, updated: true, copiesAdded };
   } catch (error) {
     console.error('DB Insert Error:', error);
     return { success: false, error: error.message };
@@ -291,7 +292,22 @@ ipcMain.handle('add-card-to-db', (event, card) => {
 });
 
 ipcMain.handle('get-collection', () => {
-    return db.prepare('SELECT * FROM cards WHERE quantity > 0 AND deleted = 0 ORDER BY created_at DESC').all();
+    const def = copies.defaults(db);
+    return db.prepare(collectionSql()).all({ def_condition: def.condition, def_edition: def.edition });
+});
+ipcMain.handle('get-defaults', () => copies.defaults(db));
+ipcMain.handle('list-copies', (event, printing) => copies.listCopies(db, printing));
+ipcMain.handle('add-copy', (event, { edition, condition, count, ...printing }) => {
+    try { return { success: true, copyIds: copies.addCopies(db, printing, { edition, condition, count }) }; }
+    catch (e) { return { success: false, error: e.message }; }
+});
+ipcMain.handle('remove-copy', (event, { edition, condition, count, ...printing }) => {
+    try { return { success: true, removed: copies.removeCopies(db, printing, { edition, condition, count }) }; }
+    catch (e) { return { success: false, error: e.message }; }
+});
+ipcMain.handle('update-copy-group', (event, { from, to, ...printing }) => {
+    try { return { success: true, changed: copies.updateCopyGroup(db, printing, from, to) }; }
+    catch (e) { return { success: false, error: e.message }; }
 });
 
 ipcMain.handle('delete-card', (event, { id, set_code, language, rarity }) => {
@@ -300,11 +316,10 @@ ipcMain.handle('delete-card', (event, { id, set_code, language, rarity }) => {
         // Delete only the given rarity when specified; without it, remove every rarity of the code
         // (legacy callers). rarity is part of a printing's identity.
         if (rarity !== undefined && rarity !== null) {
-            db.prepare('UPDATE cards SET deleted = 1 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?')
-              .run(String(id), set_code, language || 'DE', rarity);
+            copies.softDeletePrinting(db, { id: String(id), set_code, language: language || 'DE', rarity });
         } else {
-            db.prepare('UPDATE cards SET deleted = 1 WHERE id = ? AND set_code = ? AND language = ?')
-              .run(String(id), set_code, language || 'DE');
+            const rows = db.prepare('SELECT rarity FROM cards WHERE id = ? AND set_code = ? AND language = ? AND deleted = 0').all(String(id), set_code, language || 'DE');
+            for (const r of rows) copies.softDeletePrinting(db, { id: String(id), set_code, language: language || 'DE', rarity: r.rarity });
         }
         return { success: true };
     } catch (e) {
@@ -511,11 +526,11 @@ ipcMain.handle('update-card-meta', (event, data) => {
         // Target the specific printing (incl. rarity) when the caller provides it, so editing the
         // quantity of one rarity doesn't touch the other rarities of the same set code.
         if (quantity !== undefined) {
-            if (rarity !== undefined && rarity !== null) {
-                db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?").run(quantity, id, set_code, language || 'DE', rarity);
-            } else {
-                db.prepare("UPDATE cards SET quantity = ? WHERE id = ? AND set_code = ? AND language = ?").run(quantity, id, set_code, language || 'DE');
-            }
+            const printing = { id: String(id), set_code, language: language || 'DE', rarity: rarity || 'Unknown' };
+            const current = copies.listCopies(db, printing).length;
+            const target = Math.max(0, Number(quantity) || 0);
+            if (target > current) copies.addCopies(db, printing, { count: target - current });
+            else if (target < current) copies.removeCopies(db, printing, { count: current - target });
         }
         return { success: true };
     } catch (e) { return { success: false, error: e.message }; }
@@ -711,7 +726,7 @@ function startPricePoller() {
 
 ipcMain.handle('convert-unknowns-to-default', async () => {
     try {
-        const unknowns = db.prepare("SELECT id, quantity FROM cards WHERE set_code = 'Unknown' AND deleted = 0").all();
+        const unknowns = db.prepare("SELECT id, quantity, language, rarity FROM cards WHERE set_code = 'Unknown' AND deleted = 0").all();
         let convertedCount = 0;
 
         let priceSource = 'cardmarket';
@@ -729,17 +744,12 @@ ipcMain.handle('convert-unknowns-to-default', async () => {
                         const newRarity = bestSet.set_rarity;
                         const newPrice = parseFloat(bestSet.set_price) || (parseFloat(apiCard.card_prices[0][apiField]) || 0);
 
-                        // Check existing (same printing incl. rarity)
-                        const existing = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND language = 'DE' AND rarity = ?").get(unknown.id, newSetCode, newRarity);
-                        if (existing) {
-                            db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ? AND language = 'DE' AND rarity = ?").run(existing.quantity + unknown.quantity, unknown.id, newSetCode, newRarity);
-                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
-                        } else {
-                            db.prepare(`INSERT OR IGNORE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language, deleted)
-  SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, ?, ?, ?, language, 0
+                        const target = { id: unknown.id, set_code: newSetCode, language: 'DE', rarity: newRarity };
+                        db.prepare(`INSERT OR IGNORE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language, deleted)
+  SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, 0, ?, ?, ?, 'DE', 0
   FROM cards WHERE id = ? AND set_code = 'Unknown'`).run(newRarity, newSetCode, newPrice, unknown.id);
-                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = 'Unknown'").run(unknown.id);
-                        }
+                        db.prepare("UPDATE cards SET deleted = 0, price = ? WHERE id = ? AND set_code = ? AND language = 'DE' AND rarity = ?").run(newPrice, unknown.id, newSetCode, newRarity);
+                        copies.moveCopies(db, { id: unknown.id, set_code: 'Unknown', language: unknown.language || 'DE', rarity: unknown.rarity || 'Unknown' }, target);
                         convertedCount++;
                     }
                 }
@@ -751,14 +761,13 @@ ipcMain.handle('convert-unknowns-to-default', async () => {
 
 ipcMain.handle('merge-unknown-cards', async () => {
     try {
-        const unknowns = db.prepare("SELECT id, quantity FROM cards WHERE set_code = 'Unknown' AND deleted = 0").all();
+        const unknowns = db.prepare("SELECT id, quantity, language, rarity FROM cards WHERE set_code = 'Unknown' AND deleted = 0").all();
         let mergedCount = 0;
         db.transaction(() => {
             unknowns.forEach(u => {
-                const specific = db.prepare("SELECT id, set_code, rarity, language, quantity FROM cards WHERE id = ? AND set_code != 'Unknown' AND deleted = 0 ORDER BY quantity DESC LIMIT 1").get(u.id);
+                const specific = db.prepare("SELECT id, set_code, rarity, language FROM cards WHERE id = ? AND set_code != 'Unknown' AND deleted = 0 ORDER BY quantity DESC LIMIT 1").get(u.id);
                 if (specific) {
-                    db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").run(specific.quantity + u.quantity, specific.id, specific.set_code, specific.rarity, specific.language);
-                    db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = 'Unknown'").run(u.id);
+                    copies.moveCopies(db, { id: u.id, set_code: 'Unknown', language: u.language || 'DE', rarity: u.rarity || 'Unknown' }, specific);
                     mergedCount++;
                 }
             });
@@ -908,15 +917,7 @@ ipcMain.handle('import-csv', async () => {
     const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile'], filters: [{ name: 'CSV', extensions: ['csv'] }] });
     if (result.canceled || result.filePaths.length === 0) return { canceled: true };
     const content = fs.readFileSync(result.filePaths[0], 'utf-8');
-    const lines = content.split(/\r?\n/);
-    const cards = [];
-    for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].split(';'); // support semicolon csv
-        if (parts.length >= 2) {
-            const passcode = parts[1].trim();
-            if (/^\d+$/.test(passcode)) cards.push({ passcode });
-        }
-    }
+    const cards = parseImportCsv(content);
     return { canceled: false, cards };
 });
 
@@ -1010,16 +1011,12 @@ ipcMain.handle('downgrade-to-lowest-rarity', async (event) => {
                         const newRarity = bestSet.set_rarity;
                         const newPrice = parseFloat(bestSet.set_price) || (parseFloat(apiCard.card_prices[0][apiField]) || 0);
 
-                        const existingTarget = db.prepare("SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").get(card.id, newSetCode, newRarity, card.language);
-                        if (existingTarget) {
-                            db.prepare("UPDATE cards SET quantity = ?, deleted = 0 WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").run(existingTarget.quantity + current.quantity, card.id, newSetCode, newRarity, card.language);
-                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").run(card.id, card.set_code, card.rarity, card.language);
-                        } else {
-                            db.prepare(`INSERT OR IGNORE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language, deleted)
-  SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, ?, ?, ?, language, 0
+                        const target = { id: card.id, set_code: newSetCode, language: card.language, rarity: newRarity };
+                        db.prepare(`INSERT OR IGNORE INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language, deleted)
+  SELECT id, name, type, desc, image_url, atk, def, level, race, attribute, 0, ?, ?, ?, language, 0
   FROM cards WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?`).run(newRarity, newSetCode, newPrice, card.id, card.set_code, card.rarity, card.language);
-                            db.prepare("UPDATE cards SET deleted = 1, quantity = 0 WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").run(card.id, card.set_code, card.rarity, card.language);
-                        }
+                        db.prepare("UPDATE cards SET deleted = 0 WHERE id = ? AND set_code = ? AND rarity = ? AND language = ?").run(card.id, newSetCode, newRarity, card.language);
+                        copies.moveCopies(db, card, target);
                         changedCount++;
                     }
                 }
