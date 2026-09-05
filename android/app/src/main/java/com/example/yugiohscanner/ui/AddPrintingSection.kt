@@ -7,7 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.PrintingRepository
@@ -23,6 +25,7 @@ fun AddPrintingSection(base: CardRow, owned: List<CardRow>, onError: (String) ->
     var expanded by remember { mutableStateOf(false) }
     var adding by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     Text("Weitere Druckvariante hinzufügen", style = MaterialTheme.typography.titleMedium)
     Button(enabled = !loading, onClick = {
@@ -53,7 +56,7 @@ fun AddPrintingSection(base: CardRow, owned: List<CardRow>, onError: (String) ->
                         Button(enabled = !adding, onClick = {
                             adding = true
                             scope.launch {
-                                try { CollectionRepository.addPrinting(base, s.setCode, s.rarity, s.price, s.language, edition = "unknown", condition = "NM"); onAdded(); expanded = false } // STOPGAP(Task 13)
+                                try { CollectionRepository.addPrinting(base, s.setCode, s.rarity, s.price, s.language, edition = Prefs.defaultEdition(context), condition = Prefs.defaultCondition(context)); onAdded(); expanded = false }
                                 catch (e: Exception) { onError(e.message ?: "Hinzufügen fehlgeschlagen") }
                                 adding = false
                             }

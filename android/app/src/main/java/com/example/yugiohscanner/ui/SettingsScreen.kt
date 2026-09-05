@@ -2,6 +2,7 @@ package com.example.yugiohscanner.ui
 
 import android.content.SharedPreferences
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -88,6 +89,29 @@ fun SettingsScreen(prefs: SharedPreferences, onLoggedOut: () -> Unit) {
                         onClick = { priceSource = key; prefs.edit().putString("price_source", key).apply() },
                         label = { Text(label) },
                     )
+                }
+            }
+        }
+
+        // ---- Standards für neue Exemplare --------------------------------------
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        var defEdition by remember { mutableStateOf(com.example.yugiohscanner.Prefs.defaultEdition(ctx)) }
+        var defCondition by remember { mutableStateOf(com.example.yugiohscanner.Prefs.defaultCondition(ctx)) }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionHeader("Standards für neue Exemplare")
+            Text("Jeder Scan legt Exemplare mit diesen Werten an. Abweichungen setzt du pro Zeile.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
+            Text("Zustand", style = MaterialTheme.typography.labelSmall, color = Muted)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                com.example.yugiohscanner.cloud.Valuation.CONDITIONS.forEach { c ->
+                    FilterChip(selected = defCondition == c, onClick = { defCondition = c; com.example.yugiohscanner.Prefs.setDefaultCondition(ctx, c) }, label = { Text(c) })
+                }
+            }
+            Text("Edition", style = MaterialTheme.typography.labelSmall, color = Muted)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                com.example.yugiohscanner.cloud.Valuation.EDITIONS.forEach { e ->
+                    FilterChip(selected = defEdition == e, onClick = { defEdition = e; com.example.yugiohscanner.Prefs.setDefaultEdition(ctx, e) },
+                        label = { Text(com.example.yugiohscanner.cloud.Valuation.EDITION_LABELS[e] ?: e) })
                 }
             }
         }

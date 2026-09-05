@@ -473,7 +473,10 @@ fun ScannerScreen(
                 socket.emit("card_scanned", data)
                 scanStatus = "→ Desktop: $pc"
             } else {
-                val entry = ScanStagingEntry(System.nanoTime(), pc)
+                val entry = ScanStagingEntry(System.nanoTime(), pc).apply {
+                    edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
+                    condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
+                }
                 stagingCards.add(entry)
                 scanStatus = "＋ $pc — Prüfen (${stagingCards.size})"
                 scope.launch {
