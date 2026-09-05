@@ -1,6 +1,7 @@
 package com.example.yugiohscanner.ui
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -43,6 +44,8 @@ import kotlinx.coroutines.launch
 fun DecksScreen(onClose: (() -> Unit)? = null) {
     var openDeck by remember { mutableStateOf<Deck?>(null) }
 
+    // The editor is a sub-view of this destination — system back closes it, not the destination.
+    BackHandler(openDeck != null) { openDeck = null }
     openDeck?.let { deck ->
         DeckEditor(deck, onBack = { openDeck = null })
         return

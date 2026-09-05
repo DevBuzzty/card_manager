@@ -69,6 +69,7 @@ import io.socket.client.Socket
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
@@ -160,8 +161,10 @@ fun ScanScreen(onClose: () -> Unit) {
     // just keep panning without watching the status text.
     val flash = remember { Animatable(0f) }
     // Passcodes already captured this session (phone-staged OR sent to desktop). Dedup so panning
-    // over a card captures it once and re-detections don't spam. Cleared when a batch is committed.
-    val seen = remember { mutableSetOf<String>() }
+    // over a card captures it once and re-detections don't spam. Committed passcodes are dropped
+    // again when a batch is taken over. Concurrent: the analyzer thread adds while the main thread
+    // adds (manual entry) and removes.
+    val seen = remember { ConcurrentHashMap.newKeySet<String>() }
 
     // Phone-side scan staging — a scan always lands here; a connected desktop additionally gets a
     // mirror of the scan (see onConfirmed below).
@@ -529,7 +532,12 @@ fun ScanScreen(onClose: () -> Unit) {
         }
         if (showSheet) {
             ModalBottomSheet(onDismissRequest = { showSheet = false }, sheetState = sheetState) {
-                ScanStagingSheet(entries = stagingCards, onCommitted = { seen.clear(); showSheet = false })
+                ScanStagingSheet(
+                    entries = stagingCards,
+                    // Only forget what was actually committed — entries left in the sheet (still
+                    // resolving) must not be staged a second time.
+                    onCommitted = { passcodes -> seen.removeAll(passcodes.toSet()); showSheet = false },
+                )
             }
         }
 

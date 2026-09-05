@@ -60,6 +60,14 @@ object SupabaseCloud {
         }
     }
 
+    // Drops the session: the live token AND the credentials it was minted from, so nothing can
+    // keep writing to the account after "Abmelden". A later login re-fills them via init(prefs).
+    fun signOut() {
+        accessToken = null
+        email = ""
+        password = ""
+    }
+
     internal fun http(): OkHttpClient = client
     internal fun base(): String = baseUrl
     internal fun key(): String = apiKey

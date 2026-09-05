@@ -44,11 +44,14 @@ object Routes {
 }
 
 // Top-level destinations: the bottom bar switches between them and each keeps its own back stack.
-private data class TopLevel(val route: String, val label: String, val icon: ImageVector)
+// `route` is the navigation target, `match` the first path segment of the registered pattern —
+// Sammlung navigates to "sammlung/karten" but is registered as "sammlung/{segment}", so the
+// selected state has to compare prefixes, not whole routes.
+private data class TopLevel(val route: String, val match: String, val label: String, val icon: ImageVector)
 private val TOP_LEVEL = listOf(
-    TopLevel(Routes.START, "Start", Icons.Default.Home),
-    TopLevel(Routes.sammlung(), "Sammlung", Icons.Default.Style),
-    TopLevel(Routes.DEALS, "Deals", Icons.Default.Sell),
+    TopLevel(Routes.START, "start", "Start", Icons.Default.Home),
+    TopLevel(Routes.sammlung(), "sammlung", "Sammlung", Icons.Default.Style),
+    TopLevel(Routes.DEALS, "deals", "Deals", Icons.Default.Sell),
 )
 
 @Composable
@@ -78,7 +81,7 @@ fun AppNav() {
             composable(Routes.START) {
                 if (cloudReady) StartScreen(
                     onOpenSammlung = { nav.navigateTop(Routes.sammlung()) },
-                    onOpenScan = { nav.navigate(Routes.SCAN) },
+                    onOpenScan = { nav.navigate(Routes.SCAN) { launchSingleTop = true } },
                     onOpenDeals = { nav.navigateTop(Routes.DEALS) },
                     onOpenEinstellungen = { nav.navigate(Routes.EINSTELLUNGEN) },
                 ) else CloudLoginScreen(prefs) { cloudReady = true }
@@ -93,14 +96,22 @@ fun AppNav() {
                     onOpenSuche = { nav.navigate(Routes.SUCHE) },
                 ) else CloudLoginScreen(prefs) { cloudReady = true }
             }
-            composable(Routes.SCAN) { ScanScreen(onClose = { nav.popBackStack() }) }
+            composable(Routes.SCAN) {
+                if (cloudReady) ScanScreen(onClose = { nav.popBackStack() })
+                else CloudLoginScreen(prefs) { cloudReady = true }
+            }
             composable(Routes.DEALS) {
                 if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { cloudReady = true }
             }
             composable(Routes.EINSTELLUNGEN) {
-                SettingsScreen(prefs, onBack = { nav.popBackStack() }) { cloudReady = false; nav.popBackStack() }
+                SettingsScreen(prefs, onBack = { nav.popBackStack() }) {
+                    SupabaseCloud.signOut(); cloudReady = false; nav.popBackStack()
+                }
             }
-            composable(Routes.SUCHE) { SearchScreen(onClose = { nav.popBackStack() }, onAdded = {}) }
+            composable(Routes.SUCHE) {
+                if (cloudReady) SearchScreen(onClose = { nav.popBackStack() }, onAdded = {})
+                else CloudLoginScreen(prefs) { cloudReady = true }
+            }
         }
     }
 }
@@ -128,7 +139,7 @@ private fun AppBottomBar(nav: NavHostController) {
         }
         Box(
             Modifier.align(Alignment.TopCenter).size(60.dp).clip(CircleShape)
-                .background(Primary).clickable { nav.navigate(Routes.SCAN) },
+                .background(Primary).clickable { nav.navigate(Routes.SCAN) { launchSingleTop = true } },
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Default.CameraAlt, "Scannen", tint = Color.White, modifier = Modifier.size(28.dp)) }
     }
@@ -136,7 +147,7 @@ private fun AppBottomBar(nav: NavHostController) {
 
 @Composable
 private fun NavItem(modifier: Modifier, item: TopLevel, current: androidx.navigation.NavDestination?, nav: NavHostController) {
-    val selected = current?.hierarchy?.any { it.route == item.route } == true
+    val selected = current?.hierarchy?.any { it.route?.substringBefore('/') == item.match } == true
     val tint = if (selected) Primary else Muted
     Column(
         modifier.fillMaxHeight().clickable { nav.navigateTop(item.route) },

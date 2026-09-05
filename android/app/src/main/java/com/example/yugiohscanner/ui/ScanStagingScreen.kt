@@ -53,7 +53,9 @@ class ExtraPrinting {
 @Composable
 fun ScanStagingSheet(
     entries: SnapshotStateList<ScanStagingEntry>,
-    onCommitted: () -> Unit,
+    // Passcodes of the entries that were actually committed — the camera keeps running behind the
+    // sheet, so the caller may only forget exactly these.
+    onCommitted: (List<String>) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var committing by remember { mutableStateOf(false) }
@@ -69,7 +71,7 @@ fun ScanStagingSheet(
 
         if (entries.isEmpty()) {
             Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                Text("Keine gescannten Karten. Scanne welche im Scan-Tab.",
+                Text("Keine gescannten Karten. Tippe auf den Scannen-Button.",
                     color = Muted, style = MaterialTheme.typography.bodyMedium)
             }
             return@Column
@@ -90,6 +92,9 @@ fun ScanStagingSheet(
                 committing = true
                 scope.launch {
                     try {
+                        // Only the entries actually written are removed; ones still resolving (and
+                        // anything the camera adds while this runs) stay in the sheet.
+                        val committed = mutableListOf<ScanStagingEntry>()
                         for (e in entries.toList()) {
                             val b = e.base ?: continue // still resolving — skip
                             val s = e.selectedSet
@@ -108,10 +113,11 @@ fun ScanStagingSheet(
                                     b, es.setCode, es.rarity, es.language, ep.edition, ep.condition, ep.quantity,
                                 )
                             }
+                            committed.add(e)
                         }
-                        entries.clear()
+                        entries.removeAll(committed)
                         error = null
-                        onCommitted()
+                        onCommitted(committed.map { it.passcode })
                     } catch (ex: Exception) {
                         error = ex.message ?: "Übernehmen fehlgeschlagen"
                     } finally {

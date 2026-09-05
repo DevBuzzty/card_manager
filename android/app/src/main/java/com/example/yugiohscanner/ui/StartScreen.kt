@@ -43,8 +43,10 @@ import com.example.yugiohscanner.cloud.DealsRepository
 import com.example.yugiohscanner.cloud.SetsRepository
 import com.example.yugiohscanner.cloud.Snapshot
 import com.example.yugiohscanner.cloud.SnapshotsRepository
+import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
+import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Gold
@@ -62,7 +64,8 @@ private data class SetProgressRow(val name: String, val owned: Int, val total: I
 // App landing page: merges the old Übersicht (quick actions, deal preview, set progress) and
 // Wert (value chart + breakdowns) tabs into one scrollable Start page, plus the profile entry
 // point into Einstellungen. Every source loads in its own try/catch so a missing table or
-// network error just hides that section.
+// network error just hides that section — but the first failure is surfaced, so "offline" never
+// looks like "empty collection".
 @Composable
 fun StartScreen(
     onOpenSammlung: () -> Unit,
@@ -79,6 +82,7 @@ fun StartScreen(
     var setProgress by remember { mutableStateOf<List<SetProgressRow>>(emptyList()) }
     var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
     var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         scope.launch {
@@ -103,8 +107,8 @@ fun StartScreen(
                         .filter { it.owned < it.total }            // not yet complete
                         .sortedByDescending { it.owned.toFloat() / it.total }
                         .take(3)
-                } catch (_: Exception) {}
-            } catch (_: Exception) {}
+                } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
+            } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
 
             try {
                 val dash = computeDashboard(cards, copies)
@@ -112,13 +116,13 @@ fun StartScreen(
                 // portfolio_snapshots table isn't set up yet.
                 SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
                 snapshots = SnapshotsRepository.loadSnapshots()
-            } catch (_: Exception) {}
+            } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
 
             try {
                 val alerts = DealsRepository.loadAlerts()
                 dealAlertCount = alerts.size
                 topDeals = alerts.take(2)
-            } catch (_: Exception) {}
+            } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
 
             loading = false
         }
@@ -133,6 +137,7 @@ fun StartScreen(
         }
 
         val d = computeDashboard(cards, copies)
+        val byKey = copies.groupBy { it.printingKey() }
 
         // Window the history by the selected timeframe, spacing points by their real date.
         val nowOrd = System.currentTimeMillis() / 86_400_000L
@@ -156,6 +161,10 @@ fun StartScreen(
                 IconButton(onClick = onOpenEinstellungen) {
                     Icon(Icons.Default.AccountCircle, "Einstellungen", tint = Primary)
                 }
+            }
+
+            error?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
             // Value hero: total, Δ, timeframe chips, chart.
@@ -257,6 +266,30 @@ fun StartScreen(
                                     Modifier.fillMaxWidth((s.owned.toFloat() / s.total).coerceIn(0f, 1f))
                                         .height(6.dp).background(Primary, RoundedCornerShape(3.dp)),
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Teuerste Karten.
+            SpaceCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    SectionHeader("Teuerste Karten")
+                    Spacer(Modifier.height(8.dp))
+                    if (d.top.isEmpty()) {
+                        Text("Keine Daten", style = MaterialTheme.typography.bodySmall, color = Muted)
+                    } else {
+                        d.top.forEach { c ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    c.name ?: c.id, Modifier.weight(1f), maxLines = 1,
+                                    style = MaterialTheme.typography.bodySmall, color = OnSurface,
+                                )
+                                ValueText(printingValue(c, byKey), style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }

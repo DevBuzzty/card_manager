@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -98,7 +99,8 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
         try { reload() } catch (e: Exception) { errorMsg = e.message ?: "Laden fehlgeschlagen"; loading = false }
     }
 
-    // Full-screen sub-view takes over the whole tab.
+    // Full-screen sub-view takes over the whole tab — system back closes it instead of the tab.
+    BackHandler(detailId != null) { detailId = null }
     detailId?.let { id ->
         CardDetailScreen(
             cardId = id,

@@ -8,8 +8,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
@@ -33,6 +34,7 @@ import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.TypeChip
 import com.example.yugiohscanner.ui.components.ValueText
+import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
@@ -43,7 +45,15 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
     var printings by remember { mutableStateOf(initial.filter { it.id == cardId }) }
     var copies by remember { mutableStateOf(initialCopies.filter { it.cardId == cardId }) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Wishlist state: the POST is a plain insert, so a second tap would write a duplicate row.
+    var inWishlist by remember { mutableStateOf(false) }
+    var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(cardId) {
+        runCatching { WishlistRepository.loadWishlist() }
+            .onSuccess { list -> inWishlist = list.any { it.cardId == cardId } }
+    }
 
     // Reload this card's printings and copies from the cloud after a mutation, and tell the parent to refresh.
     suspend fun refresh() {
@@ -61,14 +71,22 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
 
     Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.Default.ArrowBack, "Zurück") }
+            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück") }
             Text(base.name ?: base.id, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            IconButton(onClick = {
+            IconButton(enabled = !inWishlist, onClick = {
                 scope.launch {
-                    try { WishlistRepository.addToWishlist(base.id, base.name ?: base.id, base.imageUrl, null); error = null }
-                    catch (e: Exception) { error = e.message }
+                    try {
+                        WishlistRepository.addToWishlist(base.id, base.name ?: base.id, base.imageUrl, null)
+                        error = null; inWishlist = true; notice = "Zur Wunschliste hinzugefügt"
+                    } catch (e: Exception) { error = e.message }
                 }
-            }) { Icon(Icons.Default.FavoriteBorder, "Zur Wunschliste hinzufügen") }
+            }) {
+                Icon(
+                    if (inWishlist) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    if (inWishlist) "Auf der Wunschliste" else "Zur Wunschliste hinzufügen",
+                    tint = if (inWishlist) Primary else LocalContentColor.current,
+                )
+            }
         }
 
         // Hero image with a soft violet glow.
@@ -94,6 +112,10 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
             Spacer(Modifier.height(8.dp))
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         }
+        notice?.let {
+            Spacer(Modifier.height(8.dp))
+            Text(it, color = Good, style = MaterialTheme.typography.bodySmall)
+        }
 
         Spacer(Modifier.height(16.dp))
         SectionHeader("Deine Exemplare")
@@ -107,7 +129,7 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
                 Column(Modifier.padding(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         RarityChip(v.rarity)
-                        Text(v.setCode, style = MaterialTheme.typography.bodyMedium, fontFamily = MonoFontFamily, color = Muted, modifier = Modifier.weight(1f))
+                        Text("${langFlag(v.language)} ${v.setCode}", style = MaterialTheme.typography.bodyMedium, fontFamily = MonoFontFamily, color = Muted, modifier = Modifier.weight(1f))
                         ValueText(Valuation.valueOf(v.price, mine), style = MaterialTheme.typography.bodyMedium)
                         IconButton(enabled = migrated, onClick = { scope.launch { try { CollectionRepository.softDelete(v); error = null; refresh() } catch (e: Exception) { error = e.message } } }) {
                             Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error)
