@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
+import SammlungLayout from './components/SammlungLayout';
 import CollectionList from './components/CollectionList';
 import Wishlist from './components/Wishlist';
 import SetCompletion from './components/SetCompletion';
@@ -99,10 +100,13 @@ function App() {
                   <Route path="/" element={<Navigate to="/start" replace />} />
                   <Route path="/start" element={<Dashboard onOpenPalette={() => setPaletteOpen(true)} />} />
                   <Route path="/scannen" element={<StagingArea scannedCards={scannedCards} setScannedCards={setScannedCards} isUpdating={!!updateProgress} />} />
-                  <Route path="/sammlung/karten" element={<CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />} />
-                  <Route path="/sammlung/wunschliste" element={<Wishlist />} />
-                  <Route path="/sammlung/sets" element={<div className="h-full"><SetCompletion /></div>} />
-                  <Route path="/sammlung/decks" element={<DeckBuilder />} />
+                  <Route path="/sammlung" element={<SammlungLayout />}>
+                    <Route index element={<Navigate to="/sammlung/karten" replace />} />
+                    <Route path="karten" element={<CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />} />
+                    <Route path="wunschliste" element={<Wishlist />} />
+                    <Route path="sets" element={<SetCompletion />} />
+                    <Route path="decks" element={<DeckBuilder />} />
+                  </Route>
                   <Route path="/deals" element={<Deals />} />
                   <Route path="/insights" element={<Insights />} />
                   <Route path="/einstellungen" element={<Settings />} />

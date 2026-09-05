@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Trophy, ChevronRight, AlertCircle } from 'lucide-react';
+import { ChevronRight, AlertCircle } from 'lucide-react';
 
 export default function SetCompletion() {
     const [sets, setSets] = useState([]);
@@ -54,13 +54,6 @@ export default function SetCompletion() {
 
     return (
         <div className="bg-[#1E1E1E] rounded-2xl border border-gray-800 p-6 h-full flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold text-white flex items-center">
-                    <Trophy className="w-5 h-5 mr-2 text-yellow-500" />
-                    Top Collected Sets
-                </h3>
-            </div>
-
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
                 {sets.length === 0 && (
                     <div className="text-center text-gray-600 py-8">No set data available.</div>

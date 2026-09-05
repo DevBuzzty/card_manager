@@ -65,7 +65,6 @@ export default function Wishlist() {
         <div className="h-full flex flex-col gap-6">
             <div className="flex justify-between items-center bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Wishlist</h1>
                     <p className="text-gray-400">Track cards you want to acquire.</p>
                 </div>
                 <button
