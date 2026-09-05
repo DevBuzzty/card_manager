@@ -7,6 +7,7 @@ const path = require('path');
 const https = require('https');
 const { cachedFetch, fetchCardData } = require('./api-handler.cjs');
 const { buildExpansionIndex, buildSinglesIndex, resolveProduct } = require('./cardmarket-bulk-parse.cjs');
+const { recordPrice } = require('./price-history.cjs');
 
 const H = 3600 * 1000;
 const FILES = {
@@ -133,7 +134,7 @@ function applyPrices(db, guide) {
       const t = trendById.get(Number(r.cm_product_id));
       if (t == null) { skipped++; continue; }
       const info = upd.run(t, r.id, r.set_code, r.language, r.rarity, t);
-      if (info.changes > 0) priced++; else unchanged++;
+      if (info.changes > 0) { priced++; recordPrice(db, r, t, 'cm_bulk'); } else unchanged++;
     }
   })();
   return { priced, skipped, unchanged };

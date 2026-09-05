@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const Database = require('better-sqlite3');
 const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
+const { ensureCopiesSchema } = require('./copies-schema.cjs');
 
 function makeDb() {
   const db = new Database(':memory:');
@@ -13,7 +14,9 @@ function makeDb() {
       cm_updated_at DATETIME, cm_product_id INTEGER, deleted INTEGER DEFAULT 0,
       PRIMARY KEY (id, set_code, language, rarity));
     CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY AUTOINCREMENT, total_value REAL);
   `);
+  ensureCopiesSchema(db); // recordPrice (wired into applyPrices) needs price_history
   const ins = db.prepare("INSERT INTO cards (id, name, set_code, rarity, price, cm_product_id) VALUES (?, ?, ?, ?, ?, ?)");
   ins.run('46986414', 'Dark Magician', 'MRD-DE001', 'Common', 0.5, null);       // unambiguous in files -> resolves to 102801
   ins.run('46986414', 'Dark Magician', 'LOB-DE005', 'Ultra Rare', 9.0, null);   // 4 products in LOB -> stays NULL

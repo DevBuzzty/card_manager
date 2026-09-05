@@ -9,6 +9,8 @@ const { startSync } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape } = require('./cardmarket-scraper.cjs');
 const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
+const { recordPrice } = require('./price-history.cjs');
+const { totalValue, copyCount } = require('./valuation.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -312,7 +314,8 @@ ipcMain.handle('delete-card', (event, { id, set_code, language, rarity }) => {
 
 ipcMain.handle('get-portfolio', () => {
     try {
-        return db.prepare('SELECT SUM(price * quantity) as totalValue, SUM(quantity) as totalCards, COUNT(*) as uniqueCards FROM cards WHERE quantity > 0 AND deleted = 0').get();
+        const unique = db.prepare('SELECT COUNT(*) AS n FROM cards WHERE quantity > 0 AND deleted = 0').get().n || 0;
+        return { totalValue: totalValue(db), totalCards: copyCount(db), uniqueCards: unique };
     } catch (e) { return { totalValue: 0, totalCards: 0, uniqueCards: 0 }; }
 });
 
@@ -523,6 +526,7 @@ ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price
     if (!id || !set_code) return { success: false, error: 'Missing id or set_code' };
     db.prepare("UPDATE cards SET price = ?, price_locked = 2 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
       .run(Number(price) || 0, String(id), set_code, language || 'DE', rarity || 'Unknown');
+    recordPrice(db, { id, set_code, language, rarity }, Number(price) || 0, 'manual');
     return { success: true };
   } catch (e) { return { success: false, error: e.message }; }
 });
@@ -570,7 +574,7 @@ function startCardmarketPoller() {
         shouldAbort: () => cmAbort,
       });
       if (res.updated > 0 && mainWindow) {
-        const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards WHERE deleted = 0').get();
+        const stats = { totalValue: totalValue(db) };
         mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
       }
     } catch (e) { console.error('Cardmarket poller error:', e); }
@@ -587,7 +591,7 @@ function bulkDue() {
 }
 function notifyBulk(res) {
   if (res && res.priced > 0 && mainWindow) {
-    const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards WHERE deleted = 0').get();
+    const stats = { totalValue: totalValue(db) };
     mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
   }
 }
@@ -677,6 +681,7 @@ function startPricePoller() {
 
                     if (Math.abs(newPrice - (localCard.price || 0)) > 0.01) {
                         updateStmt.run({ price: newPrice, id: localCard.id, set_code: localCard.set_code, language: localCard.language, rarity: localCard.rarity });
+                        recordPrice(db, localCard, newPrice, 'ygoprodeck');
                         updates.push({ id: localCard.id, newPrice });
                         totalValueChange += (newPrice - (localCard.price || 0));
                     } else {
@@ -687,7 +692,7 @@ function startPricePoller() {
             })();
 
             if (updates.length > 0) {
-                const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards WHERE deleted = 0').get();
+                const stats = { totalValue: totalValue(db) };
                 if (Math.abs(totalValueChange) > 0.5) {
                     db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: stats.totalValue || 0 });
                 }
@@ -766,7 +771,7 @@ ipcMain.handle('merge-unknown-cards', async () => {
 // (prices change) by batching unique passcodes directly against YGOPRODeck.
 ipcMain.handle('update-all-cards', async (event) => {
     try {
-        const rows = db.prepare('SELECT id, set_code, language FROM cards').all();
+        const rows = db.prepare('SELECT id, set_code, language, rarity FROM cards').all();
         const total = rows.length;
         if (total === 0) return { success: true, updatedCount: 0 };
 
@@ -799,13 +804,15 @@ ipcMain.handle('update-all-cards', async (event) => {
                 if (!apiData) return;
                 const d = detailsFromApi(apiData);
                 const price = priceForCard(apiData, row.set_code, apiField);
+                const before = db.prepare('SELECT price FROM cards WHERE id=? AND set_code=? AND language=? AND rarity=?').get(String(row.id), row.set_code, row.language, row.rarity);
                 updateStmt.run({ ...d, price, id: String(row.id), set_code: row.set_code, language: row.language });
+                if (before && Math.abs((before.price || 0) - price) > 0.01) recordPrice(db, row, price, 'ygoprodeck');
                 updatedCount++;
             });
         })();
 
         try {
-            const stats = db.prepare('SELECT SUM(price * quantity) as totalValue FROM cards WHERE deleted = 0').get();
+            const stats = { totalValue: totalValue(db) };
             db.prepare('INSERT INTO portfolio_history (total_value) VALUES (@val)').run({ val: stats.totalValue || 0 });
             if (mainWindow) mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
         } catch (e) { /* history snapshot is best-effort */ }
