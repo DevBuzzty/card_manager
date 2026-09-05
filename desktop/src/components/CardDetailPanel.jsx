@@ -1,14 +1,14 @@
 import { ChevronUp, ChevronDown, X, Minus, Plus, Trash2 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import CustomSelect from './CustomSelect';
 import Flag from './Flag';
 import { groupCopies, valueOf, CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { fmtEUR } from '../utils/format';
-import { printingFromParams, cardRoute } from '../utils/routes';
+import { printingFromParams, cardRoute, ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
 
-export default function CardDetailPanel() {
+export default function CardDetailPanel({ paletteOpen = false }) {
   const params = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,7 +34,12 @@ export default function CardDetailPanel() {
   };
   useEffect(() => { loadCard(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [params.id]);
 
-  const close = () => navigate(-1);
+  // Going back is right when we opened over a page; when /karte/… is the first history entry
+  // there is nothing behind it, so fall back to the collection instead of doing nothing.
+  const close = useCallback(
+    () => (location.state?.background ? navigate(-1) : navigate(ROUTES.karten, { replace: true })),
+    [navigate, location.state],
+  );
   const idx = list.indexOf(cardRoute(printing));
   const goRelative = (delta) => {
     const next = list[idx + delta];
@@ -42,10 +47,13 @@ export default function CardDetailPanel() {
   };
 
   useEffect(() => {
+    // The palette owns Escape while it is open — otherwise one press closes it and navigates the
+    // panel away in the same keystroke.
+    if (paletteOpen) return;
     const onKey = (e) => { if (e.key === 'Escape') close(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, [paletteOpen, close]);
 
   const reloadCopies = async (variants) => {
       if (!window.api?.listCopies) return;

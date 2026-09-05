@@ -66,7 +66,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   const [showRarityGuide, setShowRarityGuide] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [defaults, setDefaults] = useState({ edition: 'unknown', condition: 'NM' });
-  const [ipAddress, setIpAddress] = useState('Loading...');
+  const [ipAddress, setIpAddress] = useState('…');
   useEffect(() => { window.api?.getDefaults?.().then(d => d && setDefaults(d)); }, []);
   useEffect(() => { if (window.api) window.api.getIpAddress().then(setIpAddress); }, []);
 

@@ -9,28 +9,26 @@ const ICONS = { start: Home, scannen: ScanLine, sammlung: Library, deals: Tag, i
 const NavItem = ({ to, icon, label, match }) => {
   // eslint in this project doesn't see a destructured `icon: Icon` as used — bind it in the body.
   const Icon = icon;
-  const { pathname } = useLocation();
-  const forcedActive = match ? pathname.startsWith(match) : false;
+  const location = useLocation();
+  // The sidebar renders outside <Routes>, so while the card panel is open its pathname is the
+  // /karte/… overlay route and NavLink's own isActive would light nothing up. The page behind the
+  // panel is the background — highlight that, so the sidebar agrees with the segment bar.
+  const pathname = location.state?.background?.pathname || location.pathname;
+  const base = match || to;
+  const active = pathname === base || pathname.startsWith(`${base}/`);
   return (
     <NavLink
       to={to}
-      className={({ isActive }) => clsx(
+      className={clsx(
         'flex items-center w-full gap-3 px-3 py-2.5 rounded-[10px] transition-colors cursor-pointer text-[13.5px] font-medium relative',
-        (isActive || forcedActive)
+        active
           ? 'text-white bg-gradient-to-r from-space-violet/25 to-transparent shadow-[inset_0_0_0_1px_rgba(157,0,255,0.35)]'
           : 'text-ink-muted hover:bg-obsidian-700 hover:text-ink'
       )}
     >
-      {({ isActive }) => {
-        const active = isActive || forcedActive;
-        return (
-          <>
-            {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded bg-violet-soft shadow-[0_0_10px_#9D00FF]" />}
-            <Icon className="w-[17px] h-[17px] shrink-0" strokeWidth={1.8} />
-            <span>{label}</span>
-          </>
-        );
-      }}
+      {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded bg-violet-soft shadow-[0_0_10px_#9D00FF]" />}
+      <Icon className="w-[17px] h-[17px] shrink-0" strokeWidth={1.8} />
+      <span>{label}</span>
     </NavLink>
   );
 };

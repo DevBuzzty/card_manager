@@ -30,6 +30,10 @@ export default function CommandPalette({ open, onClose }) {
 
   const navigate = useNavigate();
   const location = useLocation();
+  // The palette renders outside <Routes>, so its location is the real one — while the card panel
+  // is open that is the /karte/… route itself. Reuse the background it already carries, otherwise
+  // the next card would get a card route as its background and <Routes> would match nothing.
+  const bg = location.state?.background ?? location;
   const go = (to) => { navigate(to); onClose(); };
   const actions = [
     { id: 'a-scan', label: 'Scannen', icon: Layers, run: () => go(ROUTES.scannen) },
@@ -52,7 +56,7 @@ export default function CommandPalette({ open, onClose }) {
   const runItem = (item) => {
     if (!item) return;
     if (item.type === 'action') item.run();
-    else { navigate(cardRoute(item.card.variants?.[0] || item.card), { state: { background: location } }); onClose(); }
+    else { navigate(cardRoute(item.card.variants?.[0] || item.card), { state: { background: bg } }); onClose(); }
   };
 
   useEffect(() => {

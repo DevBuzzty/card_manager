@@ -20,13 +20,15 @@ export function cardRoute({ id, set_code, language, rarity } = {}) {
   return `/karte/${seg(id, 'Unknown')}/${seg(set_code, 'Unknown')}/${seg(language, 'DE')}/${seg(rarity, 'Unknown')}`;
 }
 
-// The inverse, for the panel's useParams().
+// The inverse, for the panel's useParams(). React Router already decoded the segments (matchPath
+// decodes before useParams() returns) — decoding a second time would throw URIError on a literal
+// '%' and blank the panel, so take the params as they come.
 export function printingFromParams(params = {}) {
-  const dec = (v, fallback) => (v == null ? fallback : decodeURIComponent(v));
+  const val = (v, fallback) => (v == null ? fallback : v);
   return {
-    id: dec(params.id, 'Unknown'),
-    set_code: dec(params.setCode, 'Unknown'),
-    language: dec(params.language, 'DE'),
-    rarity: dec(params.rarity, 'Unknown'),
+    id: val(params.id, 'Unknown'),
+    set_code: val(params.setCode, 'Unknown'),
+    language: val(params.language, 'DE'),
+    rarity: val(params.rarity, 'Unknown'),
   };
 }

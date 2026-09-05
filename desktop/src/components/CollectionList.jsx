@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, RefreshCw, LayoutGrid, List as ListIcon, Database, FilterX, SlidersHorizontal, Coins, X } from 'lucide-react';
+import { Search, LayoutGrid, List as ListIcon, FilterX, SlidersHorizontal, Coins, X } from 'lucide-react';
 import clsx from 'clsx';
 import { Grid } from 'react-window';
 import CustomSelect from './CustomSelect';

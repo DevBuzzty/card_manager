@@ -24,8 +24,11 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const background = location.state?.background;
   const panelOpen = /^\/karte\//.test(location.pathname);
+  // A background that is itself a card route would make <Routes> match nothing and bounce the
+  // user to /start — ignore it and fall back to the panel's default background.
+  const rawBackground = location.state?.background;
+  const background = /^\/karte\//.test(rawBackground?.pathname || '') ? undefined : rawBackground;
 
   useEffect(() => {
     if (window.api) {
@@ -123,7 +126,7 @@ function App() {
             </div>
             {panelOpen && (
               <ErrorBoundary>
-                <CardDetailPanel />
+                <CardDetailPanel paletteOpen={paletteOpen} />
               </ErrorBoundary>
             )}
         </div>

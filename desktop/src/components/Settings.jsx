@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useParams } from 'react-router-dom';
+import { NavLink, Navigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers } from 'lucide-react';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
@@ -16,10 +16,14 @@ const SECTIONS = [
 
 export default function Settings() {
     const { bereich } = useParams();
-    const active = SECTIONS.some(s => s.id === bereich) ? bereich : 'konto';
+    const active = bereich;
+    const isKnownSection = SECTIONS.some(s => s.id === bereich);
 
     const [priceSource, setPriceSource] = useState('cardmarket');
     const [loading, setLoading] = useState(false);
+    // Which long-running action owns `loading`/`progress` — the two sections that show a bar
+    // ("preise" and "gefahrenzone") must only show their own. 'prices' | 'downgrade' | null.
+    const [runningAction, setRunningAction] = useState(null);
     const [progress, setProgress] = useState({ current: 0, total: 0 });
     const [sync, setSync] = useState({ supabase_url: '', supabase_key: '', supabase_email: '', supabase_password: '', sync_enabled: 'false' });
     const [syncStatus, setSyncStatus] = useState(null);
@@ -73,6 +77,7 @@ export default function Settings() {
         if (!confirm(`Alle Kartenpreise über ${priceSource} aktualisieren? Das kann eine Weile dauern.`)) return;
 
         setLoading(true);
+        setRunningAction('prices');
         setProgress({ current: 0, total: 0 });
         if (window.api) {
             // This triggers the full update logic in main.cjs, which reads the new setting
@@ -84,6 +89,7 @@ export default function Settings() {
             }
         }
         setLoading(false);
+        setRunningAction(null);
     };
 
     const handleBackup = async () => {
@@ -124,6 +130,7 @@ export default function Settings() {
         if (!confirm("Dies durchsucht deine GESAMTE Sammlung und setzt jede Karte auf ihre günstigste Preis-/Common-Variante. Das soll die durch hochwertige Rarity-Standards verursachte Portfolio-Inflation korrigieren. \n\nManuell gesetzte Rarities werden überschrieben, falls eine günstigere Version existiert. Fortfahren?")) return;
 
         setLoading(true);
+        setRunningAction('downgrade');
         setProgress({ current: 0, total: 0 });
         if (window.api) {
             const res = await window.api.downgradeToLowestRarity();
@@ -134,7 +141,12 @@ export default function Settings() {
             }
         }
         setLoading(false);
+        setRunningAction(null);
     };
+
+    // An unknown :bereich (e.g. /einstellungen/quatsch) would otherwise render the Konto card
+    // under a bogus URL with nothing highlighted in the sub-nav.
+    if (!isKnownSection) return <Navigate to="/einstellungen/konto" replace />;
 
     return (
         <div className="max-w-5xl mx-auto h-full flex gap-6">
@@ -217,8 +229,8 @@ export default function Settings() {
                                         onChange={handleSaveSource}
                                         className="w-full bg-obsidian border border-line text-ink rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors cursor-pointer appearance-none"
                                     >
-                                        <option value="cardmarket">CardMarket (Europe)</option>
-                                        <option value="tcgplayer">TCGPlayer (North America)</option>
+                                        <option value="cardmarket">CardMarket (Europa)</option>
+                                        <option value="tcgplayer">TCGPlayer (Nordamerika)</option>
                                         <option value="ebay">eBay</option>
                                         <option value="amazon">Amazon</option>
                                         <option value="coolstuffinc">CoolStuffInc</option>
@@ -231,16 +243,16 @@ export default function Settings() {
                                 <div className="flex items-end">
                                     <button
                                         onClick={handleUpdatePrices}
-                                        disabled={loading}
+                                        disabled={runningAction === 'prices'}
                                         className="w-full flex items-center justify-center px-6 py-3 bg-space-violet hover:bg-space-violet-dark text-white rounded-xl font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-space-violet/20"
                                     >
-                                        <RefreshCw className={`w-5 h-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                                        {loading ? 'Preise werden aktualisiert…' : 'Preise jetzt aktualisieren'}
+                                        <RefreshCw className={`w-5 h-5 mr-2 ${runningAction === 'prices' ? 'animate-spin' : ''}`} />
+                                        {runningAction === 'prices' ? 'Preise werden aktualisiert…' : 'Preise jetzt aktualisieren'}
                                     </button>
                                 </div>
                             </div>
 
-                            {loading && progress.total > 0 && (
+                            {runningAction === 'prices' && progress.total > 0 && (
                                 <div>
                                     <div className="flex justify-between text-xs text-ink-muted mb-1">
                                         <span>Verarbeitung läuft…</span>
@@ -367,7 +379,7 @@ export default function Settings() {
                             <h3 className="font-display text-lg text-crit">Gefahrenzone</h3>
                         </div>
 
-                        {loading && progress.total > 0 && (
+                        {runningAction === 'downgrade' && progress.total > 0 && (
                             <div className="mb-6">
                                 <div className="flex justify-between text-xs text-ink-muted mb-1">
                                     <span>Verarbeitung läuft…</span>
@@ -385,11 +397,11 @@ export default function Settings() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <button
                                 onClick={handleDowngrade}
-                                disabled={loading}
+                                disabled={runningAction === 'downgrade'}
                                 className="p-4 bg-crit/10 hover:bg-crit/20 rounded-xl border border-crit/30 hover:border-crit/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <div className="flex items-center text-crit mb-2">
-                                    <TrendingDown className={`w-5 h-5 mr-2 ${loading ? 'animate-bounce' : ''}`} />
+                                    <TrendingDown className={`w-5 h-5 mr-2 ${runningAction === 'downgrade' ? 'animate-bounce' : ''}`} />
                                     <h4 className="font-bold">Auf günstigste Rarity umstellen</h4>
                                 </div>
                                 <p className="text-sm text-crit/60 group-hover:text-crit">
