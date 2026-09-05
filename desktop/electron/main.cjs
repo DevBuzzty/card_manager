@@ -805,8 +805,8 @@ ipcMain.handle('update-all-cards', async (event) => {
                 const d = detailsFromApi(apiData);
                 const price = priceForCard(apiData, row.set_code, apiField);
                 const before = db.prepare('SELECT price FROM cards WHERE id=? AND set_code=? AND language=? AND rarity=?').get(String(row.id), row.set_code, row.language, row.rarity);
-                updateStmt.run({ ...d, price, id: String(row.id), set_code: row.set_code, language: row.language });
-                if (before && Math.abs((before.price || 0) - price) > 0.01) recordPrice(db, row, price, 'ygoprodeck');
+                const info = updateStmt.run({ ...d, price, id: String(row.id), set_code: row.set_code, language: row.language });
+                if (info.changes > 0 && before && Math.abs((before.price || 0) - price) > 0.01) recordPrice(db, row, price, 'ygoprodeck');
                 updatedCount++;
             });
         })();
