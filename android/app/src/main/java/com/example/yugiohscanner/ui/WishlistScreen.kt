@@ -69,7 +69,7 @@ fun WishlistScreen(onClose: (() -> Unit)? = null) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück", tint = OnSurface)
                     }
                     Spacer(Modifier.width(4.dp))
-                    Text("Wishlist", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
+                    Text("Wunschliste", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
                 }
                 Spacer(Modifier.height(12.dp))
             }

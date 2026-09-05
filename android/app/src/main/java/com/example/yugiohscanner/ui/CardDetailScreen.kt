@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +26,7 @@ import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
+import com.example.yugiohscanner.cloud.WishlistRepository
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ui.components.RarityChip
 import com.example.yugiohscanner.ui.components.SectionHeader
@@ -60,7 +62,13 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
     Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose) { Icon(Icons.Default.ArrowBack, "Zurück") }
-            Text(base.name ?: base.id, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(base.name ?: base.id, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            IconButton(onClick = {
+                scope.launch {
+                    try { WishlistRepository.addToWishlist(base.id, base.name ?: base.id, base.imageUrl, null); error = null }
+                    catch (e: Exception) { error = e.message }
+                }
+            }) { Icon(Icons.Default.FavoriteBorder, "Zur Wunschliste hinzufügen") }
         }
 
         // Hero image with a soft violet glow.
@@ -80,22 +88,6 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
             TypeChip(base.type)
             base.attribute?.takeIf { it.isNotBlank() }?.let { NeutralChip(it) }
             base.race?.takeIf { it.isNotBlank() }?.let { NeutralChip(it) }
-        }
-
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            base.level?.let { StatTile(levelLabel, it.toString()) }
-            base.atk?.let { StatTile("ATK", it.toString()) }
-            if (!isLink) base.def?.let { StatTile("DEF", it.toString()) }
-            StatTile("Passcode", base.id)
-        }
-
-        base.desc?.let {
-            Spacer(Modifier.height(12.dp))
-            SpaceCard(Modifier.fillMaxWidth()) {
-                Text(it, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(12.dp))
-            }
         }
 
         error?.let {
@@ -150,6 +142,29 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
 
         Spacer(Modifier.height(16.dp))
         AddPrintingSection(base = base, owned = printings, onError = { error = it }, onAdded = { scope.launch { refresh() } })
+
+        base.desc?.let { desc ->
+            Spacer(Modifier.height(16.dp))
+            var showText by remember { mutableStateOf(false) }
+            TextButton(onClick = { showText = !showText }) { Text(if (showText) "Kartentext ausblenden" else "Kartentext anzeigen") }
+            if (showText) {
+                SpaceCard(Modifier.fillMaxWidth()) {
+                    Text(desc, style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(12.dp))
+                }
+            }
+        }
+
+        var showStats by remember { mutableStateOf(false) }
+        TextButton(onClick = { showStats = !showStats }) { Text(if (showStats) "Stats ausblenden" else "Stats anzeigen") }
+        if (showStats) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                base.level?.let { StatTile(levelLabel, it.toString()) }
+                base.atk?.let { StatTile("ATK", it.toString()) }
+                if (!isLink) base.def?.let { StatTile("DEF", it.toString()) }
+                StatTile("Passcode", base.id)
+            }
+        }
     }
 }
 

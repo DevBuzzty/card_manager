@@ -97,9 +97,8 @@ fun AppNav() {
             composable(Routes.DEALS) {
                 if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { cloudReady = true }
             }
-            // Task 6 gives SettingsScreen its own back arrow (onBack); today it has none.
             composable(Routes.EINSTELLUNGEN) {
-                SettingsScreen(prefs) { cloudReady = false; nav.popBackStack() }
+                SettingsScreen(prefs, onBack = { nav.popBackStack() }) { cloudReady = false; nav.popBackStack() }
             }
             composable(Routes.SUCHE) { SearchScreen(onClose = { nav.popBackStack() }, onAdded = {}) }
         }
