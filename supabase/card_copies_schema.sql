@@ -65,7 +65,14 @@ create trigger trg_card_copies_recount
 -- Cross-spec columns pre-created (Spec G).
 alter table public.cards add column if not exists price_first_ed double precision;
 alter table public.cards add column if not exists cm_first_ed_updated_at timestamptz;
-alter table public.portfolio_snapshots add column if not exists sealed_value numeric not null default 0;
+
+-- Spec G column on the snapshots table; guarded so this file also applies before portfolio_snapshots_schema.sql.
+do $$
+begin
+  if to_regclass('public.portfolio_snapshots') is not null then
+    alter table public.portfolio_snapshots add column if not exists sealed_value numeric not null default 0;
+  end if;
+end $$;
 
 -- Single-user app: any authenticated session may read/write (same policy as cards).
 alter table public.card_copies enable row level security;

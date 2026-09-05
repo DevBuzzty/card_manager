@@ -60,4 +60,11 @@ desktop; the cloud never changes the mapping.
 
 ## Spec A (2026-09): price history
 
-`apply_cardmarket_prices` now also upserts one `price_history` row (source `cloud`, variant `base`, today) per card whose price changed. Apply `card_copies_schema.sql` then `price_history_schema.sql` once; the desktop backfills copies and pushes them on its next sync.
+`apply_cardmarket_prices` now also upserts one `price_history` row (source `cloud`, variant `base`, today) per card whose price changed.
+
+**Apply order (on a fresh project):**
+1. `portfolio_snapshots_schema.sql` (if not yet applied)
+2. `card_copies_schema.sql`
+3. `price_history_schema.sql`
+
+The desktop backfills copies and pushes them on its next sync.
