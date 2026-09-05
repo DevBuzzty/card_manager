@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WishlistScreen(onClose: () -> Unit) {
+fun WishlistScreen(onClose: (() -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     val items = remember { mutableStateListOf<WishlistItem>() }
     var name by remember { mutableStateOf("") }
@@ -63,15 +63,16 @@ fun WishlistScreen(onClose: () -> Unit) {
 
     Surface(Modifier.fillMaxSize(), color = Background) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück", tint = OnSurface)
+            if (onClose != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück", tint = OnSurface)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text("Wunschliste", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
                 }
-                Spacer(Modifier.width(4.dp))
-                Text("Wishlist", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
+                Spacer(Modifier.height(12.dp))
             }
-
-            Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = name, onValueChange = { name = it },

@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,7 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,11 +35,12 @@ fun SearchScreen(onClose: () -> Unit, onAdded: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
-    // Add view for a chosen search result.
+    // Add view for a chosen search result — system back returns to the result list.
+    BackHandler(selected != null) { selected = null; error = null }
     selected?.let { card ->
         Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { selected = null; error = null }) { Icon(Icons.Default.ArrowBack, "Zurück") }
+                IconButton(onClick = { selected = null; error = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück") }
                 Text(card.name ?: card.id, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             }
             AsyncImage(model = card.imageUrl, contentDescription = card.name,
@@ -60,7 +62,7 @@ fun SearchScreen(onClose: () -> Unit, onAdded: () -> Unit) {
 
     Column(Modifier.fillMaxSize().padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.Default.ArrowBack, "Zurück") }
+            IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück") }
             Text("Karte suchen", style = MaterialTheme.typography.titleLarge)
         }
         OutlinedTextField(query, { query = it }, label = { Text("Name oder Passcode") },

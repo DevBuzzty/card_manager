@@ -1,6 +1,7 @@
 package com.example.yugiohscanner.cloud
 
 import android.content.SharedPreferences
+import com.example.yugiohscanner.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -21,15 +22,22 @@ object SupabaseCloud {
     private var password: String = ""
     @Volatile private var accessToken: String? = null
 
+    // The project URL and the publishable key are build config (local.properties); the prefs only
+    // override them when the user pointed the app at a different project under "Erweitert".
+    private fun cfgUrl(prefs: SharedPreferences): String =
+        (prefs.getString("supabase_url", "")?.takeIf { it.isNotBlank() } ?: BuildConfig.SUPABASE_URL)
+            .trim().trimEnd('/').removeSuffix("/rest/v1")
+
+    private fun cfgKey(prefs: SharedPreferences): String =
+        (prefs.getString("supabase_key", "")?.takeIf { it.isNotBlank() } ?: BuildConfig.SUPABASE_KEY).trim()
+
     fun isConfigured(prefs: SharedPreferences): Boolean =
-        !prefs.getString("supabase_url", "").isNullOrBlank() &&
-        !prefs.getString("supabase_key", "").isNullOrBlank() &&
-        !prefs.getString("supabase_email", "").isNullOrBlank()
+        cfgUrl(prefs).isNotBlank() && cfgKey(prefs).isNotBlank() &&
+            !prefs.getString("supabase_email", "").isNullOrBlank()
 
     fun init(prefs: SharedPreferences) {
-        // Accept a URL with or without a trailing slash / /rest/v1 suffix.
-        baseUrl = prefs.getString("supabase_url", "")!!.trim().trimEnd('/').removeSuffix("/rest/v1")
-        apiKey = prefs.getString("supabase_key", "")!!.trim()
+        baseUrl = cfgUrl(prefs)
+        apiKey = cfgKey(prefs)
         email = prefs.getString("supabase_email", "")!!.trim()
         password = prefs.getString("supabase_password", "")!!
         accessToken = null
@@ -50,6 +58,14 @@ object SupabaseCloud {
             if (token.isBlank()) throw RuntimeException("Login: kein access_token erhalten")
             accessToken = token
         }
+    }
+
+    // Drops the session: the live token AND the credentials it was minted from, so nothing can
+    // keep writing to the account after "Abmelden". A later login re-fills them via init(prefs).
+    fun signOut() {
+        accessToken = null
+        email = ""
+        password = ""
     }
 
     internal fun http(): OkHttpClient = client

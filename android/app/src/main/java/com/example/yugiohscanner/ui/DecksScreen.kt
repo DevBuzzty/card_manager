@@ -1,6 +1,7 @@
 package com.example.yugiohscanner.ui
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -40,9 +41,11 @@ import com.example.yugiohscanner.ui.theme.Primary
 import kotlinx.coroutines.launch
 
 @Composable
-fun DecksScreen(onClose: () -> Unit) {
+fun DecksScreen(onClose: (() -> Unit)? = null) {
     var openDeck by remember { mutableStateOf<Deck?>(null) }
 
+    // The editor is a sub-view of this destination — system back closes it, not the destination.
+    BackHandler(openDeck != null) { openDeck = null }
     openDeck?.let { deck ->
         DeckEditor(deck, onBack = { openDeck = null })
         return
@@ -76,15 +79,16 @@ fun DecksScreen(onClose: () -> Unit) {
 
     Surface(Modifier.fillMaxSize(), color = Background) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück", tint = OnSurface)
+            if (onClose != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück", tint = OnSurface)
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Text("Decks", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
                 }
-                Spacer(Modifier.width(4.dp))
-                Text("Decks", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
+                Spacer(Modifier.height(12.dp))
             }
-
-            Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = name, onValueChange = { name = it },
