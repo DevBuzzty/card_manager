@@ -114,7 +114,7 @@ fun ScanScreen(onClose: () -> Unit) {
             newSocket.connect()
             socket = newSocket
         } catch (e: Exception) {
-            Toast.makeText(context, "Connection Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Verbindung fehlgeschlagen: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -144,7 +144,6 @@ fun ScanScreen(onClose: () -> Unit) {
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
 
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
-    var scanStatus by remember { mutableStateOf("Scanning...") }
     var isFlashOn by remember { mutableStateOf(false) }
     var isFocusLocked by remember { mutableStateOf(false) }
     var showManualEntry by remember { mutableStateOf(false) }
@@ -161,7 +160,7 @@ fun ScanScreen(onClose: () -> Unit) {
     // just keep panning without watching the status text.
     val flash = remember { Animatable(0f) }
     // Passcodes already captured this session (phone-staged OR sent to desktop). Dedup so panning
-    // over a card captures it once and re-detections don't spam. Cleared by the Reset button.
+    // over a card captures it once and re-detections don't spam. Cleared when a batch is committed.
     val seen = remember { mutableSetOf<String>() }
 
     // Phone-side scan staging — a scan always lands here; a connected desktop additionally gets a
@@ -175,43 +174,47 @@ fun ScanScreen(onClose: () -> Unit) {
     // across the frames it was visible (see SetCodeEvidence). The set code is resolved from it by
     // constrained matching against the card's known printings, not by trusting a single clean OCR
     // token.
-    val onConfirmed = rememberUpdatedState<(Int, List<String>) -> Unit> { passcode, evidence ->
-        val pc = passcode.toString()
-        if (passcode > 0 && seen.add(pc)) {
-            scope.launch { flash.snapTo(0.8f); flash.animateTo(0f, animationSpec = tween(300)) }
-            // Always stage on the phone; a connected desktop additionally gets a mirror of the scan.
-            val mirrorSocket = socket
-            if (isConnected && mirrorSocket != null) {
-                val data = JSONObject().put("passcode", pc)
-                val cand = com.example.yugiohscanner.ml.SetCodeOcr.extract(evidence.joinToString(" "))
-                if (cand.isNotEmpty()) { data.put("setCode", cand.first()); data.put("setCodeCandidates", JSONArray(cand)) }
-                mirrorSocket.emit("card_scanned", data)
-            }
-            val entry = ScanStagingEntry(System.nanoTime(), pc).apply {
-                edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
-                condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
-            }
-            stagingCards.add(entry)
-            scanStatus = "＋ $pc"
-            scope.launch {
-                try {
-                    val base = CardSearchRepository.search(pc).firstOrNull()
-                    if (base == null) {
-                        stagingCards.remove(entry); seen.remove(pc)   // allow a later re-scan
-                        scanStatus = "Karte $pc nicht gefunden"
-                    } else {
-                        entry.base = base
-                        val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
-                        entry.knownSets = known
-                        entry.selectedSet = SetCodeMatch.best(evidence, known)
-                        entry.loading = false
-                    }
-                } catch (e: Exception) {
+    // Shared by autonomous ML detection (onConfirmed below) and manual passcode entry: stage the
+    // card locally, then resolve its base data + set code, reporting failures via the snackbar
+    // (the success path stays silent — the flash, sound and footer counter already report it).
+    fun stageScan(pc: String, evidence: List<String>) {
+        scope.launch { flash.snapTo(0.8f); flash.animateTo(0f, animationSpec = tween(300)) }
+        // Always stage on the phone; a connected desktop additionally gets a mirror of the scan.
+        val mirrorSocket = socket
+        if (isConnected && mirrorSocket != null) {
+            val data = JSONObject().put("passcode", pc)
+            val cand = com.example.yugiohscanner.ml.SetCodeOcr.extract(evidence.joinToString(" "))
+            if (cand.isNotEmpty()) { data.put("setCode", cand.first()); data.put("setCodeCandidates", JSONArray(cand)) }
+            mirrorSocket.emit("card_scanned", data)
+        }
+        val entry = ScanStagingEntry(System.nanoTime(), pc).apply {
+            edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
+            condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
+        }
+        stagingCards.add(entry)
+        scope.launch {
+            try {
+                val base = CardSearchRepository.search(pc).firstOrNull()
+                if (base == null) {
+                    stagingCards.remove(entry); seen.remove(pc)   // allow a later re-scan
+                    snackbar.showSnackbar("Karte $pc nicht gefunden")
+                } else {
+                    entry.base = base
+                    val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
+                    entry.knownSets = known
+                    entry.selectedSet = SetCodeMatch.best(evidence, known)
                     entry.loading = false
-                    scanStatus = "Fehler: ${e.message}"
                 }
+            } catch (e: Exception) {
+                entry.loading = false
+                snackbar.showSnackbar("Fehler beim Laden: ${e.message}")
             }
         }
+    }
+
+    val onConfirmed = rememberUpdatedState<(Int, List<String>) -> Unit> { passcode, evidence ->
+        val pc = passcode.toString()
+        if (passcode > 0 && seen.add(pc)) stageScan(pc, evidence)
     }
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
@@ -222,11 +225,9 @@ fun ScanScreen(onClose: () -> Unit) {
             lastScannedCode = code
             triggerFeedback()
             if (!isConnected) {
-                // Nothing to receive the scan — tell the user instead of silently dropping it.
-                scanStatus = "⚠ Kein Desktop verbunden – $code nicht gesendet"
+                // Nothing to receive the scan.
             } else {
                 val best = setCodes.firstOrNull()
-                scanStatus = if (best != null) "Gesendet: $code ($best)" else "Gesendet: $code"
                 val data = JSONObject()
                 data.put("passcode", code)
                 if (best != null) {
@@ -239,7 +240,6 @@ fun ScanScreen(onClose: () -> Unit) {
     }
     val onProgress = rememberUpdatedState<(String, Int, Int) -> Unit> { code, hits, required ->
         if (code != lastScannedCode) {
-            scanStatus = "Reading $code… ($hits/$required)"
         }
     }
 
@@ -529,7 +529,7 @@ fun ScanScreen(onClose: () -> Unit) {
         }
         if (showSheet) {
             ModalBottomSheet(onDismissRequest = { showSheet = false }, sheetState = sheetState) {
-                ScanStagingSheet(entries = stagingCards, onCommitted = { showSheet = false })
+                ScanStagingSheet(entries = stagingCards, onCommitted = { seen.clear(); showSheet = false })
             }
         }
 
@@ -584,20 +584,17 @@ fun ScanScreen(onClose: () -> Unit) {
                             onClick = {
                                 if (manualCode.length >= 4) { // Basic validation
                                     lastScannedCode = manualCode
-                                    scanStatus = "Manual: $manualCode"
 
                                     // Trigger Feedback
                                     triggerFeedback()
 
-                                    // Emit to socket
-                                    val data = JSONObject()
-                                    data.put("passcode", manualCode)
-                                    socket?.emit("card_scanned", data)
+                                    // Stage like a scan; the desktop mirror (if connected) happens inside stageScan.
+                                    if (seen.add(manualCode)) stageScan(manualCode, emptyList())
 
                                     showManualEntry = false
                                     manualCode = ""
                                 } else {
-                                    Toast.makeText(context, "Invalid Code", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Ungültiger Passcode", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.weight(1f),
@@ -615,7 +612,10 @@ fun ScanScreen(onClose: () -> Unit) {
             Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = flash.value)))
         }
 
-        SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter))
+        SnackbarHost(
+            hostState = snackbar,
+            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp),
+        )
     }
 }
 
