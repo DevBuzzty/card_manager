@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning } from 'lucide-react';
+import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning, Award } from 'lucide-react';
 import CardTile from './CardTile';
 import SetCompletion from './SetCompletion';
 import { fmtEUR } from '../utils/format';
@@ -160,7 +160,12 @@ export default function Dashboard({ onOpenPalette }) {
       </div>
 
       {/* Set completion */}
-      <div className="h-[380px]"><SetCompletion /></div>
+      <div className="bg-obsidian-700 border border-line rounded-2xl p-6 flex flex-col">
+        <div className="mb-4">
+          <h3 className="font-display text-sm tracking-[0.12em] uppercase text-ink-muted flex items-center gap-2"><Award className="w-4 h-4" strokeWidth={1.8} /> Set-Fortschritt</h3>
+        </div>
+        <div className="h-[380px]"><SetCompletion /></div>
+      </div>
     </div>
   );
 }
