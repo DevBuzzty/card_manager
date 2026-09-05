@@ -16,11 +16,16 @@ function addColumnIfMissing(db, table, name, ddl) {
 // Recount SQL for ONE printing key; used by all three triggers. `pfx` is NEW or OLD.
 const PRINTING_WHERE = (pfx) =>
   `card_id = ${pfx}.card_id AND set_code = ${pfx}.set_code AND language = ${pfx}.language AND rarity = ${pfx}.rarity AND deleted = 0`;
+// The WHERE clause's change guard keeps this a no-op (no cards.updated_at re-stamp, no cloud
+// push) when the recount would leave quantity/deleted unchanged — e.g. editing a copy's
+// condition/edition without changing how many live copies the printing has.
 const RECOUNT = (pfx) => `
   UPDATE cards SET
     quantity = (SELECT COUNT(*) FROM card_copies WHERE ${PRINTING_WHERE(pfx)}),
     deleted  = CASE WHEN (SELECT COUNT(*) FROM card_copies WHERE ${PRINTING_WHERE(pfx)}) = 0 THEN 1 ELSE 0 END
-  WHERE id = ${pfx}.card_id AND set_code = ${pfx}.set_code AND language = ${pfx}.language AND rarity = ${pfx}.rarity;`;
+  WHERE id = ${pfx}.card_id AND set_code = ${pfx}.set_code AND language = ${pfx}.language AND rarity = ${pfx}.rarity
+    AND (quantity IS NOT (SELECT COUNT(*) FROM card_copies WHERE ${PRINTING_WHERE(pfx)})
+         OR deleted IS NOT CASE WHEN (SELECT COUNT(*) FROM card_copies WHERE ${PRINTING_WHERE(pfx)}) = 0 THEN 1 ELSE 0 END);`;
 
 function ensureCopiesSchema(db) {
   db.exec(`
@@ -53,16 +58,23 @@ function ensureCopiesSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS price_history_recorded_idx ON price_history (recorded_at);
 
-    CREATE TRIGGER IF NOT EXISTS trg_copies_ins AFTER INSERT ON card_copies FOR EACH ROW
-    BEGIN ${RECOUNT('NEW')} END;
-    CREATE TRIGGER IF NOT EXISTS trg_copies_upd AFTER UPDATE ON card_copies FOR EACH ROW
-    BEGIN ${RECOUNT('NEW')} ${RECOUNT('OLD')} END;
-    CREATE TRIGGER IF NOT EXISTS trg_copies_del AFTER DELETE ON card_copies FOR EACH ROW
-    BEGIN ${RECOUNT('OLD')} END;
-
     CREATE TRIGGER IF NOT EXISTS trg_copies_updated AFTER UPDATE ON card_copies FOR EACH ROW
     WHEN NEW.updated_at = OLD.updated_at
     BEGIN UPDATE card_copies SET updated_at = CURRENT_TIMESTAMP WHERE copy_id = NEW.copy_id; END;
+  `);
+  // The three recount triggers are dropped and recreated on every start (rather than relying on
+  // CREATE TRIGGER IF NOT EXISTS) so an already-migrated database picks up RECOUNT's change guard
+  // instead of keeping whatever definition it was created with.
+  db.exec(`
+    DROP TRIGGER IF EXISTS trg_copies_ins;
+    DROP TRIGGER IF EXISTS trg_copies_upd;
+    DROP TRIGGER IF EXISTS trg_copies_del;
+    CREATE TRIGGER trg_copies_ins AFTER INSERT ON card_copies FOR EACH ROW
+    BEGIN ${RECOUNT('NEW')} END;
+    CREATE TRIGGER trg_copies_upd AFTER UPDATE ON card_copies FOR EACH ROW
+    BEGIN ${RECOUNT('NEW')} ${RECOUNT('OLD')} END;
+    CREATE TRIGGER trg_copies_del AFTER DELETE ON card_copies FOR EACH ROW
+    BEGIN ${RECOUNT('OLD')} END;
   `);
   // Cross-spec columns pre-created now so A is the only PK/schema churn (overview doc).
   addColumnIfMissing(db, 'cards', 'price_first_ed', 'REAL');

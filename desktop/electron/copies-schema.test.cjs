@@ -52,6 +52,24 @@ test('moving a copy to another printing recounts BOTH printings', () => {
   assert.deepStrictEqual(card(db), { quantity: 1, deleted: 0 });
 });
 
+test('recount triggers only touch cards on a real count/deleted change', () => {
+  const db = freshDb(); ensureCopiesSchema(db);
+  db.exec("INSERT INTO cards (id, set_code, language, rarity, quantity, price) VALUES ('1','LOB-DE001','DE','Ultra Rare',0,5)");
+  const ins = db.prepare("INSERT INTO card_copies (copy_id, card_id, set_code, language, rarity, edition, condition) VALUES (?, '1','LOB-DE001','DE','Ultra Rare','unknown','NM')");
+  ins.run('a');
+  db.prepare("UPDATE cards SET updated_at = '2000-01-01 00:00:00' WHERE id='1' AND set_code='LOB-DE001' AND language='DE' AND rarity='Ultra Rare'").run();
+  // Editing a copy's condition doesn't change the live count -> the recount UPDATE must be a no-op.
+  db.prepare("UPDATE card_copies SET condition = 'GD' WHERE copy_id = 'a'").run();
+  assert.equal(
+    db.prepare("SELECT updated_at FROM cards WHERE id='1' AND set_code='LOB-DE001' AND language='DE' AND rarity='Ultra Rare'").get().updated_at,
+    '2000-01-01 00:00:00',
+    'cards.updated_at must not be re-stamped when quantity/deleted are unchanged',
+  );
+  // A real change (soft-delete) must still recount normally.
+  db.prepare("UPDATE card_copies SET deleted = 1 WHERE copy_id = 'a'").run();
+  assert.deepStrictEqual(card(db), { quantity: 0, deleted: 1 });
+});
+
 test('backfill creates quantity copies once, with defaults, and is guarded', () => {
   const db = freshDb(); ensureCopiesSchema(db);
   db.exec(`INSERT INTO cards (id, set_code, language, rarity, quantity, deleted) VALUES
