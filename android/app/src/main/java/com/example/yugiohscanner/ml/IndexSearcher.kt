@@ -15,7 +15,7 @@ class IndexSearcher(context: Context) {
     private val passcodes: IntArray
 
     init {
-        val bb = ByteBuffer.wrap(context.assets.open("index.bin").readBytes())
+        val bb = ByteBuffer.wrap(ModelStore.bytes(context, "index.bin"))
             .order(ByteOrder.LITTLE_ENDIAN)
         n = bb.int
         dim = bb.int

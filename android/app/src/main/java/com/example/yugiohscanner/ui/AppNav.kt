@@ -28,7 +28,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.SupabaseCloud
+import com.example.yugiohscanner.ml.ModelStore
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
@@ -65,6 +67,12 @@ fun AppNav() {
         if (SupabaseCloud.isConfigured(prefs)) {
             try { SupabaseCloud.init(prefs); SupabaseCloud.signIn(); cloudReady = true } catch (_: Exception) {}
         }
+    }
+    // Top-level so it runs once per app start, not once per tab switch. Works before login: the
+    // catalog table/bucket are public and this never touches SupabaseCloud's session state.
+    LaunchedEffect(Unit) {
+        CatalogSync.checkAndUpdate(context)
+        ModelStore.checkAndUpdate(context)
     }
 
     val entry by nav.currentBackStackEntryAsState()

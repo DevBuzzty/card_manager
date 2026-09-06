@@ -20,10 +20,22 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CardSearchRepository
+import com.example.yugiohscanner.cloud.CatalogCard
+import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.TypeChip
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+// Mirrors CardSearchRepository.parseData's CardRow shape for a fresh network hit: no exact
+// printing chosen yet ("Unknown"), German-first name. See ScanScreen.kt for the same mapping.
+private fun CatalogCard.toCardRow() = CardRow(
+    id = id, setCode = "Unknown", language = "DE", name = nameDe, imageUrl = image,
+    rarity = null, quantity = 0, price = null, type = type, desc = descDe,
+    atk = atk, def = def, level = level, race = race, attribute = attribute,
+)
 
 @Composable
 fun SearchScreen(onClose: () -> Unit, onAdded: () -> Unit) {
@@ -72,7 +84,18 @@ fun SearchScreen(onClose: () -> Unit, onAdded: () -> Unit) {
             loading = true
             scope.launch {
                 try {
-                    results = CardSearchRepository.search(query)
+                    // Catalog first (Task 9): search the offline catalog while it's ready (no
+                    // network needed); if it has no results, fall back to the network.
+                    results = if (CatalogRepository.isReady()) {
+                        val catalogResults = withContext(Dispatchers.IO) { CatalogRepository.search(query) }
+                        if (catalogResults.isNotEmpty()) {
+                            catalogResults.map { it.toCardRow() }
+                        } else {
+                            CardSearchRepository.search(query)
+                        }
+                    } else {
+                        CardSearchRepository.search(query)
+                    }
                     owned = runCatching { CollectionRepository.loadCards() }.getOrDefault(emptyList())
                     error = if (results.isEmpty()) "Nichts gefunden." else null
                 } catch (e: Exception) { error = e.message ?: "Suche fehlgeschlagen" }

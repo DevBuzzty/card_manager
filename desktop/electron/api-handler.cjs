@@ -26,18 +26,22 @@ function fetchJson(url, options = {}) {
     });
 }
 
-// Cached Fetch Wrapper
-async function cachedFetch(url, cacheKeyPrefix = 'api', ttlHours = 24) {
+// Cached Fetch Wrapper. `force` skips the cache-hit check (always fetches fresh) without deleting
+// the existing row first, so a failed fetch (fetchJson resolves null) leaves the old cached data
+// in place as a fallback instead of destroying it.
+async function cachedFetch(url, cacheKeyPrefix = 'api', ttlHours = 24, { force = false } = {}) {
     const db = getDb();
     const cacheKey = `${cacheKeyPrefix}:${url}`;
 
     // Check Cache
-    const cached = db.prepare("SELECT data, timestamp FROM api_cache WHERE key = ?").get(cacheKey);
-    if (cached) {
-        const age = (new Date() - new Date(cached.timestamp + "Z")) / (1000 * 60 * 60);
-        if (age < ttlHours) {
-            console.log(`Cache Hit for ${url}`);
-            return JSON.parse(cached.data);
+    if (!force) {
+        const cached = db.prepare("SELECT data, timestamp FROM api_cache WHERE key = ?").get(cacheKey);
+        if (cached) {
+            const age = (new Date() - new Date(cached.timestamp + "Z")) / (1000 * 60 * 60);
+            if (age < ttlHours) {
+                console.log(`Cache Hit for ${url}`);
+                return JSON.parse(cached.data);
+            }
         }
     }
 

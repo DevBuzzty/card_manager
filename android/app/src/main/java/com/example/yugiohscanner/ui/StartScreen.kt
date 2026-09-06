@@ -36,6 +36,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CardRow
+import com.example.yugiohscanner.cloud.CatalogRepository
+import com.example.yugiohscanner.cloud.CatalogState
+import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.DealAlert
@@ -56,7 +59,9 @@ import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // A couple of sets closest to (but not yet at) 100% completion — owned/total.
 private data class SetProgressRow(val name: String, val owned: Int, val total: Int)
@@ -83,6 +88,19 @@ fun StartScreen(
     var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    val catalogState by CatalogSync.state.collectAsState()
+    // Catalog readiness is a SQLite read, so it is hoisted into state instead of being called
+    // from composition: this screen recomposes on every Downloading percent tick, and reading
+    // the DB there would mean dozens of main-thread disk reads per second — and an exception
+    // (the importer holds a write transaction on the same file) thrown straight out of
+    // composition. Re-read only when the sync moves to a new phase.
+    var catalogReady by remember { mutableStateOf(false) }
+    LaunchedEffect(catalogState::class) {
+        val ready = withContext(Dispatchers.IO) {
+            runCatching { CatalogRepository.isReady() }.getOrDefault(false)
+        }
+        catalogReady = ready
+    }
 
     LaunchedEffect(Unit) {
         scope.launch {
@@ -160,6 +178,32 @@ fun StartScreen(
                 Text("Start", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
                 IconButton(onClick = onOpenEinstellungen) {
                     Icon(Icons.Default.AccountCircle, "Einstellungen", tint = Primary)
+                }
+            }
+
+            // First-run/offline banner: only while the catalog has never been imported yet AND a
+            // sync is actively in progress. Disappears the moment CatalogSync reaches Ready (or
+            // Idle/Failed, which aren't "in progress"). Independent of `error` above, which is
+            // reserved for collection-load failures.
+            val catalogPercent = when (val s = catalogState) {
+                is CatalogState.Downloading -> s.percent
+                is CatalogState.Importing -> 100
+                else -> 0
+            }
+            if (!catalogReady &&
+                (catalogState is CatalogState.Checking || catalogState is CatalogState.Downloading || catalogState is CatalogState.Importing)
+            ) {
+                SpaceCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(
+                            "Katalog wird geladen … $catalogPercent %",
+                            style = MaterialTheme.typography.bodySmall, color = OnSurface,
+                        )
+                        Text(
+                            "Scannen geht schon — es dauert nur länger.",
+                            style = MaterialTheme.typography.labelSmall, color = Muted,
+                        )
+                    }
                 }
             }
 

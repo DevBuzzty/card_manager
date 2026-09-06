@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, Navigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
-import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers } from 'lucide-react';
+import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers, Cpu, UploadCloud } from 'lucide-react';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { T } from '../utils/i18n-de';
 
@@ -29,6 +29,10 @@ export default function Settings() {
     const [syncStatus, setSyncStatus] = useState(null);
     const [defaults, setDefaults] = useState({ edition: 'unknown', condition: 'NM' });
     const [ipAddress, setIpAddress] = useState('…');
+    const [catalogStatus, setCatalogStatus] = useState({ lastRun: null, version: 0, bytes: 0 });
+    const [catalogResult, setCatalogResult] = useState(null); // { ok, text }
+    const [uploadingKind, setUploadingKind] = useState(null); // 'index' | 'embedder' | 'detector' | null
+    const [modelResult, setModelResult] = useState(null); // { ok, text }
 
     useEffect(() => {
         if (window.api) {
@@ -53,6 +57,16 @@ export default function Settings() {
     }, []);
 
     useEffect(() => { window.api?.getIpAddress?.().then(setIpAddress); }, []);
+
+    useEffect(() => { window.api?.getCatalogStatus?.().then(status => status && setCatalogStatus(status)); }, []);
+
+    const formatBytes = (bytes) => {
+        if (!bytes) return '0 Byte';
+        const units = ['Byte', 'KB', 'MB', 'GB'];
+        let n = bytes, i = 0;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        return `${n.toLocaleString('de-DE', { maximumFractionDigits: 1 })} ${units[i]}`;
+    };
 
     const saveSync = async (key, value) => {
         setSync(prev => ({ ...prev, [key]: value }));
@@ -142,6 +156,39 @@ export default function Settings() {
         }
         setLoading(false);
         setRunningAction(null);
+    };
+
+    const handleBuildCatalog = async () => {
+        if (runningAction) return;
+        setRunningAction('catalog');
+        setCatalogResult(null);
+        if (window.api) {
+            const res = await window.api.buildCatalogNow();
+            if (res && res.error) {
+                setCatalogResult({ ok: false, text: res.message });
+            } else if (res && res.version !== undefined) {
+                setCatalogResult({ ok: true, text: `Version ${res.version} hochgeladen (${formatBytes(res.bytes)}).` });
+                const status = await window.api.getCatalogStatus();
+                if (status) setCatalogStatus(status);
+            }
+        }
+        setRunningAction(null);
+    };
+
+    const handleUploadModel = async (kind) => {
+        if (uploadingKind) return;
+        setUploadingKind(kind);
+        setModelResult(null);
+        if (window.api) {
+            const res = await window.api.uploadModel(kind);
+            // A cancelled file dialog comes back as { canceled: true } — a normal outcome, not an error.
+            if (res && res.error) {
+                setModelResult({ ok: false, text: res.message });
+            } else if (res && res.version !== undefined) {
+                setModelResult({ ok: true, text: `Version ${res.version} hochgeladen (${formatBytes(res.bytes)}).` });
+            }
+        }
+        setUploadingKind(null);
     };
 
     // An unknown :bereich (e.g. /einstellungen/quatsch) would otherwise render the Konto card
@@ -280,6 +327,7 @@ export default function Settings() {
                 )}
 
                 {active === 'daten' && (
+                    <>
                     <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
                         <div className="flex items-center mb-6 text-space-violet border-b border-line pb-4">
                             <Database className="w-6 h-6 mr-2" />
@@ -340,6 +388,76 @@ export default function Settings() {
                             </button>
                         </div>
                     </div>
+
+                    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
+                        <div className="flex items-center mb-6 text-space-violet border-b border-line pb-4">
+                            <Cloud className="w-6 h-6 mr-2" />
+                            <h3 className="font-display text-lg text-ink">Katalog</h3>
+                        </div>
+                        <p className="text-sm text-ink-muted mb-4">Name, Text und Printings aller Karten — das Handy scannt damit ohne Netz.</p>
+                        <p className="text-sm text-ink-muted mb-4">
+                            {catalogStatus.lastRun
+                                ? `Version ${catalogStatus.version} · ${formatBytes(catalogStatus.bytes)} · gebaut am ${new Date(catalogStatus.lastRun).toLocaleDateString('de-DE')}`
+                                : 'Noch nie gebaut.'}
+                        </p>
+                        <button
+                            onClick={handleBuildCatalog}
+                            disabled={runningAction === 'catalog'}
+                            className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <div className="flex items-center text-ink mb-2">
+                                <RefreshCw className={`w-5 h-5 mr-2 ${runningAction === 'catalog' ? 'animate-spin' : ''}`} />
+                                <h4 className="font-bold">{runningAction === 'catalog' ? 'Wird gebaut…' : 'Katalog jetzt bauen'}</h4>
+                            </div>
+                        </button>
+                        {catalogResult && (
+                            <p className={`text-sm mt-4 ${catalogResult.ok ? 'text-good' : 'text-crit'}`}>{catalogResult.text}</p>
+                        )}
+                    </div>
+
+                    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
+                        <div className="flex items-center mb-6 text-space-violet border-b border-line pb-4">
+                            <Cpu className="w-6 h-6 mr-2" />
+                            <h3 className="font-display text-lg text-ink">Scanner-Modell</h3>
+                        </div>
+                        <p className="text-sm text-ink-muted mb-4">Neue Modelldateien landen ohne neue App-Version auf dem Handy.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <button
+                                onClick={() => handleUploadModel('index')}
+                                disabled={!!uploadingKind}
+                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <div className="flex items-center text-ink mb-2">
+                                    <UploadCloud className={`w-5 h-5 mr-2 ${uploadingKind === 'index' ? 'animate-bounce' : ''}`} />
+                                    <h4 className="font-bold">{uploadingKind === 'index' ? 'Wird hochgeladen…' : 'Index hochladen'}</h4>
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => handleUploadModel('embedder')}
+                                disabled={!!uploadingKind}
+                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <div className="flex items-center text-ink mb-2">
+                                    <UploadCloud className={`w-5 h-5 mr-2 ${uploadingKind === 'embedder' ? 'animate-bounce' : ''}`} />
+                                    <h4 className="font-bold">{uploadingKind === 'embedder' ? 'Wird hochgeladen…' : 'Embedder hochladen'}</h4>
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => handleUploadModel('detector')}
+                                disabled={!!uploadingKind}
+                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <div className="flex items-center text-ink mb-2">
+                                    <UploadCloud className={`w-5 h-5 mr-2 ${uploadingKind === 'detector' ? 'animate-bounce' : ''}`} />
+                                    <h4 className="font-bold">{uploadingKind === 'detector' ? 'Wird hochgeladen…' : 'Detektor hochladen'}</h4>
+                                </div>
+                            </button>
+                        </div>
+                        {modelResult && (
+                            <p className={`text-sm mt-4 ${modelResult.ok ? 'text-good' : 'text-crit'}`}>{modelResult.text}</p>
+                        )}
+                    </div>
+                    </>
                 )}
 
                 {active === 'standards' && (
