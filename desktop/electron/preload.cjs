@@ -89,6 +89,11 @@ contextBridge.exposeInMainWorld('api', {
   fetchYugipediaSets: (passcode) => ipcRenderer.invoke('fetch-yugipedia-sets', passcode),
   fetchJapaneseSets: (passcode) => ipcRenderer.invoke('fetch-japanese-sets', passcode),
 
+  // Offline-Katalog (Spec D1)
+  buildCatalogNow: () => ipcRenderer.invoke('catalog-build-now'),
+  getCatalogStatus: () => ipcRenderer.invoke('catalog-status'),
+  uploadModel: (kind) => ipcRenderer.invoke('model-upload', { kind }),
+
   // Deals (price-alert scraper)
   addDealWatch: (data) => ipcRenderer.invoke('add-deal-watch', data),
   getDealWatches: () => ipcRenderer.invoke('get-deal-watches'),

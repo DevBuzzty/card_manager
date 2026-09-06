@@ -9,6 +9,7 @@ const { startSync } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape } = require('./cardmarket-scraper.cjs');
 const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
+const { runCatalogBuild, getCatalogStatus, uploadModel } = require('./catalog-builder.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { totalValue, copyCount } = require('./valuation.cjs');
 const copies = require('./copies.cjs');
@@ -86,6 +87,8 @@ function startSocketServer() {
 let priceUpdateInterval;
 let cmPollInterval;
 let cmBulkInterval;
+let catalogInterval;
+let catalogRunning = false;
 let sync;   // { ensureClient } handle from startSync, for cloud deal handlers
 
 const getSetting = (key) => {
@@ -100,6 +103,7 @@ app.whenReady().then(() => {
   startCardmarketPoller();
   startCardmarketBulkScheduler();
   sync = startSync(db, () => mainWindow);
+  startCatalogScheduler();
   // Deals now live in Supabase (the cloud Edge Function scrapes, shared with the phone).
   // The old local SQLite poller is disabled — the desktop reads/writes the cloud tables.
 
@@ -643,6 +647,56 @@ ipcMain.handle('cardmarket-bulk-refresh', async () => {
 });
 ipcMain.handle('cardmarket-bulk-status', () => {
   try { return getBulkStatus(db); } catch (e) { return { lastRun: null, resolvedCount: 0, unresolvedCount: 0 }; }
+});
+
+// Wöchentlicher Offline-Katalog-Bau (Spec D1): 45 s nach Start, wenn seit dem letzten Lauf mehr
+// als 7 Tage vergangen sind, danach stündlich neu geprüft — überlebt so auch, wenn die App nicht
+// durchgehend läuft. Spiegelt startCardmarketBulkScheduler()/bulkDue() oben.
+function catalogDue() {
+  const last = getSetting('catalog_last_run');
+  return !last || (Date.now() - new Date(last).getTime()) > 7 * 24 * 60 * 60 * 1000;
+}
+function startCatalogScheduler() {
+  const tick = async () => {
+    if (catalogRunning || !sync || !catalogDue()) return;
+    catalogRunning = true;
+    try {
+      const res = await runCatalogBuild(db, { ensureClient: sync.ensureClient });
+      if (res && res.error) console.error('[catalog-builder] scheduled build failed:', res.error, res.message);
+    } catch (e) { console.error('Catalog build error:', e); }
+    finally { catalogRunning = false; }
+  };
+  setTimeout(tick, 45 * 1000);
+  if (catalogInterval) clearInterval(catalogInterval);
+  catalogInterval = setInterval(tick, 60 * 60 * 1000);
+}
+
+ipcMain.handle('catalog-build-now', async () => {
+  if (catalogRunning) return { busy: true };
+  catalogRunning = true;
+  try {
+    const ensureClient = sync ? sync.ensureClient : async () => null;
+    return await runCatalogBuild(db, { ensureClient, force: true });
+  } catch (e) { console.error('Catalog build error:', e); return { error: 'internal', message: String(e && e.message || e) }; }
+  finally { catalogRunning = false; }
+});
+ipcMain.handle('catalog-status', () => {
+  try { return getCatalogStatus(db); } catch (e) { return { lastRun: null, version: 0, bytes: 0 }; }
+});
+ipcMain.handle('model-upload', async (event, { kind, filePath } = {}) => {
+  try {
+    if (!filePath) {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Modelldatei auswählen',
+        properties: ['openFile'],
+        filters: [{ name: 'Modelldateien', extensions: ['onnx', 'bin'] }],
+      });
+      if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+      filePath = result.filePaths[0];
+    }
+    const ensureClient = sync ? sync.ensureClient : async () => null;
+    return await uploadModel(db, { ensureClient, kind, filePath });
+  } catch (e) { console.error('Model upload error:', e); return { error: 'internal', message: String(e && e.message || e) }; }
 });
 
 ipcMain.handle('check-card-exists', (event, passcode) => {
