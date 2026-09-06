@@ -85,9 +85,14 @@ fun SearchScreen(onClose: () -> Unit, onAdded: () -> Unit) {
             scope.launch {
                 try {
                     // Catalog first (Task 9): search the offline catalog while it's ready (no
-                    // network needed); otherwise the existing network search runs unchanged.
+                    // network needed); if it has no results, fall back to the network.
                     results = if (CatalogRepository.isReady()) {
-                        withContext(Dispatchers.IO) { CatalogRepository.search(query) }.map { it.toCardRow() }
+                        val catalogResults = withContext(Dispatchers.IO) { CatalogRepository.search(query) }
+                        if (catalogResults.isNotEmpty()) {
+                            catalogResults.map { it.toCardRow() }
+                        } else {
+                            CardSearchRepository.search(query)
+                        }
                     } else {
                         CardSearchRepository.search(query)
                     }
