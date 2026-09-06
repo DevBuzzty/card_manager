@@ -75,6 +75,24 @@ class SetCodeOcrTest {
         assertTrue(SetCodeOcr.extract(text).isEmpty())
     }
 
+    @Test fun `gebindestrichter Kartentext mit Ziffern liefert keinen Set-Code`() {
+        // Der Satz oben hat weder Bindestrich noch Ziffer und kann das erweiterte Muster daher gar
+        // nicht von einem beliebigen anderen unterscheiden. Diese Faelle greifen die eigentliche
+        // Risikostelle an: Bindestrich UND unmittelbar folgende Ziffern, wie sie in echtem
+        // Kartentext und im Rauschen der Zonen-OCR vorkommen.
+        for (text in listOf(
+            "Rank-Up-Magic Argent Chaos Force",
+            "Ein Effekt-Monster mit ATK-2400 und DEF-1200",
+            "Verbindungs-Monster der Stufe 8-100",
+            "SPYRAL GEAR - Last Resort",
+            "Xyz-Monster mit Rang 4",
+            "Sofort-Zauberkarte 1 pro Spielzug",
+            "Konter-Falle 2500 ATK",
+        )) {
+            assertTrue("faelschlich als Set-Code erkannt in: $text", SetCodeOcr.extract(text).isEmpty())
+        }
+    }
+
     @Test fun `mehrere Codes im selben Text werden dedupliziert, erste Reihenfolge bleibt`() {
         val text = "SDSE-DEO35 irgendwas SDSE-DEO35 LOB-G005"
         assertEquals(listOf("SDSE-DE035", "LOB-G005"), SetCodeOcr.extract(text))

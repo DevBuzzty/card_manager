@@ -27,10 +27,16 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
 
     // A corrected passcode is only credible if that card actually exists (Spec D 7c). The offline
     // catalog from Spec D1 answers this from local SQLite, so it costs no network — and it stops an
-    // aggressive confusion fix from inventing a card. Unknown-to-the-catalog cards (brand-new sets)
-    // fall back to accepting the code, so the check can never be worse than no check.
+    // aggressive confusion fix from inventing a card.
+    //
+    // The isReady() guard is load-bearing, not decoration. runCatching{}.getOrDefault(true) only
+    // substitutes on a THROWN exception; a catalog that simply has no such row returns null and the
+    // check would REJECT. On a device whose catalog has not been imported yet that rejects every
+    // corrected passcode — and the correction path only runs when the embedder missed, i.e. foils
+    // and angles, exactly the cases this plan exists to rescue. Without this guard the gate is
+    // strictly worse than no gate. Same idiom as SearchScreen/StartScreen.
     private val catalogKnows: (String) -> Boolean = { pc ->
-        runCatching { CatalogRepository.card(pc) != null }.getOrDefault(true)
+        !CatalogRepository.isReady() || runCatching { CatalogRepository.card(pc) != null }.getOrDefault(true)
     }
 
     override fun process(frame: Bitmap): List<Detection> {
@@ -85,10 +91,17 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
      * recycles it immediately after, exactly as the old single-band read did.
      */
     private fun readZones(frame: Bitmap, b: Box, knownPasscode: Int?): Pair<Map<Zone, String>, String> {
-        val layout = knownPasscode?.let {
-            val type = runCatching { CatalogRepository.card(it.toString())?.type }.getOrNull()
-            CardLayout.layoutFor(type)
+        // Key the safety net off whether the TYPE actually resolved, not off whether `layout` is
+        // null: CardLayout.layoutFor(null) returns STANDARD, a concrete value, so keying off the
+        // layout silently denied the legacy band to catalog misses — the case where we know least.
+        // The artwork index and the catalog are separately versioned artefacts (Spec D1 ships both),
+        // so a freshly trained index really can identify a card the catalog does not carry yet;
+        // that card would otherwise get STANDARD geometry with no fallback at all, strictly worse
+        // than the embedder-miss path it sits beside.
+        val type = knownPasscode?.let {
+            runCatching { CatalogRepository.card(it.toString())?.type }.getOrNull()
         }
+        val layout = if (type != null) CardLayout.layoutFor(type) else null
         val needsLegacyBand = layout == null || layout in PLACEHOLDER_LAYOUTS
         val layoutLabel = layout?.toString() ?: "UNKNOWN"
 
