@@ -3,3 +3,4 @@ torchvision>=0.28
 onnxruntime-directml>=1.24
 onnx>=1.22
 ultralytics>=8.4
+easyocr>=1.7

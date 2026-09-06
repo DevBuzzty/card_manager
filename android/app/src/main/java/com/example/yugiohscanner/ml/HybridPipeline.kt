@@ -58,10 +58,18 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
      *  The band (see [CardStrip]) holds the passcode bottom-left and the set code bottom-right,
      *  enhanced + upscaled for legibility. Runs on the analyzer's background thread. */
     private fun readBand(frame: Bitmap, b: Box): String {
-        val strip = CardStrip.bottomBand(frame, b) ?: return ""
+        val strip = CardStrip.bottomBand(frame, b) ?: run {
+            android.util.Log.i("BandOcr", "band off-frame for box ${b.x1.toInt()},${b.y1.toInt()}-${b.x2.toInt()},${b.y2.toInt()}")
+            return ""
+        }
         val enhanced = OcrPrep.enhance(strip, targetWidth = 1000)
         strip.recycle()  // enhance() has copied it into `enhanced`
         val text = Tasks.await(recognizer.process(InputImage.fromBitmap(enhanced, 0))).text
+        // Spec D2 needs to know WHAT the band actually saw — until now the only raw-OCR logging sat
+        // in PasscodeOcr, which the live HybridPipeline path never calls, so the band was invisible.
+        // Newlines are flattened to " | " so one band is one log line.
+        android.util.Log.i("BandOcr", "box=${(b.x2 - b.x1).toInt()}x${(b.y2 - b.y1).toInt()} " +
+            "band=${enhanced.width}x${enhanced.height} raw='" + text.replace("\n", " | ") + "'")
         enhanced.recycle()  // ML Kit is done once Tasks.await returns
         return text
     }
