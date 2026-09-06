@@ -36,6 +36,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CardRow
+import com.example.yugiohscanner.cloud.CatalogRepository
+import com.example.yugiohscanner.cloud.CatalogState
+import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.DealAlert
@@ -83,6 +86,7 @@ fun StartScreen(
     var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    val catalogState by CatalogSync.state.collectAsState()
 
     LaunchedEffect(Unit) {
         scope.launch {
@@ -160,6 +164,32 @@ fun StartScreen(
                 Text("Start", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
                 IconButton(onClick = onOpenEinstellungen) {
                     Icon(Icons.Default.AccountCircle, "Einstellungen", tint = Primary)
+                }
+            }
+
+            // First-run/offline banner: only while the catalog has never been imported yet AND a
+            // sync is actively in progress. Disappears the moment CatalogSync reaches Ready (or
+            // Idle/Failed, which aren't "in progress"). Independent of `error` above, which is
+            // reserved for collection-load failures.
+            val catalogPercent = when (val s = catalogState) {
+                is CatalogState.Downloading -> s.percent
+                is CatalogState.Importing -> 100
+                else -> 0
+            }
+            if (!CatalogRepository.isReady() &&
+                (catalogState is CatalogState.Checking || catalogState is CatalogState.Downloading || catalogState is CatalogState.Importing)
+            ) {
+                SpaceCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(
+                            "Katalog wird geladen … $catalogPercent %",
+                            style = MaterialTheme.typography.bodySmall, color = OnSurface,
+                        )
+                        Text(
+                            "Scannen geht schon — es dauert nur länger.",
+                            style = MaterialTheme.typography.labelSmall, color = Muted,
+                        )
+                    }
                 }
             }
 

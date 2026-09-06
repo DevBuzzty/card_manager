@@ -16,12 +16,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.BuildConfig
+import com.example.yugiohscanner.cloud.CatalogDb
+import com.example.yugiohscanner.cloud.CatalogState
+import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val PRICE_SOURCES = listOf(
     "cardmarket" to "Cardmarket", "tcgplayer" to "TCGplayer", "ebay" to "eBay",
@@ -82,6 +88,78 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
                         label = { Text("IP-Adresse") }, singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                }
+            }
+        }
+
+        // ---- Katalog --------------------------------------------------------
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionHeader("Katalog")
+            SpaceCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    val scope = rememberCoroutineScope()
+                    val catalogState by CatalogSync.state.collectAsState()
+                    var catalogVersion by remember { mutableStateOf(0) }
+                    var catalogCards by remember { mutableStateOf(0) }
+                    var mobileOk by remember { mutableStateOf(prefs.getBoolean("catalog_mobile_ok", false)) }
+
+                    // Only re-reads the DB when the sync moves to a new phase (e.g. Importing ->
+                    // Ready) — not on every Downloading percent tick, which would otherwise
+                    // reopen the catalog DB dozens of times per second for no reason.
+                    LaunchedEffect(catalogState::class) {
+                        withContext(Dispatchers.IO) {
+                            val db = CatalogDb(ctx)
+                            try {
+                                catalogVersion = db.version()
+                                catalogCards = db.cardCount()
+                            } finally {
+                                db.close()
+                            }
+                        }
+                    }
+
+                    Text(
+                        if (catalogVersion > 0) "Version $catalogVersion · $catalogCards Karten" else "Noch nicht geladen",
+                        color = OnSurface,
+                    )
+                    val statusText = when (val s = catalogState) {
+                        is CatalogState.Idle -> null
+                        is CatalogState.Checking -> "Wird geprüft…"
+                        is CatalogState.Downloading -> "Wird geladen … ${s.percent} %"
+                        is CatalogState.Importing -> "Wird importiert…"
+                        is CatalogState.Ready -> "Aktuell"
+                        is CatalogState.Failed -> "Fehlgeschlagen: ${s.reason}"
+                    }
+                    if (statusText != null) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            statusText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (catalogState is CatalogState.Failed) ErrorColor else Muted,
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("Auch über Mobilfunk laden", color = OnSurface)
+                        Switch(
+                            checked = mobileOk,
+                            onCheckedChange = {
+                                mobileOk = it
+                                prefs.edit().putBoolean("catalog_mobile_ok", it).apply()
+                            },
+                        )
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { scope.launch { CatalogSync.checkAndUpdate(ctx, force = true) } }) {
+                        Text("Jetzt prüfen")
+                    }
                 }
             }
         }
