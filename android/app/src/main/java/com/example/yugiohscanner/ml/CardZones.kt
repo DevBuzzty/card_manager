@@ -60,6 +60,22 @@ object CardZones {
      *  Null if the zone lands off-frame or is too small to be useful. Mirrors
      *  [CardStrip.bottomBand]'s clamping arithmetic. */
     private fun cropZone(frame: Bitmap, box: Box, rect: RectF): Bitmap? {
+        val (x, y, w, h) = zoneRect(box, rect, frame.width, frame.height) ?: return null
+
+        val crop = Bitmap.createBitmap(frame, x, y, w, h)
+        val enhanced = OcrPrep.enhance(crop)
+        if (crop != frame) crop.recycle()  // guard: createBitmap may return `frame` for a full-frame rect
+        return enhanced
+    }
+
+    /**
+     * Pure coordinate math: [rect] (box-relative, see class doc for the convention) to frame
+     * pixels for a [box] detected in a [frameW]x[frameH] frame, clamped to the frame. Null if the
+     * zone lands off-frame or degenerates to fewer than 6px on either side. Split out from
+     * [cropZone] so the arithmetic -- the part that must not be wrong -- is unit-testable without
+     * touching [Bitmap], which has no working stub under this module's JVM unit tests.
+     */
+    internal fun zoneRect(box: Box, rect: RectF, frameW: Int, frameH: Int): IntArray? {
         val bw = box.x2 - box.x1
         val bh = box.y2 - box.y1
         val left = box.x1 + rect.left * bw
@@ -67,15 +83,12 @@ object CardZones {
         val right = box.x1 + rect.right * bw
         val bottom = box.y2 + rect.bottom * bh
 
-        val x = left.toInt().coerceIn(0, frame.width - 1)
-        val y = top.toInt().coerceIn(0, frame.height - 1)
-        val w = (right - left).toInt().coerceIn(1, frame.width - x)
-        val h = (bottom - top).toInt().coerceIn(1, frame.height - y)
+        val x = left.toInt().coerceIn(0, frameW - 1)
+        val y = top.toInt().coerceIn(0, frameH - 1)
+        val w = (right - left).toInt().coerceIn(1, frameW - x)
+        val h = (bottom - top).toInt().coerceIn(1, frameH - y)
         if (w < 6 || h < 6) return null
 
-        val crop = Bitmap.createBitmap(frame, x, y, w, h)
-        val enhanced = OcrPrep.enhance(crop)
-        crop.recycle()  // enhance() has copied it into `enhanced`
-        return enhanced
+        return intArrayOf(x, y, w, h)
     }
 }

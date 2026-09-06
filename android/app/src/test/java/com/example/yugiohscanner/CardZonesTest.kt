@@ -1,0 +1,71 @@
+package com.example.yugiohscanner
+
+import android.graphics.RectF
+import com.example.yugiohscanner.ml.Box
+import com.example.yugiohscanner.ml.CardZones
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+/**
+ * [CardZones.zoneRect] is the pure box-relative-rect -> frame-pixel arithmetic that Fix round 1
+ * extracted out of [CardZones]'s private `cropZone` after review found the coordinate math --
+ * the one thing the original brief flagged as "must not be wrong, and no test would catch it" --
+ * resting on a single manual review. `RectF` field reads (`left`/`top`/`right`/`bottom`) work
+ * fine under this module's JVM unit-test stub jar; only the 4-arg constructor and `.equals()` are
+ * broken there (confirmed by [CardLayoutTest]'s spike), so `rect(...)` below builds via the
+ * no-arg constructor plus direct field assignment, exactly like [CardLayout]'s own `rect` helper
+ * -- and the rects here are the real STANDARD SET_CODE / PASSCODE constants from [CardLayout], so
+ * this test is decoupled from CardLayout's zone-lookup machinery and exercises only the math.
+ */
+class CardZonesTest {
+
+    // STANDARD SET_CODE / PASSCODE, copied from CardLayout.standardZones() -- see its file for
+    // provenance (measured 2026-09-06 over 954 labelled photos).
+    private val setCode = rect(0.7285f, -0.0725f, 1.0536f, 0.0909f)
+    private val passcode = rect(-0.1651f, 0.327f, 0.1507f, 0.5724f)
+
+    private fun rect(left: Float, top: Float, right: Float, bottom: Float) = RectF().apply {
+        this.left = left; this.top = top; this.right = right; this.bottom = bottom
+    }
+
+    private fun box(x1: Float, y1: Float, x2: Float, y2: Float) = Box(x1, y1, x2, y2, 0.9f)
+
+    @Test fun `reviewer's worked example -- SET_CODE on box(100,200,700,800), frame 1000x1000`() {
+        val result = CardZones.zoneRect(box(100f, 200f, 700f, 800f), setCode, 1000, 1000)
+        // Pinned: x=537, y=756, w=195, h=98 -- straddles box.y2=800 and sits to the right, exactly
+        // where the set code prints. This is the regression guard for the sign/origin bug this
+        // whole plan exists to fix.
+        assertArrayEquals(intArrayOf(537, 756, 195, 98), result)
+    }
+
+    @Test fun `PASSCODE, same box, computed the same way`() {
+        // Same box as the SET_CODE example; a taller frame so the (lower, taller) PASSCODE zone
+        // isn't itself clipped by the frame bottom -- that clamping case is covered separately
+        // below. Worked by hand: bw=bh=600, left=100+(-0.1651*600)=0.94, top=800+(0.327*600)=996.2,
+        // right=100+(0.1507*600)=190.42, bottom=800+(0.5724*600)=1143.44 ->
+        // x=0 (0.94 truncates to 0), y=996, w=(190.42-0.94)->189, h=(1143.44-996.2)->147.
+        val result = CardZones.zoneRect(box(100f, 200f, 700f, 800f), passcode, 1000, 1200)
+        assertArrayEquals(intArrayOf(0, 996, 189, 147), result)
+    }
+
+    @Test fun `negative left clamps to 0 and width shrinks to the frame edge instead of wrapping`() {
+        // Box near the left frame edge: box.x1 + rect.left*bw = 10 + (-0.1651*600) = -89.06,
+        // solidly negative. A narrow 150px-wide frame then forces the width clamp to actually
+        // bite: unclamped width is (right-left) = (100.42 - -89.06) -> 189, wider than the frame,
+        // which would make createBitmap(frame, 0, y, 189, h) reach past the frame's right edge.
+        val result = CardZones.zoneRect(box(10f, 200f, 610f, 800f), passcode, 150, 1200)
+        // x clamps to 0 (not a wraparound negative index); w shrinks from 189 to fit the 150px
+        // frame (frameW - x = 150 - 0 = 150) rather than overrunning it.
+        assertArrayEquals(intArrayOf(0, 996, 150, 147), result)
+    }
+
+    @Test fun `zone below the frame bottom degenerates below 6px and returns null`() {
+        // Same box and SET_CODE zone as the worked example, but the frame is only 760px tall --
+        // shorter than the box's own y2=800. The zone's top (756) still just barely lands inside
+        // the frame, but only 4px of it (760-756) remain below that before the frame ends, which
+        // is under the 6px floor, so the whole zone is off-frame in every way that matters.
+        val result = CardZones.zoneRect(box(100f, 200f, 700f, 800f), setCode, 1000, 760)
+        assertNull(result)
+    }
+}
