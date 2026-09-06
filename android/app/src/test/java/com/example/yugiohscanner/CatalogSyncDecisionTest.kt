@@ -24,11 +24,22 @@ class CatalogSyncDecisionTest {
         )
     }
 
-    @Test fun `frischer Install auf mobilem Netz ohne Freigabe wartet trotzdem auf WLAN`() {
-        assertFalse(
+    @Test fun `frischer Install laedt auch ueber Mobilfunk ohne Freigabe`() {
+        // Produktentscheidung: ohne Katalog ist die App offline kaum brauchbar, also schlaegt der
+        // Erstinstallations-Fall die Mobilfunk-Regel. Vorher war es umgekehrt.
+        assertTrue(
             CatalogSync.shouldDownloadNow(
                 localVersion = 0, lastDownloadAtMs = 0L, nowMs = now,
                 force = false, isUnmetered = false, mobileOk = false
+            )
+        )
+    }
+
+    @Test fun `frischer Install laedt auch mit Mobilfunk-Freigabe`() {
+        assertTrue(
+            CatalogSync.shouldDownloadNow(
+                localVersion = 0, lastDownloadAtMs = 0L, nowMs = now,
+                force = false, isUnmetered = false, mobileOk = true
             )
         )
     }
@@ -60,14 +71,27 @@ class CatalogSyncDecisionTest {
         )
     }
 
-    @Test fun `force ignoriert das Tagesfenster, aber nicht die Netzregel`() {
+    @Test fun `Mobilfunk-Freigabe hebelt das Tagesfenster nicht aus`() {
+        // Trennt "Freigabe erlaubt mobiles Laden" von "ein Tag ist vergangen": hier ist nur die
+        // Freigabe gesetzt, das Fenster laeuft noch.
+        assertFalse(
+            CatalogSync.shouldDownloadNow(
+                localVersion = 5, lastDownloadAtMs = now, nowMs = now,
+                force = false, isUnmetered = false, mobileOk = true
+            )
+        )
+    }
+
+    @Test fun `force ignoriert Tagesfenster und Netzregel`() {
+        // Produktentscheidung: ein ausdruecklicher Tipp auf "Jetzt pruefen" ist dieselbe
+        // Einwilligung wie catalog_mobile_ok. Ein Knopf, der stumm nichts tut, waere schlechter.
         assertTrue(
             CatalogSync.shouldDownloadNow(
                 localVersion = 5, lastDownloadAtMs = now, nowMs = now,
                 force = true, isUnmetered = true, mobileOk = false
             )
         )
-        assertFalse(
+        assertTrue(
             CatalogSync.shouldDownloadNow(
                 localVersion = 5, lastDownloadAtMs = now, nowMs = now,
                 force = true, isUnmetered = false, mobileOk = false

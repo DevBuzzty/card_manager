@@ -140,8 +140,12 @@ object CatalogSync {
         isUnmetered: Boolean,
         mobileOk: Boolean,
     ): Boolean {
-        if (!isUnmetered && !mobileOk) return false
+        // Both of these outrank the metered-network rule, by explicit product decision:
+        // without a catalog the app is barely usable offline, and tapping "Jetzt prüfen" is the
+        // same consent that `catalog_mobile_ok` expresses — a button that silently does nothing
+        // is worse than spending 2 MB.
         if (force || localVersion == 0) return true
+        if (!isUnmetered && !mobileOk) return false
         return nowMs - lastDownloadAtMs >= CHECK_INTERVAL_MS
     }
 
