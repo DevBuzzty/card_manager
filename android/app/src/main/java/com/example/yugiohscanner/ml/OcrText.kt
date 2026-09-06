@@ -19,16 +19,26 @@ object OcrText {
         'g' to '9', 'q' to '9',
     )
 
-    /** First 8-digit passcode in [text], correcting near-miss letter/digit confusions. */
-    fun findPasscode(text: String): Int? {
+    /**
+     * First 8-digit passcode in [text], correcting near-miss letter/digit confusions.
+     *
+     * [exists] gates only the correction pass (step 2): an aggressive letter->digit fix can turn
+     * noise into an 8-digit run that looks plausible but was never a real card, so that pass only
+     * accepts a correction the catalog actually recognises (Spec D §7c). The exact-digits fast
+     * path (step 1) needs no such check -- it never rewrites anything. Defaults to always-true so
+     * a caller with no catalog wired up keeps today's unconditional behaviour; production callers
+     * should pass a real lookup (e.g. `{ CatalogRepository.card(it) != null }`).
+     */
+    fun findPasscode(text: String, exists: (String) -> Boolean = { true }): Int? {
         // 1) exact 8-digit run anywhere (fast path, no correction risk)
         Regex("\\d{8}").find(text)?.let { return it.value.toIntOrNull() }
-        // 2) correction pass on passcode-like tokens
+        // 2) correction pass on passcode-like tokens, validated against the catalog
         for (tok in text.split(Regex("[^A-Za-z0-9|]+"))) {
             if (tok.length < 8) continue
             if (tok.count { it.isDigit() } < 6) continue          // already mostly digits
             val fixed = tok.map { confuse[it] ?: it }.joinToString("")
-            Regex("\\d{8}").find(fixed)?.let { return it.value.toIntOrNull() }
+            val match = Regex("\\d{8}").find(fixed) ?: continue
+            if (exists(match.value)) return match.value.toIntOrNull()
         }
         return null
     }
