@@ -24,7 +24,7 @@ class DetectorModel(context: Context, private val imgsz: Int = 640, private val 
     // XNNPACK gave no speedup. int8 quantization was also a wash on the CPU EP (~same ms) for a
     // ~10% recall loss. The real lever is re-exporting WITHOUT in-graph NMS (NMS in Kotlin).
     private val session: OrtSession =
-        env.createSession(context.assets.open("detector.onnx").readBytes(), OrtTuning.sessionOptions())
+        env.createSession(ModelStore.bytes(context, "detector.onnx"), OrtTuning.sessionOptions())
     private val inputName: String = session.inputNames.iterator().next()
     private var inferCount = 0
 
