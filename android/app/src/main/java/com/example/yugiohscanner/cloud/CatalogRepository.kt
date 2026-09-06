@@ -17,7 +17,14 @@ object CatalogRepository {
     }
 
     /** True once a catalog has been imported at least once. */
-    fun isReady(): Boolean = (db?.version() ?: 0) > 0
+    fun isReady(): Boolean = version() > 0
+
+    /** Version of the imported catalog, or 0 if none. Uses the shared connection — callers
+     *  (e.g. the settings screen) must not open a second [CatalogDb] on the same file. */
+    fun version(): Int = db?.version() ?: 0
+
+    /** Number of cards in the imported catalog, or 0 if none. Shared connection, see [version]. */
+    fun cardCount(): Int = db?.cardCount() ?: 0
 
     fun card(passcode: String): CatalogCard? {
         val database = db?.readableDatabase ?: return null

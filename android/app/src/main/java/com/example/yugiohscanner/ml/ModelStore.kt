@@ -62,9 +62,7 @@ object ModelStore {
             val mobileOk = prefs.getBoolean(KEY_MOBILE_OK, false)
             val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
 
-            for (kind in KINDS) {
-                updateOne(appContext, prefs, kind, unmetered, mobileOk)
-            }
+            updateBatch(appContext, prefs, unmetered, mobileOk)
         } finally {
             mutex.unlock()
         }
@@ -72,52 +70,82 @@ object ModelStore {
 
     private data class RemoteModel(val version: Int, val url: String, val sha256: String)
 
-    private fun updateOne(context: Context, prefs: SharedPreferences, kind: Kind, unmetered: Boolean, mobileOk: Boolean) {
-        val versionKey = "model_version_${kind.kind}"
-        val lastDownloadKey = "model_last_download_at_${kind.kind}"
-        val localVersion = prefs.getInt(versionKey, 0)
+    private data class Planned(val kind: Kind, val remote: RemoteModel, val tempFile: File)
 
-        val remote = try {
-            fetchLatestVersion(context, kind.kind)
-        } catch (e: Exception) {
-            Log.w(TAG, "Versionsabfrage fuer ${kind.kind} fehlgeschlagen", e)
-            return
-        } ?: return
-        if (remote.version <= localVersion) return
+    private fun versionKey(kind: Kind) = "model_version_${kind.kind}"
+    private fun lastDownloadKey(kind: Kind) = "model_last_download_at_${kind.kind}"
 
-        val lastDownloadAt = prefs.getLong(lastDownloadKey, 0L)
-        // Reuse the catalog's download gate (daily + metered-network check) for models too.
+    /**
+     * Delivers every outdated model as ONE atomic batch: all files are downloaded to `.tmp` and
+     * checksum-verified first, and only once every planned kind has verified are they renamed into
+     * place and their versions and daily stamps written.
+     *
+     * This is deliberate, not incidental: `index.bin` holds embeddings in `embedder.onnx`'s vector
+     * space, so a new index paired with an old embedder makes the scanner return confidently wrong
+     * cards with no error anywhere. Delivering the kinds independently produced exactly that
+     * whenever one of the two failed — and, because the daily stamp was written before the attempt,
+     * it also blocked the repair for 24 hours. Now nothing is stamped unless the whole batch
+     * succeeded, so a failure retries on the next app start. The detector is technically
+     * independent of the pair, but one all-or-nothing rule is simpler than two and the failure it
+     * can cause (a detector update waiting for the next start) is harmless.
+     */
+    private fun updateBatch(context: Context, prefs: SharedPreferences, unmetered: Boolean, mobileOk: Boolean) {
+        val modelsDir = File(context.filesDir, "models")
+        val planned = mutableListOf<Planned>()
+        for (kind in KINDS) {
+            val remote = try {
+                fetchLatestVersion(context, kind.kind)
+            } catch (e: Exception) {
+                Log.w(TAG, "Versionsabfrage fuer ${kind.kind} fehlgeschlagen", e)
+                return   // solange nicht alle Versionen bekannt sind, wird nichts angefasst
+            } ?: continue
+            if (remote.version <= prefs.getInt(versionKey(kind), 0)) continue
+            planned.add(Planned(kind, remote, File(modelsDir, "${kind.fileName}.tmp")))
+        }
+        if (planned.isEmpty()) return
+
+        // Reuse the catalog's download gate (daily + metered-network check) for models too, but
+        // decide it ONCE for the batch: the lowest local version (0 = never delivered, so a fresh
+        // install is never starved of retries) against the most recent attempt of the batch.
         // The three models together (~22 MB: detector.onnx 10.6, index.bin 7.5, embedder.onnx 4.0)
         // are treated the same as the 2.1 MB catalog — the cost is accepted.
+        val localVersion = planned.minOf { prefs.getInt(versionKey(it.kind), 0) }
+        val lastDownloadAt = planned.maxOf { prefs.getLong(lastDownloadKey(it.kind), 0L) }
         val shouldDownload = CatalogSync.shouldDownloadNow(
             localVersion, lastDownloadAt, System.currentTimeMillis(), false, unmetered, mobileOk
         )
         if (!shouldDownload) return
 
-        prefs.edit().putLong(lastDownloadKey, System.currentTimeMillis()).apply()
-
-        val modelsDir = File(context.filesDir, "models")
         modelsDir.mkdirs()
-        val tempFile = File(modelsDir, "${kind.fileName}.tmp")
         try {
-            val sha256 = try {
-                download(context, remote.url, tempFile)
-            } catch (e: Exception) {
-                Log.w(TAG, "Download fuer ${kind.kind} fehlgeschlagen", e)
-                return
+            for (p in planned) {
+                val sha256 = try {
+                    download(context, p.remote.url, p.tempFile)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Download fuer ${p.kind.kind} fehlgeschlagen", e)
+                    return
+                }
+                if (!sha256.equals(p.remote.sha256, ignoreCase = true)) {
+                    Log.w(TAG, "Pruefsumme fuer ${p.kind.kind} stimmt nicht ueberein")
+                    return
+                }
             }
-            if (!sha256.equals(remote.sha256, ignoreCase = true)) {
-                Log.w(TAG, "Pruefsumme fuer ${kind.kind} stimmt nicht ueberein")
-                return
+            // Every file of the batch is downloaded AND verified — only now does anything move.
+            for (p in planned) {
+                if (!p.tempFile.renameTo(File(modelsDir, p.kind.fileName))) {
+                    Log.w(TAG, "Modelldatei ${p.kind.fileName} konnte nicht ersetzt werden")
+                    return
+                }
             }
-            val localFile = File(modelsDir, kind.fileName)
-            if (!tempFile.renameTo(localFile)) {
-                Log.w(TAG, "Modelldatei ${kind.fileName} konnte nicht ersetzt werden")
-                return
+            val now = System.currentTimeMillis()
+            val edit = prefs.edit()
+            for (p in planned) {
+                edit.putInt(versionKey(p.kind), p.remote.version)
+                edit.putLong(lastDownloadKey(p.kind), now)
             }
-            prefs.edit().putInt(versionKey, remote.version).apply()
+            edit.apply()
         } finally {
-            tempFile.delete()
+            for (p in planned) p.tempFile.delete()
         }
     }
 

@@ -217,20 +217,24 @@ fun ScanScreen(onClose: () -> Unit) {
         stagingCards.add(entry)
         scope.launch {
             try {
-                // Catalog first (Task 9): a local hit resolves instantly, offline, no network.
-                // Off the UI thread — this is a SQLite read. Only when the catalog doesn't know
-                // this passcode (e.g. a brand-new set, or no catalog imported yet) does the
-                // existing network path below run, unchanged.
+                // Catalog first (Task 9): a local hit resolves the base card instantly, offline,
+                // no network. Off the UI thread — this is a SQLite read.
                 val catalogCard = withContext(Dispatchers.IO) {
                     runCatching { CatalogRepository.card(pc) }.getOrNull()
                 }
-                if (catalogCard != null) {
+                // The base card (name, stats, image) always comes from the catalog when it's
+                // there — pure win. The PRINTING list only does when the catalog holds verified
+                // (German) printings for this passcode; unverified rows are the English dump, and
+                // taking them as complete would preselect an EN code for a German collection.
+                // Everything else falls through to the network union (and its ScanCache).
+                val catalogSets = catalogCard?.printings?.takeIf { p -> p.any { it.verified } }
+                if (catalogCard != null && catalogSets != null) {
                     entry.base = catalogCard.toCardRow()
-                    entry.knownSets = catalogCard.printings.map { it.toSetOption() }
+                    entry.knownSets = catalogSets.map { it.toSetOption() }
                     entry.selectedSet = SetCodeMatch.best(evidence, entry.knownSets)
                     entry.loading = false
                 } else {
-                    val base = CardSearchRepository.search(pc).firstOrNull()
+                    val base = catalogCard?.toCardRow() ?: CardSearchRepository.search(pc).firstOrNull()
                     if (base == null) {
                         stagingCards.remove(entry); seen.remove(pc)   // allow a later re-scan
                         snackbar.showSnackbar("Karte $pc nicht gefunden")

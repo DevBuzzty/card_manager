@@ -59,7 +59,9 @@ import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // A couple of sets closest to (but not yet at) 100% completion — owned/total.
 private data class SetProgressRow(val name: String, val owned: Int, val total: Int)
@@ -87,6 +89,18 @@ fun StartScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     val catalogState by CatalogSync.state.collectAsState()
+    // Catalog readiness is a SQLite read, so it is hoisted into state instead of being called
+    // from composition: this screen recomposes on every Downloading percent tick, and reading
+    // the DB there would mean dozens of main-thread disk reads per second — and an exception
+    // (the importer holds a write transaction on the same file) thrown straight out of
+    // composition. Re-read only when the sync moves to a new phase.
+    var catalogReady by remember { mutableStateOf(false) }
+    LaunchedEffect(catalogState::class) {
+        val ready = withContext(Dispatchers.IO) {
+            runCatching { CatalogRepository.isReady() }.getOrDefault(false)
+        }
+        catalogReady = ready
+    }
 
     LaunchedEffect(Unit) {
         scope.launch {
@@ -176,7 +190,7 @@ fun StartScreen(
                 is CatalogState.Importing -> 100
                 else -> 0
             }
-            if (!CatalogRepository.isReady() &&
+            if (!catalogReady &&
                 (catalogState is CatalogState.Checking || catalogState is CatalogState.Downloading || catalogState is CatalogState.Importing)
             ) {
                 SpaceCard(Modifier.fillMaxWidth()) {

@@ -16,6 +16,15 @@ import android.database.sqlite.SQLiteOpenHelper
  */
 class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 1) {
 
+    init {
+        // WAL: [importAll] holds a multi-second write transaction, and readers (scan, search,
+        // detail, settings, the first-run banner) hit the same file meanwhile. Without WAL the
+        // default journal mode blocks them until the import commits — up to
+        // SQLiteDatabaseLockedException. With WAL a reader sees the previous catalog throughout
+        // and never waits on the writer.
+        setWriteAheadLoggingEnabled(true)
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """

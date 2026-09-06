@@ -36,14 +36,18 @@ object PrintingRepository {
     // The independent lookups run CONCURRENTLY (the phone has no request cache, so parallelism is
     // what keeps this fast) — total latency ≈ the slowest source, not the sum.
     suspend fun fetchAllSets(passcode: String): List<SetOption> = coroutineScope {
-        // Catalog first (Task 9): if the offline catalog already has this passcode's printings,
-        // use them and skip the network entirely. Falls through to the existing multi-source
-        // union below when the catalog doesn't know this passcode (e.g. a brand-new set) or
-        // hasn't been imported yet. Off the UI thread — this is a SQLite read.
+        // Catalog first (Task 9), but only on CONFIRMED German data: unverified catalog printings
+        // come straight from the English YGOPRODeck dump, and only 1.890 of 14.523 passcodes carry
+        // a verified block. Short-circuiting on mere presence would therefore offer EN codes only
+        // for ~87% of cards, and SetCodeMatch would happily match OCR "LOBDE005" against
+        // "LOB-EN005" — committing the wrong printing identity with language "EN". So the catalog
+        // replaces the network union only when it actually holds verified (German) printings;
+        // everything else falls through to the existing multi-source path and its ScanCache,
+        // unchanged. Off the UI thread — this is a SQLite read.
         val catalogSets = withContext(Dispatchers.IO) {
             runCatching { CatalogRepository.printings(passcode) }.getOrDefault(emptyList())
         }
-        if (catalogSets.isNotEmpty()) {
+        if (catalogSets.any { it.verified }) {
             return@coroutineScope catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN") }
         }
         // Disk cache: the 3-source union is the scan flow's slowest step (seconds). It's

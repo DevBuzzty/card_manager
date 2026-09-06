@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.BuildConfig
-import com.example.yugiohscanner.cloud.CatalogDb
+import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CatalogState
 import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.ui.components.SectionHeader
@@ -105,17 +105,17 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
                     var mobileOk by remember { mutableStateOf(prefs.getBoolean("catalog_mobile_ok", false)) }
 
                     // Only re-reads the DB when the sync moves to a new phase (e.g. Importing ->
-                    // Ready) — not on every Downloading percent tick, which would otherwise
-                    // reopen the catalog DB dozens of times per second for no reason.
+                    // Ready) — not on every Downloading percent tick. Reads go through
+                    // CatalogRepository's long-lived connection rather than opening a third
+                    // CatalogDb on the same file, and a failed read keeps the last known values
+                    // instead of throwing out of the coroutine and killing the screen.
                     LaunchedEffect(catalogState::class) {
-                        withContext(Dispatchers.IO) {
-                            val db = CatalogDb(ctx)
-                            try {
-                                catalogVersion = db.version()
-                                catalogCards = db.cardCount()
-                            } finally {
-                                db.close()
-                            }
+                        val read = withContext(Dispatchers.IO) {
+                            runCatching { CatalogRepository.version() to CatalogRepository.cardCount() }
+                        }
+                        read.getOrNull()?.let { (version, cards) ->
+                            catalogVersion = version
+                            catalogCards = cards
                         }
                     }
 
