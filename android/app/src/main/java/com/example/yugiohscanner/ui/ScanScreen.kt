@@ -311,7 +311,7 @@ fun ScanScreen(onClose: () -> Unit) {
             mlFrameW = w
             mlFrameH = h
             // Pool each visible card's bottom-band OCR text (set-code voting across frames).
-            for (d in dets) setEvidence.record(d.passcode, d.bandText)
+            for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
             // On confirmation, resolve the set code from ALL pooled evidence for that card, then
             // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
             for (d in tracker.update(dets)) {
