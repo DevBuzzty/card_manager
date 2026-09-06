@@ -106,7 +106,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // say so. Identification is unaffected — the embedder already ran on this box.
         val aspect = (b.x2 - b.x1) / (b.y2 - b.y1).coerceAtLeast(1f)
         if (aspect < ARTWORK_AR_MIN || aspect > ARTWORK_AR_MAX) {
-            android.util.Log.i("BandOcr", "layout=$layoutLabel zone=SKIPPED ar=${"%.3f".format(aspect)} " +
+            android.util.Log.i("BandOcr", "layout=$layoutLabel zone=SKIPPED ar=${String.format(java.util.Locale.ROOT, "%.3f", aspect)} " +
                 "box=${(b.x2 - b.x1).toInt()}x${(b.y2 - b.y1).toInt()} (Box ist kein Artwork)")
             return emptyMap<Zone, String>() to ""
         }
@@ -124,6 +124,14 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
                 "crop=${bitmap.width}x${bitmap.height} " +
                 "raw='" + text.replace("\n", " | ") + "'")
             bitmap.recycle()  // CardZones.crop hands ownership to the caller
+        }
+
+        // Diagnostic: the raw text above is pre-correction. Log what SetCodeOcr actually makes of
+        // it, so a device run can show whether the grammar pass (Task 9) helps -- otherwise the only
+        // evidence is unit tests, which is not a measurement.
+        val corrected = SetCodeOcr.extract(zoneTexts.values.joinToString(" "))
+        if (corrected.isNotEmpty()) {
+            android.util.Log.i("BandOcr", "layout=$layoutLabel korrigiert=" + corrected.joinToString(","))
         }
 
         var legacyText = ""
