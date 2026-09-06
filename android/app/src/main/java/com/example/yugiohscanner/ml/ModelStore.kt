@@ -47,7 +47,7 @@ object ModelStore {
     /** Reads `filesDir/models/<name>` when it exists, else falls back to the APK asset. */
     fun bytes(context: Context, name: String): ByteArray {
         val local = File(File(context.filesDir, "models"), name)
-        return if (local.exists()) local.readBytes() else context.assets.open(name).readBytes()
+        return if (local.exists() && local.length() > 0) local.readBytes() else context.assets.open(name).readBytes()
     }
 
     suspend fun checkAndUpdate(context: Context) = withContext(Dispatchers.IO) {
@@ -86,6 +86,9 @@ object ModelStore {
         if (remote.version <= localVersion) return
 
         val lastDownloadAt = prefs.getLong(lastDownloadKey, 0L)
+        // Reuse the catalog's download gate (daily + metered-network check) for models too.
+        // The three models together (~22 MB: detector.onnx 10.6, index.bin 7.5, embedder.onnx 4.0)
+        // are treated the same as the 2.1 MB catalog — the cost is accepted.
         val shouldDownload = CatalogSync.shouldDownloadNow(
             localVersion, lastDownloadAt, System.currentTimeMillis(), false, unmetered, mobileOk
         )
