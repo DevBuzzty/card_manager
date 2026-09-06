@@ -52,6 +52,21 @@ test('mergeCards nimmt bei Link-Monstern linkval als Level', () => {
   assert.equal(mergeCards(EN, DE)[0].level, 7);
 });
 
+test('mergeCards nimmt linkval auch dann, wenn level als 0 mitgeliefert wird', () => {
+  // Der reale Fall, der die erste Fassung überlebt hat: YGOPRODeck schickt für 108 der 473
+  // Link-Monster `level: 0` NEBEN einem echten `linkval` (geprüft an 97973962, Aleister the
+  // Invoker of Madness: level 0, linkval 2). Ein `c.level ?? c.linkval` lässt die 0 stehen,
+  // weil ?? nur auf null/undefined anspricht — die Fallunterscheidung muss über den Typ gehen.
+  const LINK0 = [{
+    id: 97973962, name: 'Aleister the Invoker of Madness', type: 'Link Monster',
+    desc: 'Ein Link-Monster mit level 0 in der Quelle.',
+    atk: 1000, def: null, level: 0, linkval: 2, race: 'Spellcaster', attribute: 'DARK',
+    card_images: [{ image_url: 'https://x/97973962.jpg', image_url_small: 'https://x/97973962_s.jpg' }],
+    card_sets: [{ set_code: 'MP21-EN045', set_rarity: 'Common' }],
+  }];
+  assert.equal(mergeCards(LINK0, [])[0].level, 2);
+});
+
 test('attachVerified hängt nur echte Funde an und leitet nichts ab', () => {
   const merged = mergeCards(EN, DE);
   const out = attachVerified(merged, new Map([

@@ -23,7 +23,11 @@ function mergeCards(enCards, deCards) {
       desc_de: (d && d.desc) || c.desc || '',
       atk: c.atk ?? null,
       def: c.def ?? null,
-      level: c.level ?? c.linkval ?? null,   // Link-Monster: YGOPRODeck legt die Link-Zahl in linkval ab
+      // Link-Monster: die Link-Zahl steht in `linkval`. Die Fallunterscheidung geht über den TYP,
+      // nicht über null — YGOPRODeck liefert für 108 der 473 Link-Monster `level: 0` neben einem
+      // echten `linkval`, und ein `??` würde die 0 stehen lassen. Gleiche Semantik wie
+      // CardSearchRepository.parseData auf dem Handy.
+      level: /Link/.test(c.type || '') ? (c.linkval ?? null) : (c.level ?? null),
       race: c.race || null,
       attribute: c.attribute || null,
       image: img.image_url,
