@@ -9,7 +9,7 @@ const { startSync } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape } = require('./cardmarket-scraper.cjs');
 const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
-const { runCatalogBuild, getCatalogStatus, uploadModel } = require('./catalog-builder.cjs');
+const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = require('./catalog-builder.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { totalValue, copyCount } = require('./valuation.cjs');
 const copies = require('./copies.cjs');
@@ -652,9 +652,16 @@ ipcMain.handle('cardmarket-bulk-status', () => {
 // Wöchentlicher Offline-Katalog-Bau (Spec D1): 45 s nach Start, wenn seit dem letzten Lauf mehr
 // als 7 Tage vergangen sind, danach stündlich neu geprüft — überlebt so auch, wenn die App nicht
 // durchgehend läuft. Spiegelt startCardmarketBulkScheduler()/bulkDue() oben.
+const CATALOG_RETRY_BACKOFF_MS = 6 * 60 * 60 * 1000;
 function catalogDue() {
   const last = getSetting('catalog_last_run');
-  return !last || (Date.now() - new Date(last).getTime()) > 7 * 24 * 60 * 60 * 1000;
+  const dueForBuild = !last || (Date.now() - new Date(last).getTime()) > 7 * 24 * 60 * 60 * 1000;
+  if (!dueForBuild) return false;
+  // Back off after a failed attempt (no client, upload/auth error, ...) so a broken upload doesn't
+  // repeat the full build every hourly tick — retry at most every 6h until an attempt succeeds.
+  const lastAttempt = getSetting('catalog_last_attempt');
+  if (lastAttempt && (Date.now() - new Date(lastAttempt).getTime()) < CATALOG_RETRY_BACKOFF_MS) return false;
+  return true;
 }
 function startCatalogScheduler() {
   const tick = async () => {
@@ -685,6 +692,11 @@ ipcMain.handle('catalog-status', () => {
 });
 ipcMain.handle('model-upload', async (event, { kind, filePath } = {}) => {
   try {
+    // Kind zuerst prüfen (Review Fix 4): sonst wählt der Nutzer eine Datei aus, bevor er erfährt,
+    // dass die mitgeschickte Art fehlt oder falsch geschrieben ist.
+    if (!ALLOWED_MODEL_KINDS.includes(kind)) {
+      return { error: 'invalid-kind', message: `Unbekannte Modellart: ${kind}`, detail: null };
+    }
     if (!filePath) {
       const result = await dialog.showOpenDialog(mainWindow, {
         title: 'Modelldatei auswählen',

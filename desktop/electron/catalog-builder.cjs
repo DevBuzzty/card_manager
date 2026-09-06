@@ -13,6 +13,24 @@ const DUMP_TTL_HOURS = 7 * 24;
 const BUCKET = 'catalog';
 const ALLOWED_MODEL_KINDS = ['index', 'embedder', 'detector'];
 
+// Deutsche Meldungen pro stabilem Fehlercode (Spec §10: kein Fehler-Popup, nur eine Statuszeile —
+// die muss deutsch sein, auch wenn die zugrunde liegende Ursache eine englische Upstream- oder
+// Dateisystem-Meldung ist). Die Rohmeldung bleibt unter `detail` erhalten (nicht gerendert),
+// damit Debugging möglich bleibt.
+const ERROR_MESSAGES = {
+  download: 'Kartendaten konnten nicht heruntergeladen werden.',
+  'no-client': 'Cloud-Sync ist nicht eingerichtet oder deaktiviert.',
+  auth: 'Anmeldung bei Cloud-Sync fehlgeschlagen.',
+  upload: 'Hochladen in den Cloud-Speicher fehlgeschlagen.',
+  catalog_versions: 'Versionseintrag konnte nicht gespeichert werden.',
+  read: 'Datei konnte nicht gelesen werden.',
+  'invalid-kind': 'Unbekannte Modellart.',
+  internal: 'Unerwarteter Fehler.',
+};
+function errResult(code, detail, message) {
+  return { error: code, message: message || ERROR_MESSAGES[code] || ERROR_MESSAGES.internal, detail: detail ?? null };
+}
+
 function getSetting(db, key) {
   try { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? r.value : null; }
   catch { return null; }
@@ -22,26 +40,33 @@ function setSetting(db, key, value) {
     .run(key, String(value));
 }
 
-// `force` (das manuelle "Jetzt bauen") verwirft einen evtl. noch nicht abgelaufenen Cache-Eintrag,
-// damit die Karten- und Namensliste garantiert frisch von YGOPRODeck kommt — dieselbe Idee wie
-// `force || !fresh` in cardmarket-bulk.cjs' loadFile, nur dass cachedFetch selbst kein force kennt.
-function bustCache(db, cacheKeyPrefix, url) {
-  try { db.prepare('DELETE FROM api_cache WHERE key = ?').run(`${cacheKeyPrefix}:${url}`); } catch { /* ignore */ }
-}
-
 async function loadDumps(db, force) {
-  if (force) { bustCache(db, 'catalog_en', EN_URL); bustCache(db, 'catalog_de', DE_URL); }
   const [enData, deData] = await Promise.all([
-    cachedFetch(EN_URL, 'catalog_en', DUMP_TTL_HOURS),
-    cachedFetch(DE_URL, 'catalog_de', DUMP_TTL_HOURS),
+    cachedFetch(EN_URL, 'catalog_en', DUMP_TTL_HOURS, { force }),
+    cachedFetch(DE_URL, 'catalog_de', DUMP_TTL_HOURS, { force }),
   ]);
   if (!enData || !Array.isArray(enData.data)) {
-    return { error: 'download', message: 'Englischer YGOPRODeck-Dump nicht verfügbar (kein Cache, kein Netz).' };
+    return errResult('download', null, 'Englischer YGOPRODeck-Dump nicht verfügbar (kein Cache, kein Netz).');
   }
   if (!deData || !Array.isArray(deData.data)) {
-    return { error: 'download', message: 'Deutscher YGOPRODeck-Dump nicht verfügbar (kein Cache, kein Netz).' };
+    return errResult('download', null, 'Deutscher YGOPRODeck-Dump nicht verfügbar (kein Cache, kein Netz).');
   }
   return { en: enData.data, de: deData.data };
+}
+
+// Seed a version counter from max(local, cloud) + 1, so restoring/wiping the local DB (which
+// holds the counter in `settings`) can never reissue an already-published version number and
+// silently overwrite `catalog.vN.json.gz`/`<kind>.vN.bin` with different bytes under the same N.
+// A failed read of catalog_versions (network hiccup, RLS, whatever) falls back to the local value
+// rather than blocking the build — the local counter is still a safe lower bound.
+async function seedVersion(client, kind, localVersion) {
+  try {
+    const { data } = await client.from('catalog_versions').select('version').eq('kind', kind).maybeSingle();
+    const cloudVersion = data && Number(data.version) ? Number(data.version) : 0;
+    return Math.max(localVersion, cloudVersion);
+  } catch {
+    return localVersion;
+  }
 }
 
 // ---- Bestätigte deutsche Set-Codes aus dem api_cache -------------------------------------------
@@ -59,6 +84,13 @@ async function loadDumps(db, force) {
 // mehreren Namens-Treffern zur Karte gehört) passiert nur live in fetchKonamiForCard() beim
 // Abgleich mit den YGOPRODeck-Codes — das aus dem Cache nachzubilden hiesse raten. Lieber weniger,
 // aber korrekte Einträge (siehe Task-Brief).
+//
+// Hinweis (Review Fix 6): Die 24h-TTL, die parseWikiSets() beim Live-Abruf auf wiki_parse-Zeilen
+// anwendet, gilt hier nicht — wir lesen jede noch vorhandene wiki_parse-Zeile unabhängig von ihrem
+// Alter. Das kann einen Eintrag nur unvollständig machen (eine seither hinzugekommene Rarität/ein
+// neuer Print fehlt noch), nie falsch (die gelesenen Codes bleiben verbatim korrekt). Absichtlich
+// keine Alters-Filterung ergänzt: das würde echte, bereits bestätigte Codes verwerfen, nur weil
+// die Zeile zufällig lange nicht neu abgerufen wurde.
 const WIKI_PARSE_KEY_RE = /^wiki_parse:https?:\/\/[^?]+\?action=parse&page=([^&]+)&prop=wikitext&format=json$/;
 const DE_SETS_BLOCK_RE = /\|\s*de_sets\s*=\s*([\s\S]*?)\n\s*(?:\||\}\})/;
 const CARD_TABLE_SET_RE = /\{\{\s*Card table set\s*\|([^}]*)\}\}/i;
@@ -136,24 +168,32 @@ function readVerified(db) {
 
 async function runCatalogBuild(db, { ensureClient, force = false } = {}) {
   try {
+    // Attempt-Marker zuerst (Review Fix 1): erlaubt dem Scheduler, nach einem fehlgeschlagenen
+    // Versuch (Client fehlt, Upload schlägt fehl, ...) zurückzustehen statt stündlich erneut den
+    // vollen Bau anzustossen — siehe catalogDue() in main.cjs.
+    setSetting(db, 'catalog_last_attempt', new Date().toISOString());
+
+    // Client zuerst prüfen (Review Fix 1): ensureClient() kostet nichts, während loadDumps +
+    // readVerified + mergeCards + gzip-9 zusammen ~28 MB Cache-Zeilen synchron verarbeiten. Ohne
+    // Cloud-Sync (ein normaler, nicht fehlerhafter Zustand) soll das nie anlaufen.
+    let client;
+    try { client = await ensureClient(); }
+    catch (e) { return errResult('auth', e.message); }
+    if (!client) return errResult('no-client');
+
     const dumps = await loadDumps(db, force);
     if (dumps.error) return dumps;
 
     const verifiedByPasscode = readVerified(db);
     const cards = attachVerified(mergeCards(dumps.en, dumps.de), verifiedByPasscode);
 
-    const prevVersion = Number(getSetting(db, 'catalog_version')) || 0;
-    const version = prevVersion + 1;
+    const localVersion = Number(getSetting(db, 'catalog_version')) || 0;
+    const version = (await seedVersion(client, 'catalog', localVersion)) + 1;
     const { buffer, bytes } = packCatalog(cards, version);
-
-    let client;
-    try { client = await ensureClient(); }
-    catch (e) { return { error: 'auth', message: e.message }; }
-    if (!client) return { error: 'no-client', message: 'Cloud-Sync ist nicht eingerichtet oder deaktiviert.' };
 
     const fileName = `catalog.v${version}.json.gz`;
     const { error: upErr } = await client.storage.from(BUCKET).upload(fileName, buffer, { contentType: 'application/gzip', upsert: true });
-    if (upErr) return { error: 'upload', message: upErr.message };
+    if (upErr) return errResult('upload', upErr.message);
 
     const { data: pub } = client.storage.from(BUCKET).getPublicUrl(fileName);
     const url = pub && pub.publicUrl;
@@ -162,7 +202,7 @@ async function runCatalogBuild(db, { ensureClient, force = false } = {}) {
 
     const { error: verErr } = await client.from('catalog_versions')
       .upsert({ kind: 'catalog', version, url, bytes, sha256, built_at }, { onConflict: 'kind' });
-    if (verErr) return { error: 'catalog_versions', message: verErr.message };
+    if (verErr) return errResult('catalog_versions', verErr.message);
 
     // Erst NACH erfolgreichem Upload verbuchen — schlägt der Upload fehl, bleibt die Version
     // stehen und der nächste Lauf versucht dieselbe Nummer erneut, statt sie zu verbrennen.
@@ -173,7 +213,7 @@ async function runCatalogBuild(db, { ensureClient, force = false } = {}) {
     return { version, bytes, url, cards: cards.length, verified: verifiedByPasscode.size };
   } catch (e) {
     console.error('[catalog-builder] runCatalogBuild failed:', e.message);
-    return { error: 'internal', message: e.message };
+    return errResult('internal', e.message);
   }
 }
 
@@ -190,24 +230,24 @@ function getCatalogStatus(db) {
 async function uploadModel(db, { ensureClient, kind, filePath } = {}) {
   try {
     if (!ALLOWED_MODEL_KINDS.includes(kind)) {
-      return { error: 'invalid-kind', message: `Unbekannte Modellart: ${kind}` };
+      return errResult('invalid-kind', null, `Unbekannte Modellart: ${kind}`);
     }
     let buffer;
     try { buffer = fs.readFileSync(filePath); }
-    catch (e) { return { error: 'read', message: e.message }; }
+    catch (e) { return errResult('read', e.message); }
 
     let client;
     try { client = await ensureClient(); }
-    catch (e) { return { error: 'auth', message: e.message }; }
-    if (!client) return { error: 'no-client', message: 'Cloud-Sync ist nicht eingerichtet oder deaktiviert.' };
+    catch (e) { return errResult('auth', e.message); }
+    if (!client) return errResult('no-client');
 
     const settingKey = `model_version_${kind}`;
-    const prevVersion = Number(getSetting(db, settingKey)) || 0;
-    const version = prevVersion + 1;
+    const localVersion = Number(getSetting(db, settingKey)) || 0;
+    const version = (await seedVersion(client, kind, localVersion)) + 1;
     const fileName = `${kind}.v${version}.bin`;
 
     const { error: upErr } = await client.storage.from(BUCKET).upload(fileName, buffer, { contentType: 'application/octet-stream', upsert: true });
-    if (upErr) return { error: 'upload', message: upErr.message };
+    if (upErr) return errResult('upload', upErr.message);
 
     const { data: pub } = client.storage.from(BUCKET).getPublicUrl(fileName);
     const url = pub && pub.publicUrl;
@@ -217,15 +257,15 @@ async function uploadModel(db, { ensureClient, kind, filePath } = {}) {
 
     const { error: verErr } = await client.from('catalog_versions')
       .upsert({ kind, version, url, bytes, sha256, built_at }, { onConflict: 'kind' });
-    if (verErr) return { error: 'catalog_versions', message: verErr.message };
+    if (verErr) return errResult('catalog_versions', verErr.message);
 
     setSetting(db, settingKey, version);
 
     return { kind, version, bytes, sha256, url };
   } catch (e) {
     console.error('[catalog-builder] uploadModel failed:', e.message);
-    return { error: 'internal', message: e.message };
+    return errResult('internal', e.message);
   }
 }
 
-module.exports = { loadDumps, readVerified, runCatalogBuild, getCatalogStatus, uploadModel };
+module.exports = { loadDumps, readVerified, runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS };
