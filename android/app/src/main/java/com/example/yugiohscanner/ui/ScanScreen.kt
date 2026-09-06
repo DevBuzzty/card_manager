@@ -55,9 +55,14 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CardSearchRepository
+import com.example.yugiohscanner.cloud.CatalogCard
+import com.example.yugiohscanner.cloud.CatalogPrinting
+import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.PrintingRepository
 import com.example.yugiohscanner.cloud.SetCodeMatch
+import com.example.yugiohscanner.cloud.SetOption
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
@@ -66,7 +71,9 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import io.socket.client.IO
 import io.socket.client.Socket
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -74,6 +81,19 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import java.util.Locale
+
+// Catalog rows (Task 9: catalog first, network as fallback) map onto the same CardRow/SetOption
+// shapes the network path already produces, so downstream code (ScanStagingEntry, the staging
+// sheet, SetCodeMatch) doesn't need to know which source resolved a scan. Mirrors the conventions
+// CardSearchRepository.parseData uses for a fresh network hit: no exact printing chosen yet
+// ("Unknown"), German-first name.
+private fun CatalogCard.toCardRow() = CardRow(
+    id = id, setCode = "Unknown", language = "DE", name = nameDe, imageUrl = image,
+    rarity = null, quantity = 0, price = null, type = type, desc = descDe,
+    atk = atk, def = def, level = level, race = race, attribute = attribute,
+)
+
+private fun CatalogPrinting.toSetOption() = SetOption(setCode = code, rarity = rarity, price = 0.0, language = lang ?: "EN")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -197,16 +217,30 @@ fun ScanScreen(onClose: () -> Unit) {
         stagingCards.add(entry)
         scope.launch {
             try {
-                val base = CardSearchRepository.search(pc).firstOrNull()
-                if (base == null) {
-                    stagingCards.remove(entry); seen.remove(pc)   // allow a later re-scan
-                    snackbar.showSnackbar("Karte $pc nicht gefunden")
-                } else {
-                    entry.base = base
-                    val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
-                    entry.knownSets = known
-                    entry.selectedSet = SetCodeMatch.best(evidence, known)
+                // Catalog first (Task 9): a local hit resolves instantly, offline, no network.
+                // Off the UI thread — this is a SQLite read. Only when the catalog doesn't know
+                // this passcode (e.g. a brand-new set, or no catalog imported yet) does the
+                // existing network path below run, unchanged.
+                val catalogCard = withContext(Dispatchers.IO) {
+                    runCatching { CatalogRepository.card(pc) }.getOrNull()
+                }
+                if (catalogCard != null) {
+                    entry.base = catalogCard.toCardRow()
+                    entry.knownSets = catalogCard.printings.map { it.toSetOption() }
+                    entry.selectedSet = SetCodeMatch.best(evidence, entry.knownSets)
                     entry.loading = false
+                } else {
+                    val base = CardSearchRepository.search(pc).firstOrNull()
+                    if (base == null) {
+                        stagingCards.remove(entry); seen.remove(pc)   // allow a later re-scan
+                        snackbar.showSnackbar("Karte $pc nicht gefunden")
+                    } else {
+                        entry.base = base
+                        val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
+                        entry.knownSets = known
+                        entry.selectedSet = SetCodeMatch.best(evidence, known)
+                        entry.loading = false
+                    }
                 }
             } catch (e: Exception) {
                 entry.loading = false

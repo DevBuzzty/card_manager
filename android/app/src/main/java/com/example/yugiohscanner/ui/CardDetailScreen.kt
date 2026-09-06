@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CardRow
+import com.example.yugiohscanner.cloud.CatalogCard
+import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
@@ -38,7 +40,9 @@ import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List<CopyRow>, onClose: () -> Unit, onChanged: () -> Unit) {
@@ -49,10 +53,18 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
     var inWishlist by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    // Catalog first (Task 9): Name, Kartentext and Stats prefer the offline catalog when it has
+    // this card; the owned printings below (rarity, set code, valuation) stay collection data,
+    // unchanged. Off the UI thread — this is a SQLite read.
+    var catalogCard by remember(cardId) { mutableStateOf<CatalogCard?>(null) }
 
     LaunchedEffect(cardId) {
         runCatching { WishlistRepository.loadWishlist() }
             .onSuccess { list -> inWishlist = list.any { it.cardId == cardId } }
+    }
+
+    LaunchedEffect(cardId) {
+        catalogCard = withContext(Dispatchers.IO) { runCatching { CatalogRepository.card(cardId) }.getOrNull() }
     }
 
     // Reload this card's printings and copies from the cloud after a mutation, and tell the parent to refresh.
@@ -65,6 +77,12 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
     val base = printings.firstOrNull() ?: initial.firstOrNull { it.id == cardId }
     if (base == null) { onClose(); return }
 
+    val displayName = catalogCard?.nameDe ?: base.name ?: base.id
+    val displayDesc = catalogCard?.descDe ?: base.desc
+    val displayLevel = catalogCard?.level ?: base.level
+    val displayAtk = catalogCard?.atk ?: base.atk
+    val displayDef = catalogCard?.def ?: base.def
+
     val isLink = base.type?.contains("Link") == true
     val isXyz = base.type?.contains("XYZ") == true
     val levelLabel = if (isLink) "Link" else if (isXyz) "Rang" else "Level"
@@ -72,7 +90,7 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
     Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück") }
-            Text(base.name ?: base.id, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             IconButton(enabled = !inWishlist, onClick = {
                 scope.launch {
                     try {
@@ -165,7 +183,7 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
         Spacer(Modifier.height(16.dp))
         AddPrintingSection(base = base, owned = printings, onError = { error = it }, onAdded = { scope.launch { refresh() } })
 
-        base.desc?.let { desc ->
+        displayDesc?.let { desc ->
             Spacer(Modifier.height(16.dp))
             var showText by remember { mutableStateOf(false) }
             TextButton(onClick = { showText = !showText }) { Text(if (showText) "Kartentext ausblenden" else "Kartentext anzeigen") }
@@ -181,9 +199,9 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
         TextButton(onClick = { showStats = !showStats }) { Text(if (showStats) "Stats ausblenden" else "Stats anzeigen") }
         if (showStats) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                base.level?.let { StatTile(levelLabel, it.toString()) }
-                base.atk?.let { StatTile("ATK", it.toString()) }
-                if (!isLink) base.def?.let { StatTile("DEF", it.toString()) }
+                displayLevel?.let { StatTile(levelLabel, it.toString()) }
+                displayAtk?.let { StatTile("ATK", it.toString()) }
+                if (!isLink) displayDef?.let { StatTile("DEF", it.toString()) }
                 StatTile("Passcode", base.id)
             }
         }

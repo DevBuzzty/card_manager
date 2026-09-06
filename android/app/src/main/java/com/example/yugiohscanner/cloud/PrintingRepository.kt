@@ -36,6 +36,16 @@ object PrintingRepository {
     // The independent lookups run CONCURRENTLY (the phone has no request cache, so parallelism is
     // what keeps this fast) — total latency ≈ the slowest source, not the sum.
     suspend fun fetchAllSets(passcode: String): List<SetOption> = coroutineScope {
+        // Catalog first (Task 9): if the offline catalog already has this passcode's printings,
+        // use them and skip the network entirely. Falls through to the existing multi-source
+        // union below when the catalog doesn't know this passcode (e.g. a brand-new set) or
+        // hasn't been imported yet. Off the UI thread — this is a SQLite read.
+        val catalogSets = withContext(Dispatchers.IO) {
+            runCatching { CatalogRepository.printings(passcode) }.getOrDefault(emptyList())
+        }
+        if (catalogSets.isNotEmpty()) {
+            return@coroutineScope catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN") }
+        }
         // Disk cache: the 3-source union is the scan flow's slowest step (seconds). It's
         // deterministic per passcode, so a cached result makes a re-scanned card instant.
         ScanCache.read("sets", passcode)?.let { cached ->
