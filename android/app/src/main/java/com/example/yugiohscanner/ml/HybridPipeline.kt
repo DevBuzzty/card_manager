@@ -20,13 +20,18 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private var frameCount = 0
 
-    // --- TEMPORARY diagnostic for Spec D2, remove once the SET_CODE zone is placed correctly. ---
-    // The measured zones land on the set code in the photo corpus but read effect text on the
-    // phone, and box aspect ratio alone does not explain the gap. Dumping a handful of real
-    // analysis frames plus their exact box lets the zones be drawn offline, which is what settled
-    // the original band bug in ten seconds. Capped hard so it cannot fill the device.
+    // State for the diagnostic frame dump (off by default, see DUMP_FRAMES).
     private val appContext = context.applicationContext
     private var dumpsWritten = 0
+
+
+    // A corrected passcode is only credible if that card actually exists (Spec D 7c). The offline
+    // catalog from Spec D1 answers this from local SQLite, so it costs no network — and it stops an
+    // aggressive confusion fix from inventing a card. Unknown-to-the-catalog cards (brand-new sets)
+    // fall back to accepting the code, so the check can never be worse than no check.
+    private val catalogKnows: (String) -> Boolean = { pc ->
+        runCatching { CatalogRepository.card(pc) != null }.getOrDefault(true)
+    }
 
     override fun process(frame: Bitmap): List<Detection> {
         frameCount++
@@ -40,7 +45,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         for (b in boxes) {
             val embed = artwork.embedBox(frame, b)
             val (zoneTexts, legacyText) = readZones(frame, b, embed?.passcode)
-            val passcode = embed?.passcode ?: (OcrText.findPasscode(concatZoneTexts(zoneTexts, legacyText)) ?: -1)
+            val passcode = embed?.passcode ?: (OcrText.findPasscode(concatZoneTexts(zoneTexts, legacyText), catalogKnows) ?: -1)
             val sim = embed?.sim ?: 1f
             if (passcode > 0 && out.none { it.passcode == passcode }) {
                 out.add(Detection(b, passcode, sim, zoneTexts, legacyText))
@@ -53,7 +58,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // while panning over an empty table.
         if (boxes.isEmpty() && frameCount % FULLFRAME_EVERY == 0) {
             val text = Tasks.await(recognizer.process(InputImage.fromBitmap(frame, 0))).text
-            val pc = OcrText.findPasscode(text)
+            val pc = OcrText.findPasscode(text, catalogKnows)
             if (pc != null && pc > 0) {
                 val w = frame.width.toFloat(); val h = frame.height.toFloat()
                 out.add(Detection(Box(w * 0.18f, h * 0.12f, w * 0.82f, h * 0.88f, 1f), pc, 1f, emptyMap(), text))
