@@ -23,7 +23,7 @@ function mergeCards(enCards, deCards) {
       desc_de: (d && d.desc) || c.desc || '',
       atk: c.atk ?? null,
       def: c.def ?? null,
-      level: c.level ?? null,
+      level: c.level ?? c.linkval ?? null,   // Link-Monster: YGOPRODeck legt die Link-Zahl in linkval ab
       race: c.race || null,
       attribute: c.attribute || null,
       image: img.image_url,

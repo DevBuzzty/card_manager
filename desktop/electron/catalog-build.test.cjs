@@ -37,6 +37,21 @@ test('mergeCards überspringt Karten ohne id oder ohne Bild', () => {
   assert.equal(mergeCards([{ id: 1, name: 'x', card_images: [] }], []).length, 0);
 });
 
+test('mergeCards nimmt bei Link-Monstern linkval als Level', () => {
+  // YGOPRODeck liefert für Link-Monster kein `level`, sondern `linkval` — ohne den Rückfall
+  // landet ein katalogbasierter Scan mit level = null in der Sammlung.
+  const LINK = [{
+    id: 1861629, name: 'Decode Talker', type: 'Link Monster', desc: 'Ein Link-Monster.',
+    atk: 2300, def: null, linkval: 3, race: 'Cyberse', attribute: 'DARK',
+    card_images: [{ image_url: 'https://x/1861629.jpg', image_url_small: 'https://x/1861629_s.jpg' }],
+    card_sets: [{ set_code: 'YS17-EN043', set_rarity: 'Ultra Rare' }],
+  }];
+  const [c] = mergeCards(LINK, []);
+  assert.equal(c.level, 3);
+  // Nicht-Link-Karten behalten ihr echtes Level.
+  assert.equal(mergeCards(EN, DE)[0].level, 7);
+});
+
 test('attachVerified hängt nur echte Funde an und leitet nichts ab', () => {
   const merged = mergeCards(EN, DE);
   const out = attachVerified(merged, new Map([
