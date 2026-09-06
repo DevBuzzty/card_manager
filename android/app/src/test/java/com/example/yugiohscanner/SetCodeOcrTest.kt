@@ -76,10 +76,19 @@ class SetCodeOcrTest {
     }
 
     @Test fun `gebindestrichter Kartentext mit Ziffern liefert keinen Set-Code`() {
-        // Der Satz oben hat weder Bindestrich noch Ziffer und kann das erweiterte Muster daher gar
-        // nicht von einem beliebigen anderen unterscheiden. Diese Faelle greifen die eigentliche
-        // Risikostelle an: Bindestrich UND unmittelbar folgende Ziffern, wie sie in echtem
-        // Kartentext und im Rauschen der Zonen-OCR vorkommen.
+        // Der Satz oben hat weder Bindestrich noch Ziffer und kann daher ueberhaupt nichts ueber
+        // das Muster aussagen. Diese Faelle haben beides.
+        //
+        // Was sie belegen und was nicht: keiner davon wuerde auch unter dem alten, engeren Muster
+        // durchrutschen — sie unterscheiden alt und neu also nicht. Sie pinnen die STRUKTUR, an der
+        // echter Kartentext scheitert, und die ist in beiden Fassungen dieselbe: nach dem
+        // Bindestrich verlangt die Region einen BUCHSTABEN, und die Ziffern muessen daran
+        // unmittelbar anschliessen. "ATK-2400" scheitert am ersten, "Konter-Falle 2500" am zweiten.
+        // Genau diese zwei Regeln tragen die Abwehr, und genau die sollen hier festgenagelt sein.
+        //
+        // Die Erweiterung selbst laesst neu "-<1 Buchstabe><Ziffern>" und einen Variantenbuchstaben
+        // zu; beides ist gewollt und steht oben als Positivtest (LOB-G005, SGX3-DEA10). Ein
+        // Negativtest kann diese Flaeche nicht abdecken, ohne der Erweiterung zu widersprechen.
         for (text in listOf(
             "Rank-Up-Magic Argent Chaos Force",
             "Ein Effekt-Monster mit ATK-2400 und DEF-1200",

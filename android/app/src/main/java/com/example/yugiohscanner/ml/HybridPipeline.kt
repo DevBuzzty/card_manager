@@ -34,9 +34,18 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
     // check would REJECT. On a device whose catalog has not been imported yet that rejects every
     // corrected passcode — and the correction path only runs when the embedder missed, i.e. foils
     // and angles, exactly the cases this plan exists to rescue. Without this guard the gate is
-    // strictly worse than no gate. Same idiom as SearchScreen/StartScreen.
+    // strictly worse than no gate.
+    //
+    // Beide Aufrufe stehen INNERHALB des runCatching, nicht nur card(). isReady() geht über
+    // version() ebenfalls direkt an SQLite (CatalogRepository.version -> CatalogDb.version ->
+    // readableDatabase.query), wirft also bei beschädigter oder nicht lesbarer catalog.db —
+    // StartScreen umschliesst denselben Aufruf aus genau diesem Grund. Stuende isReady() draussen,
+    // liefe die Ausnahme bis zum Sammel-catch in MlScanAnalyzer.analyze() durch und verwuerfe dort
+    // den GANZEN Frame samt aller Boxen, Bild fuer Bild, solange die Datei kaputt bleibt — wieder
+    // dieselbe Klasse Fehler, nur mit anderem Ausloeser.
     private val catalogKnows: (String) -> Boolean = { pc ->
-        !CatalogRepository.isReady() || runCatching { CatalogRepository.card(pc) != null }.getOrDefault(true)
+        runCatching { !CatalogRepository.isReady() || CatalogRepository.card(pc) != null }
+            .getOrDefault(true)
     }
 
     override fun process(frame: Bitmap): List<Detection> {
