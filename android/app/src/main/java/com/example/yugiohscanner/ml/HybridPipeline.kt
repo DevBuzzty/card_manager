@@ -20,6 +20,14 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private var frameCount = 0
 
+    // --- TEMPORARY diagnostic for Spec D2, remove once the SET_CODE zone is placed correctly. ---
+    // The measured zones land on the set code in the photo corpus but read effect text on the
+    // phone, and box aspect ratio alone does not explain the gap. Dumping a handful of real
+    // analysis frames plus their exact box lets the zones be drawn offline, which is what settled
+    // the original band bug in ten seconds. Capped hard so it cannot fill the device.
+    private val appContext = context.applicationContext
+    private var dumpsWritten = 0
+
     override fun process(frame: Bitmap): List<Detection> {
         frameCount++
         val out = ArrayList<Detection>()
@@ -79,6 +87,25 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         val needsLegacyBand = layout == null || layout in PLACEHOLDER_LAYOUTS
         val layoutLabel = layout?.toString() ?: "UNKNOWN"
 
+        dumpFrame(frame, b, layoutLabel)
+
+        // The zones are anchored to the artwork box, so they are only meaningful when the detector
+        // actually boxed the ARTWORK. A Yu-Gi-Oh artwork window is square (37x37 mm), and the
+        // corpus the zones were measured on went through crop_artworks.py's aspect filter, so every
+        // measured box was artwork-shaped. The phone's DetectorModel.detect filters on confidence
+        // ONLY, and on ~17% of readings it returns something much taller — the card's upper half,
+        // say. Then box.y2 sits far below the artwork's lower edge and every zone slides down with
+        // it: measured on device, a box at ratio 1.015 put the SET_CODE zone exactly on the code,
+        // while one at 0.877 put it on the effect text and the PASSCODE zone off the card entirely.
+        // Reading a zone off an implausible box produces confident nonsense, so skip the OCR and
+        // say so. Identification is unaffected — the embedder already ran on this box.
+        val aspect = (b.x2 - b.x1) / (b.y2 - b.y1).coerceAtLeast(1f)
+        if (aspect < ARTWORK_AR_MIN || aspect > ARTWORK_AR_MAX) {
+            android.util.Log.i("BandOcr", "layout=$layoutLabel zone=SKIPPED ar=${"%.3f".format(aspect)} " +
+                "box=${(b.x2 - b.x1).toInt()}x${(b.y2 - b.y1).toInt()} (Box ist kein Artwork)")
+            return emptyMap<Zone, String>() to ""
+        }
+
         val zoneTexts = LinkedHashMap<Zone, String>()
         for ((zone, bitmap) in CardZones.crop(frame, b, layout ?: Layout.STANDARD)) {
             val text = Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap, 0))).text
@@ -86,7 +113,10 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
             // Spec D2 needs to know WHAT each zone actually saw -- until now the only raw-OCR
             // logging sat in PasscodeOcr, which the live HybridPipeline path never calls, so this
             // was invisible. One zone is one log line; newlines flattened to " | ".
-            android.util.Log.i("BandOcr", "layout=$layoutLabel zone=$zone crop=${bitmap.width}x${bitmap.height} " +
+            android.util.Log.i("BandOcr", "layout=$layoutLabel zone=$zone " +
+                "frame=${frame.width}x${frame.height} " +
+                "box=${b.x1.toInt()},${b.y1.toInt()}-${b.x2.toInt()},${b.y2.toInt()} " +
+                "crop=${bitmap.width}x${bitmap.height} " +
                 "raw='" + text.replace("\n", " | ") + "'")
             bitmap.recycle()  // CardZones.crop hands ownership to the caller
         }
@@ -108,6 +138,25 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         return zoneTexts to legacyText
     }
 
+    /** TEMPORARY (Spec D2 diagnostic): write the raw analysis frame plus its box, so the measured
+     *  zones can be drawn over a REAL phone frame offline. Max [MAX_DUMPS] files, ~1 MB each. */
+    private fun dumpFrame(frame: Bitmap, b: Box, layoutLabel: String) {
+        if (!DUMP_FRAMES || dumpsWritten >= MAX_DUMPS) return
+        try {
+            val dir = appContext.getExternalFilesDir("zonedump") ?: return
+            dir.mkdirs()
+            val name = "f${dumpsWritten}_${layoutLabel}_box_${b.x1.toInt()}_${b.y1.toInt()}_" +
+                "${b.x2.toInt()}_${b.y2.toInt()}.jpg"
+            java.io.File(dir, name).outputStream().use {
+                frame.compress(Bitmap.CompressFormat.JPEG, 92, it)
+            }
+            dumpsWritten++
+            android.util.Log.i("BandOcr", "dump geschrieben: $name")
+        } catch (e: Exception) {
+            android.util.Log.w("BandOcr", "dump fehlgeschlagen", e)
+        }
+    }
+
     override fun close() {
         artwork.close()
         recognizer.close()
@@ -116,6 +165,22 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
     companion object {
         // Run the whole-frame fallback OCR at most once every this many frames.
         private const val FULLFRAME_EVERY = 3
+
+        // Diagnostic frame dump, OFF by default: writes raw camera frames to external storage, so
+        // it must never ship enabled. Flip to true, rebuild, scan a few cards, then
+        //   adb pull /sdcard/Android/data/com.example.yugiohscanner/files/zonedump
+        // and draw the zones over the real frames offline. This is what identified the band bug and
+        // then the unstable-box bug — both in seconds, after hours of reasoning had gone nowhere.
+        private const val DUMP_FRAMES = false
+        private const val MAX_DUMPS = 8
+
+        // Aspect band a detector box must fall in before its zones are trusted. The artwork window
+        // is square, so 1.0 is the target. The bounds are provisional and deliberately logged:
+        // device evidence puts a correct placement at 1.015 and a wrong one at 0.877, and the
+        // observed distribution over 136 readings was 0.7:5  0.8:18  0.9:44  1.0:67  1.1:2, so this
+        // band keeps roughly 82%. Tune from the SKIPPED rate rather than by feel.
+        private const val ARTWORK_AR_MIN = 0.90f
+        private const val ARTWORK_AR_MAX = 1.12f
 
         // Layouts whose CardLayout.zones() geometry is STANDARD's placeholder, not a measurement
         // (see CardLayout.kt) -- readZones also reads the legacy band for these as a safety net.
