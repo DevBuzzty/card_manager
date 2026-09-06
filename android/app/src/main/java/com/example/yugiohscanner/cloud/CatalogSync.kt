@@ -3,6 +3,7 @@ package com.example.yugiohscanner.cloud
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.util.Log
 import com.example.yugiohscanner.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,14 +34,25 @@ sealed interface CatalogState {
  * before the user has signed in — it never touches [SupabaseCloud]'s session state, only its URL/
  * key resolution and shared [SupabaseCloud.http] client.
  *
- * Rules (Spec §5.3): check at app start and at most once a day (timestamp in `scanner_prefs`);
- * only download over an unmetered network unless `catalog_mobile_ok` is set; verify SHA-256 before
- * import; a checksum mismatch or unreachable storage leaves the previous catalog untouched and
- * only ever surfaces as [CatalogState.Failed] (a status line, never a popup — Spec §10).
+ * Rules (Spec §5.3):
+ * - The lightweight version lookup (`catalog_versions`) runs on **every** [checkAndUpdate] call
+ *   (app start), never gated — it's a few hundred bytes and the spec asks for it at every start.
+ * - The multi-MB **download** is gated to at most once a day (timestamp in `scanner_prefs`) *and*
+ *   to an unmetered network unless `catalog_mobile_ok` is set — except while no catalog has ever
+ *   been imported ([localVersion] == 0), where the daily gate is bypassed entirely so a fresh
+ *   install keeps retrying every app start instead of being stuck for 24h. See [shouldDownloadNow].
+ * - The daily-gate timestamp is only stamped for a download attempt that actually happened
+ *   (success or a genuine failure once the transfer started); it is never stamped for "no
+ *   network" or for a metered-network skip, since those never touched the network at all.
+ * - Verify SHA-256 before import; a checksum mismatch or unreachable storage leaves the previous
+ *   catalog untouched and only ever surfaces as [CatalogState.Failed] (a status line, never a
+ *   popup — Spec §10), with a fixed German [CatalogState.Failed.reason] — the raw exception is
+ *   logged, never shown to the user.
  */
 object CatalogSync {
+    private const val TAG = "CatalogSync"
     private const val PREFS = "scanner_prefs"
-    private const val KEY_LAST_CHECK = "catalog_last_check_at"
+    private const val KEY_LAST_DOWNLOAD_AT = "catalog_last_download_at"
     private const val KEY_MOBILE_OK = "catalog_mobile_ok"
     private const val CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
 
@@ -63,53 +75,74 @@ object CatalogSync {
     private suspend fun run(context: Context, force: Boolean) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val db = CatalogDb(context)
-        val localVersion = db.version()
+        try {
+            val localVersion = db.version()
+            fun keepCurrent() = if (localVersion > 0) CatalogState.Ready(localVersion) else CatalogState.Idle
 
-        if (!force) {
-            val last = prefs.getLong(KEY_LAST_CHECK, 0L)
-            if (System.currentTimeMillis() - last < CHECK_INTERVAL_MS) {
-                _state.value = if (localVersion > 0) CatalogState.Ready(localVersion) else CatalogState.Idle
+            // The version lookup itself is never gated — it's cheap and the spec wants it at
+            // every app start. Only the download below is subject to the daily/network rules.
+            _state.value = CatalogState.Checking
+
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+            if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+                // No network at all: not a check that ran, nothing to stamp.
+                _state.value = CatalogState.Failed("Kein Internetzugang")
                 return
             }
-        }
 
-        _state.value = CatalogState.Checking
-        // Record the attempt now, not on success: a server outage or a broken published catalog
-        // must not turn into a check running (and failing) on every single app start.
-        prefs.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
+            val remote = try {
+                fetchLatestVersion(context)
+            } catch (e: Exception) {
+                Log.w(TAG, "Versionsabfrage fehlgeschlagen", e)
+                _state.value = CatalogState.Failed("Server nicht erreichbar")
+                return
+            }
+            if (remote == null) {
+                _state.value = CatalogState.Failed("Keine Katalogversion veroeffentlicht")
+                return
+            }
+            if (remote.version <= localVersion) {
+                _state.value = keepCurrent()
+                return
+            }
 
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val caps = cm.getNetworkCapabilities(cm.activeNetwork)
-        if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
-            _state.value = CatalogState.Failed("Kein Internetzugang")
-            return
-        }
+            val mobileOk = prefs.getBoolean(KEY_MOBILE_OK, false)
+            val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            val lastDownloadAt = prefs.getLong(KEY_LAST_DOWNLOAD_AT, 0L)
+            if (!shouldDownloadNow(localVersion, lastDownloadAt, System.currentTimeMillis(), force, unmetered, mobileOk)) {
+                // A newer catalog exists but we're not allowed/due to fetch it yet (daily gate
+                // still running, or metered network without catalog_mobile_ok). Not an error and
+                // not stamped, so the next app start (or the next network change) can retry.
+                _state.value = keepCurrent()
+                return
+            }
 
-        val remote = try {
-            fetchLatestVersion(context)
-        } catch (e: Exception) {
-            _state.value = CatalogState.Failed("Server nicht erreichbar: ${e.message}")
-            return
+            // From here on a real download attempt happens: stamp the gate now so this outcome
+            // (success or failure) consumes today's slot, whatever it turns out to be.
+            prefs.edit().putLong(KEY_LAST_DOWNLOAD_AT, System.currentTimeMillis()).apply()
+            downloadAndImport(context, db, remote)
+        } finally {
+            db.close()
         }
-        if (remote == null) {
-            _state.value = CatalogState.Failed("Keine Katalogversion veroeffentlicht")
-            return
-        }
-        if (remote.version <= localVersion) {
-            _state.value = if (localVersion > 0) CatalogState.Ready(localVersion) else CatalogState.Idle
-            return
-        }
+    }
 
-        val mobileOk = prefs.getBoolean(KEY_MOBILE_OK, false)
-        val unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
-        if (!unmetered && !mobileOk) {
-            // A newer catalog exists but we're not allowed to fetch it on this network yet.
-            // Not an error: keep whatever catalog is already installed.
-            _state.value = if (localVersion > 0) CatalogState.Ready(localVersion) else CatalogState.Idle
-            return
-        }
-
-        downloadAndImport(context, db, remote)
+    /**
+     * Pure decision for whether the (already-known-newer) catalog should be downloaded now.
+     * Extracted because this is exactly the rule a prior version got wrong (unconditional daily
+     * stamping starved fresh installs of retries) — see [CatalogSyncDecisionTest].
+     */
+    internal fun shouldDownloadNow(
+        localVersion: Int,
+        lastDownloadAtMs: Long,
+        nowMs: Long,
+        force: Boolean,
+        isUnmetered: Boolean,
+        mobileOk: Boolean,
+    ): Boolean {
+        if (!isUnmetered && !mobileOk) return false
+        if (force || localVersion == 0) return true
+        return nowMs - lastDownloadAtMs >= CHECK_INTERVAL_MS
     }
 
     private data class RemoteVersion(val version: Int, val url: String, val sha256: String)
@@ -145,7 +178,8 @@ object CatalogSync {
                 _state.value = CatalogState.Downloading(0)
                 download(context, remote.url, tempFile)
             } catch (e: Exception) {
-                _state.value = CatalogState.Failed("Speicher nicht erreichbar: ${e.message}")
+                Log.w(TAG, "Download fehlgeschlagen", e)
+                _state.value = CatalogState.Failed("Speicher nicht erreichbar")
                 return
             }
 
@@ -157,7 +191,8 @@ object CatalogSync {
             val parsed = try {
                 CatalogParser.parse(tempFile.readBytes())
             } catch (e: Exception) {
-                _state.value = CatalogState.Failed("Katalog konnte nicht gelesen werden: ${e.message}")
+                Log.w(TAG, "Katalog konnte nicht geparst werden", e)
+                _state.value = CatalogState.Failed("Katalog konnte nicht gelesen werden")
                 return
             }
 
@@ -165,7 +200,8 @@ object CatalogSync {
             try {
                 db.importAll(parsed)
             } catch (e: Exception) {
-                _state.value = CatalogState.Failed("Import fehlgeschlagen: ${e.message}")
+                Log.w(TAG, "Import fehlgeschlagen", e)
+                _state.value = CatalogState.Failed("Import fehlgeschlagen")
                 return
             }
 
