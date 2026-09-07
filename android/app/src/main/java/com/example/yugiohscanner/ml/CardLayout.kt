@@ -56,16 +56,13 @@ object CardLayout {
         Layout.STANDARD -> standardZones()
         Layout.SPELL_TRAP -> spellTrapZones()
         Layout.LINK -> linkZones()
-        // PENDULUM (23 usable samples) and SKILL (0) are both below the 40-sample minimum, and
-        // LEGACY (pre-2004 frames) was never measured at all -- user decision 2026-09-06 to ship
-        // without them and catch up later. This is a PROVISIONAL placeholder, not a measurement of
-        // these layouts: do not read it as "Pendulum's SET_CODE is the same as STANDARD's". A
-        // Pendulum card's set code actually prints bottom-LEFT under the pendulum-effect box, i.e.
-        // nowhere near STANDARD's bottom-right zone -- a made-up constant there would be worse than
-        // this honest fallback. Task 5 additionally keeps `CardStrip.bottomBand`'s old full-band
-        // read as a safety net specifically for these three layouts, so a wrong zone here degrades
-        // to the previous (working, if imprecise) behaviour instead of failing outright.
-        Layout.PENDULUM, Layout.SKILL, Layout.LEGACY -> standardZones()
+        Layout.PENDULUM -> pendulumZones()
+        // SKILL (0 samples) and LEGACY (pre-2004 frames, never measured) still fall back to
+        // STANDARD -- a PROVISIONAL placeholder, not a measurement. Do not read it as "their
+        // SET_CODE is the same as STANDARD's". Task 5 keeps `CardStrip.bottomBand`'s old full-band
+        // read as a safety net for these layouts, so a wrong zone degrades to the previous
+        // (working, if imprecise) behaviour instead of failing outright.
+        Layout.SKILL, Layout.LEGACY -> standardZones()
     }
 
     // EDITION is intentionally omitted: it has not been measured (Task 2/3 only measured PASSCODE
@@ -86,6 +83,32 @@ object CardLayout {
         Zone.PASSCODE to rect(-0.1577f, 0.3231f, 0.1513f, 0.5647f),
         // n=254, std x1=0.0157 y1=0.0226 x2=0.018 y2=0.0233
         Zone.SET_CODE to rect(0.725f, -0.0739f, 1.0467f, 0.0826f),
+    )
+
+    /**
+     * Measured 2026-09-07 from 65 photographs of the user's own Pendulum cards, via
+     * `ml/measure_zones_photos.py` (see `ml/zones_measured.json`). Sample counts are below the
+     * 40 that Task 2 required, and that is a deliberate, disclosed call rather than an oversight:
+     *
+     *  - The spread says these are well determined despite the count. Per-edge std runs 0.012 to
+     *    0.031, which is as tight as STANDARD's zones measured from 335 samples (0.026 to 0.046).
+     *    The 40-sample floor exists to stop guessing; nothing here is guessed.
+     *  - The alternative was known to be WRONG, not merely imprecise. These zones do not overlap
+     *    STANDARD's placeholder AT ALL -- passcode y 0.63..0.82 against 0.33..0.57, set code
+     *    y 0.58..0.73 against -0.07..0.09. The placeholder read a disjoint part of the card.
+     *  - Verified by eye before adoption: drawn over a real photo (IMG_20260907_183545,
+     *    "Symphonischer Krieger Rock-k-ks"), the SET_CODE rectangle lands on DIFO-DE042 and the
+     *    PASSCODE rectangle on 24070330.
+     *
+     * Both zones sit far lower than STANDARD's because the pendulum effect box occupies the space
+     * under the artwork, pushing the set code down to the ATK/DEF line at the card's LEFT edge --
+     * the opposite side from STANDARD, whose set code prints bottom-right just under the artwork.
+     */
+    private fun pendulumZones() = mapOf(
+        // n=33, std x1=0.0195 y1=0.0308 x2=0.0177 y2=0.0262
+        Zone.PASSCODE to rect(-0.0873f, 0.6269f, 0.1746f, 0.815f),
+        // n=17, std x1=0.0123 y1=0.0173 x2=0.0181 y2=0.0159
+        Zone.SET_CODE to rect(-0.0202f, 0.5782f, 0.2765f, 0.728f),
     )
 
     private fun linkZones() = mapOf(
@@ -111,32 +134,38 @@ object CardLayout {
      * Is a box of this shape plausibly the artwork window whose [zones] geometry we are about to
      * apply?
      *
-     * The band belongs to the GEOMETRY BEING APPLIED, not to the physical card. That distinction
-     * decides the Pendulum case. A Pendulum card's artwork window really is wider than tall —
-     * measured at 1.28–1.35 (11 rig frames), 1.29–1.36 (11 photos) and a 1.31 median across the
-     * eBay corpus, three independent sources — so a correct Pendulum box lands near 1.33 and this
-     * function rejects it, since [zones] hands out STANDARD's placeholder for PENDULUM. That
-     * rejection is deliberate: zone offsets are expressed in box widths and heights, so applying
-     * a square layout's numbers to a 1.33-wide box reads a completely different part of the card.
-     * Skipping beats confident nonsense.
+     * The band belongs to the GEOMETRY BEING APPLIED, not to the physical card, and the Pendulum
+     * case is what makes that distinction concrete. A Pendulum artwork window really is wider than
+     * tall — 1.28–1.35 over 11 rig frames, 1.27–1.38 over 65 photographs, a 1.31 median across the
+     * eBay corpus: three independent sources agreeing on ~1.33 — because the window stretches
+     * across the pendulum scales. While [zones] handed PENDULUM the STANDARD placeholder, this
+     * function therefore REJECTED every correct Pendulum box, and that was right: zone offsets are
+     * expressed in box widths and heights, so applying square numbers to a 1.33-wide box reads a
+     * different part of the card entirely. Skipping beats confident nonsense.
      *
-     * So when PENDULUM's real geometry is measured, [zones] and this band change TOGETHER. Adding
-     * a Pendulum band on its own would unlock exactly the wrong reads.
+     * Since PENDULUM now has measured zones, its band moved WITH them, in one change. That
+     * coupling is the rule, not a coincidence: a band widened on its own would unlock exactly the
+     * reads the placeholder got wrong.
      *
-     * Bounds are provisional and deliberately logged. Device evidence: a correct placement at
-     * 1.015, a wrong one at 0.877, and over 136 readings the distribution ran 0.7:5 0.8:18 0.9:44
-     * 1.0:67 1.1:2 — this band keeps roughly 82%. Tune from the SKIPPED rate, not by feel.
+     * Bounds are provisional and deliberately logged. Device evidence for the square band: a
+     * correct placement at 1.015, a wrong one at 0.877, and over 136 readings the distribution ran
+     * 0.7:5 0.8:18 0.9:44 1.0:67 1.1:2 — it keeps roughly 82%. Tune from the SKIPPED rate, not by
+     * feel.
      */
     fun isArtworkShaped(layout: Layout?, width: Float, height: Float): Boolean {
         val a = aspect(width, height)
-        return a >= SQUARE_AR_MIN && a <= SQUARE_AR_MAX
+        return if (layout == Layout.PENDULUM) a in PENDULUM_AR_MIN..PENDULUM_AR_MAX
+        else a in SQUARE_AR_MIN..SQUARE_AR_MAX
     }
 
-    // Every layout currently served by `zones()` uses the square artwork window (37x37 mm), so one
-    // band covers them all. `layout` is already a parameter of isArtworkShaped so that measuring
-    // PENDULUM adds a branch here rather than a new call signature everywhere.
+    // The square artwork window (37x37 mm) that every layout except PENDULUM uses.
     const val SQUARE_AR_MIN = 0.90f
     const val SQUARE_AR_MAX = 1.12f
+
+    // PENDULUM's wider window. Observed range across all three sources is 1.27–1.38; the band adds
+    // roughly the same relative headroom the square band carries.
+    const val PENDULUM_AR_MIN = 1.20f
+    const val PENDULUM_AR_MAX = 1.45f
 
     private fun rect(x1: Float, y1: Float, x2: Float, y2: Float) = RectF().apply {
         left = x1; top = y1; right = x2; bottom = y2

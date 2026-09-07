@@ -48,7 +48,52 @@
     }
   },
   "PENDULUM": {
-    "PASSCODE": "insufficient data"
+    "PASSCODE": {
+      "x": [
+        -0.0873,
+        0.1746
+      ],
+      "y": [
+        0.6269,
+        0.815
+      ],
+      "n": 33,
+      "median": {
+        "x1": -0.023,
+        "y1": 0.7095,
+        "x2": 0.1336,
+        "y2": 0.7603
+      },
+      "std": {
+        "x1": 0.0195,
+        "y1": 0.0308,
+        "x2": 0.0177,
+        "y2": 0.0262
+      }
+    },
+    "SET_CODE": {
+      "x": [
+        -0.0202,
+        0.2765
+      ],
+      "y": [
+        0.5782,
+        0.728
+      ],
+      "n": 17,
+      "median": {
+        "x1": 0.0209,
+        "y1": 0.6245,
+        "x2": 0.2241,
+        "y2": 0.6788
+      },
+      "std": {
+        "x1": 0.0123,
+        "y1": 0.0173,
+        "x2": 0.0181,
+        "y2": 0.0159
+      }
+    }
   },
   "LINK": {
     "PASSCODE": {
@@ -152,8 +197,8 @@
   "_meta": {
     "measured": "2026-09-06",
     "source": "ml/measure_zones.py ueber 954 gelabelte eBay-Fotos, 2064 s",
-    "convention": "Artwork-Box-Einheiten: x ab box.x1 in Boxbreiten, y ab box.y2 nach unten in Boxhoehen — dieselbe wie CardStrip",
+    "convention": "Artwork-Box-Einheiten: x ab box.x1 in Boxbreiten, y ab box.y2 nach unten in Boxhoehen \u2014 dieselbe wie CardStrip",
     "note": "ml/data/ ist git-ignoriert, deshalb liegt die Kopie hier. Task 4 traegt diese Werte als Kotlin-Konstanten ein.",
-    "gaps": "PENDULUM (23 Stichproben) und SKILL (0) sind ungemessen — Nutzerentscheidung 2026-09-06: ohne sie weiterbauen."
+    "gaps": "PENDULUM (23 Stichproben) und SKILL (0) sind ungemessen \u2014 Nutzerentscheidung 2026-09-06: ohne sie weiterbauen."
   }
 }

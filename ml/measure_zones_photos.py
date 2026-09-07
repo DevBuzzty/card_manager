@@ -184,6 +184,46 @@ def find_setcode_span_by_catalog(box_y2, box_h, box_x1, box_w, results, known_co
     return None, None
 
 
+def detect_box_central(img):
+    """Like measure_zones.detect_box, but picks the CENTRAL candidate instead of the highest-
+    scoring one.
+
+    The photos are of binder pages: four to six neighbouring cards are partly visible in every
+    shot, and detect_box takes whichever artwork scores best anywhere in the frame. When that is
+    a neighbour clipped by the frame edge, the region "below the artwork" holds no card foot at
+    all and the photo yields nothing -- 20 of 52 failed that way, while the target card in them
+    was perfectly legible (82661461 / BLMR-DE029 in IMG_20260907_204017, read off the screen by
+    eye).
+
+    Centrality is the right tiebreak because it encodes what the photographer did: they aimed at
+    the card they wanted. Score does not encode that at all. Everything else -- the scale sweep,
+    the confidence floor, the squareness and area filters -- is copied unchanged from
+    measure_zones.detect_box, so this differs in the choice among candidates and nothing else.
+    """
+    H, W = img.shape[:2]
+    cx, cy = W / 2.0, H / 2.0
+    best, best_d, best_score = None, None, 0.0
+    for f in MZ.SCALES:
+        canvas, r, left, top = MZ._sceneify(img, f)
+        inp = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+        out = MZ.det_sess().run(None, {"images": inp.transpose(2, 0, 1)[None]})[0][0]
+        for x1, y1, x2, y2, score, _ in out:
+            if score < MZ.MIN_SCORE:
+                continue
+            ox1, oy1 = (x1 - left) / r, (y1 - top) / r
+            ox2, oy2 = (x2 - left) / r, (y2 - top) / r
+            bw, bh = ox2 - ox1, oy2 - oy1
+            if bw <= 0 or bh <= 0:
+                continue
+            if not (0.6 < bw / bh < 1.7 and (bw * bh) / (W * H) > 0.10):
+                continue
+            d = ((ox1 + ox2) / 2 - cx) ** 2 + ((oy1 + oy2) / 2 - cy) ** 2
+            if best_d is None or d < best_d:
+                best_d, best_score = d, float(score)
+                best = (max(0.0, ox1), max(0.0, oy1), min(float(W), ox2), min(float(H), oy2))
+    return None if best is None else (*best, best_score)
+
+
 ROTATIONS = (0, 90, 180, 270)
 _CV_ROT = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
 

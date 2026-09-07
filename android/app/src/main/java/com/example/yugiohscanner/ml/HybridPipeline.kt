@@ -88,13 +88,13 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
      * thing this OCR is often needed to help with (foils/angles the embedder misses). So:
      *  - [knownPasscode] non-null (embedder hit): look its type up in the local catalog and read
      *    that [Layout]'s zones.
-     *  - [knownPasscode] null (embedder missed): type is unknown. Read STANDARD's zones -- the
-     *    plan's "STANDARD and PENDULUM both" would today mean reading the same placeholder
-     *    rectangle twice (PENDULUM has no measured geometry, see [CardLayout.zones]) -- plus the
-     *    legacy full-width band as the honest second source.
-     * [Layout.PENDULUM], [Layout.SKILL] and [Layout.LEGACY] also get the legacy band even when the
-     * type IS known, for the same reason: their zone geometry is [CardLayout]'s explicit STANDARD
-     * placeholder, not a measurement.
+     *  - [knownPasscode] null (embedder missed): type is unknown, so read STANDARD's zones plus the
+     *    legacy full-width band as the honest second source. Reading PENDULUM's zones too is not
+     *    an option here: its geometry sits far lower on the card AND its aspect guard rejects a
+     *    square box, so a wrong guess about the layout reads nothing useful either way.
+     * [Layout.SKILL] and [Layout.LEGACY] also get the legacy band even when the type IS known,
+     * because their zone geometry is still [CardLayout]'s explicit STANDARD placeholder rather
+     * than a measurement. PENDULUM no longer needs it -- its zones were measured 2026-09-07.
      *
      * Every zone bitmap [CardZones] hands back is already enhanced; this function OCRs each and
      * recycles it immediately after, exactly as the old single-band read did.
@@ -224,6 +224,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
 
         // Layouts whose CardLayout.zones() geometry is STANDARD's placeholder, not a measurement
         // (see CardLayout.kt) -- readZones also reads the legacy band for these as a safety net.
-        private val PLACEHOLDER_LAYOUTS = setOf(Layout.PENDULUM, Layout.SKILL, Layout.LEGACY)
+        // PENDULUM left this set on 2026-09-07 when its zones were measured from 65 photographs.
+        private val PLACEHOLDER_LAYOUTS = setOf(Layout.SKILL, Layout.LEGACY)
     }
 }

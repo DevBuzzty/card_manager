@@ -81,13 +81,34 @@ class CardLayoutTest {
 
     @Test
     fun unmeasuredLayoutsFallBackToStandardZones() {
-        // PENDULUM and SKILL have no measured geometry (23 and 0 usable samples, below the
-        // 40-sample minimum) -- they must still return a usable (if provisional) zone map rather
-        // than an empty one or a crash.
+        // SKILL (0 samples) and LEGACY (never measured) still have no geometry of their own --
+        // they must return a usable (if provisional) zone map rather than an empty one or a crash.
         val standard = CardLayout.zones(Layout.STANDARD)
-        assertZonesEqual(standard, CardLayout.zones(Layout.PENDULUM))
         assertZonesEqual(standard, CardLayout.zones(Layout.SKILL))
         assertZonesEqual(standard, CardLayout.zones(Layout.LEGACY))
+    }
+
+    @Test
+    fun `Pendulum hat eigene, gemessene Zonen -- nicht STANDARDs Platzhalter`() {
+        val p = CardLayout.zones(Layout.PENDULUM)
+        val s = CardLayout.zones(Layout.STANDARD)
+        // Die beiden ueberlappen NICHT -- der Platzhalter las einen voellig anderen Teil der Karte.
+        assertTrue("PASSCODE muss tiefer liegen als STANDARDs",
+            p.getValue(Zone.PASSCODE).top > s.getValue(Zone.PASSCODE).bottom)
+        assertTrue("SET_CODE muss tiefer liegen als STANDARDs",
+            p.getValue(Zone.SET_CODE).top > s.getValue(Zone.SET_CODE).bottom)
+        // ... und der Set-Code sitzt LINKS, waehrend STANDARD ihn rechts hat.
+        assertTrue("SET_CODE muss links sitzen", p.getValue(Zone.SET_CODE).right < 0.5f)
+        assertTrue("STANDARDs SET_CODE sitzt rechts", s.getValue(Zone.SET_CODE).left > 0.5f)
+        // Exakte gemessene Werte, ziffernweise gegen ml/zones_measured.json.
+        assertEquals(-0.0873f, p.getValue(Zone.PASSCODE).left, 0f)
+        assertEquals(0.6269f, p.getValue(Zone.PASSCODE).top, 0f)
+        assertEquals(0.1746f, p.getValue(Zone.PASSCODE).right, 0f)
+        assertEquals(0.815f, p.getValue(Zone.PASSCODE).bottom, 0f)
+        assertEquals(-0.0202f, p.getValue(Zone.SET_CODE).left, 0f)
+        assertEquals(0.5782f, p.getValue(Zone.SET_CODE).top, 0f)
+        assertEquals(0.2765f, p.getValue(Zone.SET_CODE).right, 0f)
+        assertEquals(0.728f, p.getValue(Zone.SET_CODE).bottom, 0f)
     }
 
     // ---- Seitenverhaeltnis-Waechter (aus HybridPipeline.readZones herausgezogen) ----------------
@@ -120,15 +141,19 @@ class CardLayoutTest {
         assertTrue(!CardLayout.isArtworkShaped(null, 440f, 502f))
     }
 
-    @Test fun `Pendulum-Boxen werden derzeit bewusst verworfen`() {
+    @Test fun `Pendulum-Boxen werden jetzt akzeptiert -- Band und Geometrie wanderten gemeinsam`() {
         // Eine korrekte Pendulum-Box liegt bei ~1.33 (drei unabhaengige Quellen: 11 Rig-Frames,
-        // 11 Fotos, eBay-Korpus-Median). Sie faellt durch, WEIL zones(PENDULUM) noch STANDARDs
-        // Platzhalter liefert -- die Zonen sind in Boxbreiten ausgedrueckt, eine 1.33 breite Box
-        // mit quadratischer Geometrie zu lesen traefe eine voellig andere Stelle der Karte.
-        // Dieser Test faellt absichtlich um, sobald jemand nur das Band aufmacht: Band und
-        // Geometrie muessen GEMEINSAM wandern.
-        assertTrue(!CardLayout.isArtworkShaped(Layout.PENDULUM, 532f, 400f))
-        assertTrue(!CardLayout.isArtworkShaped(Layout.PENDULUM, 658f, 504f))
+        // 65 Fotos, eBay-Korpus-Median). Solange zones(PENDULUM) STANDARDs Platzhalter lieferte,
+        // wurde sie bewusst verworfen; seit die Zonen gemessen sind, gilt PENDULUMs eigenes Band.
+        assertTrue(CardLayout.isArtworkShaped(Layout.PENDULUM, 532f, 400f))    // 1.33
+        assertTrue(CardLayout.isArtworkShaped(Layout.PENDULUM, 658f, 504f))    // 1.31
+        assertTrue(CardLayout.isArtworkShaped(Layout.PENDULUM, 549f, 429f))    // 1.28, Randfall
+        // Eine QUADRATISCHE Box ist fuer Pendulum falsch -- dann hat der Detektor etwas anderes
+        // erwischt, und PENDULUMs tief liegende Zonen wuerden ins Leere greifen.
+        assertTrue(!CardLayout.isArtworkShaped(Layout.PENDULUM, 500f, 500f))
+        // Und umgekehrt bleibt eine Pendulum-foermige Box fuer die quadratischen Layouts falsch.
+        assertTrue(!CardLayout.isArtworkShaped(Layout.STANDARD, 532f, 400f))
+        assertTrue(!CardLayout.isArtworkShaped(null, 532f, 400f))
     }
 
     @Test fun `Bandgrenzen sind einschliesslich`() {
