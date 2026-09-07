@@ -48,14 +48,24 @@ import measure_zones as MZ  # detector, OCR reader, span maths, outlier rejectio
 
 def load_catalog_full():
     """{passcode:int -> (layout, {set codes})}. MZ.load_catalog() returns only {id: type}; the
-    catalog-as-label rule needs each card's printings too."""
+    catalog-as-label rule needs each card's printings too.
+
+    BOTH printing fields are read, and they are not the same thing. `printings` holds YGOPRODeck's
+    ENGLISH codes for 14,014 of 14,523 cards; `printings_verified` holds the GERMAN ones that the
+    desktop has actually confirmed (catalog-builder.cjs enriches the pack with them), and covers
+    1,890 cards -- 13%. So for that 13% an exact German match is possible and for the rest only
+    the region-agnostic key is, which is exactly what code_key exists for.
+    """
     import gzip
     if not MZ.CATALOG_CACHE.exists():
         MZ.load_catalog()                       # downloads it
     data = json.loads(gzip.decompress(MZ.CATALOG_CACHE.read_bytes()))
     out = {}
     for c in data["cards"]:
-        codes = {p["code"].upper() for p in (c.get("printings") or []) if p.get("code")}
+        codes = {p["code"].upper()
+                 for src in ("printings", "printings_verified")
+                 for p in (c.get(src) or [])
+                 if isinstance(p, dict) and p.get("code")}
         out[int(c["id"])] = (MZ.layout_for_type(c.get("type")), codes)
     return out
 
