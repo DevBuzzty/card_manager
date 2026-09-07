@@ -336,20 +336,54 @@ def push():
     print("push done")
 
 
+APP_ID = "com.example.yugiohscanner"
+RUNNER = f"{APP_ID}.test/androidx.test.runner.AndroidJUnitRunner"
+
+
 def run_instrumentation():
-    gradlew = ANDROID_DIR / ("gradlew.bat" if sys.platform == "win32" else "gradlew")
-    cmd = [str(gradlew), "-p", str(ANDROID_DIR), "connectedDebugAndroidTest",
-           f"-Pandroid.testInstrumentationRunnerArguments.class={TEST_CLASS}"]
+    """Drive the instrumentation with `am instrument` -- NOT with gradle connectedDebugAndroidTest.
+
+    Gradle uninstalls both APKs around a connected test run, and Android deletes
+    /sdcard/Android/data/<pkg>/ when a package is uninstalled. The staged corpus therefore cannot
+    survive a gradle-driven run: measured here, the run ended with the app gone, the test APK gone
+    and 0 of 445 images left on the device, and the test itself died on
+    `FileNotFoundException ... /files/ocr_bench/in/manifest.json`. Pushing data into the app's own
+    external directory and letting gradle manage the install are simply incompatible.
+
+    So install both APKs once, push, and then instrument directly. Nothing uninstalls, the corpus
+    stays put, and re-running costs one `am instrument` instead of a full gradle cycle.
+    """
+    apk = ANDROID_DIR / "app/build/outputs/apk/debug/app-debug.apk"
+    test_apk = ANDROID_DIR / "app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
+    for path in (apk, test_apk):
+        if not path.exists():
+            sys.exit(f"missing {path} -- build first:\n"
+                     f"  cd android && ./gradlew assembleDebug assembleDebugAndroidTest")
+    # -r keeps existing data; -t allows the test-only APK. A MIUI device refuses both with
+    # INSTALL_FAILED_USER_RESTRICTED while the screen is locked -- unlock it and retry.
+    for path in (apk, test_apk):
+        proc = subprocess.run(["adb", "install", "-r", "-t", str(path)],
+                              capture_output=True, text=True)
+        if "Success" not in (proc.stdout or "") + (proc.stderr or ""):
+            sys.exit(f"adb install failed for {path.name}:\n{proc.stdout}{proc.stderr}\n"
+                     "If this is INSTALL_FAILED_USER_RESTRICTED: unlock the phone (and enable "
+                     "Developer options -> Install via USB), then re-run.")
+    print("both APKs installed")
+
+    # Push AFTER installing, never before. Installing a package Android does not currently have
+    # recreates /sdcard/Android/data/<pkg>/ from scratch, so a corpus pushed first is wiped by the
+    # install -- measured: the push reported all 445 images landed, and the test still died on
+    # `FileNotFoundException ... manifest.json`. Install, then push, then instrument.
+    push()
+
+    cmd = ["adb", "shell", "am", "instrument", "-w", "-e", "class", TEST_CLASS, RUNNER]
     print("running:", " ".join(cmd))
-    proc = subprocess.run(cmd, cwd=str(ANDROID_DIR))
-    if proc.returncode != 0:
-        sys.exit(
-            "gradle connectedDebugAndroidTest failed (exit "
-            f"{proc.returncode}). If this is INSTALL_FAILED_USER_RESTRICTED on a fresh device, "
-            "run once manually:\n"
-            "  adb install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk\n"
-            "then re-run 'python ml/ocr_bench.py run'."
-        )
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    out = (proc.stdout or "") + (proc.stderr or "")
+    print(out[-4000:])
+    # `am instrument` exits 0 even when the test fails; the payload is in its own report.
+    if "OK (" not in out or "FAILURES" in out or "Error" in out:
+        sys.exit("instrumentation did not report OK -- see the output above.")
 
 
 def pull():
