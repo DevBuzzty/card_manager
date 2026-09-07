@@ -37,6 +37,7 @@ Out: ml/data/zones/photos_<layout>.jsonl    per-photo samples (checkpoint, resum
 """
 import argparse
 import json
+import re
 from pathlib import Path
 
 import cv2
@@ -105,43 +106,132 @@ def discover_passcode_span(results, catalog_types, want_layout):
 SETCODE_Y_RANGE = (-0.30, 1.60)   # only to stay below the artwork; deliberately far too wide
 
 
+_CODE_KEY_RE = re.compile(r"^([A-Z0-9]{2,6})-[A-Z]{1,3}[A-Z]?(\d{2,4})$")
+
+
+def code_key(code):
+    """(prefix, number) with the REGION dropped, e.g. 'DIFO-DE019' and 'DIFO-EN019' both give
+    ('DIFO', '19').
+
+    Necessary because the offline catalog carries English codes only -- measured: 0 of its 14,014
+    cards with printings has a single DE or G code, while every card being photographed here is
+    German. Matching the full string would therefore never succeed.
+
+    This is safe HERE and only here. The project's standing rule is never to derive a German set
+    code from an English one, because the region infix genuinely differs (DE vs G) and guessing it
+    would write a wrong code into the collection. Nothing is written here: the key is used purely
+    to confirm that a token on the card is that card's set code, so that its POSITION can be
+    measured. Prefix plus number is specific enough for that -- and the code that gets recorded
+    is the one OCR actually read, never a reconstructed one.
+    """
+    m = _CODE_KEY_RE.match(code)
+    return (m.group(1), m.group(2).lstrip("0") or "0") if m else None
+
+
 def find_setcode_span_by_catalog(box_y2, box_h, box_x1, box_w, results, known_codes, y_range):
     """Locate the set code by matching against `known_codes` (this card's real printings) rather
     than by where we expect it to be. Returns (code, pixel_sub_box) or (None, None)."""
     lo, hi = y_range
+    known_keys = {k for k in (code_key(c) for c in known_codes) if k}
     for box, text, _conf in results:
         (_x1, y1), (_x2, _y2), _br, (_x4, y4) = box
         if not (lo < ((y1 + y4) / 2 - box_y2) / box_h < hi):
             continue
         upper = text.upper()
         for m in MZ.SETCODE_RE.finditer(upper):
-            if m.group(0) in known_codes:
+            if code_key(m.group(0)) in known_keys:
                 return m.group(0), MZ._sub_box(box, m.start(), m.end(), len(text))
     return None, None
 
 
-def measure_one(path, catalog_types, want_layout):
-    """One photo -> {'passcode': rel-box, 'setcode': rel-box, 'box': px-box, 'pc': str} or a
-    dict with 'skip' explaining why. Detection and OCR run once each."""
+ROTATIONS = (0, 90, 180, 270)
+_CV_ROT = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+
+
+def measure_one(path, catalog_types, want_layout, rot_hint=0):
+    """One photo -> a measurement dict, or {'skip': reason}.
+
+    Photographing a portrait card with the phone held landscape leaves the card lying on its
+    side, and then the whole geometry is nonsense: the ROI under the artwork covers table, not
+    card. Observed on the user's first ten photos -- every one detected its artwork fine (score
+    0.90) at aspect 0.76, which is 1/1.31, a Pendulum box turned 90 degrees, and every one
+    yielded no passcode.
+
+    So try the four right-angle rotations and keep the first that produces a catalog-valid
+    passcode of the wanted layout. That check is strict enough to make a wrong rotation
+    essentially unacceptable, so this cannot silently pick a bad orientation. `rot_hint` (the
+    rotation that worked on the previous photo) is tried first, because a person holding the
+    phone one way holds it that way for the whole batch -- so in practice this costs one attempt
+    per photo, not four.
+    """
+    order = [rot_hint] + [r for r in ROTATIONS if r != rot_hint]
+    first_skip = None
+    for rot in order:
+        r = _measure_at(path, catalog_types, want_layout, rot)
+        if "skip" not in r:
+            r["rot"] = rot
+            return r
+        if first_skip is None:
+            first_skip = r["skip"]
+    return {"skip": first_skip or "kein gueltiger Passcode gelesen"}
+
+
+def _measure_at(path, catalog_types, want_layout, rot):
+    """One photo at one rotation. Detection and OCR run once each."""
     img = cv2.imread(str(path))
     if img is None:
         return {"skip": "unlesbar"}
+    if rot:
+        img = cv2.rotate(img, _CV_ROT[rot])
     det = MZ.detect_box(img)
     if det is None:
         return {"skip": "keine Artwork-Box"}
     bx1, by1, bx2, by2, _score = det
     bw, bh = bx2 - bx1, by2 - by1
     H, W = img.shape[:2]
-    # Same ROI rule as measure_zones.measure_one: start comfortably above the box's lower edge so
-    # both the set code (just under the box) and the passcode (card bottom) fall inside.
-    y_start = max(0, int(by1 + 0.85 * bh))
-    roi = img[y_start:H, 0:W]
-    if roi.size == 0:
-        return {"skip": "ROI leer"}
-    results = MZ.ocr_reader().readtext(roi)
-    results = [([[px, py + y_start] for px, py in pts], text, conf) for pts, text, conf in results]
-
-    pc, pbox = discover_passcode_span(results, catalog_types, want_layout)
+    # ROI: start above the box's lower edge so the set code (just under the box on STANDARD) and
+    # the passcode (card foot) both fall inside, as in measure_zones.measure_one -- but BOUNDED,
+    # not "everything below, full width".
+    #
+    # That mattered more than expected. A 12 MP phone photo gave a 2646x1653 full-width strip,
+    # EasyOCR downscales an input that large internally, and the passcode line -- perfectly
+    # legible to the eye at full size, DIFO-DE083 / 26435595 -- came back as nothing on 4 of 11
+    # photos. The photos were fine; the ROI was wrong. Cropping to the card and upscaling makes
+    # the text large relative to whatever EasyOCR resizes to.
+    # Two ROI strategies, tried in order until one yields a catalog-valid passcode.
+    #
+    # "tight" crops to the card and upscales; "wide" is measure_zones' original everything-below-
+    # full-width strip. Neither dominates: tight recovered two photos wide had missed, and wide
+    # holds two that tight loses -- EasyOCR's internal resizing is simply not monotonic in input
+    # size. Since the catalog validates every hit, taking the first that works costs only a second
+    # OCR pass on photos that would otherwise have failed outright, and can never accept a worse
+    # answer. Measured on the same 11 photos: wide 7, tight 8, both 9.
+    for mode in ("tight", "wide"):
+        if mode == "tight":
+            x_lo, x_hi = max(0, int(bx1 - 0.35 * bw)), min(W, int(bx2 + 0.35 * bw))
+            y_start, y_end = max(0, int(by1 + 0.85 * bh)), min(H, int(by2 + 1.6 * bh))
+        else:
+            x_lo, x_hi = 0, W
+            y_start, y_end = max(0, int(by1 + 0.85 * bh)), H
+        roi = img[y_start:y_end, x_lo:x_hi]
+        if roi.size == 0:
+            continue
+        scale = 1.0
+        if mode == "tight":
+            # A 12 MP photo gives a ~2600 px strip; EasyOCR downscales an input that large, and a
+            # passcode line perfectly legible at full size (DIFO-DE083 / 26435595) came back empty
+            # on 4 of 11 photos. Normalising the crop to ~1600 px makes the text large relative to
+            # whatever EasyOCR resizes to.
+            scale = 1600.0 / roi.shape[1]
+            interp = cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA
+            roi = cv2.resize(roi, None, fx=scale, fy=scale, interpolation=interp)
+        raw = MZ.ocr_reader().readtext(roi)
+        # OCR ran on a scaled crop; map every box back to full-image coordinates.
+        results = [([[px / scale + x_lo, py / scale + y_start] for px, py in pts], text, conf)
+                   for pts, text, conf in raw]
+        pc, pbox = discover_passcode_span(results, catalog_types, want_layout)
+        if pc is not None:
+            break
     if pc is None:
         return {"skip": "kein gueltiger Passcode gelesen"}
 
@@ -198,22 +288,25 @@ def main():
         print(f"{len(done)} davon bereits gemessen, wird uebersprungen")
 
     skips = {}
+    rot_hint = 0
     with jsonl.open("a", encoding="utf-8") as fh:
         for i, p in enumerate(photos, 1):
             if p.name in done:
                 continue
             try:
-                r = measure_one(p, catalog, a.layout)
+                r = measure_one(p, catalog, a.layout, rot_hint)
             except Exception as e:                      # one bad photo must not kill the run
                 r = {"skip": f"{type(e).__name__}: {e}"}
             r["file"] = p.name
+            if "rot" in r:
+                rot_hint = r["rot"]                     # the batch is shot one way; remember it
             fh.write(json.dumps(r) + "\n")
             fh.flush()                                   # checkpoint, jedes Foto
             done[p.name] = r
             if "skip" in r:
                 skips[r["skip"]] = skips.get(r["skip"], 0) + 1
             print(f"  {i}/{len(photos)} {p.name[:34]:<36} "
-                  f"{'pc=' + r['pc'] + ' ar=' + str(r['ar']) if 'pc' in r else r.get('skip')}")
+                  f"{'pc=' + r['pc'] + ' ar=' + str(r['ar']) + ' rot=' + str(r['rot']) if 'pc' in r else r.get('skip')}")
 
     rows = list(done.values())
     pass_s = [r["passcode"] for r in rows if "passcode" in r]
@@ -260,6 +353,11 @@ def main():
         src = Path(a.dir) / r["file"]
         if not src.exists():
             continue
+        if r.get("rot"):
+            # Die Boxkoordinaten liegen im gedrehten Bild; der Beleg muss dieselbe Drehung haben.
+            rotated = cv2.rotate(cv2.imread(str(src)), _CV_ROT[r["rot"]])
+            src = MZ.ZONES_DIR / f"_rot_{src.name}"
+            cv2.imwrite(str(src), rotated)
         MZ.draw_evidence(src, as_zone(r["passcode"]),
                          as_zone(r["setcode"]) if "setcode" in r else None,
                          tuple(r["box"]), outdir / f"{src.stem}.png")
