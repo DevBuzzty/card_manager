@@ -106,7 +106,12 @@ def discover_passcode_span(results, catalog_types, want_layout):
 SETCODE_Y_RANGE = (-0.30, 1.60)   # only to stay below the artwork; deliberately far too wide
 
 
-_CODE_KEY_RE = re.compile(r"^([A-Z0-9]{2,6})-[A-Z]{1,3}[A-Z]?(\d{2,4})$")
+# SetCodeOcr.kt's VARIANT_AS_DIGIT, ported: only the two confusions actually observed in the
+# number slot. Deliberately NOT measure_zones.CONFUSE, which targets an all-digit passcode and
+# maps D->0 and E->3, turning "DE019" into "03019".
+NARROW_CONFUSE = {"O": "0", "o": "0", "Y": "1"}
+
+_CODE_SPLIT_RE = re.compile(r"^([A-Z0-9]{2,6})-([A-Z0-9]{3,7})$")
 
 
 def code_key(code):
@@ -123,9 +128,34 @@ def code_key(code):
     to confirm that a token on the card is that card's set code, so that its POSITION can be
     measured. Prefix plus number is specific enough for that -- and the code that gets recorded
     is the one OCR actually read, never a reconstructed one.
+
+    The number is digit-confusion-corrected first. OCR really does return "LEDE-DEOO9" for
+    LEDE-DE009, and an uncorrected comparison threw that reading away -- the very confusion class
+    SetCodeOcr.kt already handles on the phone.
+
+    The correction uses NARROW_CONFUSE, not measure_zones.CONFUSE. That map exists to force an
+    all-digit passcode and maps D->0 and E->3 among others, so it turns "DE019" into "03019" and
+    eats the region. This mirrors SetCodeOcr.kt's deliberately narrow VARIANT_AS_DIGIT instead:
+    O->0 and Y->1 only, so a genuine variant letter (SGX3-DEA10) survives.
+
+    Where the region ends is not knowable up front -- "DE" plus a number, or "DEA" plus a number
+    with a variant letter -- so region lengths 1..3 are tried and the first split whose tail
+    corrects to 2-4 digits wins. Only the tail is corrected, never the prefix: real prefixes
+    legitimately contain digits (RA01, SGX3, MP23), so nothing there distinguishes a genuine
+    digit from a misread letter.
     """
-    m = _CODE_KEY_RE.match(code)
-    return (m.group(1), m.group(2).lstrip("0") or "0") if m else None
+    m = _CODE_SPLIT_RE.match(code)
+    if not m:
+        return None
+    prefix, tail = m.group(1), m.group(2)
+    for k in (1, 2, 3):
+        region, rest = tail[:k], tail[k:]
+        if not region.isalpha() or not rest:
+            continue
+        fixed = "".join(NARROW_CONFUSE.get(ch, ch) for ch in rest)
+        if fixed.isdigit() and 2 <= len(fixed) <= 4:
+            return (prefix, fixed.lstrip("0") or "0")
+    return None
 
 
 def find_setcode_span_by_catalog(box_y2, box_h, box_x1, box_w, results, known_codes, y_range):
