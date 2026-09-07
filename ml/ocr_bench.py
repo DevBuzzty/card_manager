@@ -42,6 +42,7 @@ import random
 import re
 import shutil
 import subprocess
+import time
 import sys
 from collections import defaultdict
 from datetime import date
@@ -376,6 +377,15 @@ def run_instrumentation():
     # `FileNotFoundException ... manifest.json`. Install, then push, then instrument.
     push()
 
+    # Delete the device-side result BEFORE measuring, so a failed run cannot leave the previous
+    # one lying around to be pulled and scored as if it were fresh. That is not hypothetical: the
+    # phone dropped off USB mid-chain, install and pull both failed, and `score` then re-scored the
+    # previous results.json into a report stamped with today's date and numbers identical to the
+    # baseline -- which reads exactly like "the change did nothing". Causality beats a timestamp
+    # check here: with no file on the device, `pull` fails and `score` has nothing to be fooled by.
+    subprocess.run(["adb", "shell", "rm", "-f", f"{DEVICE_BASE}/out/results.json"],
+                   capture_output=True, text=True)
+
     cmd = ["adb", "shell", "am", "instrument", "-w", "-e", "class", TEST_CLASS, RUNNER]
     print("running:", " ".join(cmd))
     proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -390,7 +400,16 @@ def pull():
     out_dir = BENCH_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     dest = WORK_DIR / "results.json"
+    before = dest.stat().st_mtime if dest.exists() else None
     adb("pull", f"{DEVICE_BASE}/out/results.json", str(dest))
+    if not dest.exists():
+        sys.exit(f"no results.json pulled -- the run did not produce one. {dest} absent.")
+    if before is not None and dest.stat().st_mtime == before:
+        sys.exit(
+            "results.json was NOT replaced by this pull -- the device had no fresh "
+            "result, so this is the previous run's file.\n"
+            "Re-run:  python ml/ocr_bench.py run"
+        )
     print(f"pulled -> {dest}")
 
 
@@ -546,9 +565,28 @@ def write_report(gt_data, table, diag, out_path):
     print(f"wrote {out_path}")
 
 
+STALE_AFTER_S = 15 * 60
+
+
 def do_score():
     gt_data = json.loads((WORK_DIR / "manifest_gt.json").read_text())
-    results = json.loads((WORK_DIR / "results.json").read_text())
+    results_path = WORK_DIR / "results.json"
+    # Refuse to score results that did not come from a run just now.
+    #
+    # This bit once already and would have been believed: the phone dropped off USB mid-chain, the
+    # install failed, `run` and `pull` both errored -- and `score` cheerfully re-scored the PREVIOUS
+    # run's results.json and wrote a report with a today's date on it. The numbers were identical to
+    # the baseline, which reads exactly like "the change had no effect". A benchmark that reports
+    # stale numbers as fresh ones is worse than a benchmark that refuses.
+    age = time.time() - results_path.stat().st_mtime
+    if age > STALE_AFTER_S:
+        sys.exit(
+            f"results.json is {age / 60:.0f} min old -- refusing to score it as if it were fresh.\n"
+            "Run the benchmark first:\n"
+            "  python ml/ocr_bench.py run && python ml/ocr_bench.py pull\n"
+            f"(override only if you really mean it: touch {results_path})"
+        )
+    results = json.loads(results_path.read_text())
     table, diag = score(gt_data, results)
     out_path = BENCH_DIR / f"report-{date.today().isoformat()}.md"
     write_report(gt_data, table, diag, out_path)

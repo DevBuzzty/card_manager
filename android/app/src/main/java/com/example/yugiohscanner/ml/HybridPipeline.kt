@@ -88,10 +88,11 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
      * thing this OCR is often needed to help with (foils/angles the embedder misses). So:
      *  - [knownPasscode] non-null (embedder hit): look its type up in the local catalog and read
      *    that [Layout]'s zones.
-     *  - [knownPasscode] null (embedder missed): type is unknown, so read STANDARD's zones plus the
-     *    legacy full-width band as the honest second source. Reading PENDULUM's zones too is not
-     *    an option here: its geometry sits far lower on the card AND its aspect guard rejects a
-     *    square box, so a wrong guess about the layout reads nothing useful either way.
+     *  - [knownPasscode] null (embedder missed): type is unknown, so the layout is inferred from
+     *    the box's own shape ([CardLayout.inferFromBox]) -- a ~1.33-wide box can only be PENDULUM,
+     *    a square one is read as STANDARD -- plus the legacy full-width band as the honest second
+     *    source, because an inference from one number is still a guess. A box matching no band
+     *    yields no layout and the zone OCR is skipped entirely.
      * [Layout.SKILL] and [Layout.LEGACY] also get the legacy band even when the type IS known,
      * because their zone geometry is still [CardLayout]'s explicit STANDARD placeholder rather
      * than a measurement. PENDULUM no longer needs it -- its zones were measured 2026-09-07.
@@ -110,9 +111,19 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         val type = knownPasscode?.let {
             runCatching { CatalogRepository.card(it.toString())?.type }.getOrNull()
         }
-        val layout = if (type != null) CardLayout.layoutFor(type) else null
-        val needsLegacyBand = layout == null || layout in PLACEHOLDER_LAYOUTS
-        val layoutLabel = layout?.toString() ?: "UNKNOWN"
+        val bw = b.x2 - b.x1
+        val bh = b.y2 - b.y1
+        val catalogLayout = if (type != null) CardLayout.layoutFor(type) else null
+        // When the catalog cannot name the layout, the box's own shape can (see
+        // CardLayout.inferFromBox). Without this, an embedder miss got STANDARD's square band and
+        // any Pendulum card among them was discarded -- 21 of the 85 embedder-miss frames in the
+        // benchmark corpus, clustered at aspect 1.3, and those are the foils and steep angles this
+        // whole path exists to rescue.
+        val layout = catalogLayout ?: CardLayout.inferFromBox(bw, bh)
+        // Keyed off the CATALOG layout, not the resolved one: an inferred layout is a guess from
+        // one number, so it keeps the legacy band as its second source just like no layout at all.
+        val needsLegacyBand = catalogLayout == null || catalogLayout in PLACEHOLDER_LAYOUTS
+        val layoutLabel = catalogLayout?.toString() ?: layout?.let { "$it?" } ?: "UNKNOWN"
 
         dumpFrame(frame, b, layoutLabel, knownPasscode)
 
@@ -126,8 +137,12 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // while one at 0.877 put it on the effect text and the PASSCODE zone off the card entirely.
         // Reading a zone off an implausible box produces confident nonsense, so skip the OCR and
         // say so. Identification is unaffected — the embedder already ran on this box.
-        val bw = b.x2 - b.x1
-        val bh = b.y2 - b.y1
+        //
+        // Mit einem ABGELEITETEN Layout kann diese Pruefung nicht mehr scheitern: inferFromBox
+        // liefert nur ein Layout, in dessen Band die Box ohnehin liegt. Sie sichert weiterhin den
+        // ueber den Katalog aufgeloesten Pfad ab (eine bekannte STANDARD-Karte, deren Box die
+        // obere Kartenhaelfte erwischt hat), und sie ist es, die eine Box verwirft, die in gar kein
+        // Band faellt — 55 der 85 Embedder-Fehltreffer im Messkorb, gestreut von 1:0.3 bis 8.6.
         if (!CardLayout.isArtworkShaped(layout, bw, bh)) {
             android.util.Log.i("BandOcr", "layout=$layoutLabel zone=SKIPPED " +
                 "ar=${String.format(java.util.Locale.ROOT, "%.3f", CardLayout.aspect(bw, bh))} " +

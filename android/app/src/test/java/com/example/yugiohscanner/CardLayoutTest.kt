@@ -163,6 +163,42 @@ class CardLayoutTest {
         assertTrue(!CardLayout.isArtworkShaped(Layout.STANDARD, 113f, 100f))
     }
 
+    @Test fun `Layout aus der Boxform ableiten`() {
+        // Ein ~1.33 breites Artwork kann nur Pendulum sein -- kein anderes Layout hat ein so
+        // breites Fenster. Die 16er-Haeufung bei 1.3 unter den Embedder-Fehltreffern im Messkorb
+        // ist genau das.
+        assertEquals(Layout.PENDULUM, CardLayout.inferFromBox(532f, 400f))
+        assertEquals(Layout.PENDULUM, CardLayout.inferFromBox(658f, 504f))
+        // Quadratisch heisst STANDARD -- stellvertretend fuer alle Layouts mit quadratischem
+        // Fenster, deren Zonen sich ohnehin kaum unterscheiden.
+        assertEquals(Layout.STANDARD, CardLayout.inferFromBox(511f, 503f))
+        assertEquals(Layout.STANDARD, CardLayout.inferFromBox(500f, 500f))
+    }
+
+    @Test fun `Boxen ausserhalb beider Baender liefern kein Layout`() {
+        // Die 55 echten Ausschussboxen aus dem Messkorb, gestreut von 0.3 bis 8.6: Kartenfetzen,
+        // Bildraender, Splitter. Hier ist null die ehrliche Antwort, und der Aufrufer ueberspringt.
+        for (ar in listOf(0.3f, 0.5f, 0.7f, 0.85f, 1.16f, 1.5f, 2.2f, 4.6f, 8.6f)) {
+            assertEquals("ar=$ar", null, CardLayout.inferFromBox(ar * 400f, 400f))
+        }
+    }
+
+    @Test fun `die beiden Baender ueberlappen nicht`() {
+        // 1.12 gegen 1.20 -- eine Box faellt in hoechstens eines, es gibt nichts zu entscheiden.
+        assertTrue(CardLayout.SQUARE_AR_MAX < CardLayout.PENDULUM_AR_MIN)
+        assertEquals(null, CardLayout.inferFromBox(116f, 100f))   // genau dazwischen
+    }
+
+    @Test fun `abgeleitetes Layout besteht den Waechter immer`() {
+        // Konstruktionsbedingt: inferFromBox liefert nur ein Layout, in dessen Band die Box liegt.
+        for (ar in listOf(0.90f, 1.0f, 1.12f, 1.20f, 1.33f, 1.45f)) {
+            val w = ar * 400f
+            val l = CardLayout.inferFromBox(w, 400f)
+            assertTrue("ar=$ar muss ein Layout liefern", l != null)
+            assertTrue("ar=$ar muss den Waechter bestehen", CardLayout.isArtworkShaped(l, w, 400f))
+        }
+    }
+
     /**
      * Compares zone maps field-by-field. Not `assertEquals(Map, Map)`: that would delegate to
      * `RectF.equals`, which throws "not mocked" under this module's JVM unit-test stub jar

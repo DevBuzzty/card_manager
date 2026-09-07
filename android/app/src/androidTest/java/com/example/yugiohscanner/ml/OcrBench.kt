@@ -91,11 +91,18 @@ class OcrBench {
             )
             // manifest layout is null exactly for rig frames the embedder missed (pcNONE) --
             // mirrors HybridPipeline.readZones's "type unknown" branch.
-            val layout = if (item.isNull("layout")) null else Layout.valueOf(item.getString("layout"))
+            val catalogLayout =
+                if (item.isNull("layout")) null else Layout.valueOf(item.getString("layout"))
 
             val bw = box.x2 - box.x1
             val bh = box.y2 - box.y1
             out.put("aspect", CardLayout.aspect(bw, bh).toDouble())
+
+            // Same inference the live pipeline makes: with no layout from the catalog, the box's
+            // own shape names one. Mirrored here deliberately -- the benchmark has to measure the
+            // production path, not a simplified copy of it.
+            val layout = catalogLayout ?: CardLayout.inferFromBox(bw, bh)
+            out.put("inferredLayout", if (catalogLayout == null && layout != null) layout.name else JSONObject.NULL)
 
             if (!CardLayout.isArtworkShaped(layout, bw, bh)) {
                 // Same gate HybridPipeline.readZones applies before reading any zone: an
@@ -105,6 +112,9 @@ class OcrBench {
             }
             out.put("skipped", false)
 
+            // inferFromBox already returned null for a box in no band, and the gate above rejected
+            // it, so reaching here with a null layout is impossible in practice; STANDARD stays as
+            // a defensive default rather than a !! that would crash the whole benchmark run.
             val effectiveLayout = layout ?: Layout.STANDARD
             val zoneTexts = LinkedHashMap<Zone, String>()
             val zonesJson = JSONObject()

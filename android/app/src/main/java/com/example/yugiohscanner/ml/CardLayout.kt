@@ -158,6 +158,37 @@ object CardLayout {
         else a in SQUARE_AR_MIN..SQUARE_AR_MAX
     }
 
+    /**
+     * Guess the layout from the artwork box's shape alone, for when the catalog cannot say.
+     *
+     * The box shape is real evidence, not a coin flip: PENDULUM's artwork window stretches across
+     * the pendulum scales and measures ~1.33 wide, while every other layout's window is the square
+     * 37x37 mm one at ~1.0. The two bands do not touch (1.12 against 1.20), so a box lands in at
+     * most one of them and there is nothing to arbitrate.
+     *
+     * This exists because of what the benchmark found. Of 130 frames dumped from the live analyzer,
+     * 85 carried no passcode at all — the embedder missed, which is what it does on foils and steep
+     * angles, precisely the cases zone OCR is meant to rescue. Of those 85, the aspect guard threw
+     * away 76. Measured against the bands: 55 of those really are junk (fragments of neighbouring
+     * cards, frame edges, slivers, spread from 0.3 to 8.6) and rejecting them is correct — but 21
+     * sit in the Pendulum band with a hard cluster of 16 at 1.3, i.e. they are Pendulum cards whose
+     * geometry has been known since the zones were measured. Discarding those was pure waste.
+     *
+     * Returns null when the box matches no band. That is the honest answer for the other 55, and
+     * the caller must skip the OCR rather than pick a layout at random.
+     *
+     * A guess is not a lookup: a caller resolving the layout this way should still read the legacy
+     * full-width band as a second source, exactly as it does when nothing resolves at all.
+     */
+    fun inferFromBox(width: Float, height: Float): Layout? {
+        val a = aspect(width, height)
+        return when {
+            a in PENDULUM_AR_MIN..PENDULUM_AR_MAX -> Layout.PENDULUM
+            a in SQUARE_AR_MIN..SQUARE_AR_MAX -> Layout.STANDARD
+            else -> null
+        }
+    }
+
     // The square artwork window (37x37 mm) that every layout except PENDULUM uses.
     const val SQUARE_AR_MIN = 0.90f
     const val SQUARE_AR_MAX = 1.12f
