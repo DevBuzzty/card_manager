@@ -99,6 +99,45 @@ object CardLayout {
     // `testDebugUnitTest` (fields stay 0f, no exception) -- confirmed by spiking it directly.
     // Building via the no-arg constructor plus direct field assignment (raw field access, not a
     // method call) works correctly both there and on-device, so use that instead.
+    /**
+     * Width / height of a detector box, guarding a zero or negative height.
+     *
+     * Pure and separate so it can be pinned by tests, the same reason [CardZones.zoneRect] was
+     * extracted. It used to sit inline in HybridPipeline.readZones with no test at all.
+     */
+    fun aspect(width: Float, height: Float): Float = width / height.coerceAtLeast(1f)
+
+    /**
+     * Is a box of this shape plausibly the artwork window whose [zones] geometry we are about to
+     * apply?
+     *
+     * The band belongs to the GEOMETRY BEING APPLIED, not to the physical card. That distinction
+     * decides the Pendulum case. A Pendulum card's artwork window really is wider than tall —
+     * measured at 1.28–1.35 (11 rig frames), 1.29–1.36 (11 photos) and a 1.31 median across the
+     * eBay corpus, three independent sources — so a correct Pendulum box lands near 1.33 and this
+     * function rejects it, since [zones] hands out STANDARD's placeholder for PENDULUM. That
+     * rejection is deliberate: zone offsets are expressed in box widths and heights, so applying
+     * a square layout's numbers to a 1.33-wide box reads a completely different part of the card.
+     * Skipping beats confident nonsense.
+     *
+     * So when PENDULUM's real geometry is measured, [zones] and this band change TOGETHER. Adding
+     * a Pendulum band on its own would unlock exactly the wrong reads.
+     *
+     * Bounds are provisional and deliberately logged. Device evidence: a correct placement at
+     * 1.015, a wrong one at 0.877, and over 136 readings the distribution ran 0.7:5 0.8:18 0.9:44
+     * 1.0:67 1.1:2 — this band keeps roughly 82%. Tune from the SKIPPED rate, not by feel.
+     */
+    fun isArtworkShaped(layout: Layout?, width: Float, height: Float): Boolean {
+        val a = aspect(width, height)
+        return a >= SQUARE_AR_MIN && a <= SQUARE_AR_MAX
+    }
+
+    // Every layout currently served by `zones()` uses the square artwork window (37x37 mm), so one
+    // band covers them all. `layout` is already a parameter of isArtworkShaped so that measuring
+    // PENDULUM adds a branch here rather than a new call signature everywhere.
+    const val SQUARE_AR_MIN = 0.90f
+    const val SQUARE_AR_MAX = 1.12f
+
     private fun rect(x1: Float, y1: Float, x2: Float, y2: Float) = RectF().apply {
         left = x1; top = y1; right = x2; bottom = y2
     }

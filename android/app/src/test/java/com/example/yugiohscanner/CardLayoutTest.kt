@@ -90,6 +90,54 @@ class CardLayoutTest {
         assertZonesEqual(standard, CardLayout.zones(Layout.LEGACY))
     }
 
+    // ---- Seitenverhaeltnis-Waechter (aus HybridPipeline.readZones herausgezogen) ----------------
+
+    @Test fun `aspect teilt Breite durch Hoehe`() {
+        assertEquals(1.0f, CardLayout.aspect(500f, 500f), 0.001f)
+        assertEquals(1.33f, CardLayout.aspect(532f, 400f), 0.005f)
+    }
+
+    @Test fun `aspect faengt Hoehe null und negativ ab, statt zu explodieren`() {
+        // Ohne coerceAtLeast(1f) gaebe eine Hoehe von 0 Infinity und eine negative ein negatives
+        // Verhaeltnis -- beides wuerde den Vergleich unten stillschweigend falsch beantworten.
+        assertEquals(500f, CardLayout.aspect(500f, 0f), 0.001f)
+        assertEquals(500f, CardLayout.aspect(500f, -20f), 0.001f)
+        assertTrue(CardLayout.aspect(500f, 0f).isFinite())
+    }
+
+    @Test fun `quadratische Artwork-Boxen werden akzeptiert`() {
+        // Echte Geraetemessungen: eine korrekte Platzierung lag bei 1.015.
+        for (l in listOf(Layout.STANDARD, Layout.SPELL_TRAP, Layout.LINK)) {
+            assertTrue("$l 1.015", CardLayout.isArtworkShaped(l, 511f, 503f))
+            assertTrue("$l genau 1.0", CardLayout.isArtworkShaped(l, 500f, 500f))
+        }
+        assertTrue("unbekanntes Layout", CardLayout.isArtworkShaped(null, 511f, 503f))
+    }
+
+    @Test fun `zu hohe Boxen werden verworfen`() {
+        // 0.877 war auf dem Geraet der Fall, der die SET_CODE-Zone auf den Effekttext schob.
+        assertTrue(!CardLayout.isArtworkShaped(Layout.STANDARD, 440f, 502f))
+        assertTrue(!CardLayout.isArtworkShaped(null, 440f, 502f))
+    }
+
+    @Test fun `Pendulum-Boxen werden derzeit bewusst verworfen`() {
+        // Eine korrekte Pendulum-Box liegt bei ~1.33 (drei unabhaengige Quellen: 11 Rig-Frames,
+        // 11 Fotos, eBay-Korpus-Median). Sie faellt durch, WEIL zones(PENDULUM) noch STANDARDs
+        // Platzhalter liefert -- die Zonen sind in Boxbreiten ausgedrueckt, eine 1.33 breite Box
+        // mit quadratischer Geometrie zu lesen traefe eine voellig andere Stelle der Karte.
+        // Dieser Test faellt absichtlich um, sobald jemand nur das Band aufmacht: Band und
+        // Geometrie muessen GEMEINSAM wandern.
+        assertTrue(!CardLayout.isArtworkShaped(Layout.PENDULUM, 532f, 400f))
+        assertTrue(!CardLayout.isArtworkShaped(Layout.PENDULUM, 658f, 504f))
+    }
+
+    @Test fun `Bandgrenzen sind einschliesslich`() {
+        assertTrue(CardLayout.isArtworkShaped(Layout.STANDARD, 90f, 100f))    // genau 0.90
+        assertTrue(CardLayout.isArtworkShaped(Layout.STANDARD, 112f, 100f))   // genau 1.12
+        assertTrue(!CardLayout.isArtworkShaped(Layout.STANDARD, 89f, 100f))
+        assertTrue(!CardLayout.isArtworkShaped(Layout.STANDARD, 113f, 100f))
+    }
+
     /**
      * Compares zone maps field-by-field. Not `assertEquals(Map, Map)`: that would delegate to
      * `RectF.equals`, which throws "not mocked" under this module's JVM unit-test stub jar

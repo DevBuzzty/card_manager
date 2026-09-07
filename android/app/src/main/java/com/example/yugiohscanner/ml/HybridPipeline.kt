@@ -126,10 +126,12 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // while one at 0.877 put it on the effect text and the PASSCODE zone off the card entirely.
         // Reading a zone off an implausible box produces confident nonsense, so skip the OCR and
         // say so. Identification is unaffected — the embedder already ran on this box.
-        val aspect = (b.x2 - b.x1) / (b.y2 - b.y1).coerceAtLeast(1f)
-        if (aspect < ARTWORK_AR_MIN || aspect > ARTWORK_AR_MAX) {
-            android.util.Log.i("BandOcr", "layout=$layoutLabel zone=SKIPPED ar=${String.format(java.util.Locale.ROOT, "%.3f", aspect)} " +
-                "box=${(b.x2 - b.x1).toInt()}x${(b.y2 - b.y1).toInt()} (Box ist kein Artwork)")
+        val bw = b.x2 - b.x1
+        val bh = b.y2 - b.y1
+        if (!CardLayout.isArtworkShaped(layout, bw, bh)) {
+            android.util.Log.i("BandOcr", "layout=$layoutLabel zone=SKIPPED " +
+                "ar=${String.format(java.util.Locale.ROOT, "%.3f", CardLayout.aspect(bw, bh))} " +
+                "box=${bw.toInt()}x${bh.toInt()} (Box ist kein Artwork)")
             return emptyMap<Zone, String>() to ""
         }
 
@@ -219,14 +221,6 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         private const val DUMP_FRAMES = false
         private const val MAX_DUMPS = 120
         private const val DUMP_EVERY = 4
-
-        // Aspect band a detector box must fall in before its zones are trusted. The artwork window
-        // is square, so 1.0 is the target. The bounds are provisional and deliberately logged:
-        // device evidence puts a correct placement at 1.015 and a wrong one at 0.877, and the
-        // observed distribution over 136 readings was 0.7:5  0.8:18  0.9:44  1.0:67  1.1:2, so this
-        // band keeps roughly 82%. Tune from the SKIPPED rate rather than by feel.
-        private const val ARTWORK_AR_MIN = 0.90f
-        private const val ARTWORK_AR_MAX = 1.12f
 
         // Layouts whose CardLayout.zones() geometry is STANDARD's placeholder, not a measurement
         // (see CardLayout.kt) -- readZones also reads the legacy band for these as a safety net.
