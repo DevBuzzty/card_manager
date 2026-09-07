@@ -114,7 +114,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         val needsLegacyBand = layout == null || layout in PLACEHOLDER_LAYOUTS
         val layoutLabel = layout?.toString() ?: "UNKNOWN"
 
-        dumpFrame(frame, b, layoutLabel)
+        dumpFrame(frame, b, layoutLabel, knownPasscode)
 
         // The zones are anchored to the artwork box, so they are only meaningful when the detector
         // actually boxed the ARTWORK. A Yu-Gi-Oh artwork window is square (37x37 mm), and the
@@ -174,19 +174,29 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
     }
 
     /** TEMPORARY (Spec D2 diagnostic): write the raw analysis frame plus its box, so the measured
-     *  zones can be drawn over a REAL phone frame offline. Max [MAX_DUMPS] files, ~1 MB each. */
-    private fun dumpFrame(frame: Bitmap, b: Box, layoutLabel: String) {
+     *  zones can be drawn over a REAL phone frame offline, and so Task 6 can build its benchmark
+     *  from frames the analyzer actually saw rather than from camera photos.
+     *
+     *  Only every [DUMP_EVERY]th frame is written. Without that the analyzer fills [MAX_DUMPS] in
+     *  the first second or two on a single card, and a benchmark set of twenty different cards
+     *  needs the budget spread across all of them.
+     *
+     *  [passcode] goes in the name so frames can be grouped back to their card offline without
+     *  relying on scan order. It is null exactly when the embedder missed — foils and steep angles,
+     *  which is the half of the set that has to be matched up by hand anyway. */
+    private fun dumpFrame(frame: Bitmap, b: Box, layoutLabel: String, passcode: Int?) {
         if (!DUMP_FRAMES || dumpsWritten >= MAX_DUMPS) return
+        if (frameCount % DUMP_EVERY != 0) return
         try {
             val dir = appContext.getExternalFilesDir("zonedump") ?: return
             dir.mkdirs()
-            val name = "f${dumpsWritten}_${layoutLabel}_box_${b.x1.toInt()}_${b.y1.toInt()}_" +
-                "${b.x2.toInt()}_${b.y2.toInt()}.jpg"
+            val name = "f${dumpsWritten}_pc${passcode ?: "NONE"}_${layoutLabel}_box_" +
+                "${b.x1.toInt()}_${b.y1.toInt()}_${b.x2.toInt()}_${b.y2.toInt()}.jpg"
             java.io.File(dir, name).outputStream().use {
                 frame.compress(Bitmap.CompressFormat.JPEG, 92, it)
             }
             dumpsWritten++
-            android.util.Log.i("BandOcr", "dump geschrieben: $name")
+            android.util.Log.i("BandOcr", "dump $dumpsWritten/$MAX_DUMPS geschrieben: $name")
         } catch (e: Exception) {
             android.util.Log.w("BandOcr", "dump fehlgeschlagen", e)
         }
@@ -207,7 +217,8 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // and draw the zones over the real frames offline. This is what identified the band bug and
         // then the unstable-box bug — both in seconds, after hours of reasoning had gone nowhere.
         private const val DUMP_FRAMES = false
-        private const val MAX_DUMPS = 8
+        private const val MAX_DUMPS = 120
+        private const val DUMP_EVERY = 4
 
         // Aspect band a detector box must fall in before its zones are trusted. The artwork window
         // is square, so 1.0 is the target. The bounds are provisional and deliberately logged:
