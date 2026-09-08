@@ -193,10 +193,10 @@ fun ScanScreen(onClose: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Continuous scanning: each newly-seen card is captured automatically (screen blinks) — no
-    // per-card Reset/Prüfen. `evidence` is the pooled raw OCR text of this card's bottom band
-    // across the frames it was visible (see SetCodeEvidence). The set code is resolved from it by
-    // constrained matching against the card's known printings, not by trusting a single clean OCR
-    // token.
+    // per-card Reset/Prüfen. `evidence` is this card's set-code candidates, voted per zone across
+    // every frame it was visible (see SetCodeEvidence.setCodeCandidates / ZoneVote). The set code
+    // is resolved from it by constrained matching against the card's known printings, not by
+    // trusting a single clean OCR token.
     // Shared by autonomous ML detection (onConfirmed below) and manual passcode entry: stage the
     // card locally, then resolve its base data + set code, reporting failures via the snackbar
     // (the success path stays silent — the flash, sound and footer counter already report it).
@@ -299,7 +299,22 @@ fun ScanScreen(onClose: () -> Unit) {
     // Identification is by ARTWORK embedding: each detector crop -> pad-to-square 224 -> embedder
     // -> nearest-neighbour over the on-device index (production model, TOP-1 ~0.998).
     val pipeline = remember { com.example.yugiohscanner.ml.HybridPipeline(context, minSim = 0.6f) }
-    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 2) }
+    // need = 4, nicht 2. Der Tracker bestimmt zugleich, wie viele Stimmen die
+    // Set-Code-Abstimmung ueberhaupt zu sehen bekommt: bei Bestaetigung loest
+    // SetCodeEvidence.setCodeCandidates auf und forget() loescht die Belege. Mit need = 2 stimmte
+    // Task 10 also ueber ZWEI Lesungen ab, und eine Mehrheit aus zwei ist ein Losentscheid, den
+    // die Einfuegereihenfolge bricht. Der Beleg fuer Task 10 (eine 29-Stimmen-Mehrheit ueber eine
+    // Fehllesung) stammt aus dem Nachspielen einer dichten Aufnahme und konnte auf dem Geraet gar
+    // nicht vorkommen.
+    //
+    // Der Preis ist zwei Frames mehr bis zur Bestaetigung, bei ~10 Bildern/s also rund 0,2 s --
+    // und Stimmen ueberleben kurze Aussetzer, weil votes erst nach maxMisses = 8 fehlenden Frames
+    // verfallen. Eine Karte, die nur zwei Frames lang sichtbar ist, wird dafuer nicht mehr
+    // erfasst; das ist die bewusst eingegangene Seite des Tauschs.
+    //
+    // NICHT vom Messkorb belegt: ml/ocr_bench.py bewertet Einzelbilder und kennt keinen Tracker.
+    // Das ist eine begruendete Abwaegung, keine Messung.
+    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 4) }
     // Pools each card's bottom-band OCR text across frames so the set code is voted, not read once.
     val setEvidence = remember { com.example.yugiohscanner.ml.SetCodeEvidence() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
@@ -311,12 +326,20 @@ fun ScanScreen(onClose: () -> Unit) {
             mlFrameW = w
             mlFrameH = h
             // Pool each visible card's bottom-band OCR text (set-code voting across frames).
-            for (d in dets) setEvidence.record(d.passcode, d.bandText)
+            for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
             // On confirmation, resolve the set code from ALL pooled evidence for that card, then
             // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
             for (d in tracker.update(dets)) {
                 Log.i("MlScan", "confirmed card ${d.passcode}")
-                onConfirmed.value(d.passcode, setEvidence.textsFor(d.passcode))
+                // Voted candidates FIRST, then every frame's raw text. SetCodeMatch scores by
+                // edit distance over both, so a grammar-clean winner still matches at 0 — but a
+                // reading the grammar rejects (lost hyphen, line break, region digit) is no longer
+                // silently dropped before the matcher that exists to handle it. See
+                // SetCodeEvidence.rawTexts.
+                onConfirmed.value(
+                    d.passcode,
+                    setEvidence.setCodeCandidates(d.passcode) + setEvidence.rawTexts(d.passcode),
+                )
                 setEvidence.forget(d.passcode)
             }
             if (dets.isNotEmpty()) {

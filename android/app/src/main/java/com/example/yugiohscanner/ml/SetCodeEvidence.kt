@@ -2,26 +2,82 @@ package com.example.yugiohscanner.ml
 
 /**
  * Multi-frame set-code voting. The set code is tiny print and any single frame may be blurred,
- * glared, or partly cut off, so we accumulate the bottom-band OCR text of each card across the
- * frames it's visible (keyed by passcode) and resolve it from all of them at once. Downstream,
- * SetCodeMatch matches this pooled evidence against the card's known printings — the true code
- * only has to be legible in ONE of the recorded frames.
+ * glared, or partly cut off, so we accumulate each card's OCR text across the frames it's visible
+ * (keyed by passcode) and resolve it from all of them at once. Downstream, SetCodeMatch matches
+ * this evidence against the card's known printings — the true code only has to be legible in ONE
+ * of the recorded frames.
+ *
+ * Recorded per-zone (see [HybridPipeline] / [CardZones]), not as one flattened string, precisely so
+ * [setCodeCandidates] (Task 10) can vote the SET_CODE zone's history independently of PASSCODE's --
+ * see [ZoneVote]'s class doc for why that separation is the point: a good SET_CODE-zone reading
+ * must not be diluted by the same card's bad PASSCODE-zone reading.
  */
 class SetCodeEvidence(private val maxPerCard: Int = 8) {
-    private val texts = HashMap<Int, ArrayDeque<String>>()
+    private data class Frame(val zoneTexts: Map<Zone, String>, val legacyText: String)
 
-    /** Record one frame's band text for [passcode]. Ignores blanks and consecutive duplicates. */
-    fun record(passcode: Int, bandText: String) {
-        if (passcode <= 0 || bandText.isBlank()) return
-        val dq = texts.getOrPut(passcode) { ArrayDeque() }
-        if (dq.lastOrNull() == bandText) return
-        dq.addLast(bandText)
+    private val frames = HashMap<Int, ArrayDeque<Frame>>()
+
+    /** Record one frame's zone texts (+ legacy-band/whole-frame fallback, see [Detection]) for
+     *  [passcode]. Ignores an entirely-blank frame and one identical to the last one recorded. */
+    fun record(passcode: Int, zoneTexts: Map<Zone, String>, legacyText: String = "") {
+        if (passcode <= 0) return
+        if (zoneTexts.values.all { it.isBlank() } && legacyText.isBlank()) return
+        val frame = Frame(zoneTexts, legacyText)
+        val dq = frames.getOrPut(passcode) { ArrayDeque() }
+        if (dq.lastOrNull() == frame) return
+        dq.addLast(frame)
         while (dq.size > maxPerCard) dq.removeFirst()
     }
 
-    /** All recorded band texts for [passcode] (most recent last). */
-    fun textsFor(passcode: Int): List<String> = texts[passcode]?.toList() ?: emptyList()
+    // Zone priority for resolving the set-code field out of [ZoneVote]: the measured SET_CODE
+    // zone first (it exists specifically for this text, see CardLayout's class doc); then the
+    // legacy full-width band (`null` -- read only when the layout is unmeasured or a placeholder,
+    // see HybridPipeline.readZones' `needsLegacyBand`); then PASSCODE last, since it is never
+    // intentionally read for a set code and is only worth trying at all because a badly-placed box
+    // can occasionally let the code bleed into it. A higher-priority zone with even one vote wins
+    // outright over a lower-priority zone with many -- see [ZoneVote.resolve].
+    private val setCodeZonePriority = listOf<Zone?>(Zone.SET_CODE, null, Zone.PASSCODE)
 
-    fun forget(passcode: Int) { texts.remove(passcode) }
-    fun reset() { texts.clear() }
+    /**
+     * The set-code candidates recorded for [passcode] so far, resolved by [ZoneVote] across every
+     * frame recorded (most-voted first within the winning zone; see [ZoneVote.candidatesFor] for
+     * the tie-break). Each zone-reading is extracted+corrected via [SetCodeOcr.extract] BEFORE it
+     * is tallied -- voting on raw OCR text would let a repeating uncorrected mistake outvote a rare
+     * clean read; see [ZoneVote]'s class doc. Empty if nothing recorded, or nothing recorded ever
+     * produced a set-code-shaped token in any zone.
+     */
+    fun setCodeCandidates(passcode: Int): List<String> {
+        val dq = frames[passcode] ?: return emptyList()
+        val vote = ZoneVote()
+        for (frame in dq) {
+            for ((zone, text) in frame.zoneTexts) vote.record(zone, SetCodeOcr.extract(text))
+            vote.record(null, SetCodeOcr.extract(frame.legacyText))
+        }
+        return vote.resolve(setCodeZonePriority)
+    }
+
+    /**
+     * Every recorded frame's text, flattened and UNCORRECTED — one entry per frame.
+     *
+     * [SetCodeMatch] needs this, not [setCodeCandidates]'s grammar-clean winners, and the two are
+     * not interchangeable. That object exists precisely to survive readings the grammar rejects:
+     * its own header names the cases — "the hyphen is dropped, digits are confused, the code is
+     * split across a line break" — and it normalises with `filter { isLetterOrDigit() }` so a
+     * hyphenless read still aligns at distance 0 against a known printing.
+     *
+     * SET_CODE's pattern, by contrast, demands a literal hyphen, a letter straight after it and
+     * contiguous digits. Feeding only its output to the matcher throws away exactly the readings
+     * the matcher was built for: "SDSE DE013" (hyphen lost), "SDSE-\nDE013" (ML Kit split the crop
+     * into two blocks), "SDSE-0E013" (region D read as 0, a confusion SetCodeMatch scores at 0.5
+     * and the grammar cannot express) all become no candidate at all, and `best()` returns null on
+     * an empty list.
+     *
+     * So the caller passes BOTH. A grammar-clean candidate still wins at distance 0; the raw texts
+     * only matter when nothing survived the grammar, which is the case worth rescuing.
+     */
+    fun rawTexts(passcode: Int): List<String> =
+        frames[passcode]?.map { concatZoneTexts(it.zoneTexts, it.legacyText) } ?: emptyList()
+
+    fun forget(passcode: Int) { frames.remove(passcode) }
+    fun reset() { frames.clear() }
 }

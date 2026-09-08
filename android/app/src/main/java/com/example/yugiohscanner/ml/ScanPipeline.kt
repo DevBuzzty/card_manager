@@ -4,16 +4,31 @@ import android.content.Context
 import android.graphics.Bitmap
 
 /**
- * One recognised card: its detector box, matched passcode, cosine similarity, and the raw OCR
- * text of this card's bottom code band (passcode + set code live there). [bandText] is empty only
- * when no band was read this frame; the caller votes over it across frames to resolve the set code.
+ * One recognised card: its detector box, matched passcode, cosine similarity, and the OCR text
+ * read from its bottom-of-artwork zones (see [CardZones] / [CardLayout]), keyed by [Zone].
+ * [legacyText] additionally carries the old full-width band's OCR (see [CardZones.legacyBand]) --
+ * read by [HybridPipeline] as a safety net whenever the card's type (and so its exact zone
+ * geometry) isn't known yet, or falls back to a placeholder layout. Both are empty only when
+ * nothing was read this frame; the caller votes over them across frames to resolve the set code.
  */
 data class Detection(
     val box: Box,
     val passcode: Int,
     val sim: Float,
-    val bandText: String = ""
-)
+    val zoneTexts: Map<Zone, String> = emptyMap(),
+    val legacyText: String = ""
+) {
+    /** [zoneTexts] and [legacyText] concatenated into one string, for consumers that pattern-match
+     *  over plain text (`OcrText.findPasscode`, `SetCodeOcr.extract`) rather than reading the
+     *  per-zone breakdown a future per-zone vote would use. */
+    fun allText(): String = concatZoneTexts(zoneTexts, legacyText)
+}
+
+/** Shared flattening used by [Detection.allText] and callers that don't have a [Detection] yet
+ *  (e.g. [HybridPipeline], which needs the concatenated text to resolve a passcode BEFORE it can
+ *  construct one). */
+fun concatZoneTexts(zoneTexts: Map<Zone, String>, legacyText: String): String =
+    (zoneTexts.values + legacyText).filter { it.isNotBlank() }.joinToString(" ")
 
 /** A per-frame card recogniser: detect boxes and attach a passcode to each. */
 interface CardPipeline {
