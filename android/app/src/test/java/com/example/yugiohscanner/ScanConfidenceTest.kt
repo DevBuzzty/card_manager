@@ -210,4 +210,41 @@ class ScanConfidenceTest {
         assertEquals("unlimited", result.effectiveEdition)
         assertNull(result.reason)
     }
+
+    // --- Task 6: codeExactMatch / codeFrameCount genuinely produced by SetCodeMatch ------------
+    //
+    // Every case above hand-supplies matchResult/codeExactMatch/codeFrameCount as three
+    // independent fields, exactly the gap Task 5 left open (see Input's own KDoc). These two feed
+    // SetCodeMatch.best()'s REAL output straight through -- no matched()/regionUnclear() helper --
+    // to prove green can now genuinely fire, and does not fire on a case that would only look green
+    // if codeFrameCount were read off the pooled distance instead of counted per frame.
+
+    @Test fun `green genuinely fires off SetCodeMatch's real per-frame count -- two separately clean frames`() {
+        val known = listOf(SetOption("LOB-DE005", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("LOB-DE005", "LOB-DE005")
+        val match = SetCodeMatch.best(frames, known, frames)
+        val input = baseline.copy(
+            matchResult = match, codeExactMatch = match.codeExactMatch, codeFrameCount = match.codeFrameCount,
+        )
+        val result = ScanConfidence.evaluate(input)
+        assertEquals(ScanConfidence.Light.GREEN, result.light)
+        assertNull(result.reason)
+    }
+
+    @Test fun `one clean frame plus one unrelated garbled frame stays yellow -- pooled distance alone must not fake green`() {
+        val known = listOf(SetOption("LOB-DE005", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("LOB-DE005", "QQQQQQQQQQQQQQQQQQQQQQQQ")
+        val match = SetCodeMatch.best(frames, known, frames)
+        // Sanity check on the premise: the pooled match itself still succeeds (one frame carries a
+        // clean reading, and best() searches the whole pooled haystack) -- it's specifically the
+        // FRAME COUNT, not whether a match was found at all, that this test is pinning.
+        assertEquals(SetCodeMatch.MatchReason.MATCHED, match.reason)
+        assertEquals(1, match.codeFrameCount)
+        val input = baseline.copy(
+            matchResult = match, codeExactMatch = match.codeExactMatch, codeFrameCount = match.codeFrameCount,
+        )
+        val result = ScanConfidence.evaluate(input)
+        assertEquals(ScanConfidence.Light.YELLOW, result.light)
+        assertEquals("Code unsicher: LOB-DE005", result.reason)
+    }
 }

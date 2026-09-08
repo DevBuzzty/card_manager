@@ -103,11 +103,27 @@ object SetCodeMatch {
      *  3. Region read, but contradicts a VERIFIED printing with the same prefix+number -> that
      *     verified printing is `selected` (evidence beats a misread) and sorts first in
      *     `candidates`; the misread composition is not trusted.
+     *
+     * [codeExactMatch] and [codeFrameCount] are Spec D3 Task 6's fix for a gap Task 5 found: the
+     * traffic light's green condition ("Code-Distanz 0 in >=2 Frames", [ScanConfidence]) needs to
+     * know not just THAT a printing matched, but whether that match was clean (distance 0) and in
+     * how many SEPARATE frames -- neither of which this function used to expose ([Scored.dist] was
+     * private, and [best] only ever saw one pooled haystack, never a per-frame breakdown). Both are
+     * computed from [best]'s `framesEvidence` parameter, counting frames whose OWN text -- not the
+     * pooled haystack -- lands the winning prefix+number at distance 0 in isolation. That
+     * distinction matters: pooling several frames into one haystack can let a single clean
+     * substring buried in unrelated noise still win at distance 0 overall, which would make EVERY
+     * multi-frame scan look "exact in N frames" even when only one frame ever read anything
+     * legible -- see [SetCodeMatchTest]'s pinning test for the worked example. [codeExactMatch] is
+     * `true` iff [codeFrameCount] is at least 1; both default to `false`/`0` for the NO_MATCH early
+     * returns, where there is no winning printing for a frame to match at all.
      */
     data class MatchResult(
         val selected: SetOption?,
         val candidates: List<SetOption>,
         val reason: MatchReason,
+        val codeExactMatch: Boolean = false,
+        val codeFrameCount: Int = 0,
     )
 
     private data class Scored(val option: SetOption, val parts: CodeParts, val dist: Float)
@@ -152,8 +168,14 @@ object SetCodeMatch {
      * [evidence] doubles as the region zone text passed to [RegionToken.read] -- the same pooled
      * text the prefix/number match came from is exactly what should also carry the (separate)
      * region reading.
+     *
+     * [framesEvidence] is separate from [evidence] specifically for [MatchResult.codeFrameCount]
+     * (Task 6): one entry per SEPARATE frame/reading, so each can be checked in isolation against
+     * the winning prefix+number, instead of the pooled haystack [evidence] flattens into. Defaults
+     * to [evidence] for callers that have no better per-frame breakdown to offer (matches was the
+     * pre-Task-6 behaviour, just also now populating the two new fields off whatever was passed).
      */
-    fun best(evidence: List<String>, known: List<SetOption>): MatchResult {
+    fun best(evidence: List<String>, known: List<SetOption>, framesEvidence: List<String> = evidence): MatchResult {
         if (known.isEmpty() || evidence.isEmpty()) return MatchResult(null, emptyList(), MatchReason.NO_MATCH)
         val joined = evidence.joinToString(" ")
         val hay = norm(joined)
@@ -185,12 +207,25 @@ object SetCodeMatch {
         val groupPrefix = bestGroup.first().parts.prefix
         val groupNumber = bestGroup.first().parts.number
 
+        // Task 6: how many of the SEPARATE frames in [framesEvidence] independently land this
+        // exact prefix+number at distance 0 on their own -- see [MatchResult]'s KDoc on why this
+        // must be re-derived per frame rather than read off [minDist], which is measured against
+        // the pooled haystack and can be 0 even when only one frame ever read anything legible.
+        val normGroupPrefix = norm(groupPrefix)
+        val normGroupNumber = norm(groupNumber)
+        val codeFrameCount = framesEvidence.count { frame ->
+            val frameHay = norm(frame)
+            frameHay.length >= 4 && prefixNumberDist(normGroupPrefix, normGroupNumber, frameHay) <= 0f
+        }
+        val codeExactMatch = codeFrameCount >= 1
+
         fun byVerifiedFirst(list: List<Scored>) = list.map { it.option }.sortedByDescending { it.verified }
 
         // Case 2: region not readable. Offer only printings that actually exist for this
         // prefix+number -- nothing is composed.
-        val region = RegionToken.read(joined, groupPrefix, groupNumber)
-            ?: return byVerifiedFirst(bestGroup).let { MatchResult(it.firstOrNull(), it, MatchReason.REGION_UNCLEAR) }
+        val region = RegionToken.read(joined, groupPrefix, groupNumber) ?: return byVerifiedFirst(bestGroup).let {
+            MatchResult(it.firstOrNull(), it, MatchReason.REGION_UNCLEAR, codeExactMatch, codeFrameCount)
+        }
 
         // Case 3: the read region contradicts a VERIFIED printing of the same prefix+number (a
         // verified entry whose OWN region differs from what was just read). The verified printing
@@ -201,7 +236,7 @@ object SetCodeMatch {
         if (conflicting != null) {
             val candidates = (listOf(conflicting.option) + bestGroup.map { it.option })
                 .distinctBy { it.setCode }
-            return MatchResult(conflicting.option, candidates, MatchReason.REGION_CONTRADICTS_VERIFIED)
+            return MatchResult(conflicting.option, candidates, MatchReason.REGION_CONTRADICTS_VERIFIED, codeExactMatch, codeFrameCount)
         }
 
         // Case 1: region read confidently, no conflict. A real known printing at that exact code
@@ -221,6 +256,6 @@ object SetCodeMatch {
             language = region,
             verified = false,
         )
-        return MatchResult(selected, listOf(selected), MatchReason.MATCHED)
+        return MatchResult(selected, listOf(selected), MatchReason.MATCHED, codeExactMatch, codeFrameCount)
     }
 }

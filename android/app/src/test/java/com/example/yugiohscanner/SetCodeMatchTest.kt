@@ -3,6 +3,7 @@ package com.example.yugiohscanner
 import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -143,5 +144,70 @@ class SetCodeMatchTest {
         assertTrue(result.selected?.setCode != "LOB-EN005")
         assertEquals("DE", result.selected?.language)
         assertEquals("LOB-DE005", result.selected?.setCode)
+    }
+
+    // -- codeExactMatch / codeFrameCount (Spec D3 Task 6 -- the gap Task 5 found) -----------------
+    //
+    // ScanConfidence's green condition needs "the same code read cleanly (distance 0) in >=2
+    // SEPARATE frames" -- not "distance 0 on the pooled haystack, and we happened to record >=2
+    // frames total". These pin the strict, per-frame definition.
+
+    @Test fun `codeFrameCount zaehlt jeden Frame, der EINZELN Distanz 0 erreicht`() {
+        val known = listOf(SetOption("LOB-DE001", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("LOB-DE001", "LOB-DE001", "LOB-DE001")
+        val result = SetCodeMatch.best(frames, known, frames)
+        assertEquals(SetCodeMatch.MatchReason.MATCHED, result.reason)
+        assertTrue(result.codeExactMatch)
+        assertEquals(3, result.codeFrameCount)
+    }
+
+    @Test fun `ein einzelner sauberer Frame reicht fuer codeExactMatch, aber nicht fuer 2 Frames`() {
+        val known = listOf(SetOption("LOB-DE001", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("LOB-DE001")
+        val result = SetCodeMatch.best(frames, known, frames)
+        assertTrue(result.codeExactMatch)
+        assertEquals(1, result.codeFrameCount)
+    }
+
+    @Test fun `codeFrameCount bleibt bei 1, wenn nur EIN Frame sauber war -- gepoolte Distanz 0 taeuscht sonst 2 Frames vor`() {
+        // Ein sauberer Frame plus ein voellig unverwandter, verrauschter Frame. Weil best() ALLE
+        // Belege zu EINEM Suchtext poolt, findet die Fenstersuche die saubere Teilzeichenkette
+        // trotzdem und die gepoolte Distanz ist 0 -- genau die Falle, vor der die Aufgabe warnt
+        // ("distance 0 on pooled evidence, and we happened to record 2 frames" darf NICHT gruen
+        // ausloesen). codeFrameCount muss trotzdem bei 1 bleiben, weil nur EIN Frame fuer sich
+        // genommen an Distanz 0 liegt.
+        val known = listOf(SetOption("LOB-DE001", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("LOB-DE001", "QQQQQQQQQQQQQQQQQQQQQQQQ")
+        val result = SetCodeMatch.best(frames, known, frames)
+        assertEquals("gepoolt matcht es trotzdem (die saubere Teilzeichenkette steckt im Text)",
+            SetCodeMatch.MatchReason.MATCHED, result.reason)
+        assertTrue(result.codeExactMatch)
+        assertEquals("aber nur EIN Frame war fuer sich genommen sauber", 1, result.codeFrameCount)
+    }
+
+    @Test fun `ein Frame mit Toleranz-Distanz (nicht 0) zaehlt nicht zu codeFrameCount`() {
+        // "L0B-DE0O1" ist mit Verwechslungskosten (0.5 je Konfusionspaar) nahe an "LOB-DE001" dran
+        // und wird noch akzeptiert -- aber eben NICHT an Distanz 0.
+        val known = listOf(SetOption("LOB-DE001", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("L0B-DE0O1")
+        val result = SetCodeMatch.best(frames, known, frames)
+        assertEquals(SetCodeMatch.MatchReason.MATCHED, result.reason)
+        assertFalse(result.codeExactMatch)
+        assertEquals(0, result.codeFrameCount)
+    }
+
+    @Test fun `NO_MATCH liefert codeExactMatch=false und codeFrameCount=0`() {
+        val known = listOf(SetOption("LOB-EN005", "Common", 0.0, "EN"))
+        val result = SetCodeMatch.best(listOf("QQQQQQQQQQQQQQQQQQQQQQQQ"), known)
+        assertEquals(SetCodeMatch.MatchReason.NO_MATCH, result.reason)
+        assertFalse(result.codeExactMatch)
+        assertEquals(0, result.codeFrameCount)
+    }
+
+    @Test fun `framesEvidence faellt auf evidence zurueck, wenn kein separater Parameter uebergeben wird`() {
+        val known = listOf(SetOption("LOB-DE001", "Common", 0.0, "DE", verified = true))
+        val result = SetCodeMatch.best(listOf("LOB-DE001"), known) // kein framesEvidence-Argument
+        assertTrue(result.codeExactMatch)
+        assertEquals(1, result.codeFrameCount)
     }
 }

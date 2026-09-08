@@ -43,17 +43,18 @@ object ScanConfidence {
      * table's YELLOW cases, and their German text is read straight off
      * [SetCodeMatch.MatchReason.text] rather than duplicated here.
      *
-     * [codeExactMatch] and [codeFrameCount] are the table's "Code-Distanz 0 in >=2 Frames" signal
-     * -- and the one input this object CANNOT source from Tasks 2-4 today. `SetCodeMatch.best()`
-     * pools every frame's evidence into one joined haystack and returns a single match with no
-     * exposed edit distance and no per-frame breakdown (its internal `Scored.dist` is private);
-     * neither `SetCodeEvidence` nor `ZoneVote` records "this known printing matched this frame at
-     * distance 0" either -- `ZoneVote`'s per-candidate tallies count frames that produced the SAME
-     * grammar-corrected string, not frames that matched a KNOWN printing at distance 0, which is a
-     * different fact. So until a future change teaches `SetCodeMatch` (or a caller wrapping it) to
-     * report that per-frame, whoever assembles this `Input` (Task 7's staging wiring, most likely)
-     * has to supply it directly; this object only ever consumes it, never approximates it from
-     * `matchResult` alone -- see this task's report for the finding written up in full.
+     * [codeExactMatch] and [codeFrameCount] are the table's "Code-Distanz 0 in >=2 Frames" signal.
+     * Until Spec D3 Task 6, this object could not source them from Tasks 2-4 at all: `SetCodeMatch
+     * .best()` pooled every frame's evidence into one joined haystack and returned a single match
+     * with no exposed edit distance and no per-frame breakdown. Task 6 closed that gap directly on
+     * `SetCodeMatch.MatchResult` -- `best()` now takes a `framesEvidence` parameter (one entry per
+     * separate frame) and returns `codeExactMatch`/`codeFrameCount` computed by checking EACH frame
+     * against the winning prefix+number in isolation, not by reading `minDist` off the pooled hay
+     * (see `MatchResult`'s KDoc for why that distinction matters: pooled distance can be 0 from a
+     * single clean frame buried in several noisy ones). So a caller building this `Input` should
+     * take both fields straight off its `SetCodeMatch.MatchResult` (`matchResult.codeExactMatch`,
+     * `matchResult.codeFrameCount`) rather than approximating them; this object still never
+     * re-derives them itself, it only consumes what `SetCodeMatch` now reports.
      *
      * [rarity] is Task 3's [RarityRank.Result] for the matched group ([RarityRank.isAmbiguous] +
      * [RarityRank.distinctRarities] feed the "Rarity mehrdeutig: X/Y" reason directly); `null` when
