@@ -600,12 +600,31 @@ def main():
                     choices=["build", "push", "run", "pull", "score", "all"])
     ap.add_argument("--n", type=int, default=DEFAULT_TARGET, help="eBay-Zielgroesse (>=300)")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--rebuild", action="store_true",
+                    help="Stichprobe NEU ziehen und die bestehende ueberschreiben. "
+                         "Entwertet jeden Vergleich mit frueheren Berichten.")
     args = ap.parse_args()
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     stages = ["build", "push", "run", "pull", "score"] if args.stage == "all" else [args.stage]
     for stage in stages:
         if stage == "build":
+            # Die Stichprobe ist eingefroren, sobald sie einmal gezogen wurde.
+            #
+            # `sample_ebay` zieht aus `labels.csv`, und diese Datei WAECHST: bei der Basismessung
+            # standen 1563 Zeilen darin, inzwischen 5651. Ein erneutes `build` zoege also eine
+            # andere Stichprobe, und jeder Vorher/Nachher-Vergleich vermengte danach echte
+            # Wirkung mit Stichprobendrift — ohne dass man es den Zahlen ansieht. Genau deshalb
+            # sind Task 8 und 10 sauber vergleichbar: `build` lief zwischendurch nicht.
+            #
+            # Neu ziehen bleibt moeglich, muss aber ausgesprochen werden, und danach ist die alte
+            # Basislinie hinfaellig, nicht bloss ungenau.
+            manifest = WORK_DIR / "manifest.json"
+            if manifest.exists() and not args.rebuild:
+                print(f"Stichprobe steht bereits ({manifest}) — build uebersprungen.\n"
+                      "Vergleichbarkeit mit frueheren Berichten bleibt damit erhalten.\n"
+                      "Wirklich neu ziehen:  python ml/ocr_bench.py build --rebuild")
+                continue
             build_manifest(args.n, args.seed)
         elif stage == "push":
             push()
