@@ -15,13 +15,24 @@ enum class Zone { SET_CODE, PASSCODE, EDITION }
  * BOTTOM edge (`y2`), growing downward, in box-height units. Note SET_CODE zones straddle y = 0 —
  * the set code prints right where the artwork's lower edge sits, not below the whole card.
  *
- * The numbers below were measured 2026-09-06 by `ml/measure_zones.py` over 954 labelled eBay
- * photos (see `ml/zones_measured.json`, committed alongside it): for each photo it OCRs the region
- * below the detected artwork box and locates the known passcode / a set-code-shaped token there,
- * then takes the 5th/95th-percentile span (+ a small margin) across all matches per layout, so
- * each zone covers the measured spread rather than just one sample's position. Each block below
- * cites `n` (sample count) and `std` (per-edge standard deviation, from `zones_measured.json`) so
- * a caller can judge how tight a given zone actually is.
+ * The PASSCODE/SET_CODE numbers below were measured 2026-09-06 by `ml/measure_zones.py` over 954
+ * labelled eBay photos (see `ml/zones_measured.json`, committed alongside it): for each photo it
+ * OCRs the region below the detected artwork box and locates the known passcode / a set-code-shaped
+ * token there, then takes the 5th/95th-percentile span (+ a small margin) across all matches per
+ * layout, so each zone covers the measured spread rather than just one sample's position.
+ *
+ * EDITION was added 2026-09-08 (Spec D3 Task 0) the same way, but against a different ground
+ * truth: `ml/ocr_bench/labels.csv`'s `edition` column (97.0% coverage, from Spec D2's
+ * `label_setcodes.py`), searching for the edition marker text (`ml/measure_zones.py`'s
+ * `find_edition_span`, reusing that file's OCR-tolerant marker regexes) instead of a known
+ * passcode. Only `first`/`limited` rows carry a locatable marker -- `unlimited` means none was
+ * printed. The naive shortcut of widening the PASSCODE zone rightward does NOT hold: measured,
+ * STANDARD's EDITION zone starts at x=0.0957, past PASSCODE's own x2=0.1507, but the two zones
+ * still overlap in y (same printed line, as expected) and abut rather than nest in x -- a
+ * measurement, not a derivation.
+ *
+ * Each block below cites `n` (sample count) and `std` (per-edge standard deviation, from
+ * `zones_measured.json`) so a caller can judge how tight a given zone actually is.
  */
 object CardLayout {
 
@@ -65,17 +76,25 @@ object CardLayout {
         Layout.SKILL, Layout.LEGACY -> standardZones()
     }
 
-    // EDITION is intentionally omitted: it has not been measured (Task 2/3 only measured PASSCODE
-    // and SET_CODE), and the one plausible derivation -- widening the PASSCODE zone to the right,
-    // since the edition marker sits on the same line as the passcode on most cards -- is still a
-    // guess, not a measurement. Emitting a fabricated number here would violate the "do not invent
-    // values" rule this task was built under, so no Zone.EDITION entry exists in any map below.
+    // EDITION for PENDULUM is intentionally omitted from pendulumZones() below: it had only 36
+    // candidates in ml/ocr_bench/labels.csv (28 after outlier rejection) against the MIN_SAMPLES=40
+    // floor. Unlike PENDULUM's own PASSCODE/SET_CODE zones (also measured below MIN_SAMPLES, but
+    // from a separate photo set, justified by a tight std AND a demonstrably wrong alternative),
+    // there is no second measurement here to argue tightness from and no evidence the STANDARD
+    // placeholder would even be wrong -- see ml/zones_measured.json's `_meta_edition`. Emitting a
+    // number anyway would be a guess, not a measurement.
+    //
+    // SKILL and LEGACY still get a (provisional) EDITION rect below, same as they already get for
+    // PASSCODE/SET_CODE -- both fall back to standardZones() wholesale in [zones] above, and that
+    // fallback is unconditional per zone-map, not per-key.
 
     private fun standardZones() = mapOf(
         // n=335, std x1=0.0335 y1=0.0433 x2=0.0259 y2=0.046
         Zone.PASSCODE to rect(-0.1651f, 0.327f, 0.1507f, 0.5724f),
         // n=271, std x1=0.0153 y1=0.0228 x2=0.019 y2=0.0229
         Zone.SET_CODE to rect(0.7285f, -0.0725f, 1.0536f, 0.0909f),
+        // n=273, std x1=0.0225 y1=0.0403 x2=0.0142 y2=0.0436
+        Zone.EDITION to rect(0.0957f, 0.3408f, 0.3459f, 0.575f),
     )
 
     private fun spellTrapZones() = mapOf(
@@ -83,6 +102,8 @@ object CardLayout {
         Zone.PASSCODE to rect(-0.1577f, 0.3231f, 0.1513f, 0.5647f),
         // n=254, std x1=0.0157 y1=0.0226 x2=0.018 y2=0.0233
         Zone.SET_CODE to rect(0.725f, -0.0739f, 1.0467f, 0.0826f),
+        // n=243, std x1=0.0215 y1=0.0417 x2=0.0161 y2=0.0445
+        Zone.EDITION to rect(0.1013f, 0.3264f, 0.3545f, 0.5562f),
     )
 
     /**
@@ -116,6 +137,8 @@ object CardLayout {
         Zone.PASSCODE to rect(-0.14f, 0.3091f, 0.1591f, 0.5418f),
         // n=73, std x1=0.0177 y1=0.025 x2=0.0229 y2=0.0273
         Zone.SET_CODE to rect(0.6237f, -0.0832f, 0.9489f, 0.0793f),
+        // n=73, std x1=0.019 y1=0.0488 x2=0.0136 y2=0.0516
+        Zone.EDITION to rect(0.1141f, 0.3001f, 0.3485f, 0.5438f),
     )
 
     // RectF's 4-float constructor is a silent no-op under the Android unit-test stub jar used by

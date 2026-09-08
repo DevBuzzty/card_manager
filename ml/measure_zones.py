@@ -24,6 +24,7 @@ failures, not worth re-running).
     python ml/measure_zones.py --dry-run      # 50 photos, prints stats, writes nothing
 """
 import argparse
+import csv
 import gzip
 import json
 import random
@@ -65,6 +66,16 @@ OUTLIER_K = 3.5             # robust-z reject threshold (MAD-scaled)
 CAP = {"STANDARD": 400, "SPELL_TRAP": 400}   # bound runtime on the two big layouts; others use all
 
 LAYOUTS = ["STANDARD", "PENDULUM", "LINK", "SPELL_TRAP", "SKILL"]
+
+# --- Task 0 (Spec D3): EDITION zone, measured from ml/ocr_bench/labels.csv's `edition` ground
+# truth (97.0% coverage, from Spec D2's label_setcodes.py) instead of the manifest's passcode
+# ground truth -- see find_edition_span() and run_edition() below. SKILL has zero labelled rows of
+# any edition in that corpus (same as its PASSCODE gap), so it is excluded rather than run for 0
+# candidates.
+EDITION_LAYOUTS = ["STANDARD", "SPELL_TRAP", "LINK", "PENDULUM"]
+LABELS_CSV = ML_DIR / "ocr_bench" / "labels.csv"
+EDITION_CAP = {"STANDARD": 400, "SPELL_TRAP": 400}   # same runtime bound as CAP above
+EDITION_JSONL = ZONES_DIR / "edition_samples.jsonl"  # per-photo checkpoint, resumable
 
 # Ported from android/app/src/main/java/com/example/yugiohscanner/ml/OcrText.kt's `confuse` map --
 # the project's existing OCR digit-confusion tolerance (0/O, 1/I/l, 5/S, 8/B, ...).
@@ -229,6 +240,75 @@ def find_setcode_span(box_rel_y2, box_h, box_x1, box_w, ocr_results):
         if m:
             return _sub_box(box, m.start(), m.end(), len(text))
     return None
+
+
+def _edition_patterns():
+    """label_setcodes.py's marker regexes and accent-stripper, imported lazily so that this module
+    and label_setcodes.py (which already does `import measure_zones as MZ` at its own top) don't
+    form a module-level circular import. Reused rather than re-written: label_setcodes.py's
+    FIRST_PATTERNS/LIMITED_PATTERNS already had four real OCR-tolerance bugs fixed in them by
+    hand-verification against real photos (garbled "1st", "Auflage" read as "Auflaqe", ...); a
+    second, slightly different pattern set here would silently drift from that fix history."""
+    import label_setcodes as LS
+    return LS.FIRST_PATTERNS, LS.LIMITED_PATTERNS, LS._strip_accents
+
+
+def find_edition_span(ocr_results, edition_label):
+    """First OCR box whose accent-stripped, upper-cased text matches one of label_setcodes.py's
+    marker patterns for `edition_label` ('first' or 'limited'), as a pixel sub-box.
+
+    label_setcodes.find_edition() pools every OCR box's text into one string, because it only
+    needs a yes/no label for the whole photo. This needs the matching box's own POSITION instead,
+    so it checks each box's text individually and returns that box's own matched span --
+    interpolated against the accent-stripped/upper-cased length, since that is the string the
+    regex actually matched against, not the raw OCR text length. A marker split across two
+    separate OCR boxes (rare -- the PASSCODE evidence above shows OCR usually merges same-line
+    text into one box, e.g. '00102380 1 Auflage') yields no sample for that photo, same as
+    find_passcode_span's no-fallback rule."""
+    first_patterns, limited_patterns, strip_accents = _edition_patterns()
+    patterns = limited_patterns if edition_label == "limited" else first_patterns
+    for box, text, _conf in ocr_results:
+        norm = strip_accents(text).upper()
+        for p in patterns:
+            m = p.search(norm)
+            if m:
+                return _sub_box(box, m.start(), m.end(), len(norm))
+    return None
+
+
+def measure_edition_one(path, edition_label):
+    """Like measure_one(), but locates the edition marker instead of the passcode/set-code. Same
+    ROI as measure_one (comfortably above the box's bottom edge, full width, to the image bottom)
+    -- deliberately NOT narrowed to "beside the passcode": the brief's own measurement (STANDARD's
+    PASSCODE zone ends at x=0.134, "1. Auflage" starts after that) shows the naive same-zone
+    assumption is wrong, so the marker's actual position is left for find_edition_span to locate
+    anywhere in this broad band, not assumed in advance."""
+    img = cv2.imread(str(path))
+    if img is None:
+        return None
+    det = detect_box(img)
+    if det is None:
+        return None
+    bx1, by1, bx2, by2, _score = det
+    bw, bh = bx2 - bx1, by2 - by1
+    H, W = img.shape[:2]
+    y_start = max(0, int(by1 + 0.85 * bh))
+    roi = img[y_start:H, 0:W]
+    if roi.size == 0:
+        return None
+    results = ocr_reader().readtext(roi)
+    results = [([[px, py + y_start] for px, py in pts], text, conf) for pts, text, conf in results]
+    ebox = find_edition_span(results, edition_label)
+    if ebox is None:
+        return None
+    ex1, ey1, ex2, ey2 = ebox
+    # detect_box's coords can be numpy float32 (from the ONNX output); float() them so the
+    # checkpoint JSONL (json.dumps) doesn't choke -- same fix measure_zones_photos.py needed.
+    return {
+        "edition": tuple(float(v) for v in (
+            (ex1 - bx1) / bw, (ey1 - by2) / bh, (ex2 - bx1) / bw, (ey2 - by2) / bh)),
+        "box": tuple(float(v) for v in (bx1, by1, bx2, by2)),
+    }
 
 
 def measure_one(path, passcode):
@@ -422,11 +502,132 @@ def run(dry_run):
           f"-> {ZONES_DIR / 'measured.json'}")
 
 
+def _load_edition_candidates():
+    """{layout -> [labels.csv row, ...]} restricted to rows with a locatable marker ('first' or
+    'limited' -- 'unlimited' means no marker was printed, there is nothing to locate) and a layout
+    Task 2 actually measures. Deterministically shuffled per layout, same seed convention as
+    run()'s manifest shuffle, so a capped subset is reproducible across runs."""
+    with LABELS_CSV.open("r", encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    by_layout = {L: [] for L in EDITION_LAYOUTS}
+    for r in rows:
+        if r["edition"] in ("first", "limited") and r["layout"] in by_layout:
+            by_layout[r["layout"]].append(r)
+    for L in EDITION_LAYOUTS:
+        random.Random(0).shuffle(by_layout[L])
+    return by_layout
+
+
+def _load_edition_checkpoint():
+    """Rows already measured in a prior (possibly killed) run, keyed by file -- so a restart
+    resumes instead of re-measuring from scratch. Mirrors measure_zones_photos.py's load_done()."""
+    done = {}
+    if EDITION_JSONL.exists():
+        for line in EDITION_JSONL.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                r = json.loads(line)
+                done[r["file"]] = r
+            except json.JSONDecodeError:
+                continue   # a half-written last line from a killed run
+    return done
+
+
+def run_edition(dry_run):
+    """Measure the EDITION zone per layout from labels.csv's ground truth (see find_edition_span
+    and measure_edition_one). Checkpoints every photo to EDITION_JSONL immediately, so a killed
+    run loses at most one photo's work, not the whole run."""
+    candidates = _load_edition_candidates()
+
+    if dry_run:
+        pool = candidates["STANDARD"][:50]
+        print(f"DRY RUN: {len(pool)} STANDARD edition photos (diagnostic only, nothing written)\n")
+        samples = []
+        for r in pool:
+            res = measure_edition_one(LABELED / r["file"], r["edition"])
+            if res:
+                samples.append(res["edition"])
+        if samples:
+            arr = np.array(samples)
+            print(f"n={len(samples)}")
+            print(f"  x1 median={np.median(arr[:,0]):.3f}  x2 median={np.median(arr[:,2]):.3f}")
+            print(f"  y1 median={np.median(arr[:,1]):.3f}  y2 median={np.median(arr[:,3]):.3f}")
+        return
+
+    ZONES_DIR.mkdir(parents=True, exist_ok=True)
+    done = _load_edition_checkpoint()
+    if done:
+        print(f"{len(done)} photos already checkpointed, skipping")
+
+    t0 = time.time()
+    edition_samples = {L: [] for L in EDITION_LAYOUTS}
+    evidence_candidates = {L: [] for L in EDITION_LAYOUTS}
+    new_tried = 0
+    with EDITION_JSONL.open("a", encoding="utf-8") as fh:
+        for L in EDITION_LAYOUTS:
+            pool = candidates[L][:EDITION_CAP.get(L)]
+            for i, r in enumerate(pool, 1):
+                fkey = r["file"]
+                if fkey in done:
+                    rec = done[fkey]
+                else:
+                    new_tried += 1
+                    try:
+                        res = measure_edition_one(LABELED / fkey, r["edition"])
+                    except Exception as e:                      # one bad photo must not kill the run
+                        res = None
+                    rec = {"file": fkey, "layout": L, "edition": r["edition"]}
+                    if res:
+                        rec["sample"] = list(res["edition"])
+                        rec["box"] = list(res["box"])
+                    fh.write(json.dumps(rec) + "\n")
+                    fh.flush()                                    # checkpoint, every photo
+                    done[fkey] = rec
+                if "sample" in rec:
+                    edition_samples[L].append(tuple(rec["sample"]))
+                    if len(evidence_candidates[L]) < 3:
+                        evidence_candidates[L].append((LABELED / fkey, rec))
+                if i % 100 == 0:
+                    print(f"  {L}: {i}/{len(pool)}, {len(edition_samples[L])} markers found")
+            print(f"{L}: {len(pool)} candidates ({len(candidates[L])} available before cap), "
+                  f"{len(edition_samples[L])} markers located")
+
+    measured = {}
+    for L in EDITION_LAYOUTS:
+        entry, n_raw, n_clean = summarize(edition_samples[L])
+        if entry is None:
+            print(f"{L} EDITION: insufficient data (n={n_raw} raw, {n_clean} after outlier "
+                  f"rejection, need >= {MIN_SAMPLES})")
+        else:
+            measured[L] = entry
+            print(f"{L} EDITION: n={entry['n']}  x={entry['x']}  y={entry['y']}")
+
+    out_path = ZONES_DIR / "measured_edition.json"
+    out_path.write_text(json.dumps(measured, indent=2))
+
+    for L in EDITION_LAYOUTS:
+        e_zone = measured.get(L)
+        for idx, (path, rec) in enumerate(evidence_candidates[L][:3], 1):
+            zone = {"x": (e_zone["x"][0], e_zone["x"][1]), "y": (e_zone["y"][0], e_zone["y"][1])} \
+                if e_zone else None
+            draw_evidence(path, None, zone, tuple(rec["box"]), ZONES_DIR / L / f"evidence_edition_{idx}.jpg")
+
+    dt = time.time() - t0
+    print(f"\nDone: {new_tried} photos newly measured this run in {dt:.0f}s -> {out_path}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--edition", action="store_true",
+                     help="measure the EDITION zone from labels.csv instead of PASSCODE/SET_CODE "
+                          "from the manifest")
     args = ap.parse_args()
-    run(args.dry_run)
+    if args.edition:
+        run_edition(args.dry_run)
+    else:
+        run(args.dry_run)
 
 
 if __name__ == "__main__":
