@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -166,6 +168,7 @@ fun ScanScreen(onClose: () -> Unit) {
 
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
     var isFlashOn by remember { mutableStateOf(false) }
+    var scanMode by remember { mutableStateOf(com.example.yugiohscanner.Prefs.scanMode(context)) }
     var isFocusLocked by remember { mutableStateOf(false) }
     var showManualEntry by remember { mutableStateOf(false) }
     var manualCode by remember { mutableStateOf("") }
@@ -272,13 +275,68 @@ fun ScanScreen(onClose: () -> Unit) {
         }
     }
 
+    // Spec D4 §4: ein WIEDERHOLTES Erkennen derselben Karte im Modus "stapel". Kein Netz, kein
+    // Katalog -- `entry.knownSets` steht bereits, `SetCodeMatch.best` laeuft direkt dagegen.
+    // Wohin gebucht wird, entscheidet ScanAggregator (rein und getestet); hier wird nur gebucht.
+    fun aggregateRepeat(pc: String, evidence: List<String>, framesEvidence: List<String>) {
+        val entry = stagingCards.lastOrNull { it.passcode == pc } ?: return
+        // Anderes Aufblitzen als bei einer Neuaufnahme (die blitzt mit 0.8f), damit ein "+1"
+        // im Sucher nicht wie eine neue Karte aussieht.
+        scope.launch { flash.snapTo(0.45f); flash.animateTo(0f, animationSpec = tween(300)) }
+
+        val match = SetCodeMatch.best(evidence, entry.knownSets, framesEvidence)
+        val target = ScanAggregator.target(
+            primary = entry.selectedSet,
+            extras = entry.extraPrintings.map { it.selectedSet },
+            scanned = match.selected,
+        )
+        // Was rueckgaengig gemacht werden muesste, wird hier festgehalten -- nach dem Buchen ist
+        // aus dem Zustand nicht mehr ablesbar, WELCHE Zeile dieses eine "+1" bekommen hat.
+        val added: ExtraPrinting? = when (target) {
+            is ScanAggregator.Target.Primary -> { entry.quantity++; null }
+            is ScanAggregator.Target.Extra -> { entry.extraPrintings[target.index].quantity++; null }
+            is ScanAggregator.Target.NewExtra -> ExtraPrinting().apply {
+                selectedSet = target.set
+                edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
+                condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
+            }.also { entry.extraPrintings.add(it) }
+        }
+        val menge = when (target) {
+            is ScanAggregator.Target.Primary -> entry.quantity
+            is ScanAggregator.Target.Extra -> entry.extraPrintings[target.index].quantity
+            is ScanAggregator.Target.NewExtra -> 1
+        }
+        val name = entry.base?.name ?: pc
+        scope.launch {
+            val r = snackbar.showSnackbar(
+                message = "$name ×$menge", actionLabel = "rueckgaengig",
+                duration = SnackbarDuration.Short,
+            )
+            if (r != SnackbarResult.ActionPerformed) return@launch
+            when (target) {
+                is ScanAggregator.Target.Primary -> entry.quantity--
+                is ScanAggregator.Target.Extra -> entry.extraPrintings[target.index].quantity--
+                is ScanAggregator.Target.NewExtra -> added?.let { entry.extraPrintings.remove(it) }
+            }
+        }
+    }
+
+    // Der einzige Einstieg fuer eine erfasste Karte -- autonome Erkennung wie manuelle Eingabe.
+    // Spec D4 §3: im Modus "einzeln" faengt `seen` jede Wiederholung ab (heutiges Verhalten);
+    // im Modus "stapel" wird sie zusammengefasst.
+    fun onCapture(pc: String, evidence: List<String>, frames: List<String>, editionTexts: List<String>) {
+        val isRepeat = !seen.add(pc)
+        if (isRepeat && scanMode != "stapel") return
+        if (isRepeat) aggregateRepeat(pc, evidence, frames)
+        else stageScan(pc, evidence, frames, editionTexts)
+    }
+
     // [frames] is [evidence]'s per-frame breakdown (see stageScan's own doc) — a separate
     // parameter rather than re-deriving it from [evidence], since the two callers below don't
     // always have the same list to offer for both. [editionTexts] is stageScan's own new
     // parameter (Task 7), threaded through the same way.
     val onConfirmed = rememberUpdatedState<(Int, List<String>, List<String>, List<String>) -> Unit> { passcode, evidence, frames, editionTexts ->
-        val pc = passcode.toString()
-        if (passcode > 0 && seen.add(pc)) stageScan(pc, evidence, frames, editionTexts)
+        if (passcode > 0) onCapture(passcode.toString(), evidence, frames, editionTexts)
     }
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
@@ -613,6 +671,27 @@ fun ScanScreen(onClose: () -> Unit) {
                     },
             )
             Spacer(Modifier.weight(1f))
+            // Spec D4 §3: Einzeln = jede Karte einmal pro Stapel. Stapel = ein erneutes Erkennen
+            // erhoeht die Menge. Gemerkt in scanner_prefs, damit der Modus einen Neustart ueberlebt.
+            IconButton(
+                onClick = {
+                    scanMode = if (scanMode == "stapel") "einzeln" else "stapel"
+                    com.example.yugiohscanner.Prefs.setScanMode(context, scanMode)
+                    Toast.makeText(
+                        context,
+                        if (scanMode == "stapel") "Stapel: Wiederholungen zaehlen"
+                        else "Einzeln: jede Karte einmal",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                },
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50)),
+            ) {
+                Icon(
+                    imageVector = if (scanMode == "stapel") Icons.Default.Layers else Icons.Default.LooksOne,
+                    contentDescription = "Scan-Modus",
+                    tint = if (scanMode == "stapel") Color.Yellow else Color.White,
+                )
+            }
             // Auto Focus Reset
             IconButton(
                 onClick = {
@@ -731,7 +810,7 @@ fun ScanScreen(onClose: () -> Unit) {
                                     triggerFeedback()
 
                                     // Stage like a scan; the desktop mirror (if connected) happens inside stageScan.
-                                    if (seen.add(manualCode)) stageScan(manualCode, emptyList())
+                                    onCapture(manualCode, emptyList(), emptyList(), emptyList())
 
                                     showManualEntry = false
                                     manualCode = ""
