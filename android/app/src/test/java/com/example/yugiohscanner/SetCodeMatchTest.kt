@@ -210,4 +210,50 @@ class SetCodeMatchTest {
         assertTrue(result.codeExactMatch)
         assertEquals(1, result.codeFrameCount)
     }
+
+    // -- C1 regression: a composed code's `language` must be DE/EN/JP, never the raw region infix --
+    //
+    // RegionToken.KNOWN holds REGION INFIXES ("G", "E", "F", ...), not language codes. `language`
+    // is part of the collection's composite primary key (CollectionRepository.addScanned ->
+    // getRow(id, setCode, language, rarity)), so writing the raw infix straight in used to create a
+    // second, invisible row for the same physical card -- no flag renders (LangFlag), the DE-first
+    // logic never sees it, and it never merges with the user's existing DE rows.
+
+    @Test fun `C1 -- die alte einbuchstabige deutsche Region G komponiert language='DE', nicht 'G'`() {
+        // RegionToken.KNOWN names LOB-G005 explicitly as a real card in this project's own corpus.
+        // The catalog only knows the (unverified) English printing, so Case 1 has to compose.
+        val known = listOf(SetOption("LOB-EN005", "Common", 0.0, "EN", verified = false))
+        val result = SetCodeMatch.best(listOf("LOB-G005", "LOB-G005"), known)
+        assertEquals(SetCodeMatch.MatchReason.MATCHED, result.reason)
+        assertEquals("LOB-G005", result.selected?.setCode)
+        assertEquals("DE", result.selected?.language)
+    }
+
+    @Test fun `C1 -- die neue zweibuchstabige deutsche Region DE komponiert weiterhin language='DE'`() {
+        val known = listOf(SetOption("SDY-EN005", "Common", 0.0, "EN", verified = false))
+        val result = SetCodeMatch.best(listOf("SDY-DE005", "SDY-DE005"), known)
+        assertEquals(SetCodeMatch.MatchReason.MATCHED, result.reason)
+        assertEquals("SDY-DE005", result.selected?.setCode)
+        assertEquals("DE", result.selected?.language)
+    }
+
+    @Test fun `C1 -- eine japanische Region komponiert language='JP'`() {
+        val known = listOf(SetOption("TSC-EN003", "Common", 0.0, "EN", verified = false))
+        val result = SetCodeMatch.best(listOf("TSC-JP003", "TSC-JP003"), known)
+        assertEquals(SetCodeMatch.MatchReason.MATCHED, result.reason)
+        assertEquals("JP", result.selected?.language)
+    }
+
+    @Test fun `C1 -- eine Region ohne eigenen Sprachwert im System (z_B_ Franzoesisch) faellt auf 'EN' zurueck`() {
+        // Diese App kennt nur DE/EN/JP als language-Wert (siehe LangFlag.langFlag,
+        // CollectionRepository's zusammengesetzter Primaerschluessel). PrintingRepository.fetchSets
+        // buendelt bereits heute JEDEN nicht-deutschen, nicht-japanischen Netzwerktreffer -- auch
+        // franzoesische/italienische/... Codes -- unter language="EN". RegionToken.language nutzt
+        // exakt dieselbe Buendelung, statt eine neue Zuordnung zu erfinden, fuer die es hier gar
+        // keinen Platz gibt.
+        val known = listOf(SetOption("LOB-EN005", "Common", 0.0, "EN", verified = false))
+        val result = SetCodeMatch.best(listOf("LOB-F005", "LOB-F005"), known)
+        assertEquals(SetCodeMatch.MatchReason.MATCHED, result.reason)
+        assertEquals("EN", result.selected?.language)
+    }
 }

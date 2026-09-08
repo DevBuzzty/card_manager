@@ -44,6 +44,28 @@ object RegionToken {
         "JP", "JA", "KR", "AE", "TC", "SC"
     )
 
+    // Spec D3 fix C1: a REGION INFIX is not a language code -- `language` is part of the collection's
+    // composite primary key (CollectionRepository.addScanned -> getRow(id, setCode, language,
+    // rarity)) and every reader of it (LangFlag.langFlag, CollectionRepository, CardSearchRepository)
+    // only ever expects "DE"/"EN"/"JP". Writing a raw region like "G" or "F" into that column used to
+    // create a second, invisible row for the same physical card -- no flag, no DE-first handling, no
+    // merge with the user's real DE rows. [language] maps a region infix to the value the rest of the
+    // app understands, reusing PrintingRepository's OWN classification rather than inventing a second
+    // one:
+    //  - DE, G  -> "DE"  (PrintingRepository.germanCode: "-DE|-G\d" tags a printing "DE")
+    //  - JP, JA -> "JP"  (PrintingRepository tags Japanese printings "JP", passes wiki locale "ja")
+    //  - everything else (EN, E, FR, F, IT, I, SP, S, PT, P, KR, AE, TC, SC) has no language slot of
+    //    its own anywhere in this app -- PrintingRepository.fetchSets already collapses EVERY
+    //    non-German, non-Japanese network hit into "EN" regardless of its real region infix (see its
+    //    `SetOption(code, rarity, price, "EN")`, applied to French/Italian/Spanish/... codes alike).
+    //    Mapping them here to "EN" reuses that exact, already-shipped collapse instead of drawing a
+    //    new line this app has nowhere to put.
+    fun language(region: String): String = when (region.uppercase(Locale.ROOT)) {
+        "DE", "G" -> "DE"
+        "JP", "JA" -> "JP"
+        else -> "EN"
+    }
+
     // The confusion table the brief points at (0/O, 1/I/l, 5/S, 8/B), used to locate the prefix
     // and number spans in noisy OCR text -- e.g. recognising that zoneText's "L0B" is really the
     // expected prefix "LOB", or that "0O5" is really "005". Symmetric so either side can be the

@@ -249,11 +249,16 @@ object SetCodeMatch {
             .filter { it.parts.region?.equals(region, ignoreCase = true) == true }
             .sortedByDescending { it.option.verified }
             .firstOrNull()
+        // Spec D3 fix C1: `region` is the raw infix read off the card (e.g. "G", "F"), not a
+        // language code -- RegionToken.language maps it to the DE/EN/JP value `language` actually
+        // means everywhere else (the collection's composite primary key included). Writing `region`
+        // straight into `language` used to file a "-G005" printing under language="G", invisible to
+        // every DE-aware code path and never merging with the user's real DE rows.
         val selected = exact?.option ?: SetOption(
             setCode = "$groupPrefix-$region$groupNumber",
             rarity = bestGroup.first().option.rarity,
             price = 0.0,
-            language = region,
+            language = RegionToken.language(region),
             verified = false,
         )
         return MatchResult(selected, listOf(selected), MatchReason.MATCHED, codeExactMatch, codeFrameCount)
