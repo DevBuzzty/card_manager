@@ -27,11 +27,17 @@ object ScanConfidence {
      * [com.example.yugiohscanner.cloud.Valuation.EDITIONS] and is populated for every light, not
      * just GREEN, since a caller staging a RED or YELLOW card still needs *some* edition value to
      * prefill (same as today's un-overridden `Prefs.defaultEdition` prefill in `ScanScreen`).
+     *
+     * [editionConfidence] is [Input.edition]'s own RAW confidence (HIGH/LOW), carried through
+     * unchanged -- Spec D3 Task 8's mirror-to-desktop payload needs it alongside
+     * [effectiveEdition] (the merged value) so the desktop can show the same "how sure was the
+     * edition reading" signal the phone has, instead of only the already-merged result.
      */
     data class Result(
         val light: Light,
         val reason: String?,
         val effectiveEdition: String,
+        val editionConfidence: EditionEvidence.Confidence,
     )
 
     /**
@@ -106,27 +112,27 @@ object ScanConfidence {
         val selected = input.matchResult.selected
 
         if (selected == null || input.matchResult.reason == SetCodeMatch.MatchReason.NO_MATCH) {
-            return Result(Light.RED, "Kein Code-Treffer", effectiveEdition)
+            return Result(Light.RED, "Kein Code-Treffer", effectiveEdition, input.edition.confidence)
         }
 
         if (!input.codeExactMatch || input.codeFrameCount < 2) {
-            return Result(Light.YELLOW, "Code unsicher: ${selected.setCode}", effectiveEdition)
+            return Result(Light.YELLOW, "Code unsicher: ${selected.setCode}", effectiveEdition, input.edition.confidence)
         }
         if (input.rarity?.isAmbiguous == true) {
             val names = input.rarity.distinctRarities.joinToString("/")
-            return Result(Light.YELLOW, "Rarity mehrdeutig: $names", effectiveEdition)
+            return Result(Light.YELLOW, "Rarity mehrdeutig: $names", effectiveEdition, input.edition.confidence)
         }
         if (input.edition.edition == "unknown" || input.edition.confidence == EditionEvidence.Confidence.LOW) {
-            return Result(Light.YELLOW, "Edition nicht erkannt", effectiveEdition)
+            return Result(Light.YELLOW, "Edition nicht erkannt", effectiveEdition, input.edition.confidence)
         }
         if (input.matchResult.reason == SetCodeMatch.MatchReason.REGION_UNCLEAR) {
-            return Result(Light.YELLOW, SetCodeMatch.MatchReason.REGION_UNCLEAR.text!!, effectiveEdition)
+            return Result(Light.YELLOW, SetCodeMatch.MatchReason.REGION_UNCLEAR.text!!, effectiveEdition, input.edition.confidence)
         }
         if (input.matchResult.reason == SetCodeMatch.MatchReason.REGION_CONTRADICTS_VERIFIED) {
-            return Result(Light.YELLOW, SetCodeMatch.MatchReason.REGION_CONTRADICTS_VERIFIED.text!!, effectiveEdition)
+            return Result(Light.YELLOW, SetCodeMatch.MatchReason.REGION_CONTRADICTS_VERIFIED.text!!, effectiveEdition, input.edition.confidence)
         }
 
-        return Result(Light.GREEN, null, effectiveEdition)
+        return Result(Light.GREEN, null, effectiveEdition, input.edition.confidence)
     }
 
     /**

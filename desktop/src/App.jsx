@@ -43,10 +43,24 @@ function App() {
                 return prev;
             }
 
+            // Spec D3 Task 8: the phone already resolved set code, rarity, language, edition and
+            // the traffic light from evidence the desktop never saw (the card's own band text) --
+            // `scannedConfidence` (present only from an updated phone) is the signal StagingArea
+            // uses to take that conclusion as-is instead of re-matching scannedSetCandidates
+            // itself. An older phone build never sends these fields, so they land `undefined`
+            // here and StagingArea falls back to its existing local matching (see its own
+            // comment on that fallback).
             return [...prev, {
                 tempId: Date.now() + Math.random(),
                 passcode: data.passcode,
                 scannedSetCandidates: data.setCodeCandidates || (data.setCode ? [data.setCode] : []),
+                scannedSetCode: data.setCode,
+                scannedRarity: data.rarity,
+                scannedLanguage: data.language,
+                scannedEdition: data.edition,
+                scannedEditionConfidence: data.editionConfidence,
+                scannedConfidence: data.confidence,
+                scannedReason: data.reason,
                 status: 'pending',
                 data: null
             }];

@@ -209,14 +209,6 @@ fun ScanScreen(onClose: () -> Unit) {
     // reports `edition = unknown`, the honest answer for "never looked".
     fun stageScan(pc: String, evidence: List<String>, framesEvidence: List<String> = evidence, editionTexts: List<String> = emptyList()) {
         scope.launch { flash.snapTo(0.8f); flash.animateTo(0f, animationSpec = tween(300)) }
-        // Always stage on the phone; a connected desktop additionally gets a mirror of the scan.
-        val mirrorSocket = socket
-        if (isConnected && mirrorSocket != null) {
-            val data = JSONObject().put("passcode", pc)
-            val cand = com.example.yugiohscanner.ml.SetCodeOcr.extract(evidence.joinToString(" "))
-            if (cand.isNotEmpty()) { data.put("setCode", cand.first()); data.put("setCodeCandidates", JSONArray(cand)) }
-            mirrorSocket.emit("card_scanned", data)
-        }
         val entry = ScanStagingEntry(System.nanoTime(), pc).apply {
             edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
             condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
@@ -238,6 +230,35 @@ fun ScanScreen(onClose: () -> Unit) {
             )
             entry.confidence = confidence
             entry.edition = confidence.effectiveEdition
+        }
+        // Spec D3 Task 8 (plan Section 6.5): mirrors the phone's ALREADY-RESOLVED conclusion to a
+        // connected desktop -- setCode/rarity/language/edition, the traffic light and its German
+        // reason verbatim -- so the desktop shows the SAME preselection instead of re-matching the
+        // candidates itself against a card it never saw the band text of. Sent once `applyConfidence`
+        // has run (both branches below), not eagerly at scan time the way the old mirror was: none
+        // of this is known until the printing list is resolved and SetCodeMatch/ScanConfidence have
+        // judged it. An older desktop build ignores the extra fields it doesn't recognise; a newer
+        // desktop talking to an older phone that never sends them falls back to its own local match
+        // (see StagingArea.jsx's own comment on that fallback).
+        fun mirrorToDesktop(match: SetCodeMatch.MatchResult) {
+            val mirrorSocket = socket
+            if (!isConnected || mirrorSocket == null) return
+            val confidence = entry.confidence ?: return // applyConfidence always ran first; guards a future call-order change
+            val data = JSONObject().put("passcode", pc)
+            val selected = match.selected
+            if (selected != null) {
+                data.put("setCode", selected.setCode)
+                data.put("rarity", selected.rarity)
+                data.put("language", selected.language)
+            }
+            if (match.candidates.isNotEmpty()) {
+                data.put("setCodeCandidates", JSONArray(match.candidates.map { it.setCode }))
+            }
+            data.put("edition", entry.edition)
+            data.put("editionConfidence", confidence.editionConfidence.name.lowercase(Locale.ROOT))
+            data.put("confidence", confidence.light.name.lowercase(Locale.ROOT))
+            data.put("reason", confidence.reason ?: JSONObject.NULL)
+            mirrorSocket.emit("card_scanned", data)
         }
         scope.launch {
             try {
@@ -264,6 +285,7 @@ fun ScanScreen(onClose: () -> Unit) {
                     entry.selectedSet = match.selected
                     applyConfidence(match)
                     entry.loading = false
+                    mirrorToDesktop(match)
                 } else {
                     val base = catalogCard?.toCardRow() ?: CardSearchRepository.search(pc).firstOrNull()
                     if (base == null) {
@@ -278,6 +300,7 @@ fun ScanScreen(onClose: () -> Unit) {
                         entry.selectedSet = match.selected
                         applyConfidence(match)
                         entry.loading = false
+                        mirrorToDesktop(match)
                     }
                 }
             } catch (e: Exception) {
