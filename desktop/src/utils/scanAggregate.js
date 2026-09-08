@@ -22,14 +22,26 @@ const keyOf = (s) => (s ? `${s.set_code}|${s.set_rarity}|${s.language}` : null);
  * @param {object} scanned die Meldung des Handys ({ passcode, setCode, rarity, language })
  * @returns {{kind:'primary'} | {kind:'extra', index:number} | {kind:'newExtra', set:object}}
  *
- * Drei Faelle enden bewusst auf `primary`: kein gemeldeter Set-Code, eine noch ladende Karte
- * (keine Druckliste, gegen die verglichen werden koennte -- dieselbe Antwort, die das Handy im
- * Wettlauf gibt) und ein Druck, der sich nicht aufloesen laesst. Ein Zusatzdruck ohne
+ * Vier Faelle enden bewusst auf `primary`: kein gemeldeter Set-Code, kein Hauptdruck, eine noch
+ * ladende Karte (keine Druckliste, gegen die verglichen werden koennte -- dieselbe Antwort, die
+ * das Handy im Wettlauf gibt) und ein Druck, der sich nicht aufloesen laesst. Ein Zusatzdruck ohne
  * auflösbaren Druck waere schlimmer als ein "+1": `handleAdd` ueberspringt ihn wortlos, die
  * Kopie waere still verloren.
  */
 export function aggregateTarget(card, scanned) {
   if (!scanned || !scanned.setCode) return { kind: 'primary' };
+  // Gegenstueck zu `key(primary) ?: return Target.Primary` in ScanAggregator.kt -- beide Stellen
+  // aendern sich zusammen. Unbedingt noetig, denn `card.status === 'loaded'` UND
+  // `card.selectedSet === null` sind gleichzeitig erreichbar: liefert YGOPRODeck fuer einen
+  // Passcode ein leeres `card_sets`, ist `enPrintings` in StagingArea.jsx ein LEERES aber WAHRES
+  // Array -- der `!card.allPrintings`-Wächter unten besteht es, `enPrintings[0]` ist `undefined`,
+  // und ohne Treffer vom Handy/lokalen Matching wird `selectedSet: null` gesetzt (StagingArea.jsx
+  // ~Zeile 121). Ohne diese Pruefung wuerde eine solche Karte faelschlich gegen `extraPrintings`
+  // verglichen statt bedingungslos den Hauptdruck zu zaehlen.
+  if (!card.selectedSet) return { kind: 'primary' };
+  // Statusproxy fuer den separaten Wettlauf-Fall: waehrend eine Karte noch laedt (status !==
+  // 'loaded'), gibt es noch gar keine `allPrintings`, gegen die sich der gemeldete Code aufloesen
+  // liesse -- unabhaengig davon, ob `selectedSet` (das oben schon fehlen wuerde) gesetzt ist.
   if (card.status !== 'loaded' || !card.allPrintings) return { kind: 'primary' };
   const set = phoneSelectedSet(scanned.setCode, scanned.rarity, scanned.language, card.allPrintings);
   if (!set) return { kind: 'primary' };

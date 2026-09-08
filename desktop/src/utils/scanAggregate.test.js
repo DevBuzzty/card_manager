@@ -53,6 +53,26 @@ test('gleicher Setcode mit anderer Rarity ist ein anderer Druck', () => {
   assert.equal(t.kind, 'newExtra');
 });
 
+test('gleicher Setcode in anderer Sprache ist ein anderer Druck', () => {
+  const t = aggregateTarget(loaded(), scan({ language: 'EN' }));
+  assert.equal(t.kind, 'newExtra');
+});
+
+test('ein noch leerer Zusatzdruck wird uebersprungen statt getroffen', () => {
+  const card = loaded({ extraPrintings: [{ selectedSet: null, quantity: 1 }] });
+  const t = aggregateTarget(card, scan({ setCode: 'SDY-G005' }));
+  assert.equal(t.kind, 'newExtra');
+  assert.equal(t.set.set_code, 'SDY-G005');
+});
+
+test('geladene Karte ohne Hauptdruck zaehlt trotzdem den Hauptdruck', () => {
+  // Befund 1: `status === 'loaded'` und `selectedSet === null` sind gleichzeitig erreichbar --
+  // siehe Kommentar in scanAggregate.js. `allPrintings: []` ist absichtlich ein LEERES aber
+  // WAHRES Array, damit der Statusproxy allein diesen Fall nicht abfaengt.
+  const card = { tempId: 1, passcode: '46986414', status: 'loaded', allPrintings: [], selectedSet: null, quantity: 1, extraPrintings: [] };
+  assert.deepEqual(aggregateTarget(card, scan()), { kind: 'primary' });
+});
+
 test('applyScan haengt eine unbekannte Karte hinten an', () => {
   const out = applyScan([], scan());
   assert.equal(out.length, 1);
