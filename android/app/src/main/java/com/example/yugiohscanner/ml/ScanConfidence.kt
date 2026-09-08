@@ -1,0 +1,237 @@
+package com.example.yugiohscanner.ml
+
+import com.example.yugiohscanner.cloud.SetCodeMatch
+import com.example.yugiohscanner.cloud.SetOption
+
+// The traffic light (Spec D3 Task 5, plan Section 6.4). PURE: no Android types (no Bitmap,
+// Context, Compose state), just the Kotlin signal types Tasks 2-4 already produce -- consuming
+// them instead of re-deriving anything they already know, per this task's own brief and the KDoc
+// on SetCodeMatch.MatchResult ("the traffic light reads this instead of re-deriving it").
+//
+// Green is a promise: "you do not need to check this one." It requires THREE things at once (code
+// distance 0 in >=2 frames, rarity unambiguous, edition != unknown) -- a single weak signal is
+// enough to fall back to yellow. This deliberately does not get softened to produce more green;
+// see [evaluate]'s KDoc for the measured reality (D2's OCR benchmark) that makes yellow the
+// expected, honest outcome for most scans.
+object ScanConfidence {
+
+    enum class Light { GREEN, YELLOW, RED }
+
+    /**
+     * [reason] is `null` only for GREEN (nothing to call out) and otherwise the German text
+     * naming the concrete case, per the plan's requirement that `reason` name the case, not just
+     * the level (e.g. `"Rarity mehrdeutig: Ultra/Secret"`, not just "ambiguous").
+     *
+     * [effectiveEdition] is the edition value the card-beats-setting rule (Spec Section 7)
+     * resolved -- see [evaluate]'s KDoc on why that merge lives here. It is always one of
+     * [com.example.yugiohscanner.cloud.Valuation.EDITIONS] and is populated for every light, not
+     * just GREEN, since a caller staging a RED or YELLOW card still needs *some* edition value to
+     * prefill (same as today's un-overridden `Prefs.defaultEdition` prefill in `ScanScreen`).
+     *
+     * [editionConfidence] is [Input.edition]'s own RAW confidence (HIGH/LOW), carried through
+     * unchanged -- Spec D3 Task 8's mirror-to-desktop payload needs it alongside
+     * [effectiveEdition] (the merged value) so the desktop can show the same "how sure was the
+     * edition reading" signal the phone has, instead of only the already-merged result.
+     */
+    data class Result(
+        val light: Light,
+        val reason: String?,
+        val effectiveEdition: String,
+        val editionConfidence: EditionEvidence.Confidence,
+    )
+
+    /**
+     * Everything [evaluate] needs, already computed by Tasks 1-4 -- this object fuses their
+     * outputs, it does not recompute any of them.
+     *
+     * [matchResult] is Task 2's [SetCodeMatch.MatchResult] for the card's set code: `selected ==
+     * null` (equivalently `reason == NO_MATCH`) is this table's RED case ("kein Code-Treffer");
+     * `reason`'s two region cases (`REGION_UNCLEAR` / `REGION_CONTRADICTS_VERIFIED`) are two of the
+     * table's YELLOW cases, and their German text is read straight off
+     * [SetCodeMatch.MatchReason.text] rather than duplicated here.
+     *
+     * [codeExactMatch] and [codeFrameCount] are the table's "Code-Distanz 0 in >=2 Frames" signal.
+     * Until Spec D3 Task 6, this object could not source them from Tasks 2-4 at all: `SetCodeMatch
+     * .best()` pooled every frame's evidence into one joined haystack and returned a single match
+     * with no exposed edit distance and no per-frame breakdown. Task 6 closed that gap directly on
+     * `SetCodeMatch.MatchResult` -- `best()` now takes a `framesEvidence` parameter (one entry per
+     * separate frame) and returns `codeExactMatch`/`codeFrameCount` computed by checking EACH frame
+     * against the winning prefix+number in isolation, not by reading `minDist` off the pooled hay
+     * (see `MatchResult`'s KDoc for why that distinction matters: pooled distance can be 0 from a
+     * single clean frame buried in several noisy ones). So a caller building this `Input` should
+     * take both fields straight off its `SetCodeMatch.MatchResult` (`matchResult.codeExactMatch`,
+     * `matchResult.codeFrameCount`) rather than approximating them; this object still never
+     * re-derives them itself, it only consumes what `SetCodeMatch` now reports.
+     *
+     * [rarity] is Task 3's [RarityRank.Result] for the matched group ([RarityRank.isAmbiguous] +
+     * [RarityRank.distinctRarities] feed the "Rarity mehrdeutig: X/Y" reason directly); `null` when
+     * the caller has nothing to rank (e.g. RED already short-circuits before rarity would matter).
+     *
+     * [edition] is Task 4's [EditionEvidence.EditionResult] for the EDITION zone, deliberately the
+     * RAW detected reading, not [Result.effectiveEdition] -- see [evaluate]'s KDoc on why the
+     * ampel must judge what was actually seen, not what the settings default silently fills in.
+     *
+     * [defaultEdition] is the user's Spec A `default_edition` setting (`Prefs.defaultEdition`),
+     * needed only for the card-beats-setting merge, never for the ampel colour itself.
+     */
+    data class Input(
+        val matchResult: SetCodeMatch.MatchResult,
+        val codeExactMatch: Boolean,
+        val codeFrameCount: Int,
+        val rarity: RarityRank.Result?,
+        val edition: EditionEvidence.EditionResult,
+        val defaultEdition: String,
+    )
+
+    /**
+     * The plan's table (Section 6.4), evaluated in order RED -> YELLOW -> GREEN:
+     *
+     * | Ampel | Bedingung |
+     * |---|---|
+     * | Gruen | Code-Distanz 0 in >=2 Frames UND Rarity eindeutig UND Edition != unknown |
+     * | Gelb | Code nur mit Toleranz/1 Frame, ODER Rarity mehrdeutig, ODER Edition unknown/LOW, ODER Region unklar, ODER Region widerspricht einem bekannten Druck |
+     * | Rot | kein Code-Treffer (Set = Unknown) |
+     *
+     * When several YELLOW conditions fire at once, only one `reason` can be shown -- the table
+     * itself doesn't rank them, so this picks a fixed, documented priority: code confidence first
+     * (the input everything else assumes is even legible), then rarity, then edition, then the two
+     * region cases (unclear before contradicts, matching [SetCodeMatch]'s own case numbering). This
+     * ordering is this task's own assumption, not something the plan specifies.
+     *
+     * The measured reality this is built on: D2's OCR benchmark (`ml/ocr_bench/report-2026-09-08.md`)
+     * reads the set code on only 37.5-53.8% of single frames, and GREEN requires distance 0 in
+     * *two* of them at once, on top of unambiguous rarity and a known edition. Expect YELLOW far
+     * more often than GREEN -- that is the honest result of a real card and a real camera, not a
+     * bug in this table. Loosening any single condition to chase more green would let a wrong
+     * printing slip through as a "you don't need to check this" promise, which is the one outcome
+     * the plan's Task 9 acceptance (>=25/30 green, **zero false greens**) treats as worse than
+     * missing the 25.
+     */
+    fun evaluate(input: Input): Result {
+        val effectiveEdition = resolveEdition(input.edition, input.defaultEdition)
+        val selected = input.matchResult.selected
+
+        if (selected == null || input.matchResult.reason == SetCodeMatch.MatchReason.NO_MATCH) {
+            return Result(Light.RED, "Kein Code-Treffer", effectiveEdition, input.edition.confidence)
+        }
+
+        if (!input.codeExactMatch || input.codeFrameCount < 2) {
+            return Result(Light.YELLOW, "Code unsicher: ${selected.setCode}", effectiveEdition, input.edition.confidence)
+        }
+        if (input.rarity?.isAmbiguous == true) {
+            val names = input.rarity.distinctRarities.joinToString("/")
+            return Result(Light.YELLOW, "Rarity mehrdeutig: $names", effectiveEdition, input.edition.confidence)
+        }
+        if (input.edition.edition == "unknown" || input.edition.confidence == EditionEvidence.Confidence.LOW) {
+            return Result(Light.YELLOW, "Edition nicht erkannt", effectiveEdition, input.edition.confidence)
+        }
+        if (input.matchResult.reason == SetCodeMatch.MatchReason.REGION_UNCLEAR) {
+            return Result(Light.YELLOW, SetCodeMatch.MatchReason.REGION_UNCLEAR.text!!, effectiveEdition, input.edition.confidence)
+        }
+        if (input.matchResult.reason == SetCodeMatch.MatchReason.REGION_CONTRADICTS_VERIFIED) {
+            return Result(Light.YELLOW, SetCodeMatch.MatchReason.REGION_CONTRADICTS_VERIFIED.text!!, effectiveEdition, input.edition.confidence)
+        }
+
+        return Result(Light.GREEN, null, effectiveEdition, input.edition.confidence)
+    }
+
+    /**
+     * Spec D3 Task 7's own wiring gap: a caller like `ScanScreen` has the RAW per-frame evidence
+     * (a [SetCodeMatch.MatchResult], the full [knownSets] list it was matched against, and one
+     * EDITION-zone-text-per-frame list from [SetCodeEvidence.editionTexts]), not an already-
+     * assembled [Input] -- building the two missing pieces ([EditionEvidence.EditionResult],
+     * [RarityRank.Result]) is pure composition of already-tested objects, so it lives here rather
+     * than being re-implemented at the call site (this task's own brief: "consume, do not
+     * re-derive").
+     *
+     * [editionTexts] is fed to a fresh [EditionEvidence] verbatim, one `add` call per entry --
+     * caller must already have filtered it to frames that actually had the zone (see
+     * [SetCodeEvidence.editionTexts]'s own doc; this function does not re-check that).
+     *
+     * [knownSets] is filtered down to [match]'s selected printing's NATURAL KEY -- prefix+number
+     * ([SetCodeMatch.parts]), not the exact `setCode` string -- for [RarityRank]. Deliberately NOT
+     * [match]'s own `candidates`: that field already collapses to a single entry for the common
+     * MATCHED case ([SetCodeMatch.best]'s Case 1 always returns `listOf(selected)`, never the tied
+     * group it picked `selected` from), so it can never carry a rarity disagreement even when one
+     * exists in the catalog. And deliberately NOT an exact string match on `selected.setCode`
+     * either (Spec D3 fix C2): `selected` is frequently a code [SetCodeMatch] COMPOSED from
+     * prefix+region+number (Case 1's "verified beats derived" only reuses a real known row when
+     * one already carries the read region) -- no entry in [knownSets] carries that exact composed
+     * string, so filtering on it yields an EMPTY list, [RarityRank.lowest] returns `null`, and a
+     * real rarity disagreement between e.g. two English rows goes completely unseen ("Rarity
+     * eindeutig" is satisfied only because nothing was even looked at). Rarity is assumed the same
+     * across languages of the same printing (the same assumption [SetCodeMatch]'s Case 1 already
+     * makes when it reuses `bestGroup.first().option.rarity` for a composed code), so grouping by
+     * prefix+number -- the identity a composed code and its real, differently-languaged siblings
+     * all share -- is the correct natural key, not a workaround. [knownSets] is the same list the
+     * caller already passed to [SetCodeMatch.best] itself. Falls back to an exact `setCode` string
+     * match only when [selected]'s code doesn't parse via [SetCodeMatch.parts] at all (should not
+     * happen for anything [SetCodeMatch.best] itself produced, but keeps this total rather than
+     * throwing on a shape it doesn't expect). `null` (not an empty-list ranking) when [match] has
+     * no selection at all -- there is nothing to rank, and RED short-circuits before rarity matters
+     * anyway.
+     */
+    fun fromEvidence(
+        match: SetCodeMatch.MatchResult,
+        knownSets: List<SetOption>,
+        editionTexts: List<String>,
+        defaultEdition: String,
+    ): Result {
+        val editionEv = EditionEvidence()
+        for (t in editionTexts) editionEv.add(t)
+        val rarity = match.selected?.let { sel ->
+            val selParts = SetCodeMatch.parts(sel.setCode)
+            val sameIdentity = if (selParts != null) {
+                knownSets.filter { opt ->
+                    val p = SetCodeMatch.parts(opt.setCode)
+                    p != null &&
+                        p.prefix.equals(selParts.prefix, ignoreCase = true) &&
+                        p.number.equals(selParts.number, ignoreCase = true)
+                }
+            } else {
+                knownSets.filter { it.setCode.equals(sel.setCode, ignoreCase = true) }
+            }
+            RarityRank.lowest(sameIdentity)
+        }
+        return evaluate(
+            Input(
+                matchResult = match,
+                codeExactMatch = match.codeExactMatch,
+                codeFrameCount = match.codeFrameCount,
+                rarity = rarity,
+                edition = editionEv.result(),
+                defaultEdition = defaultEdition,
+            )
+        )
+    }
+
+    /**
+     * "Die Karte schlaegt die Einstellung" (Spec Abschnitt 7) -- als PRINZIP umgesetzt, nicht als
+     * Einzelfall. Nutzerentscheidung vom 2026-09-08, bewusste Abweichung vom Wortlaut.
+     *
+     * Das Spec formuliert: "Wenn Default-Edition (A) auf `first` steht und die Erkennung
+     * `unlimited` HIGH liefert, gewinnt die Erkennung (Karte schlaegt Einstellung)." Der Satz
+     * nennt einen Fall, der Klammerzusatz ein Prinzip. Woertlich umgesetzt verwarf die Funktion
+     * jede andere sichere Lesung:
+     *
+     *  - Voreinstellung `unlimited`, Karte liest `first` HIGH  -> verbuchte `unlimited`
+     *  - Voreinstellung `first`, Karte liest `limited` HIGH     -> verbuchte `first`
+     *
+     * In beiden Faellen stand die Angabe zweifelsfrei auf der Karte und wurde weggeworfen. Das
+     * ist das Gegenteil dessen, was der Klammerzusatz sagt.
+     *
+     * Jetzt gilt: eine Erkennung mit HIGH gewinnt, sofern sie ueberhaupt etwas gelesen hat. Die
+     * Voreinstellung ist der Rueckfall fuer genau die Faelle, in denen die Karte schweigt --
+     * `unknown` (nichts gelesen) oder LOW (nur ein Frame, siehe [EditionEvidence]).
+     *
+     * Die Abwaegung, offen benannt: eine falsche Erkennung schlaegt damit oefter durch. HIGH
+     * verlangt aber denselben Marker in mindestens zwei Frames, und der Labellauf ueber 5.651
+     * Fotos erkannte Editionen zu 97 Prozent -- die belastbarste Groesse der ganzen Kette,
+     * deutlich vor dem Set-Code mit 37,5 bis 53,8 Prozent.
+     */
+    private fun resolveEdition(detected: EditionEvidence.EditionResult, defaultEdition: String): String =
+        if (detected.confidence == EditionEvidence.Confidence.HIGH && detected.edition != "unknown")
+            detected.edition
+        else
+            defaultEdition
+}

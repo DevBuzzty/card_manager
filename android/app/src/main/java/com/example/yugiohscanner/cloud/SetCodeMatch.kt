@@ -1,13 +1,25 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.RegionToken
+import java.util.Locale
+import java.util.regex.Pattern
+
 // Constrained set-code recognition. The card's identity (passcode) is already known, so its set
 // code can ONLY be one of that card's known printings — a small, closed list. Instead of trusting
 // a clean `XXX-DE123` token to survive OCR (it often doesn't: the hyphen is dropped, digits are
 // confused, the code is split across a line break), we match each KNOWN printing against the raw
 // OCR evidence, separators stripped, using a confusion-weighted edit distance, and keep the best.
+//
+// Spec D3 Task 2 — the structural fix for the D1 defect: matching a whole code cost only ~2 of 8
+// characters for an EN/DE region swap, comfortably inside the old length-scaled tolerance, so
+// `LOB-EN005` was silently accepted for a German card. As of this task the distance compare runs
+// ONLY over `prefix + number` (see [parts]); the region is not part of that comparison at all and
+// is instead read independently from the card's own text via [RegionToken] (Task 1). The
+// confusable region characters can therefore no longer buy a wrong printing a passing score, no
+// matter how the tolerance is tuned later.
 object SetCodeMatch {
     // Keep only A-Z0-9 (OCR frequently loses the hyphen and spaces), uppercased.
-    private fun norm(s: String) = s.uppercase().filter { it.isLetterOrDigit() }
+    private fun norm(s: String) = s.uppercase(Locale.ROOT).filter { it.isLetterOrDigit() }
 
     // Symmetric OCR confusions cost 0.5 instead of a full substitution.
     private val CONFUSE = hashSetOf(
@@ -33,53 +45,222 @@ object SetCodeMatch {
         return prev[n]
     }
 
-    // Smallest weighted distance aligning `code` anywhere inside `hay` (both normalized). Tries
-    // window lengths L-1..L+1 to tolerate an inserted/dropped character. Cheap: codes are ~8-10
-    // chars and the band text is short.
-    private fun bestWindowDist(code: String, hay: String): Float {
-        val L = code.length
+    /** A known code split into its three grammar slots. [region] is `null` when the code has none
+     *  (rare regionless OCG codes) or when [code] doesn't parse at all -- see [parts]. */
+    data class CodeParts(val prefix: String, val region: String?, val number: String)
+
+    // PREFIX-REGION[VARIANT]NUMBER. Deliberately the same grammar as SetCodeOcr's SET_CODE pattern
+    // (region 1-2 letters, an optional single variant letter that sits between region and number,
+    // e.g. Speed Duel's "SGX3-DEA10" where the number is "A10" -- see SetCodeOcr's own comment on
+    // why that letter belongs to the number, not the region). The one difference: this pattern is
+    // anchored (`^...$`) and applied to an already-clean CATALOG code, never to noisy OCR prose, so
+    // it doesn't need SetCodeOcr's VARIANT_AS_DIGIT correction (there is no misread to correct --
+    // a catalog code's variant letter, if any, is always genuine) and can afford a slightly wider
+    // prefix (2-6 instead of 2-5) without risking an accidental match inside ordinary text.
+    private val CODE_PATTERN: Pattern =
+        Pattern.compile("^([A-Z0-9]{2,6})-([A-Z]{1,2})([A-Z])?(\\d{2,4})$")
+
+    /**
+     * Decomposes a known, clean printing code (e.g. from the catalog or a network fetch) into
+     * prefix/region/number, or `null` if [code] doesn't have this grammar at all. Agrees with
+     * `ml/measure_zones_photos.py`'s `code_key()` on WHERE the split happens (prefix vs. region vs.
+     * tail), but keeps the number's original digits (incl. leading zeros and a real variant letter
+     * like SGX3-DEA10's "A") rather than stripping leading zeros the way `code_key` does --
+     * `code_key` only ever needs an EQUALITY key for measurement, this needs the literal digits
+     * back to compose a real code (Case 1 below), so trimming zeros here would corrupt it.
+     */
+    fun parts(code: String): CodeParts? {
+        val m = CODE_PATTERN.matcher(code.trim().uppercase(Locale.ROOT))
+        if (!m.matches()) return null
+        val prefix = m.group(1)!!
+        val region = m.group(2)!!
+        val variant = m.group(3)
+        val digits = m.group(4)!!
+        return CodeParts(prefix, region, (variant ?: "") + digits)
+    }
+
+    /** Why [MatchResult.selected] is what it is -- the traffic light (Task 5) reads this instead
+     *  of re-deriving it from scratch. [text] is the exact German wording Task 5 shows the user;
+     *  `null` for a plain, uncontested match (Task 5 derives ITS OWN green/yellow reasons there
+     *  from code distance, frame count, rarity and edition -- this object only ever speaks for the
+     *  region decision, which is the one thing only this function has enough information to know). */
+    enum class MatchReason(val text: String?) {
+        MATCHED(null),
+        REGION_UNCLEAR("Region unklar"),
+        REGION_CONTRADICTS_VERIFIED("Region widerspricht bekanntem Druck"),
+        NO_MATCH(null),
+    }
+
+    /**
+     * [selected] is the preselection; [candidates] is everything the user could reasonably pick
+     * from instead (verified printings first), always containing [selected] when it's non-null.
+     * [reason] explains why, for the three region cases from the plan's binding rule:
+     *  1. Region read confidently, no conflict -> MATCHED, `selected` = the composed code, or a
+     *     real known printing at that exact code if the catalog/network already had one (a real
+     *     entry always wins over a freshly-composed twin — "verified beats derived").
+     *  2. Region not readable -> REGION_UNCLEAR, `candidates` = only the printings that actually
+     *     exist for this prefix+number (verified first). Nothing is composed.
+     *  3. Region read, but contradicts a VERIFIED printing with the same prefix+number -> that
+     *     verified printing is `selected` (evidence beats a misread) and sorts first in
+     *     `candidates`; the misread composition is not trusted.
+     *
+     * [codeExactMatch] and [codeFrameCount] are Spec D3 Task 6's fix for a gap Task 5 found: the
+     * traffic light's green condition ("Code-Distanz 0 in >=2 Frames", [ScanConfidence]) needs to
+     * know not just THAT a printing matched, but whether that match was clean (distance 0) and in
+     * how many SEPARATE frames -- neither of which this function used to expose ([Scored.dist] was
+     * private, and [best] only ever saw one pooled haystack, never a per-frame breakdown). Both are
+     * computed from [best]'s `framesEvidence` parameter, counting frames whose OWN text -- not the
+     * pooled haystack -- lands the winning prefix+number at distance 0 in isolation. That
+     * distinction matters: pooling several frames into one haystack can let a single clean
+     * substring buried in unrelated noise still win at distance 0 overall, which would make EVERY
+     * multi-frame scan look "exact in N frames" even when only one frame ever read anything
+     * legible -- see [SetCodeMatchTest]'s pinning test for the worked example. [codeExactMatch] is
+     * `true` iff [codeFrameCount] is at least 1; both default to `false`/`0` for the NO_MATCH early
+     * returns, where there is no winning printing for a frame to match at all.
+     */
+    data class MatchResult(
+        val selected: SetOption?,
+        val candidates: List<SetOption>,
+        val reason: MatchReason,
+        val codeExactMatch: Boolean = false,
+        val codeFrameCount: Int = 0,
+    )
+
+    private data class Scored(val option: SetOption, val parts: CodeParts, val dist: Float)
+
+    // Smallest total edit distance for [prefix] and [number] against ANY split of [hay] that
+    // places them with 0-3 characters between them (the region's length -- RegionToken's own
+    // candidates run 1-3 letters; 0 additionally covers a region that OCR dropped outright). Each
+    // side independently tolerates a +/-1 length mismatch, the same insertion/deletion slack the
+    // old whole-code matcher gave the full string. The region-length gap costs NOTHING regardless
+    // of what characters sit there -- that gap is precisely how the region is excluded from the
+    // comparison, per this task's whole point.
+    private fun prefixNumberDist(prefix: String, number: String, hay: String): Float {
         var best = Float.MAX_VALUE
-        for (len in (L - 1)..(L + 1)) {
-            if (len < 3 || len > hay.length) continue
-            var s = 0
-            while (s + len <= hay.length) {
-                val d = dist(code, hay.substring(s, s + len))
-                if (d < best) best = d
-                s++
+        val pLenRange = maxOf(1, prefix.length - 1)..(prefix.length + 1)
+        val nLenRange = maxOf(1, number.length - 1)..(number.length + 1)
+        for (pStart in 0 until hay.length) {
+            for (pLen in pLenRange) {
+                val pEnd = pStart + pLen
+                if (pEnd > hay.length) continue
+                val dP = dist(prefix, hay.substring(pStart, pEnd))
+                if (dP >= best) continue // can't possibly beat the current best any more
+                for (gap in 0..3) {
+                    val nStart = pEnd + gap
+                    for (nLen in nLenRange) {
+                        val nEnd = nStart + nLen
+                        if (nEnd > hay.length) continue
+                        val dN = dist(number, hay.substring(nStart, nEnd))
+                        val total = dP + dN
+                        if (total < best) best = total
+                    }
+                }
             }
         }
         return best
     }
 
-    private val GERMAN = Regex("""-DE|-G\d""", RegexOption.IGNORE_CASE)
-    private fun isGerman(code: String) = GERMAN.containsMatchIn(code)
-
     /**
-     * Best known printing for the raw OCR [evidence] (one string per frame/read), or null if
-     * nothing is close enough. [known] should be German-first so a tie prefers the German printing.
-     * Passing already-clean codes still works — they align at distance 0.
+     * Best known printing for the raw OCR [evidence] (one string per frame/read; both grammar-
+     * corrected candidates and uncorrected raw text, see [com.example.yugiohscanner.ml.SetCodeEvidence.rawTexts]
+     * for why both matter), or a NO_MATCH result if nothing is close enough. [known] should be
+     * verified-first (the catalog already returns it that way) so a tie prefers a verified entry.
+     * [evidence] doubles as the region zone text passed to [RegionToken.read] -- the same pooled
+     * text the prefix/number match came from is exactly what should also carry the (separate)
+     * region reading.
+     *
+     * [framesEvidence] is separate from [evidence] specifically for [MatchResult.codeFrameCount]
+     * (Task 6): one entry per SEPARATE frame/reading, so each can be checked in isolation against
+     * the winning prefix+number, instead of the pooled haystack [evidence] flattens into. Defaults
+     * to [evidence] for callers that have no better per-frame breakdown to offer (matches was the
+     * pre-Task-6 behaviour, just also now populating the two new fields off whatever was passed).
      */
-    fun best(evidence: List<String>, known: List<SetOption>): SetOption? {
-        if (known.isEmpty() || evidence.isEmpty()) return null
-        val hay = norm(evidence.joinToString(" "))
-        if (hay.length < 4) return null
+    fun best(evidence: List<String>, known: List<SetOption>, framesEvidence: List<String> = evidence): MatchResult {
+        if (known.isEmpty() || evidence.isEmpty()) return MatchResult(null, emptyList(), MatchReason.NO_MATCH)
+        val joined = evidence.joinToString(" ")
+        val hay = norm(joined)
+        if (hay.length < 4) return MatchResult(null, emptyList(), MatchReason.NO_MATCH)
 
-        var best: SetOption? = null
-        var bestScore = Float.MAX_VALUE
-        var bestRaw = Float.MAX_VALUE
-        for (k in known) {
-            val code = norm(k.setCode)
-            if (code.length < 4) continue
-            val d = bestWindowDist(code, hay)
-            // Nudge German printings ahead on ties (the known list is already DE-first, this just
-            // makes it explicit and robust to ordering).
-            val score = d - if (isGerman(k.setCode)) 0.1f else 0f
-            if (score < bestScore) { bestScore = score; bestRaw = d; best = k }
+        val scored = known.mapNotNull { opt ->
+            val p = parts(opt.setCode) ?: return@mapNotNull null
+            val prefix = norm(p.prefix)
+            val number = norm(p.number)
+            if (prefix.isEmpty() || number.isEmpty()) return@mapNotNull null
+            Scored(opt, p, prefixNumberDist(prefix, number, hay))
+        }
+        if (scored.isEmpty()) return MatchResult(null, emptyList(), MatchReason.NO_MATCH)
+
+        // Accept only a close-enough match; the tolerance scales with the compared length (prefix
+        // + number only -- the region is excluded, so it no longer inflates the length the
+        // tolerance is scaled against either).
+        val accepted = scored.filter { s ->
+            val len = norm(s.parts.prefix).length + norm(s.parts.number).length
+            s.dist <= maxOf(1.5f, 0.25f * len)
+        }
+        if (accepted.isEmpty()) return MatchResult(null, emptyList(), MatchReason.NO_MATCH)
+
+        // Several known printings legitimately share one prefix+number (that's the whole point --
+        // it's the same underlying printing in different languages), so they tie at the identical
+        // distance. Group on the best distance, not on a single winning SetOption.
+        val minDist = accepted.minOf { it.dist }
+        val bestGroup = accepted.filter { it.dist <= minDist + 1e-4f }
+        val groupPrefix = bestGroup.first().parts.prefix
+        val groupNumber = bestGroup.first().parts.number
+
+        // Task 6: how many of the SEPARATE frames in [framesEvidence] independently land this
+        // exact prefix+number at distance 0 on their own -- see [MatchResult]'s KDoc on why this
+        // must be re-derived per frame rather than read off [minDist], which is measured against
+        // the pooled haystack and can be 0 even when only one frame ever read anything legible.
+        val normGroupPrefix = norm(groupPrefix)
+        val normGroupNumber = norm(groupNumber)
+        val codeFrameCount = framesEvidence.count { frame ->
+            val frameHay = norm(frame)
+            frameHay.length >= 4 && prefixNumberDist(normGroupPrefix, normGroupNumber, frameHay) <= 0f
+        }
+        val codeExactMatch = codeFrameCount >= 1
+
+        fun byVerifiedFirst(list: List<Scored>) = list.map { it.option }.sortedByDescending { it.verified }
+
+        // Case 2: region not readable. Offer only printings that actually exist for this
+        // prefix+number -- nothing is composed.
+        val region = RegionToken.read(joined, groupPrefix, groupNumber) ?: return byVerifiedFirst(bestGroup).let {
+            MatchResult(it.firstOrNull(), it, MatchReason.REGION_UNCLEAR, codeExactMatch, codeFrameCount)
         }
 
-        // Accept only a close-enough match; the tolerance scales with code length.
-        val code = best?.let { norm(it.setCode) } ?: return null
-        val tolerance = maxOf(1.5f, 0.25f * code.length)
-        return if (bestRaw <= tolerance) best else null
+        // Case 3: the read region contradicts a VERIFIED printing of the same prefix+number (a
+        // verified entry whose OWN region differs from what was just read). The verified printing
+        // wins the selection and sorts first; the misread composition is not trusted over it.
+        val conflicting = bestGroup.firstOrNull { s ->
+            s.option.verified && s.parts.region != null && !s.parts.region.equals(region, ignoreCase = true)
+        }
+        if (conflicting != null) {
+            val candidates = (listOf(conflicting.option) + bestGroup.map { it.option })
+                .distinctBy { it.setCode }
+            return MatchResult(conflicting.option, candidates, MatchReason.REGION_CONTRADICTS_VERIFIED, codeExactMatch, codeFrameCount)
+        }
+
+        // Case 1: region read confidently, no conflict. A real known printing at that exact code
+        // wins over a freshly-composed one ("verified beats derived" also covers "real beats
+        // derived" for an unverified-but-real network hit); only compose when nothing already
+        // carries this region. Rarity is assumed the same across languages of the same printing
+        // (the plan's stated assumption) -- reuse the group's own rarity rather than inventing one;
+        // Task 3 (RarityRank) is what resolves an actual rarity disagreement within the group.
+        val exact = bestGroup
+            .filter { it.parts.region?.equals(region, ignoreCase = true) == true }
+            .sortedByDescending { it.option.verified }
+            .firstOrNull()
+        // Spec D3 fix C1: `region` is the raw infix read off the card (e.g. "G", "F"), not a
+        // language code -- RegionToken.language maps it to the DE/EN/JP value `language` actually
+        // means everywhere else (the collection's composite primary key included). Writing `region`
+        // straight into `language` used to file a "-G005" printing under language="G", invisible to
+        // every DE-aware code path and never merging with the user's real DE rows.
+        val selected = exact?.option ?: SetOption(
+            setCode = "$groupPrefix-$region$groupNumber",
+            rarity = bestGroup.first().option.rarity,
+            price = 0.0,
+            language = RegionToken.language(region),
+            verified = false,
+        )
+        return MatchResult(selected, listOf(selected), MatchReason.MATCHED, codeExactMatch, codeFrameCount)
     }
 }

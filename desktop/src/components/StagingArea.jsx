@@ -5,7 +5,7 @@ import CustomSelect from './CustomSelect';
 import RarityGuide from './RarityGuide';
 import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
-import { matchCandidates } from '../utils/setCodeMatch';
+import { matchCandidates, phoneSelectedSet, mapPhoneConfidence } from '../utils/setCodeMatch';
 import Flag from './Flag';
 import CopyChip from './CopyChip';
 
@@ -102,8 +102,14 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
         // Show the card immediately with the English printings; German + Japanese load right after.
         setScannedCards(prev => prev.map(c => {
             if (c.tempId !== tempId) return c;
-            const apiMatch = matchCandidates(c.scannedSetCandidates, data.card_sets);
             const enPrintings = mergePrintings(data.card_sets, [], []);
+            // Spec D3 Task 8: a phone that sent its own conclusion (`scannedConfidence` set) is
+            // used AS-IS -- no local matchCandidates() fallback runs at all for that card. An
+            // older phone never sends it, so `usePhoneMatch` is false and this stays exactly the
+            // pre-Task-8 local-matching path.
+            const usePhoneMatch = c.scannedConfidence != null;
+            const phoneSet = usePhoneMatch ? phoneSelectedSet(c.scannedSetCode, c.scannedRarity, c.scannedLanguage, enPrintings) : null;
+            const apiMatch = usePhoneMatch ? null : matchCandidates(c.scannedSetCandidates, data.card_sets);
             return {
                 ...c,
                 status: 'loaded',
@@ -112,10 +118,10 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 loadingSets: true,
                 inCollection: result.exists,
                 ownedQuantity: result.quantity,
-                selectedSet: c.selectedSet || (apiMatch.set ? { ...apiMatch.set, language: 'EN' } : (enPrintings[0] || null)),
-                setAutoDetected: apiMatch.confidence !== 'none',
-                setMatchConfidence: apiMatch.confidence,
-                edition: c.edition || c.presetEdition || defaults.edition,
+                selectedSet: c.selectedSet || phoneSet || (apiMatch?.set ? { ...apiMatch.set, language: 'EN' } : (enPrintings[0] || null)),
+                setAutoDetected: usePhoneMatch ? c.scannedConfidence !== 'red' : apiMatch.confidence !== 'none',
+                setMatchConfidence: usePhoneMatch ? mapPhoneConfidence(c.scannedConfidence) : apiMatch.confidence,
+                edition: c.edition || c.presetEdition || c.scannedEdition || defaults.edition,
                 condition: c.condition || c.presetCondition || defaults.condition,
             };
         }));
@@ -134,14 +140,24 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 let auto = c.setAutoDetected;
                 let confidence = c.setMatchConfidence;
                 if (!keepSelection) {
-                    // Prefer the German printing that matches the scanned set code (collection is DE-first).
-                    const deMatch = matchCandidates(c.scannedSetCandidates, germanSets);
-                    if (deMatch && deMatch.set) {
-                        chosen = { ...deMatch.set, language: 'DE', isYugipedia: true };
-                        auto = true;
-                        confidence = deMatch.confidence;
-                    } else if (germanSets.length > 0 && !c.setAutoDetected) {
-                        chosen = { ...germanSets[0], language: 'DE', isYugipedia: true };
+                    if (c.scannedConfidence != null) {
+                        // Spec D3 Task 8: still the phone's own conclusion, just re-resolved
+                        // against the now-larger printings list (DE/JP just arrived) so it can
+                        // pick up the real printing instead of the composed placeholder from the
+                        // first setter above -- never blended with a local match.
+                        chosen = phoneSelectedSet(c.scannedSetCode, c.scannedRarity, c.scannedLanguage, allPrintings) || chosen;
+                        auto = c.scannedConfidence !== 'red';
+                        confidence = mapPhoneConfidence(c.scannedConfidence);
+                    } else {
+                        // Prefer the German printing that matches the scanned set code (collection is DE-first).
+                        const deMatch = matchCandidates(c.scannedSetCandidates, germanSets);
+                        if (deMatch && deMatch.set) {
+                            chosen = { ...deMatch.set, language: 'DE', isYugipedia: true };
+                            auto = true;
+                            confidence = deMatch.confidence;
+                        } else if (germanSets.length > 0 && !c.setAutoDetected) {
+                            chosen = { ...germanSets[0], language: 'DE', isYugipedia: true };
+                        }
                     }
                 }
                 return { ...c, loadingSets: false, allPrintings, selectedSet: chosen, setAutoDetected: auto, setMatchConfidence: confidence };
@@ -437,6 +453,19 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         {card.status === 'loaded' ? (
                             <>
                                 <div className="flex items-center gap-2">
+                                    {/* Traffic-light dot (Spec D3 Task 8): DISPLAYS the ampel the phone already
+                                        computed (card.scannedConfidence) -- this screen never re-derives green/
+                                        yellow/red itself, same as the phone's own StagingRow. Absent entirely for
+                                        an older phone build (scannedConfidence undefined) or a manual/CSV entry. */}
+                                    {card.scannedConfidence && (
+                                        <span
+                                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                                card.scannedConfidence === 'green' ? 'bg-good' :
+                                                card.scannedConfidence === 'yellow' ? 'bg-warn' : 'bg-crit'
+                                            }`}
+                                            title={card.scannedReason || 'Vom Handy erkannt'}
+                                        />
+                                    )}
                                     <h3 className="font-bold text-lg text-space-white truncate">{card.data.name}</h3>
                                     {card.quantity > 1 && (
                                         <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-[10px] font-bold uppercase rounded border border-green-500/30">
@@ -453,6 +482,13 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     <span className="text-space-violet font-mono bg-purple-900/30 px-1.5 py-0.5 rounded">{card.passcode}</span>
                                     <span className="text-gray-400 truncate">{card.data.type}</span>
                                 </div>
+                                {/* Grund (Spec D3 Task 8): read verbatim off the phone's ScanConfidence result --
+                                    already German, never re-translated or paraphrased here. `null`/absent exactly
+                                    for GREEN (see ScanConfidence.Result's own doc), so nothing renders for a green
+                                    card, same as the phone. */}
+                                {card.scannedReason && (
+                                    <p className="text-xs text-gray-500 -mt-1 mb-2 truncate">{card.scannedReason}</p>
+                                )}
 
                                 <div className="flex gap-2 items-center">
                                     {/* Quantity */}

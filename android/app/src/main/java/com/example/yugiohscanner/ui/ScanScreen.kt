@@ -93,7 +93,7 @@ private fun CatalogCard.toCardRow() = CardRow(
     atk = atk, def = def, level = level, race = race, attribute = attribute,
 )
 
-private fun CatalogPrinting.toSetOption() = SetOption(setCode = code, rarity = rarity, price = 0.0, language = lang ?: "EN")
+private fun CatalogPrinting.toSetOption() = SetOption(setCode = code, rarity = rarity, price = 0.0, language = lang ?: "EN", verified = verified)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -200,21 +200,67 @@ fun ScanScreen(onClose: () -> Unit) {
     // Shared by autonomous ML detection (onConfirmed below) and manual passcode entry: stage the
     // card locally, then resolve its base data + set code, reporting failures via the snackbar
     // (the success path stays silent — the flash, sound and footer counter already report it).
-    fun stageScan(pc: String, evidence: List<String>) {
+    // [framesEvidence] is one entry per SEPARATE frame (see SetCodeMatch.best's own doc on why
+    // that's not the same list as [evidence]) — defaults to [evidence] for callers (manual entry)
+    // that have no real per-frame breakdown to offer.
+    // [editionTexts] is Spec D3 Task 7's addition: one EDITION-zone-text entry per frame (see
+    // SetCodeEvidence.editionTexts), for the traffic light's edition signal. Defaults to empty for
+    // callers (manual entry) that never OCR a zone at all — ScanConfidence.fromEvidence then
+    // reports `edition = unknown`, the honest answer for "never looked".
+    fun stageScan(pc: String, evidence: List<String>, framesEvidence: List<String> = evidence, editionTexts: List<String> = emptyList()) {
         scope.launch { flash.snapTo(0.8f); flash.animateTo(0f, animationSpec = tween(300)) }
-        // Always stage on the phone; a connected desktop additionally gets a mirror of the scan.
-        val mirrorSocket = socket
-        if (isConnected && mirrorSocket != null) {
-            val data = JSONObject().put("passcode", pc)
-            val cand = com.example.yugiohscanner.ml.SetCodeOcr.extract(evidence.joinToString(" "))
-            if (cand.isNotEmpty()) { data.put("setCode", cand.first()); data.put("setCodeCandidates", JSONArray(cand)) }
-            mirrorSocket.emit("card_scanned", data)
-        }
         val entry = ScanStagingEntry(System.nanoTime(), pc).apply {
             edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
             condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
         }
         stagingCards.add(entry)
+        // Spec D3 Task 7: assemble the traffic light from this scan's evidence and apply it to
+        // `entry` -- both branches below need the exact same three lines, so it's pulled out once.
+        // Reads `entry.knownSets`, which both branches below already set BEFORE calling this (same
+        // list `match` was itself matched against) -- see ScanConfidence.fromEvidence's own doc on
+        // why the full known-sets list, not `match.candidates`, is what RarityRank needs.
+        // `.effectiveEdition` always overwrites `entry.edition` here because this is the entry's
+        // FIRST resolve: `userTouched` cannot yet be true (the user has had no chance to edit an
+        // entry that just appeared), the same reasoning that already lets `.selectedSet` below be
+        // set unconditionally on first resolve. The silent-improvement loop (below, Task 6) is
+        // where a later resolve must respect `userTouched` instead.
+        fun applyConfidence(match: SetCodeMatch.MatchResult) {
+            val confidence = com.example.yugiohscanner.ml.ScanConfidence.fromEvidence(
+                match, entry.knownSets, editionTexts, com.example.yugiohscanner.Prefs.defaultEdition(context),
+            )
+            entry.confidence = confidence
+            entry.edition = confidence.effectiveEdition
+            logScanDecision("erst", pc, match, confidence, entry.knownSets)
+        }
+        // Spec D3 Task 8 (plan Section 6.5): mirrors the phone's ALREADY-RESOLVED conclusion to a
+        // connected desktop -- setCode/rarity/language/edition, the traffic light and its German
+        // reason verbatim -- so the desktop shows the SAME preselection instead of re-matching the
+        // candidates itself against a card it never saw the band text of. Sent once `applyConfidence`
+        // has run (both branches below), not eagerly at scan time the way the old mirror was: none
+        // of this is known until the printing list is resolved and SetCodeMatch/ScanConfidence have
+        // judged it. An older desktop build ignores the extra fields it doesn't recognise; a newer
+        // desktop talking to an older phone that never sends them falls back to its own local match
+        // (see StagingArea.jsx's own comment on that fallback).
+        fun mirrorToDesktop(match: SetCodeMatch.MatchResult) {
+            val mirrorSocket = socket
+            if (!isConnected || mirrorSocket == null) return
+            val confidence = entry.confidence ?: return // applyConfidence always ran first; guards a future call-order change
+            val data = JSONObject().put("passcode", pc)
+            val selected = match.selected
+            if (selected != null) {
+                data.put("setCode", selected.setCode)
+                data.put("rarity", selected.rarity)
+                data.put("language", selected.language)
+            }
+            if (match.candidates.isNotEmpty()) {
+                data.put("setCodeCandidates", JSONArray(match.candidates.map { it.setCode }))
+            }
+            data.put("edition", entry.edition)
+            data.put("editionConfidence", confidence.editionConfidence.name.lowercase(Locale.ROOT))
+            data.put("confidence", confidence.light.name.lowercase(Locale.ROOT))
+            data.put("reason", confidence.reason ?: JSONObject.NULL)
+            mirrorSocket.emit("card_scanned", data)
+        }
         scope.launch {
             try {
                 // Catalog first (Task 9): a local hit resolves the base card instantly, offline,
@@ -231,8 +277,16 @@ fun ScanScreen(onClose: () -> Unit) {
                 if (catalogCard != null && catalogSets != null) {
                     entry.base = catalogCard.toCardRow()
                     entry.knownSets = catalogSets.map { it.toSetOption() }
-                    entry.selectedSet = SetCodeMatch.best(evidence, entry.knownSets)
+                    // .selected is the preselection; .reason (Region unklar/widerspricht) and
+                    // .candidates feed the traffic light + set picker (Task 7's applyConfidence
+                    // below). .codeMatch is kept so a later frame's silent improvement (Task 6) has
+                    // something to compare against — see SetCodeEvidence.shouldSilentlyImprove.
+                    val match = SetCodeMatch.best(evidence, entry.knownSets, framesEvidence)
+                    entry.codeMatch = match
+                    entry.selectedSet = match.selected
+                    applyConfidence(match)
                     entry.loading = false
+                    mirrorToDesktop(match)
                 } else {
                     val base = catalogCard?.toCardRow() ?: CardSearchRepository.search(pc).firstOrNull()
                     if (base == null) {
@@ -242,8 +296,12 @@ fun ScanScreen(onClose: () -> Unit) {
                         entry.base = base
                         val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
                         entry.knownSets = known
-                        entry.selectedSet = SetCodeMatch.best(evidence, known)
+                        val match = SetCodeMatch.best(evidence, known, framesEvidence)
+                        entry.codeMatch = match
+                        entry.selectedSet = match.selected
+                        applyConfidence(match)
                         entry.loading = false
+                        mirrorToDesktop(match)
                     }
                 }
             } catch (e: Exception) {
@@ -253,9 +311,13 @@ fun ScanScreen(onClose: () -> Unit) {
         }
     }
 
-    val onConfirmed = rememberUpdatedState<(Int, List<String>) -> Unit> { passcode, evidence ->
+    // [frames] is [evidence]'s per-frame breakdown (see stageScan's own doc) — a separate
+    // parameter rather than re-deriving it from [evidence], since the two callers below don't
+    // always have the same list to offer for both. [editionTexts] is stageScan's own new
+    // parameter (Task 7), threaded through the same way.
+    val onConfirmed = rememberUpdatedState<(Int, List<String>, List<String>, List<String>) -> Unit> { passcode, evidence, frames, editionTexts ->
         val pc = passcode.toString()
-        if (passcode > 0 && seen.add(pc)) stageScan(pc, evidence)
+        if (passcode > 0 && seen.add(pc)) stageScan(pc, evidence, frames, editionTexts)
     }
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
@@ -290,7 +352,7 @@ fun ScanScreen(onClose: () -> Unit) {
     val analyzer = remember {
         CardAnalyzer(
             // Reliable identification by passcode OCR → autonomous phone staging (onConfirmed).
-            onResultDetected = { code, setCodes -> onConfirmed.value(code.toIntOrNull() ?: -1, setCodes) },
+            onResultDetected = { code, setCodes -> onConfirmed.value(code.toIntOrNull() ?: -1, setCodes, setCodes, emptyList()) },
             onProgress = { code, hits, required -> onProgress.value(code, hits, required) }
         )
     }
@@ -336,11 +398,61 @@ fun ScanScreen(onClose: () -> Unit) {
                 // reading the grammar rejects (lost hyphen, line break, region digit) is no longer
                 // silently dropped before the matcher that exists to handle it. See
                 // SetCodeEvidence.rawTexts.
+                val frames = setEvidence.rawTexts(d.passcode)
+                // Task 7's own addition: the EDITION zone's per-frame text, recorded by the same
+                // setEvidence.record() call above -- see SetCodeEvidence.editionTexts.
                 onConfirmed.value(
-                    d.passcode,
-                    setEvidence.setCodeCandidates(d.passcode) + setEvidence.rawTexts(d.passcode),
+                    d.passcode, setEvidence.setCodeCandidates(d.passcode) + frames, frames,
+                    setEvidence.editionTexts(d.passcode),
                 )
-                setEvidence.forget(d.passcode)
+                // NO setEvidence.forget() here (Spec D3 Task 6, "Stille Verbesserung"): the card
+                // usually stays visible after its first confirmation, and BoxTracker.update only
+                // ever returns it ONCE per presence (see BoxTracker's own doc) — so this is the
+                // only chance to seed setCodeCandidates/rawTexts, but NOT the last chance to
+                // improve on them. The silent-improvement loop below keeps resolving from whatever
+                // record() adds on every later frame, for as long as the card stays in `dets`.
+            }
+            // Belege einer Karte abraeumen, sobald sie endgueltig aus dem Bild ist. Seit Task 6
+            // wird bei der Bestaetigung bewusst NICHT mehr vergessen -- die stille Verbesserung
+            // braucht die Historie. Ohne diesen Abgang waechst die Map dann ueber eine lange
+            // Sitzung unbegrenzt, und der Speed-Scan aus D4 schiebt Hunderte Karten durch eine
+            // einzige. BoxTracker ist die einzige Stelle, die "weg" von "kurz verdeckt"
+            // unterscheiden kann: es meldet erst nach maxMisses Frames ohne Sichtung.
+            for (gone in tracker.droppedThisFrame) setEvidence.forget(gone)
+
+            // Silent improvement (Spec D3 Task 6, plan Section 6.2): a card already staged
+            // (`seen`) but still visible gets its set code re-resolved from ALL evidence gathered
+            // so far on every frame — a later, cleaner frame can genuinely beat the one(s) that won
+            // the first resolve. `shouldSilentlyImprove` also enforces the one thing this must
+            // never do: overwrite a set/rarity/language/edition the user already corrected by hand
+            // (`entry.userTouched`).
+            for (d in dets) {
+                if (d.passcode <= 0) continue
+                val pc = d.passcode.toString()
+                if (pc !in seen) continue
+                val entry = stagingCards.find { it.passcode == pc } ?: continue
+                if (entry.loading) continue // still resolving its first hit — nothing to compare yet
+                val frames = setEvidence.rawTexts(d.passcode)
+                val result = SetCodeMatch.best(
+                    setEvidence.setCodeCandidates(d.passcode) + frames, entry.knownSets, frames,
+                )
+                if (com.example.yugiohscanner.ml.SetCodeEvidence.shouldSilentlyImprove(entry.userTouched, result, entry.codeMatch)) {
+                    entry.codeMatch = result
+                    entry.selectedSet = result.selected
+                    // Task 7: the traffic light must move in lockstep with .codeMatch/.selectedSet
+                    // above, or the dot+reason shown in the staging sheet would go stale against
+                    // the very selection it's supposed to describe -- exactly the "second opinion"
+                    // this task's brief warns against. Guarded by the same shouldSilentlyImprove
+                    // (userTouched already false here, same as .selectedSet's own lack of a
+                    // separate guard above), so a deliberate user correction still freezes both.
+                    val confidence = com.example.yugiohscanner.ml.ScanConfidence.fromEvidence(
+                        result, entry.knownSets, setEvidence.editionTexts(d.passcode),
+                        com.example.yugiohscanner.Prefs.defaultEdition(context),
+                    )
+                    entry.confidence = confidence
+                    entry.edition = confidence.effectiveEdition
+                    logScanDecision("verbessert", d.passcode.toString(), result, confidence, entry.knownSets)
+                }
             }
             if (dets.isNotEmpty()) {
                 val top = dets.maxByOrNull { it.sim }
@@ -777,4 +889,42 @@ class CardAnalyzer(
     fun close() {
         recognizer.close()
     }
+}
+
+/**
+ * Eine Zeile je Ampel-Entscheidung, im key=value-Format, das `ml/ocr_bench.py` ohnehin liest.
+ *
+ * Warum das noetig ist, und zwar dringend: die Geraeteabnahme zu D3 ergab 31 von 31 gruen, und das
+ * Abschlussreview fand danach ZWEI kritische Fehler, die genau diese Abnahme ueberlebt hatten --
+ * eine Rarity-Pruefung, die bei komponierten Codes leer erfuellt war, und ein `unlimited`, das aus
+ * dreimal leerem Ausschnitt entstand. Beide erzeugten GRUEN, und Gruen zeigt keinen Grund an. Eine
+ * leer-gruene Karte war vom Bildschirm aus nicht von einer echt-gruenen zu unterscheiden.
+ *
+ * Das entscheidende Feld ist `composed`: es sagt, ob der Set-Code in der Printing-Liste GEFUNDEN
+ * oder aus Praefix + gelesener Region + Nummer ZUSAMMENGESETZT wurde. Allein dieses Feld haette
+ * den Rarity-Fehler sichtbar gemacht, denn er trat ausschliesslich im komponierten Fall auf.
+ *
+ * `stage` unterscheidet die erste Aufloesung von der stillen Verbesserung. Ohne das sind eine
+ * Verbesserung und eine Nicht-Verbesserung im Protokoll identisch -- und die Verbesserung ersetzt
+ * einen Druck, NACHDEM der Nutzer den alten bereits gesehen hat.
+ */
+private fun logScanDecision(
+    stage: String,
+    passcode: String,
+    match: com.example.yugiohscanner.cloud.SetCodeMatch.MatchResult,
+    confidence: com.example.yugiohscanner.ml.ScanConfidence.Result,
+    knownSets: List<com.example.yugiohscanner.cloud.SetOption>,
+) {
+    val sel = match.selected
+    val composed = sel != null && knownSets.none { it.setCode.equals(sel.setCode, ignoreCase = true) }
+    android.util.Log.i(
+        "ScanDecision",
+        "stage=$stage pc=$passcode " +
+            "code=${sel?.setCode ?: "-"} rarity=${sel?.rarity ?: "-"} lang=${sel?.language ?: "-"} " +
+            "composed=$composed match=${match.reason.name} " +
+            "exact=${match.codeExactMatch} frames=${match.codeFrameCount} " +
+            "known=${knownSets.size} " +
+            "light=${confidence.light.name} grund='${confidence.reason ?: ""}' " +
+            "edition=${confidence.effectiveEdition} editionConf=${confidence.editionConfidence.name}"
+    )
 }

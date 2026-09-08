@@ -62,3 +62,34 @@ export function matchCandidates(candidates, sets) {
   }
   return { set: null, score: bestScore, confidence: 'none' };
 }
+
+// Spec D3 Task 8: preselects a printing from what the PHONE already resolved (setCode/rarity/
+// language, sent alongside the scan) instead of matching OCR candidates against `printings` a
+// second time here -- the phone saw the card's own band text through ScanScreen/SetCodeMatch.kt,
+// this app never does, so its conclusion is used as-is rather than blended with a fresh local
+// guess. Looks the phone's printing up in `printings` first so it carries a real price/isYugipedia
+// flag; falls back to a printing BUILT from the phone's own fields (price 0, the same shape
+// SetCodeMatch.kt's own "composed" case produces) when `printings` hasn't reached that printing's
+// language list yet (e.g. the DE/JP fetch is still in flight). `null` when the phone itself found
+// no match (`setCode` absent -- its Ampel was RED), the one case with nothing to preselect.
+export function phoneSelectedSet(setCode, rarity, language, printings) {
+  if (!setCode) return null;
+  const hit = (printings || []).find(p =>
+    normalize(p.set_code) === normalize(setCode) &&
+    (!rarity || normalize(p.set_rarity) === normalize(rarity)) &&
+    (!language || normalize(p.language) === normalize(language))
+  );
+  if (hit) return hit;
+  return { set_code: setCode, set_rarity: rarity || 'Unknown', set_price: 0, language: language || 'DE' };
+}
+
+// Maps the phone's traffic light (green/yellow/red) onto the 'exact'/'fuzzy'/'none' vocabulary
+// matchCandidates() already returns above, so a phone-resolved card drives the same "Erkannt"/
+// "Prüfen?" badges and the "Erkannte übernehmen" bulk button in StagingArea as a locally-matched
+// one -- the traffic-light dot + reason shown alongside it is the separate, new display the
+// phone's Ampel actually needs.
+export function mapPhoneConfidence(light) {
+  if (light === 'green') return 'exact';
+  if (light === 'yellow') return 'fuzzy';
+  return 'none';
+}

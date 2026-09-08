@@ -10,7 +10,19 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.net.URLEncoder
 
-data class SetOption(val setCode: String, val rarity: String, val price: Double, val language: String = "EN")
+// [verified] mirrors CatalogPrinting.verified (Spec D1): true only for a printing the offline
+// catalog's `printings_verified` block actually confirms (a real, curated code for THIS card in
+// THIS language), never for the English bulk dump or a network scrape. SetCodeMatch (Spec D3
+// Task 2) uses it to let a confirmed printing outrank a code it would otherwise have to compose
+// from prefix + a separately-read region + number -- "evidence beats a misread; the card beats an
+// assumption."
+data class SetOption(
+    val setCode: String,
+    val rarity: String,
+    val price: Double,
+    val language: String = "EN",
+    val verified: Boolean = false,
+)
 
 // Looks up all real printings of a passcode across languages. We UNION several real sources
 // (never guessing codes — the region infix varies DE/G):
@@ -48,7 +60,7 @@ object PrintingRepository {
             runCatching { CatalogRepository.printings(passcode) }.getOrDefault(emptyList())
         }
         if (catalogSets.any { it.verified }) {
-            return@coroutineScope catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN") }
+            return@coroutineScope catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN", verified = it.verified) }
         }
         // Disk cache: the 3-source union is the scan flow's slowest step (seconds). It's
         // deterministic per passcode, so a cached result makes a re-scanned card instant.

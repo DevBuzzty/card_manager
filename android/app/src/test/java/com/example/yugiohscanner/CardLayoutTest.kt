@@ -111,6 +111,46 @@ class CardLayoutTest {
         assertEquals(0.728f, p.getValue(Zone.SET_CODE).bottom, 0f)
     }
 
+    // -- EDITION (Spec D3 Task 0): ziffernweise gegen ml/zones_measured.json festgenagelt ---------
+
+    @Test
+    fun `EDITION-Zonen sind ziffernweise gegen zones_measured json festgenagelt`() {
+        val standard = CardLayout.zones(Layout.STANDARD).getValue(Zone.EDITION)
+        assertEquals(0.0957f, standard.left, 0f)
+        assertEquals(0.3408f, standard.top, 0f)
+        assertEquals(0.3459f, standard.right, 0f)
+        assertEquals(0.575f, standard.bottom, 0f)
+
+        val spellTrap = CardLayout.zones(Layout.SPELL_TRAP).getValue(Zone.EDITION)
+        assertEquals(0.1013f, spellTrap.left, 0f)
+        assertEquals(0.3264f, spellTrap.top, 0f)
+        assertEquals(0.3545f, spellTrap.right, 0f)
+        assertEquals(0.5562f, spellTrap.bottom, 0f)
+
+        val link = CardLayout.zones(Layout.LINK).getValue(Zone.EDITION)
+        assertEquals(0.1141f, link.left, 0f)
+        assertEquals(0.3001f, link.top, 0f)
+        assertEquals(0.3485f, link.right, 0f)
+        assertEquals(0.5438f, link.bottom, 0f)
+    }
+
+    @Test
+    fun `PENDULUM und SKILL-eigene Geometrie haben keine eigene EDITION -- unter der Messschwelle`() {
+        // PENDULUM: 36 Kandidaten (28 nach Ausreisser-Filter) gegen MIN_SAMPLES=40 -- bewusst
+        // unvermessen, siehe der Kommentar ueber standardZones(). pendulumZones() traegt daher
+        // keinen Zone.EDITION-Eintrag.
+        assertTrue(!CardLayout.zones(Layout.PENDULUM).containsKey(Zone.EDITION))
+    }
+
+    @Test
+    fun `SKILL und LEGACY erben EDITION als Platzhalter, genau wie PASSCODE und SET_CODE`() {
+        // Der Fallback in [CardLayout.zones] ist pro Zonen-Map, nicht pro Schluessel -- SKILL und
+        // LEGACY erhalten also automatisch auch STANDARDs (provisorische) EDITION-Zone, sobald sie
+        // dort existiert. Das ist beabsichtigt, nicht ein Leck: siehe unmeasuredLayoutsFallBackToStandardZones.
+        assertTrue(CardLayout.zones(Layout.SKILL).containsKey(Zone.EDITION))
+        assertTrue(CardLayout.zones(Layout.LEGACY).containsKey(Zone.EDITION))
+    }
+
     // ---- Seitenverhaeltnis-Waechter (aus HybridPipeline.readZones herausgezogen) ----------------
 
     @Test fun `aspect teilt Breite durch Hoehe`() {

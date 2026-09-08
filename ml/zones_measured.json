@@ -45,6 +45,29 @@
         "x2": 0.019,
         "y2": 0.0229
       }
+    },
+    "EDITION": {
+      "x": [
+        0.0957,
+        0.3459
+      ],
+      "y": [
+        0.3408,
+        0.575
+      ],
+      "n": 273,
+      "median": {
+        "x1": 0.1519,
+        "y1": 0.4307,
+        "x2": 0.3024,
+        "y2": 0.4881
+      },
+      "std": {
+        "x1": 0.0225,
+        "y1": 0.0403,
+        "x2": 0.0142,
+        "y2": 0.0436
+      }
     }
   },
   "PENDULUM": {
@@ -93,7 +116,8 @@
         "x2": 0.0181,
         "y2": 0.0159
       }
-    }
+    },
+    "EDITION": "insufficient data"
   },
   "LINK": {
     "PASSCODE": {
@@ -140,6 +164,29 @@
         "y1": 0.025,
         "x2": 0.0229,
         "y2": 0.0273
+      }
+    },
+    "EDITION": {
+      "x": [
+        0.1141,
+        0.3485
+      ],
+      "y": [
+        0.3001,
+        0.5438
+      ],
+      "n": 73,
+      "median": {
+        "x1": 0.1556,
+        "y1": 0.3761,
+        "x2": 0.305,
+        "y2": 0.4266
+      },
+      "std": {
+        "x1": 0.019,
+        "y1": 0.0488,
+        "x2": 0.0136,
+        "y2": 0.0516
       }
     }
   },
@@ -189,6 +236,29 @@
         "x2": 0.018,
         "y2": 0.0233
       }
+    },
+    "EDITION": {
+      "x": [
+        0.1013,
+        0.3545
+      ],
+      "y": [
+        0.3264,
+        0.5562
+      ],
+      "n": 243,
+      "median": {
+        "x1": 0.1556,
+        "y1": 0.4155,
+        "x2": 0.3018,
+        "y2": 0.4702
+      },
+      "std": {
+        "x1": 0.0215,
+        "y1": 0.0417,
+        "x2": 0.0161,
+        "y2": 0.0445
+      }
     }
   },
   "SKILL": {
@@ -200,5 +270,12 @@
     "convention": "Artwork-Box-Einheiten: x ab box.x1 in Boxbreiten, y ab box.y2 nach unten in Boxhoehen \u2014 dieselbe wie CardStrip",
     "note": "ml/data/ ist git-ignoriert, deshalb liegt die Kopie hier. Task 4 traegt diese Werte als Kotlin-Konstanten ein.",
     "gaps": "PENDULUM (23 Stichproben) und SKILL (0) sind ungemessen \u2014 Nutzerentscheidung 2026-09-06: ohne sie weiterbauen."
+  },
+  "_meta_edition": {
+    "measured": "2026-09-08",
+    "source": "ml/measure_zones.py --edition ueber die 'first'/'limited'-Zeilen aus ml/ocr_bench/labels.csv (940 Fotos neu vermessen, 2140 s): STANDARD/SPELL_TRAP je 400 von 3167/904 verfuegbaren Kandidaten (Cap wie bei PASSCODE/SET_CODE), LINK und PENDULUM vollstaendig (101 bzw. 39 verfuegbar).",
+    "convention": "Wie oben, gleiche Box-relative Konvention. Marker-Text sitzt auf derselben Zeile wie PASSCODE, aber rechts davon versetzt -- siehe find_edition_span() in measure_zones.py.",
+    "note": "labels.csv-Zeilen mit edition=unlimited haben keinen Marker (per Definition) und wurden nicht als Kandidaten gezogen; edition-Zeilen ohne aufloesbares layout ('') wurden uebersprungen.",
+    "gaps": "PENDULUM blieb unter der 40er-Schwelle (36 Kandidaten in labels.csv, 28 nach Ausreisser-Filter) -- bewusst unvermessen gelassen, kein Zone.EDITION fuer PENDULUM. SKILL hat 0 Editions-Zeilen in labels.csv ueberhaupt, ebenfalls unvermessen."
   }
 }

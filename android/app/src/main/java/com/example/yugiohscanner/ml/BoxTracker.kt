@@ -16,8 +16,13 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
     private val misses = HashMap<Int, Int>()
     private val emitted = HashSet<Int>()
 
+    /** Passcodes, die [update] im letzten Aufruf endgueltig verworfen hat (Karte ist aus dem Bild).
+     *  Wird bei jedem [update] neu befuellt; der Aufrufer raeumt daraufhin seine eigenen Belege ab. */
+    val droppedThisFrame = ArrayList<Int>()
+
     /** Feed one frame's detections; returns the detections that JUST reached confirmation. */
     fun update(dets: List<Detection>): List<Detection> {
+        droppedThisFrame.clear()
         val newlyConfirmed = ArrayList<Detection>()
         val present = HashSet<Int>()
 
@@ -43,6 +48,13 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
                 misses[pc] = m
                 if (m > maxMisses) {
                     votes.remove(pc); emitted.remove(pc); misses.remove(pc)
+                    // Merken, wer gerade endgueltig aus dem Bild ist. Seit Spec D3 Task 6 raeumt
+                    // ScanScreen die Belege einer Karte nicht mehr bei der Bestaetigung ab -- die
+                    // stille Verbesserung braucht sie ja noch. Ohne diese Meldung waechst
+                    // SetCodeEvidence dann unbegrenzt weiter, und D4 schiebt Hunderte Karten
+                    // durch eine Sitzung. Hier ist der einzige Ort, der weiss, dass eine Karte
+                    // nicht bloss kurz verdeckt, sondern weg ist.
+                    droppedThisFrame.add(pc)
                 }
             }
         }
@@ -51,6 +63,6 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
 
     /** Forget all state (used by the Reset/"Neu" button so the same cards can be re-scanned). */
     fun reset() {
-        votes.clear(); misses.clear(); emitted.clear()
+        votes.clear(); misses.clear(); emitted.clear(); droppedThisFrame.clear()
     }
 }

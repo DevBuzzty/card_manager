@@ -1,8 +1,11 @@
 package com.example.yugiohscanner
 
+import com.example.yugiohscanner.cloud.SetCodeMatch
+import com.example.yugiohscanner.cloud.SetOption
 import com.example.yugiohscanner.ml.SetCodeEvidence
 import com.example.yugiohscanner.ml.Zone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -82,6 +85,29 @@ class SetCodeEvidenceTest {
         assertTrue(SetCodeEvidence().rawTexts(999).isEmpty())
     }
 
+    // -- editionTexts (Spec D3 Task 7) -----------------------------------------------------------
+    // EditionEvidence.add() must be called ONLY for a frame whose layout actually had the EDITION
+    // zone measured -- an ABSENT map entry (the zone was never cropped, e.g. PENDULUM) must be
+    // dropped, while a PRESENT but blank entry (the zone was read and found empty) must survive.
+
+    @Test fun `editionTexts collects one entry per frame that actually had the EDITION zone`() {
+        val ev = SetCodeEvidence()
+        ev.record(1234, mapOf(Zone.EDITION to "1st Edition", Zone.SET_CODE to "LOB-DE001"))
+        ev.record(1234, mapOf(Zone.EDITION to "", Zone.SET_CODE to "LOB-DE001"))
+        assertEquals(listOf("1st Edition", ""), ev.editionTexts(1234))
+    }
+
+    @Test fun `a frame whose layout has no measured EDITION zone at all is dropped, not treated as blank`() {
+        val ev = SetCodeEvidence()
+        // No Zone.EDITION key at all -- e.g. PENDULUM, which CardLayout never gives one.
+        ev.record(1234, mapOf(Zone.SET_CODE to "LOB-DE001", Zone.PASSCODE to "12341234"))
+        assertTrue(ev.editionTexts(1234).isEmpty())
+    }
+
+    @Test fun `editionTexts for an unrecorded passcode is empty, not a crash`() {
+        assertTrue(SetCodeEvidence().editionTexts(999).isEmpty())
+    }
+
     @Test fun `nothing recorded for this passcode returns empty, not a crash`() {
         val ev = SetCodeEvidence()
         assertTrue(ev.setCodeCandidates(999).isEmpty())
@@ -93,5 +119,74 @@ class SetCodeEvidenceTest {
         ev.record(2222, mapOf(Zone.SET_CODE to "SDSE-DE035"))
         assertEquals(listOf("LOB-DE001"), ev.setCodeCandidates(1111))
         assertEquals(listOf("SDSE-DE035"), ev.setCodeCandidates(2222))
+    }
+
+    // -- shouldSilentlyImprove (Spec D3 Task 6, "Stille Verbesserung", plan Section 6.2) ----------
+    //
+    // SetCodeEvidence keeps collecting after the first confirmation for as long as BoxTracker
+    // still sees the card (ScanScreen no longer calls forget() on confirmation); every later frame
+    // re-resolves the evidence and shouldSilentlyImprove decides whether that new resolve earns the
+    // right to replace what's already staged. The one failure this must never have is overwriting a
+    // deliberate user correction (userTouched=true) -- covered first and separately from the
+    // "genuinely better" cases so a bug in one can't hide behind the other.
+
+    private fun option(code: String) = SetOption(setCode = code, rarity = "Common", price = 0.0, language = "DE")
+
+    private fun result(code: String?, exact: Boolean, frames: Int) = SetCodeMatch.MatchResult(
+        selected = code?.let { option(it) },
+        candidates = code?.let { listOf(option(it)) } ?: emptyList(),
+        reason = if (code != null) SetCodeMatch.MatchReason.MATCHED else SetCodeMatch.MatchReason.NO_MATCH,
+        codeExactMatch = exact,
+        codeFrameCount = frames,
+    )
+
+    @Test fun `userTouched blocks the update even when the new hit is strictly better`() {
+        val weak = result("LOB-DE001", exact = false, frames = 1)
+        val strong = result("LOB-DE001", exact = true, frames = 5)
+        assertFalse(
+            "eine vom Nutzer angefasste Karte darf die Automatik nicht ueberschreiben",
+            SetCodeEvidence.shouldSilentlyImprove(userTouched = true, new = strong, previous = weak),
+        )
+    }
+
+    @Test fun `userTouched blocks the update even when nothing was staged yet`() {
+        // Defensive: userTouched must win even against a null previous (first-ever resolve) --
+        // in practice this combination shouldn't arise (nothing to touch before it's staged), but
+        // the flag's whole point is that it wins unconditionally, not "unless previous is null".
+        assertFalse(SetCodeEvidence.shouldSilentlyImprove(userTouched = true, new = result("LOB-DE001", true, 2), previous = null))
+    }
+
+    @Test fun `no previous hit -- any real match is an improvement`() {
+        assertTrue(SetCodeEvidence.shouldSilentlyImprove(userTouched = false, new = result("LOB-DE001", false, 1), previous = null))
+    }
+
+    @Test fun `a new hit with no selected printing is never an improvement`() {
+        val previous = result("LOB-DE001", exact = false, frames = 1)
+        val noHit = result(null, exact = false, frames = 0)
+        assertFalse(SetCodeEvidence.shouldSilentlyImprove(userTouched = false, new = noHit, previous = previous))
+    }
+
+    @Test fun `strictly more exact frames is an improvement, untouched`() {
+        val previous = result("LOB-DE001", exact = true, frames = 1)
+        val new = result("LOB-DE001", exact = true, frames = 2)
+        assertTrue(SetCodeEvidence.shouldSilentlyImprove(userTouched = false, new = new, previous = previous))
+    }
+
+    @Test fun `fewer exact frames is NOT an improvement, even untouched`() {
+        val previous = result("LOB-DE001", exact = true, frames = 3)
+        val new = result("LOB-DE001", exact = true, frames = 2)
+        assertFalse(SetCodeEvidence.shouldSilentlyImprove(userTouched = false, new = new, previous = previous))
+    }
+
+    @Test fun `equal frame count but now exact where it previously wasn't -- an improvement`() {
+        val previous = result("LOB-DE001", exact = false, frames = 2)
+        val new = result("LOB-DE001", exact = true, frames = 2)
+        assertTrue(SetCodeEvidence.shouldSilentlyImprove(userTouched = false, new = new, previous = previous))
+    }
+
+    @Test fun `equal frame count, equally exact -- no change, not an improvement`() {
+        val previous = result("LOB-DE001", exact = true, frames = 2)
+        val new = result("LOB-DE001", exact = true, frames = 2)
+        assertFalse(SetCodeEvidence.shouldSilentlyImprove(userTouched = false, new = new, previous = previous))
     }
 }
