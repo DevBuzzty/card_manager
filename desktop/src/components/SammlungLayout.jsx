@@ -14,9 +14,11 @@ const SEGMENTS = [
 export default function SammlungLayout() {
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center gap-4 mb-5 shrink-0">
+      {/* Wraps instead of overflowing — in a narrow window the heading and the segments together
+          are wider than the column, and the page would otherwise scroll sideways. */}
+      <div className="flex flex-wrap items-center gap-4 mb-5 shrink-0">
         <h1 className="font-display font-semibold text-2xl text-ink">{T.sammlung}</h1>
-        <div className="inline-flex bg-obsidian-700 border border-line rounded-xl p-1 gap-1">
+        <div className="flex flex-wrap bg-obsidian-700 border border-line rounded-xl p-1 gap-1">
           {SEGMENTS.map(s => (
             <NavLink
               key={s.to}

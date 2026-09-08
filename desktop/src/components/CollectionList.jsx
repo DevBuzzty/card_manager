@@ -32,6 +32,20 @@ const AutoSizer = ({ children }) => {
     );
 };
 
+// Width of a scrollbar in this build, measured once. index.css styles it (8px today), so
+// reading it off the page beats repeating the number here.
+let sbWidth = null;
+const scrollbarWidth = () => {
+    if (sbWidth == null) {
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:absolute;top:-9999px;width:100px;height:100px;overflow-y:scroll';
+        document.body.appendChild(probe);
+        sbWidth = probe.offsetWidth - probe.clientWidth;
+        probe.remove();
+    }
+    return sbWidth;
+};
+
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -452,15 +466,20 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
             ) : (
                 <AutoSizer>
                     {({ height, width }) => {
+                        // The Grid's own vertical scrollbar sits inside the width AutoSizer
+                        // measured. Columns spread across the full width would push the last one
+                        // underneath it and make the Grid scroll sideways, so lay them out
+                        // across what the scrollbar leaves over.
+                        const inner = Math.max(width - scrollbarWidth(), 0);
                         // Responsive Column Count
                         const columnWidth = 180;
-                        const columnCount = Math.floor(width / columnWidth) || 1;
+                        const columnCount = Math.floor(inner / columnWidth) || 1;
                         const rowCount = Math.ceil(filtered.length / columnCount);
 
                         return (
                             <Grid
                                 columnCount={columnCount}
-                                columnWidth={width / columnCount}
+                                columnWidth={inner / columnCount}
                                 defaultHeight={height}
                                 rowCount={rowCount}
                                 rowHeight={300}
