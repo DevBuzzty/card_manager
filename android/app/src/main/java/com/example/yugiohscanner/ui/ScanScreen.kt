@@ -830,28 +830,37 @@ fun ScanScreen(onClose: () -> Unit) {
             IconButton(onClick = { showManualEntry = true }) { Icon(Icons.Default.Keyboard, "Passcode eingeben", tint = Color.White) }
         }
 
-        // Fusszeile: bei verbundenem PC eine Fortschrittsanzeige (Spec D4 §6.3), sonst wie bisher
-        // der Zaehler mit dem Pruefen-Knopf.
-        if (isConnected && sentCount > 0) {
-            Row(
-                Modifier.fillMaxWidth().align(Alignment.BottomCenter)
-                    .background(Color.Black.copy(alpha = 0.55f)).navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        // Fusszeile: die Fortschrittsanzeige (Spec D4 §6.3) und die Staging-Zeile sind zwei
+        // unabhaengige Sachverhalte und erscheinen unabhaengig voneinander -- kein "else if"
+        // mehr, sonst verschwindet der Pruefen-Knopf (einziger Zugang zum Pruefen-Blatt),
+        // sobald der PC waehrend eines laufenden Handy-Staging-Stapels verbindet.
+        if ((isConnected && sentCount > 0) || stagingCards.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding()
             ) {
-                Text("$sentCount an den PC gesendet", color = Color.White, modifier = Modifier.weight(1f))
-                // Dieselben drei Ampelfarben wie im Staging-Sheet -- keine neuen Farben.
-                Box(Modifier.size(10.dp).clip(CircleShape).background(ScanStagingLogic.dotColor(lastLight)))
-            }
-        } else if (stagingCards.isNotEmpty()) {
-            Row(
-                Modifier.fillMaxWidth().align(Alignment.BottomCenter)
-                    .background(Color.Black.copy(alpha = 0.55f)).navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("${stagingCards.size} Karten erkannt", color = Color.White, modifier = Modifier.weight(1f))
-                Button(onClick = { showSheet = true }) { Text("Prüfen (${stagingCards.size})") }
+                if (isConnected && sentCount > 0) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("$sentCount an den PC gesendet", color = Color.White, modifier = Modifier.weight(1f))
+                        // Dieselben drei Ampelfarben wie im Staging-Sheet -- keine neuen Farben.
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(ScanStagingLogic.dotColor(lastLight)))
+                    }
+                }
+                if (stagingCards.isNotEmpty()) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("${stagingCards.size} Karten erkannt", color = Color.White, modifier = Modifier.weight(1f))
+                        Button(onClick = { showSheet = true }) { Text("Prüfen (${stagingCards.size})") }
+                    }
+                }
             }
         }
         if (showSheet) {
