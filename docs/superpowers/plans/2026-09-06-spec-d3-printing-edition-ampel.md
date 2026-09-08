@@ -11,7 +11,11 @@
 ## Global Constraints
 
 - **Spec:** `docs/superpowers/specs/2026-09-05-spec-d-scan-flow-design.md`, Abschnitte **§6** (Printing ohne Nachfrage) und **§7** (Edition automatisch). §7a (Speed-Scan, Nachprüfen-Liste) ist **D4** — hier nicht anfangen. §7b/§7c (Zonen, Messkorb) sind **D2** und werden hier vorausgesetzt.
-- **Setzt D2 voraus:** D3 arbeitet auf `zoneTexts: Map<Zone, String>` statt auf einem einzelnen `bandText`. Ist D2 noch nicht gebaut, liest D3 aus `Zone.SET_CODE`/`Zone.EDITION` ersatzweise denselben Bandtext — der Code muss aber schon gegen die Zonen-Schnittstelle geschrieben sein.
+- **D2 ist gebaut und gemerged** (`e92b017`, 2026-09-08). Die Ersatzregel „liest notfalls den Bandtext" entfällt: `zoneTexts: Map<Zone, String>` ist da, `Zone.SET_CODE` wird real befüllt, und `Zone.EDITION` liefert **Task 0** dieses Plans nach.
+
+- **Was D2 an Zahlen mitbringt, und was D3 daraus folgt.** Gemessen auf 446 Bildern, getrennt nach Quelle (`ml/ocr_bench/report-2026-09-08.md`): Passcode eBay 91,4 % (STANDARD) bis 72,8 % (LINK), Set-Code eBay 53,8 % bis 37,5 %, auf echten Analyzer-Frames durchweg niedriger. **Der Set-Code ist die schwache Stelle, auf der D3 aufbaut** — das ist kein Grund, den Plan zu ändern, aber jeder Task, der „der Code wird gelesen" voraussetzt, muss den Fall ohne Code genauso sauber behandeln wie den mit. Der Messkorb steht und misst jede Änderung in 75 Sekunden; wer hier etwas verbessern will, misst es, statt es zu vermuten.
+
+- **Die 13-%-Abdeckung deutscher Set-Codes im Katalog ist KEIN Hindernis für diesen Plan** — hier festgehalten, damit die Frage nicht erneut aufgeworfen wird. Der Katalog trägt deutsche Codes nur in `printings_verified`, für 1.890 von 14.523 Karten. Die Bauart dieses Plans braucht sie nicht: Präfix und Nummer kommen aus dem **englischen** Katalogeintrag, die Region wird **von der Karte gelesen**. `printings_verified` betrifft allein Regel 3 unten, die Widerspruchsprüfung — ein Bonus dort, wo Belege vorliegen, kein Fundament.
 - **Deutsche Set-Codes werden nie erfunden.** Ein Code darf nur entstehen, wenn **jeder** seiner Teile belegt ist: Präfix und Nummer aus einem bekannten Printing der Karte, die Region **aus dem Bandtext der Karte gelesen**. Wird die Region nicht gelesen, wird **kein** Code zusammengesetzt — siehe die verbindliche Regel unten.
 - **Jede benutzersichtbare Zeichenkette ist deutsch.** Yu-Gi-Oh-Begriffe bleiben englisch (Rarity, Set-Code, Passcode, Secret Rare, Common). Verbindliches Vokabular aus Spec C §4.
 - Printing-Identität bleibt der 4-Spalten-Schlüssel `(id, set_code, language, rarity)`. `cards.quantity`/`deleted` sind triggergepflegte Caches und werden nie aus Anwendungscode geschrieben. Nur Soft-Delete.
@@ -34,6 +38,8 @@ Spec §6.1 sagt: „Kein Region-Token lesbar → Sprache = Default-Sprache des N
 | Datei | Verantwortung |
 |---|---|
 | `android/.../cloud/SetCodeMatch.kt` | Zerlegung `PREFIX·REGION·NUMMER`, Vergleich nur über Präfix+Nummer, Region getrennt aus dem Text lesen. Der Kern dieses Plans. |
+| `ml/measure_zones.py`, `ml/zones_measured.json` | **Task 0:** die EDITION-Zone ausmessen, mit derselben Maschinerie wie PASSCODE/SET_CODE in D2. |
+| `android/.../ml/CardLayout.kt` | **Task 0:** `Zone.EDITION` je Layout eintragen, ziffernweise aus `zones_measured.json`, mit `n` und `std` im Kommentar. |
 | `android/.../ml/RegionToken.kt` (neu) | Liest das Regionskürzel aus dem Set-Code-Zonentext (`DE`, `G`, `EN`, `FR`, `IT`, `SP`, `PT`, `JP`, …), mit derselben Confusion-Toleranz wie der Rest. Rein. |
 | `android/.../ml/RarityRank.kt` (neu) | Rangfolge Common < Short Print < Rare < Super < Ultra < Secret < Rest, plus `lowest(rarities)`. Kotlin-Pendant zu `findBestDefaultSet` am Desktop. Rein. |
 | `android/.../ml/EditionEvidence.kt` (neu) | Sammelt Editionsmarker über die Frames derselben Karte; liefert `first`/`limited`/`unlimited`/`unknown` mit `HIGH`/`LOW`. Rein. |
@@ -44,6 +50,33 @@ Spec §6.1 sagt: „Kein Region-Token lesbar → Sprache = Default-Sprache des N
 | `android/.../cloud/CollectionRepository.kt` | Socket-Payload um `rarity`, `language`, `edition`, `editionConfidence`, `confidence`, `reason` erweitern. |
 | `desktop/src/components/StagingArea.jsx` | Payload-Felder als Vorauswahl übernehmen statt neu zu matchen; Ampel anzeigen. |
 | Tests | `SetCodeMatchTest`, `RegionTokenTest`, `RarityRankTest`, `EditionEvidenceTest`, `ScanConfidenceTest` (JVM); `setCodeMatch.test.js` am Desktop erweitern. |
+
+---
+
+### Task 0: Die `EDITION`-Zone vermessen
+
+**Files:** Modify `ml/measure_zones.py`, `ml/zones_measured.json`, `android/.../ml/CardLayout.kt`, `android/app/src/test/.../CardLayoutTest.kt`.
+
+**Dieser Task wurde nach D2 ergänzt, weil Task 4 sonst nicht baubar ist.** `EditionEvidence.add(zoneText)` will aus einer Editions-Zone lesen — die es nicht gibt. `Zone.EDITION` fehlt bewusst in **jeder** Map in `CardLayout.zones()`: D2 hat PASSCODE und SET_CODE vermessen, die Edition nicht, und eine erfundene Geometrie wäre schlimmer gewesen als eine fehlende.
+
+**Die naheliegende Abkürzung trägt nicht.** Der Editions-Marker steht auf derselben Zeile wie der Passcode, aber rechts daneben, und die PASSCODE-Zone ist auf den Passcode zugeschnitten: gemessen reicht sie bei STANDARD von x = −0,1651 bis 0,1507, während der Passcode-Text selbst bei x = −0,023 bis 0,134 liegt. „1. Auflage" beginnt hinter 0,134 und fällt heraus. Die Zone einfach nach rechts zu verbreitern wäre wieder eine geratene Zahl.
+
+**Das Vollband hätte den Marker** — der Labellauf holte damit 97 % — aber es wird im Normalfall gar nicht mehr gelesen: `needsLegacyBand` ist nur bei Platzhalter-Layouts und Embedder-Fehltreffern wahr. Es immer zu lesen kostet pro Frame einen zusätzlichen OCR-Durchgang auf dem größten Ausschnitt und nähme D2s Zonenarbeit teilweise zurück. Deshalb: messen, nicht raten.
+
+**Interfaces:**
+- Produces: `EDITION`-Einträge in `ml/zones_measured.json` je Layout, und `Zone.EDITION` in `CardLayout.zones()` für jedes Layout mit ausreichend Messungen.
+- Consumes: den gelabelten Korpus (`ml/ocr_bench/labels.csv`, 5.651 Zeilen, Editions-Ausbeute 97 %) — die Wahrheit liegt also bereits vor.
+
+**Das Verfahren steht schon.** `measure_zones.py` lokalisiert eine bekannte Textspanne relativ zur Artwork-Box und bildet über alle Treffer das 5./95.-Perzentil; genau so wurden PASSCODE und SET_CODE gemessen. Für die Edition ist der gesuchte Text der Marker aus der Liste in Task 4 statt des Passcodes. `MIN_SAMPLES = 40` gilt unverändert.
+
+- [ ] **Schritt 1:** `find_edition_span()` in `measure_zones.py` nach dem Vorbild von `find_passcode_span` — Marker case-insensitiv und OCR-tolerant suchen, Position relativ zur Box zurückgeben.
+- [ ] **Schritt 2:** Messlauf über den gelabelten Korpus, je Layout. Ausbeute berichten.
+- [ ] **Schritt 3:** Ergebnis nach `zones_measured.json` und ziffernweise nach `CardLayout.kt`, mit `n` und `std` im Kommentar wie bei den anderen Zonen.
+- [ ] **Schritt 4:** Test, der die Konstanten ziffernweise gegen `zones_measured.json` festnagelt (Vorbild: `pendulumZones` in `CardLayoutTest`).
+- [ ] **Schritt 5:** Messkorb laufen lassen — die neue Zone darf PASSCODE und SET_CODE **nicht** verschlechtern. Vorher/Nachher je Feld, Layout und Quelle.
+- [ ] **Schritt 6: Committen**
+
+**Wenn ein Layout unter 40 Messungen bleibt:** kein `Zone.EDITION` für dieses Layout, und Task 4 liefert dort `unknown` statt zu raten — genau wie D2 es mit SKILL und LEGACY gehalten hat. Das ist ein Ergebnis, kein Fehlschlag.
 
 ---
 
@@ -96,13 +129,17 @@ Mehrere Rarities für denselben Code ⇒ Vorauswahl ist die **niedrigste** nach 
 
 **Files:** Create `android/.../ml/EditionEvidence.kt`, Test.
 
+**Setzt Task 0 voraus.** `add` liest aus `Zone.EDITION`, und die existiert erst, seit Task 0 sie vermessen hat. Für ein Layout ohne gemessene EDITION-Zone gibt es keinen Ausschnitt: dort liefert `result()` `unknown`, und das ist die richtige Antwort, keine Lücke.
+
 **Interfaces:** `add(zoneText: String)`, `result(): EditionResult(edition: String, confidence: Confidence)` mit `edition ∈ first|limited|unlimited|unknown`, `confidence ∈ HIGH|LOW`.
 
 Marker (case-insensitiv, OCR-tolerant — `1st` ≈ `lst`/`Ist`, `Auflage` ≈ `Auflaqe`):
 - **first:** `1st Edition`, `1. Auflage`, `1ª Edición`, `1ère Édition`, `1ª Edizione`, `1ª Edição`
 - **limited:** `LIMITED EDITION`, `LIMITIERTE AUFLAGE`, `EDICIÓN LIMITADA`, `ÉDITION LIMITÉE`
-- Kein Marker, aber die **Passcode-Zeile** in ≥ 2 Frames gelesen → **unlimited**
+- Kein Marker, aber die **EDITION-Zone selbst** in ≥ 2 Frames lesbar (irgendein Text, oder nachweislich leer) → **unlimited**
 - Sonst **unknown**
+
+Die unlimited-Regel hängt an der EDITION-Zone, nicht mehr an der Passcode-Zeile. Der Schluss lautet „wir konnten dort hinsehen und es stand kein Marker" — er braucht also einen Beleg über **diese** Stelle. Dass anderswo Text gelesen wurde, belegt nichts über die Editionsstelle: PASSCODE und SET_CODE liegen unterschiedlich gut, in D2 gemessen 91,4 % gegen 53,8 % auf demselben Korpus.
 
 `HIGH` = Marker in ≥ 2 Frames, oder unlimited mit ≥ 3 Frames. `LOW` = 1 Frame. **`LOW` macht den Eintrag gelb.**
 
@@ -180,6 +217,10 @@ Der Desktop nutzt `setCode`/`rarity`/`language` **direkt als Vorauswahl**, statt
 
 Aus Spec §11, unverändert übernommen: **30 Karten** scannen, darunter 10 Foils, 5 Karten erster Auflage und 3 mit mehrdeutigen Codes. Erwartung: **≥ 25 grün**, und **keine falsch-grünen** — eine grüne Karte mit falschem Printing ist das einzige Ergebnis, das den Plan zurückwirft, weil Grün genau die Zusage „musst du nicht prüfen" ist.
 
+**Die 25 sind eine Vorhersage, die schiefgehen kann, und dann ist die Zahl das Ergebnis.** D2 hat den Set-Code je Einzelbild bei 53,8 % (STANDARD), 47,8 % (SPELL_TRAP) und 37,5 % (LINK) gemessen. Grün verlangt aber **drei** Bedingungen gleichzeitig — Distanz 0 in ≥ 2 Frames, eindeutige Rarity, Edition ≠ unknown — und eine Konjunktion aus Bedingungen um 50 % erreicht 83 % nicht von selbst. Zwei Dinge sprechen dagegen: die Abstimmung sieht seit D2 vier Frames statt eines, und Task 6 sammelt nach der Bestätigung weiter, die wirksame Rate liegt also über der Einzelbildrate. Um wie viel, weiß niemand — genau das misst dieser Task.
+
+**Wird die 25 verfehlt, ist die Antwort nicht, Grün großzügiger zu definieren.** Die Ampel ist eine Zusage an den Nutzer; sie zu lockern, um eine Zahl zu treffen, tauscht eine ehrliche gelbe Karte gegen eine unehrliche grüne. Die Antwort ist dann ein Messtask auf die schwächste Bedingung, mit dem Messkorb aus D2 — so wie Task 8 dort den Kontrast gefunden hat.
+
 Zusätzlich, weil D1 es aufgeworfen hat: mindestens 5 der 30 Karten sollen **nicht** zu den 1.890 Karten mit verifizierten deutschen Codes gehören. Genau dort zeigt sich, ob die sprachneutrale Auflösung die Abdeckungslücke schließt.
 
 - [ ] **Schritt 1: Scannen und protokollieren** — [ ] **Schritt 2: Ampelverteilung und Fehlerfälle berichten** — [ ] **Schritt 3: Urteil**
@@ -195,10 +236,11 @@ Zusätzlich, weil D1 es aufgeworfen hat: mindestens 5 der 30 Karten sollen **nic
 | §6.3 Rarity-Vorauswahl | 3 |
 | §6.4 Ampel mit Gründen, Nur-unsichere | 5, 7 |
 | §6.5 Socket-Payload, Desktop-Vorauswahl | 8 |
-| §7 Edition automatisch, Sicherheit, Karte schlägt Einstellung | 4 |
+| §7 Edition automatisch, Sicherheit, Karte schlägt Einstellung | **0**, 4 |
 | §11 Tests und die 30-Karten-Abnahme | 1–5 (Unit), 9 (Gerät) |
 
 **Bewusste Abweichungen (im Ledger festhalten):**
+0. **Task 0 wurde nach D2 ergänzt.** Der ursprüngliche Plan setzte eine `Zone.EDITION` voraus, die es nicht gibt und nie gab — D2 hat sie bewusst aus jeder Layout-Map herausgelassen, weil sie nie vermessen wurde. Task 4 wäre so nicht baubar gewesen. Die Alternative, das Vollband immer mitzulesen, kostet pro Frame einen OCR-Durchgang auf dem größten Ausschnitt und nähme D2s Zonenarbeit teilweise zurück; deshalb wird gemessen statt geraten, mit der Maschinerie, die für PENDULUM bereits steht.
 1. **Die Rückfallregel aus §6.1 wird nicht umgesetzt.** Das Spec will bei unlesbarer Region die Standardsprache annehmen; auf Entscheidung des Nutzers werden stattdessen nur belegte Codes angeboten und der Eintrag gelb markiert. Begründung oben — die eigenen Daten zeigen `SDY-G005` neben `SYE-DE001`.
 2. **Zusätzlicher Gelb-Grund** „Region widerspricht bekanntem Druck", den das Spec nicht kennt. Er fängt den Fall ab, dass die Region zwar gelesen wurde, aber falsch — sonst bliebe ein selbstbewusst falscher Code grün.
 3. **`SetCodeMatch`s Toleranzarithmetik wird nicht nachjustiert.** Sie wird durch das Ausblenden der Region gegenstandslos, was der bessere Weg ist als eine Schwellwertänderung, deren Nebenwirkungen niemand messen kann.
