@@ -279,7 +279,16 @@ fun ScanScreen(onClose: () -> Unit) {
     // Katalog -- `entry.knownSets` steht bereits, `SetCodeMatch.best` laeuft direkt dagegen.
     // Wohin gebucht wird, entscheidet ScanAggregator (rein und getestet); hier wird nur gebucht.
     fun aggregateRepeat(pc: String, evidence: List<String>, framesEvidence: List<String>) {
-        val entry = stagingCards.lastOrNull { it.passcode == pc } ?: return
+        val entry = stagingCards.lastOrNull { it.passcode == pc } ?: run {
+            // Review-Befund 2: der Eintrag kann fehlen, weil der Nutzer die ganze Karte im
+            // Pruefen-Blatt geloescht hat -- ihr Passcode steht aber weiterhin in `seen`. Stiller
+            // Ausstieg wuerde die Karte fuer den Rest der Sitzung kommentarlos unscannbar machen,
+            // der schlechteste aller Ausgaenge. Stattdessen wie eine neue Erfassung behandeln.
+            // (Nicht `onCapture` -- zwei lokale Funktionen koennen sich in Kotlin nicht gegenseitig
+            // aufrufen, und `stageScan` steht bereits vor dieser Funktion.)
+            stageScan(pc, evidence, framesEvidence, emptyList())
+            return
+        }
         // Anderes Aufblitzen als bei einer Neuaufnahme (die blitzt mit 0.8f), damit ein "+1"
         // im Sucher nicht wie eine neue Karte aussieht.
         scope.launch { flash.snapTo(0.45f); flash.animateTo(0f, animationSpec = tween(300)) }
@@ -290,33 +299,61 @@ fun ScanScreen(onClose: () -> Unit) {
             extras = entry.extraPrintings.map { it.selectedSet },
             scanned = match.selected,
         )
-        // Was rueckgaengig gemacht werden muesste, wird hier festgehalten -- nach dem Buchen ist
-        // aus dem Zustand nicht mehr ablesbar, WELCHE Zeile dieses eine "+1" bekommen hat.
-        val added: ExtraPrinting? = when (target) {
-            is ScanAggregator.Target.Primary -> { entry.quantity++; null }
-            is ScanAggregator.Target.Extra -> { entry.extraPrintings[target.index].quantity++; null }
-            is ScanAggregator.Target.NewExtra -> ExtraPrinting().apply {
-                selectedSet = target.set
-                edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
-                condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
-            }.also { entry.extraPrintings.add(it) }
-        }
-        val menge = when (target) {
-            is ScanAggregator.Target.Primary -> entry.quantity
-            is ScanAggregator.Target.Extra -> entry.extraPrintings[target.index].quantity
-            is ScanAggregator.Target.NewExtra -> 1
-        }
         val name = entry.base?.name ?: pc
+        // Review-Befund 3: `entry.quantity++`/`--` und das ExtraPrinting-Aequivalent sind
+        // Lesen-Aendern-Schreiben auf einem Feld, das der QtyStepper im Pruefen-Blatt (Hauptthread)
+        // ebenfalls beschreibt -- diese Funktion selbst laeuft auf dem Analyzer-Hintergrundthread.
+        // `scope` ist ein rememberCoroutineScope (Main); Buchung UND Ruecknahme laufen deshalb
+        // beide hier drin, in Reihenfolge: erst buchen, dann die Snackbar mit der Folgemenge.
         scope.launch {
+            // Review-Befund 1: das Ziel wird HIER, sofort beim Buchen, zum OBJEKT aufgeloest, nicht
+            // zum Index -- der Index kann zwischen Buchen und Rueckgaengig veralten (das
+            // Pruefen-Blatt kann waehrenddessen eine Zusatzzeile oder die ganze Karte loeschen; das
+            // Sheet haelt weder Kamera noch Analyzer an). `bookedExtra` haelt das getroffene bzw.
+            // neu angelegte ExtraPrinting-Objekt fest; die Ruecknahme unten prueft per Identitaet
+            // (===), ob es das noch gibt, statt es erneut zu indizieren.
+            var bookedExtra: ExtraPrinting? = null
+            var isNewExtra = false
+            val menge = when (target) {
+                is ScanAggregator.Target.Primary -> {
+                    entry.quantity++
+                    entry.quantity
+                }
+                is ScanAggregator.Target.Extra -> {
+                    val ep = entry.extraPrintings[target.index]
+                    ep.quantity++
+                    bookedExtra = ep
+                    ep.quantity
+                }
+                is ScanAggregator.Target.NewExtra -> {
+                    val ep = ExtraPrinting().apply {
+                        selectedSet = target.set
+                        edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
+                        condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
+                    }
+                    entry.extraPrintings.add(ep)
+                    bookedExtra = ep
+                    isNewExtra = true
+                    1
+                }
+            }
             val r = snackbar.showSnackbar(
-                message = "$name ×$menge", actionLabel = "rueckgaengig",
+                message = "$name ×$menge", actionLabel = "rückgängig",
                 duration = SnackbarDuration.Short,
             )
             if (r != SnackbarResult.ActionPerformed) return@launch
             when (target) {
-                is ScanAggregator.Target.Primary -> entry.quantity--
-                is ScanAggregator.Target.Extra -> entry.extraPrintings[target.index].quantity--
-                is ScanAggregator.Target.NewExtra -> added?.let { entry.extraPrintings.remove(it) }
+                is ScanAggregator.Target.Primary ->
+                    // `entry` selbst kann der Nutzer inzwischen aus der Liste geloescht haben.
+                    if (stagingCards.any { it === entry }) entry.quantity--
+                is ScanAggregator.Target.Extra, is ScanAggregator.Target.NewExtra -> {
+                    val ep = bookedExtra ?: return@launch
+                    // Ist die Zeile weg, hat der Nutzer sie selbst geloescht: Ruecknahme tut dann
+                    // nichts und wirft nicht.
+                    if (entry.extraPrintings.any { it === ep }) {
+                        if (isNewExtra) entry.extraPrintings.remove(ep) else ep.quantity--
+                    }
+                }
             }
         }
     }
@@ -679,7 +716,7 @@ fun ScanScreen(onClose: () -> Unit) {
                     com.example.yugiohscanner.Prefs.setScanMode(context, scanMode)
                     Toast.makeText(
                         context,
-                        if (scanMode == "stapel") "Stapel: Wiederholungen zaehlen"
+                        if (scanMode == "stapel") "Stapel: Wiederholungen zählen"
                         else "Einzeln: jede Karte einmal",
                         Toast.LENGTH_SHORT,
                     ).show()
