@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
@@ -41,6 +42,16 @@ class ScanStagingEntry(val id: Long, val passcode: String) {
     // Additional printings of the SAME scanned card (e.g. you also have the English print), so you
     // can record them here instead of re-adding them from the collection later.
     val extraPrintings = mutableStateListOf<ExtraPrinting>()
+
+    // Spec D3 Task 6 ("Stille Verbesserung"): the SetCodeMatch.MatchResult behind the current
+    // `selectedSet`, kept around so a later, better-evidenced frame can be compared against it
+    // (see SetCodeEvidence.shouldSilentlyImprove) instead of only against the SetOption itself,
+    // which carries no distance/frame-count signal of its own.
+    var codeMatch by mutableStateOf<SetCodeMatch.MatchResult?>(null)
+    // Set the moment the user hand-corrects set, rarity, language or edition (SetPicker / CopyChip
+    // below) -- freezes silent improvement for this entry from then on, so a deliberate correction
+    // is never silently overwritten by a later automatic re-resolve.
+    var userTouched by mutableStateOf(false)
 }
 
 class ExtraPrinting {
@@ -158,11 +169,19 @@ private fun StagingRow(entry: ScanStagingEntry, onDelete: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            // Primary printing.
+            // Primary printing. Any hand edit here (set/rarity/language via SetPicker, edition via
+            // CopyChip) marks the entry `userTouched`, so silent improvement stops updating it.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SetPicker(entry.knownSets, entry.selectedSet, { entry.selectedSet = it }, Modifier.weight(1f))
+                SetPicker(
+                    entry.knownSets, entry.selectedSet,
+                    { entry.userTouched = true; entry.selectedSet = it },
+                    Modifier.weight(1f),
+                )
                 Spacer(Modifier.width(6.dp))
-                CopyChip(entry.edition, entry.condition) { e, c -> entry.edition = e; entry.condition = c }
+                CopyChip(entry.edition, entry.condition) { e, c ->
+                    if (e != entry.edition) entry.userTouched = true
+                    entry.edition = e; entry.condition = c
+                }
                 Spacer(Modifier.width(8.dp))
                 QtyStepper(entry.quantity) { entry.quantity = it }
             }

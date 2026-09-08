@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.ml
 
+import com.example.yugiohscanner.cloud.SetCodeMatch
+
 /**
  * Multi-frame set-code voting. The set code is tiny print and any single frame may be blurred,
  * glared, or partly cut off, so we accumulate each card's OCR text across the frames it's visible
@@ -80,4 +82,40 @@ class SetCodeEvidence(private val maxPerCard: Int = 8) {
 
     fun forget(passcode: Int) { frames.remove(passcode) }
     fun reset() { frames.clear() }
+
+    companion object {
+        /**
+         * Spec D3 Task 6 ("Stille Verbesserung", plan Section 6.2): after a card is first
+         * confirmed, this class keeps recording new frames for as long as [BoxTracker] still sees
+         * it, so a later frame can genuinely resolve the set code better than the one(s) that won
+         * the first resolve. This decides whether [new] earns the right to replace what's already
+         * staged ([previous] -- `null` when nothing has been staged yet, e.g. the very first
+         * resolve).
+         *
+         * [userTouched] wins unconditionally: it's `true` exactly when the user has hand-corrected
+         * this entry's set, rarity, language or edition, and the one failure this task must not
+         * have is the automation silently overwriting that correction -- so it short-circuits to
+         * `false` before anything else is even looked at, regardless of how much "better" [new]
+         * looks.
+         *
+         * "Better" reuses the exact two signals [ScanConfidence]'s green condition already trusts
+         * (`codeFrameCount`, `codeExactMatch` -- Task 6's other half, see
+         * [SetCodeMatch.MatchResult]) rather than inventing a third notion of quality: strictly
+         * more separate frames confirmed at distance 0 wins outright; at an equal frame count, only
+         * newly reaching distance 0 (exact was false, now true) counts as an improvement. A [new]
+         * result with no [SetCodeMatch.MatchResult.selected] at all is never an improvement -- there
+         * is nothing to prefer it over keeping what is already staged.
+         */
+        fun shouldSilentlyImprove(
+            userTouched: Boolean,
+            new: SetCodeMatch.MatchResult,
+            previous: SetCodeMatch.MatchResult?,
+        ): Boolean {
+            if (userTouched) return false
+            if (new.selected == null) return false
+            if (previous == null) return true
+            if (new.codeFrameCount != previous.codeFrameCount) return new.codeFrameCount > previous.codeFrameCount
+            return new.codeExactMatch && !previous.codeExactMatch
+        }
+    }
 }

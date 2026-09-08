@@ -200,7 +200,10 @@ fun ScanScreen(onClose: () -> Unit) {
     // Shared by autonomous ML detection (onConfirmed below) and manual passcode entry: stage the
     // card locally, then resolve its base data + set code, reporting failures via the snackbar
     // (the success path stays silent — the flash, sound and footer counter already report it).
-    fun stageScan(pc: String, evidence: List<String>) {
+    // [framesEvidence] is one entry per SEPARATE frame (see SetCodeMatch.best's own doc on why
+    // that's not the same list as [evidence]) — defaults to [evidence] for callers (manual entry)
+    // that have no real per-frame breakdown to offer.
+    fun stageScan(pc: String, evidence: List<String>, framesEvidence: List<String> = evidence) {
         scope.launch { flash.snapTo(0.8f); flash.animateTo(0f, animationSpec = tween(300)) }
         // Always stage on the phone; a connected desktop additionally gets a mirror of the scan.
         val mirrorSocket = socket
@@ -233,7 +236,11 @@ fun ScanScreen(onClose: () -> Unit) {
                     entry.knownSets = catalogSets.map { it.toSetOption() }
                     // .selected is the preselection; .reason (Region unklar/widerspricht) and
                     // .candidates feed the traffic light + set picker in Tasks 5/7, not here yet.
-                    entry.selectedSet = SetCodeMatch.best(evidence, entry.knownSets).selected
+                    // .codeMatch is kept so a later frame's silent improvement (Task 6) has
+                    // something to compare against — see SetCodeEvidence.shouldSilentlyImprove.
+                    val match = SetCodeMatch.best(evidence, entry.knownSets, framesEvidence)
+                    entry.codeMatch = match
+                    entry.selectedSet = match.selected
                     entry.loading = false
                 } else {
                     val base = catalogCard?.toCardRow() ?: CardSearchRepository.search(pc).firstOrNull()
@@ -244,7 +251,9 @@ fun ScanScreen(onClose: () -> Unit) {
                         entry.base = base
                         val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
                         entry.knownSets = known
-                        entry.selectedSet = SetCodeMatch.best(evidence, known).selected
+                        val match = SetCodeMatch.best(evidence, known, framesEvidence)
+                        entry.codeMatch = match
+                        entry.selectedSet = match.selected
                         entry.loading = false
                     }
                 }
@@ -255,9 +264,12 @@ fun ScanScreen(onClose: () -> Unit) {
         }
     }
 
-    val onConfirmed = rememberUpdatedState<(Int, List<String>) -> Unit> { passcode, evidence ->
+    // [frames] is [evidence]'s per-frame breakdown (see stageScan's own doc) — a separate
+    // parameter rather than re-deriving it from [evidence], since the two callers below don't
+    // always have the same list to offer for both.
+    val onConfirmed = rememberUpdatedState<(Int, List<String>, List<String>) -> Unit> { passcode, evidence, frames ->
         val pc = passcode.toString()
-        if (passcode > 0 && seen.add(pc)) stageScan(pc, evidence)
+        if (passcode > 0 && seen.add(pc)) stageScan(pc, evidence, frames)
     }
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
@@ -292,7 +304,7 @@ fun ScanScreen(onClose: () -> Unit) {
     val analyzer = remember {
         CardAnalyzer(
             // Reliable identification by passcode OCR → autonomous phone staging (onConfirmed).
-            onResultDetected = { code, setCodes -> onConfirmed.value(code.toIntOrNull() ?: -1, setCodes) },
+            onResultDetected = { code, setCodes -> onConfirmed.value(code.toIntOrNull() ?: -1, setCodes, setCodes) },
             onProgress = { code, hits, required -> onProgress.value(code, hits, required) }
         )
     }
@@ -338,11 +350,35 @@ fun ScanScreen(onClose: () -> Unit) {
                 // reading the grammar rejects (lost hyphen, line break, region digit) is no longer
                 // silently dropped before the matcher that exists to handle it. See
                 // SetCodeEvidence.rawTexts.
-                onConfirmed.value(
-                    d.passcode,
-                    setEvidence.setCodeCandidates(d.passcode) + setEvidence.rawTexts(d.passcode),
+                val frames = setEvidence.rawTexts(d.passcode)
+                onConfirmed.value(d.passcode, setEvidence.setCodeCandidates(d.passcode) + frames, frames)
+                // NO setEvidence.forget() here (Spec D3 Task 6, "Stille Verbesserung"): the card
+                // usually stays visible after its first confirmation, and BoxTracker.update only
+                // ever returns it ONCE per presence (see BoxTracker's own doc) — so this is the
+                // only chance to seed setCodeCandidates/rawTexts, but NOT the last chance to
+                // improve on them. The silent-improvement loop below keeps resolving from whatever
+                // record() adds on every later frame, for as long as the card stays in `dets`.
+            }
+            // Silent improvement (Spec D3 Task 6, plan Section 6.2): a card already staged
+            // (`seen`) but still visible gets its set code re-resolved from ALL evidence gathered
+            // so far on every frame — a later, cleaner frame can genuinely beat the one(s) that won
+            // the first resolve. `shouldSilentlyImprove` also enforces the one thing this must
+            // never do: overwrite a set/rarity/language/edition the user already corrected by hand
+            // (`entry.userTouched`).
+            for (d in dets) {
+                if (d.passcode <= 0) continue
+                val pc = d.passcode.toString()
+                if (pc !in seen) continue
+                val entry = stagingCards.find { it.passcode == pc } ?: continue
+                if (entry.loading) continue // still resolving its first hit — nothing to compare yet
+                val frames = setEvidence.rawTexts(d.passcode)
+                val result = SetCodeMatch.best(
+                    setEvidence.setCodeCandidates(d.passcode) + frames, entry.knownSets, frames,
                 )
-                setEvidence.forget(d.passcode)
+                if (com.example.yugiohscanner.ml.SetCodeEvidence.shouldSilentlyImprove(entry.userTouched, result, entry.codeMatch)) {
+                    entry.codeMatch = result
+                    entry.selectedSet = result.selected
+                }
             }
             if (dets.isNotEmpty()) {
                 val top = dets.maxByOrNull { it.sim }
