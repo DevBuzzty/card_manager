@@ -12,6 +12,7 @@ import Start from './components/Start';
 import Deals from './components/Deals';
 import ErrorBoundary from './components/ErrorBoundary';
 import CardDetailPanel from './components/CardDetailPanel';
+import { applyScan } from './utils/scanAggregate.js';
 
 // Heavy tabs are code-split so the initial load stays light.
 const Insights = lazy(() => import('./components/Insights'));
@@ -35,36 +36,10 @@ function App() {
       // Listen for scans
       const removeScanListener = window.api.onCardScanned((data) => {
         console.log('Received scan:', data);
-        // Append to the END so the first-scanned card stays at the top (a newly-added card grows
-        // the list downward, so its expanded rows can't get clipped off the bottom).
-        setScannedCards(prev => {
-            // Check for duplicates in current staging
-            if (prev.some(c => c.passcode === data.passcode)) {
-                return prev;
-            }
-
-            // Spec D3 Task 8: the phone already resolved set code, rarity, language, edition and
-            // the traffic light from evidence the desktop never saw (the card's own band text) --
-            // `scannedConfidence` (present only from an updated phone) is the signal StagingArea
-            // uses to take that conclusion as-is instead of re-matching scannedSetCandidates
-            // itself. An older phone build never sends these fields, so they land `undefined`
-            // here and StagingArea falls back to its existing local matching (see its own
-            // comment on that fallback).
-            return [...prev, {
-                tempId: Date.now() + Math.random(),
-                passcode: data.passcode,
-                scannedSetCandidates: data.setCodeCandidates || (data.setCode ? [data.setCode] : []),
-                scannedSetCode: data.setCode,
-                scannedRarity: data.rarity,
-                scannedLanguage: data.language,
-                scannedEdition: data.edition,
-                scannedEditionConfidence: data.editionConfidence,
-                scannedConfidence: data.confidence,
-                scannedReason: data.reason,
-                status: 'pending',
-                data: null
-            }];
-        });
+        // Spec D4 §5: eine Wiederholung wird zusammengefasst, statt verworfen zu werden --
+        // gleicher Druck erhoeht die Menge, ein anderer macht eine Zusatzzeile auf. Die Regel
+        // steht in utils/scanAggregate.js, ihr Kotlin-Zwilling in ScanAggregator.kt.
+        setScannedCards(prev => applyScan(prev, data));
       });
 
       // Listen for progress
