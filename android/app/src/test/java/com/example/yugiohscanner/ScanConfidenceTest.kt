@@ -186,12 +186,41 @@ class ScanConfidenceTest {
         assertEquals("Edition nicht erkannt", result.reason)
     }
 
-    @Test fun `the override only fires for a 'first' default, not other defaults`() {
+    @Test fun `sichere Erkennung schlaegt JEDE Voreinstellung, nicht nur first`() {
+        // Nutzerentscheidung 2026-09-08: "Karte schlaegt Einstellung" gilt als Prinzip, nicht als
+        // Einzelfall. Woertlich umgesetzt gab das Spec hier "limited" zurueck und warf eine
+        // zweifelsfrei gelesene Angabe weg.
         val input = baseline.copy(
             defaultEdition = "limited",
             edition = EditionEvidence.EditionResult("unlimited", EditionEvidence.Confidence.HIGH),
         )
-        assertEquals("limited", ScanConfidence.evaluate(input).effectiveEdition)
+        assertEquals("unlimited", ScanConfidence.evaluate(input).effectiveEdition)
+    }
+
+    @Test fun `die beiden Faelle, die der Wortlaut verlor`() {
+        // Voreinstellung unlimited, Karte liest sicher "1. Auflage" -> die Karte gewinnt.
+        assertEquals("first", ScanConfidence.evaluate(baseline.copy(
+            defaultEdition = "unlimited",
+            edition = EditionEvidence.EditionResult("first", EditionEvidence.Confidence.HIGH),
+        )).effectiveEdition)
+        // Voreinstellung first, Karte liest sicher "Limitierte Auflage" -> die Karte gewinnt.
+        assertEquals("limited", ScanConfidence.evaluate(baseline.copy(
+            defaultEdition = "first",
+            edition = EditionEvidence.EditionResult("limited", EditionEvidence.Confidence.HIGH),
+        )).effectiveEdition)
+    }
+
+    @Test fun `LOW und unknown lassen die Voreinstellung stehen`() {
+        // Der Rueckfall bleibt: nur eine SICHERE Lesung gewinnt. Ein einzelner Frame (LOW) oder
+        // gar keine Lesung (unknown) aendert nichts an der Einstellung.
+        assertEquals("first", ScanConfidence.evaluate(baseline.copy(
+            defaultEdition = "first",
+            edition = EditionEvidence.EditionResult("unlimited", EditionEvidence.Confidence.LOW),
+        )).effectiveEdition)
+        assertEquals("first", ScanConfidence.evaluate(baseline.copy(
+            defaultEdition = "first",
+            edition = EditionEvidence.EditionResult("unknown", EditionEvidence.Confidence.HIGH),
+        )).effectiveEdition)
     }
 
     @Test fun `effectiveEdition is resolved even for a RED result`() {
@@ -205,10 +234,14 @@ class ScanConfidenceTest {
         assertEquals("unlimited", result.effectiveEdition)
     }
 
-    @Test fun `no override -- effectiveEdition just carries the default through unchanged`() {
-        val result = ScanConfidence.evaluate(baseline.copy(defaultEdition = "unlimited"))
+    @Test fun `ohne sichere Lesung traegt die Voreinstellung durch`() {
+        // Die Grundlage enthaelt eine SICHERE Lesung -- die wuerde jetzt gewinnen. Hier geht es um
+        // den Rueckfall, also muss die Lesung ausdruecklich unsicher sein.
+        val result = ScanConfidence.evaluate(baseline.copy(
+            defaultEdition = "unlimited",
+            edition = EditionEvidence.EditionResult("unknown", EditionEvidence.Confidence.LOW),
+        ))
         assertEquals("unlimited", result.effectiveEdition)
-        assertNull(result.reason)
     }
 
     // --- Task 6: codeExactMatch / codeFrameCount genuinely produced by SetCodeMatch ------------
@@ -267,10 +300,9 @@ class ScanConfidenceTest {
             match, known, editionTexts = listOf("Limitierte Auflage", "LIMITIERTE AUFLAGE"), defaultEdition = "unknown",
         )
         assertEquals(ScanConfidence.Light.GREEN, result.light)
-        // The override (Spec Section 7) only fires for defaultEdition=="first" plus a HIGH
-        // "unlimited" detection -- neither holds here ("limited" was detected), so effectiveEdition
-        // just carries the unrelated setting through unchanged; see resolveEdition's own KDoc.
-        assertEquals("unknown", result.effectiveEdition)
+        // Seit der Nutzerentscheidung gewinnt jede sichere Lesung: hier wurde "limited" in zwei
+        // Frames gelesen, also steht "limited" im Ergebnis -- nicht die unbeteiligte Einstellung.
+        assertEquals("limited", result.effectiveEdition)
     }
 
     @Test fun `fromEvidence -- no edition texts at all reports unknown, not a crash`() {

@@ -178,25 +178,32 @@ object ScanConfidence {
     }
 
     /**
-     * Spec Section 7, verbatim: if the user's default edition is `first` and the EDITION zone
-     * reads `unlimited` at HIGH confidence, detection wins over the setting -- the card beats the
-     * setting. [EditionEvidence.result]'s own KDoc explicitly defers this merge to Task 5 ("That
-     * merge with the Spec A default is Task 5's job (the traffic light), not this class's"), so
-     * this is that rule's code home; [EditionEvidenceTest]'s two pinning tests already cover that
-     * `EditionEvidence` itself reaches exactly the `(unlimited, HIGH)` / `(unlimited, LOW)` inputs
-     * this rule keys off of.
+     * "Die Karte schlaegt die Einstellung" (Spec Abschnitt 7) -- als PRINZIP umgesetzt, nicht als
+     * Einzelfall. Nutzerentscheidung vom 2026-09-08, bewusste Abweichung vom Wortlaut.
      *
-     * Deliberately narrow: the plan states this ONE direction only (`first` default + `unlimited`
-     * HIGH detection). It says nothing about, say, a `limited` default contradicted by a HIGH
-     * `first` detection, so this does not generalise "detection always beats an unconfirmed
-     * setting" -- that would be inventing a policy the plan never stated. Outside this one
-     * documented case, the setting stands, same as today's un-overridden `Prefs.defaultEdition`
-     * prefill in `ScanScreen`.
+     * Das Spec formuliert: "Wenn Default-Edition (A) auf `first` steht und die Erkennung
+     * `unlimited` HIGH liefert, gewinnt die Erkennung (Karte schlaegt Einstellung)." Der Satz
+     * nennt einen Fall, der Klammerzusatz ein Prinzip. Woertlich umgesetzt verwarf die Funktion
+     * jede andere sichere Lesung:
+     *
+     *  - Voreinstellung `unlimited`, Karte liest `first` HIGH  -> verbuchte `unlimited`
+     *  - Voreinstellung `first`, Karte liest `limited` HIGH     -> verbuchte `first`
+     *
+     * In beiden Faellen stand die Angabe zweifelsfrei auf der Karte und wurde weggeworfen. Das
+     * ist das Gegenteil dessen, was der Klammerzusatz sagt.
+     *
+     * Jetzt gilt: eine Erkennung mit HIGH gewinnt, sofern sie ueberhaupt etwas gelesen hat. Die
+     * Voreinstellung ist der Rueckfall fuer genau die Faelle, in denen die Karte schweigt --
+     * `unknown` (nichts gelesen) oder LOW (nur ein Frame, siehe [EditionEvidence]).
+     *
+     * Die Abwaegung, offen benannt: eine falsche Erkennung schlaegt damit oefter durch. HIGH
+     * verlangt aber denselben Marker in mindestens zwei Frames, und der Labellauf ueber 5.651
+     * Fotos erkannte Editionen zu 97 Prozent -- die belastbarste Groesse der ganzen Kette,
+     * deutlich vor dem Set-Code mit 37,5 bis 53,8 Prozent.
      */
-    private fun resolveEdition(detected: EditionEvidence.EditionResult, defaultEdition: String): String {
-        val detectionWins = defaultEdition == "first" &&
-            detected.edition == "unlimited" &&
-            detected.confidence == EditionEvidence.Confidence.HIGH
-        return if (detectionWins) "unlimited" else defaultEdition
-    }
+    private fun resolveEdition(detected: EditionEvidence.EditionResult, defaultEdition: String): String =
+        if (detected.confidence == EditionEvidence.Confidence.HIGH && detected.edition != "unknown")
+            detected.edition
+        else
+            defaultEdition
 }
