@@ -230,6 +230,7 @@ fun ScanScreen(onClose: () -> Unit) {
             )
             entry.confidence = confidence
             entry.edition = confidence.effectiveEdition
+            logScanDecision("erst", pc, match, confidence, entry.knownSets)
         }
         // Spec D3 Task 8 (plan Section 6.5): mirrors the phone's ALREADY-RESOLVED conclusion to a
         // connected desktop -- setCode/rarity/language/edition, the traffic light and its German
@@ -450,6 +451,7 @@ fun ScanScreen(onClose: () -> Unit) {
                     )
                     entry.confidence = confidence
                     entry.edition = confidence.effectiveEdition
+                    logScanDecision("verbessert", d.passcode.toString(), result, confidence, entry.knownSets)
                 }
             }
             if (dets.isNotEmpty()) {
@@ -887,4 +889,42 @@ class CardAnalyzer(
     fun close() {
         recognizer.close()
     }
+}
+
+/**
+ * Eine Zeile je Ampel-Entscheidung, im key=value-Format, das `ml/ocr_bench.py` ohnehin liest.
+ *
+ * Warum das noetig ist, und zwar dringend: die Geraeteabnahme zu D3 ergab 31 von 31 gruen, und das
+ * Abschlussreview fand danach ZWEI kritische Fehler, die genau diese Abnahme ueberlebt hatten --
+ * eine Rarity-Pruefung, die bei komponierten Codes leer erfuellt war, und ein `unlimited`, das aus
+ * dreimal leerem Ausschnitt entstand. Beide erzeugten GRUEN, und Gruen zeigt keinen Grund an. Eine
+ * leer-gruene Karte war vom Bildschirm aus nicht von einer echt-gruenen zu unterscheiden.
+ *
+ * Das entscheidende Feld ist `composed`: es sagt, ob der Set-Code in der Printing-Liste GEFUNDEN
+ * oder aus Praefix + gelesener Region + Nummer ZUSAMMENGESETZT wurde. Allein dieses Feld haette
+ * den Rarity-Fehler sichtbar gemacht, denn er trat ausschliesslich im komponierten Fall auf.
+ *
+ * `stage` unterscheidet die erste Aufloesung von der stillen Verbesserung. Ohne das sind eine
+ * Verbesserung und eine Nicht-Verbesserung im Protokoll identisch -- und die Verbesserung ersetzt
+ * einen Druck, NACHDEM der Nutzer den alten bereits gesehen hat.
+ */
+private fun logScanDecision(
+    stage: String,
+    passcode: String,
+    match: com.example.yugiohscanner.cloud.SetCodeMatch.MatchResult,
+    confidence: com.example.yugiohscanner.ml.ScanConfidence.Result,
+    knownSets: List<com.example.yugiohscanner.cloud.SetOption>,
+) {
+    val sel = match.selected
+    val composed = sel != null && knownSets.none { it.setCode.equals(sel.setCode, ignoreCase = true) }
+    android.util.Log.i(
+        "ScanDecision",
+        "stage=$stage pc=$passcode " +
+            "code=${sel?.setCode ?: "-"} rarity=${sel?.rarity ?: "-"} lang=${sel?.language ?: "-"} " +
+            "composed=$composed match=${match.reason.name} " +
+            "exact=${match.codeExactMatch} frames=${match.codeFrameCount} " +
+            "known=${knownSets.size} " +
+            "light=${confidence.light.name} grund='${confidence.reason ?: ""}' " +
+            "edition=${confidence.effectiveEdition} editionConf=${confidence.editionConfidence.name}"
+    )
 }
