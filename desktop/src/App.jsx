@@ -126,7 +126,13 @@ function App() {
             </div>
             {panelOpen && (
               <ErrorBoundary>
-                <CardDetailPanel paletteOpen={paletteOpen} />
+                {/* The panel sits beside the page instead of replacing it, so it needs a
+                    <Routes> of its own: outside a matched route useParams() is empty, the
+                    panel looks up the printing key "Unknown" and renders nothing. */}
+                <Routes>
+                  <Route path="/karte/:id/:setCode/:language/:rarity"
+                         element={<CardDetailPanel paletteOpen={paletteOpen} />} />
+                </Routes>
               </ErrorBoundary>
             )}
         </div>
