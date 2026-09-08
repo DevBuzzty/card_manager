@@ -87,9 +87,13 @@ class SetCodeEvidence(private val maxPerCard: Int = 8) {
      * function's own doc on why a layout with no measured EDITION zone must never be recorded at
      * all). [mapNotNull] is the mechanism that enforces that here: a frame whose [Zone.EDITION]
      * key is ABSENT from `zoneTexts` (the layout has no measured zone, e.g. PENDULUM) is dropped,
-     * while a frame whose zone was read and came back blank keeps its (blank) entry -- that is
-     * still "we looked and found nothing", a real signal [EditionEvidence.result]'s `unlimited`
-     * case depends on, not the same as never having looked.
+     * while a frame whose zone was read and came back blank still keeps its (blank) entry -- that
+     * distinction (looked vs. never looked) is worth preserving here regardless. What that blank
+     * entry then COUNTS as is [EditionEvidence.add]'s call, not this function's: since Spec D3 fix
+     * I1, a blank entry no longer confirms "legible" for [EditionEvidence.result]'s `unlimited`
+     * case on its own -- an OCR failure on a badly-placed crop returns "" exactly like a genuinely
+     * blank zone would, and the two used to be indistinguishable to that rule's advantage (see
+     * [EditionEvidence.add]'s own doc).
      */
     fun editionTexts(passcode: Int): List<String> =
         frames[passcode]?.mapNotNull { it.zoneTexts[Zone.EDITION] } ?: emptyList()

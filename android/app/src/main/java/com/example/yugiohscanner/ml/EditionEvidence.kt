@@ -86,16 +86,24 @@ class EditionEvidence {
      * actually cropped and OCR'd for this card's layout -- see the class doc on why a layout with
      * no measured EDITION zone must never call this at all.
      *
-     * [zoneText] may be blank. A "nachweislich leer" (provably empty) reading counts exactly the
-     * same as one with unrelated text on it for the unlimited rule in [result]: both mean "we
-     * looked at this exact spot, on this frame, and there was no marker" -- which a caller that
-     * never looked at all cannot claim. This is also why the unlimited rule hangs on THIS zone
-     * being legible and not, say, the passcode line being legible elsewhere on the same frame: D2
-     * measured PASSCODE at 91.4% legibility against SET_CODE at 53.8% on the same corpus, so one
+     * Spec D3 fix I1: [zoneText] only counts towards `legibleFrames` -- and so towards the
+     * `unlimited` rule in [result] -- when it is actually non-blank. This class used to count a
+     * blank [zoneText] as "provably empty, we looked and found nothing" evidence, on the theory
+     * that a real, no-marker crop and an OCR failure both mean "no marker seen". They don't: OCR
+     * on a badly-placed crop (box slightly large, glare, a placeholder rectangle) also returns "",
+     * and that case is NOT "we confirmed this spot is blank" -- it is "we never actually read this
+     * spot at all". Treating it as legible let three such frames alone (no other evidence) fabricate
+     * `unlimited` at HIGH confidence, which -- since detection beats the default-edition setting
+     * (Spec Section 7, see [ScanConfidence.resolveEdition]) -- silently overwrote a 1st-edition
+     * card's user-set `first` default. `isNotBlank()` is the fix: legibility now requires OCR to
+     * have actually produced characters, marker or not, exactly as this function's own name
+     * ("legible") already implied but did not enforce. This is why the unlimited rule hangs on THIS
+     * zone being legible and not, say, the passcode line being legible elsewhere on the same frame:
+     * D2 measured PASSCODE at 91.4% legibility against SET_CODE at 53.8% on the same corpus, so one
      * zone's success says nothing about another's.
      */
     fun add(zoneText: String) {
-        legibleFrames++
+        if (zoneText.isNotBlank()) legibleFrames++
         val norm = normalize(zoneText)
         when {
             LIMITED_PATTERNS.any { it.containsMatchIn(norm) } -> limitedFrames++

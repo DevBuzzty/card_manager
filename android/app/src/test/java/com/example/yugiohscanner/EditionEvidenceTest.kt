@@ -125,24 +125,52 @@ class EditionEvidenceTest {
 
     // --- unlimited rule: hangs on the EDITION zone itself being legible ------------------------
 
-    @Test fun `two legible EDITION-zone frames with no marker -- unlimited, LOW`() {
+    @Test fun `two legible (non-blank) EDITION-zone frames with no marker -- unlimited, LOW`() {
         val ev = EditionEvidence()
-        ev.add("")               // provably empty -- still "we looked"
         ev.add("some scuff")     // legible but unrelated text
+        ev.add("a dent")         // legible but unrelated text
         assertEquals(EditionEvidence.EditionResult("unlimited", Confidence.LOW), ev.result())
     }
 
-    @Test fun `three legible EDITION-zone frames with no marker -- unlimited, HIGH`() {
+    @Test fun `three legible (non-blank) EDITION-zone frames with no marker -- unlimited, HIGH`() {
         val ev = EditionEvidence()
-        ev.add("")
-        ev.add("")
         ev.add("some scuff")
+        ev.add("a dent")
+        ev.add("a smudge")
         assertEquals(EditionEvidence.EditionResult("unlimited", Confidence.HIGH), ev.result())
     }
 
     @Test fun `one legible markerless frame is NOT enough for unlimited`() {
         val ev = EditionEvidence()
         ev.add("some scuff")
+        assertEquals(EditionEvidence.EditionResult("unknown", Confidence.LOW), ev.result())
+    }
+
+    // --- I1 regression: a blank OCR read is not evidence of a legible, confirmed-empty zone -----
+    // (reviewer's reproduction, kept verbatim as the pinning test) ------------------------------
+
+    @Test fun `I1 -- three BLANK frames alone must NOT fabricate unlimited HIGH`() {
+        // Before the fix: add("") unconditionally incremented legibleFrames, so three frames whose
+        // EDITION crop simply never yielded any text (box slightly too large, glare, a placeholder
+        // rect) -- NOT a confirmed-blank zone -- produced exactly the same (unlimited, HIGH) result
+        // as a genuinely read, markerless zone. Since HIGH-confidence unlimited beats a 'first'
+        // default (Spec Section 7 / ScanConfidence.resolveEdition), that silently overwrote an
+        // explicit user setting on nothing but an OCR failure.
+        val ev = EditionEvidence()
+        ev.add("")
+        ev.add("")
+        ev.add("")
+        assertEquals(EditionEvidence.EditionResult("unknown", Confidence.LOW), ev.result())
+    }
+
+    @Test fun `I1 -- blank frames don't count towards legibility even mixed with a real read`() {
+        // One genuinely legible, markerless frame plus two blanks used to read as "3 legible" (LOW
+        // threshold cleared twice over). Only the one non-blank frame actually counts now -- not
+        // enough on its own for unlimited.
+        val ev = EditionEvidence()
+        ev.add("")
+        ev.add("some scuff")
+        ev.add("")
         assertEquals(EditionEvidence.EditionResult("unknown", Confidence.LOW), ev.result())
     }
 
@@ -184,18 +212,18 @@ class EditionEvidenceTest {
         assertEquals(Confidence.HIGH, ev.result().confidence)
     }
 
-    @Test fun `unlimited at exactly 2 legible frames is LOW`() {
+    @Test fun `unlimited at exactly 2 legible (non-blank) frames is LOW`() {
         val ev = EditionEvidence()
-        ev.add("")
-        ev.add("")
+        ev.add("some scuff")
+        ev.add("a dent")
         assertEquals(Confidence.LOW, ev.result().confidence)
     }
 
-    @Test fun `unlimited at 3 legible frames is HIGH`() {
+    @Test fun `unlimited at 3 legible (non-blank) frames is HIGH`() {
         val ev = EditionEvidence()
-        ev.add("")
-        ev.add("")
-        ev.add("")
+        ev.add("some scuff")
+        ev.add("a dent")
+        ev.add("a smudge")
         assertEquals(Confidence.HIGH, ev.result().confidence)
     }
 
@@ -212,21 +240,22 @@ class EditionEvidenceTest {
         // says 'unlimited' with HIGH, detection wins -- the card beats the setting. Applying that
         // override against the Spec A default is Task 5's job (the traffic light, out of scope
         // here); this test pins that EditionEvidence itself reaches exactly this result (unlimited,
-        // HIGH) from 3 legible, markerless EDITION-zone frames, which is the only signal Task 5
-        // needs to make that call.
+        // HIGH) from 3 legible (non-blank -- see the I1 tests above for why a blank read no longer
+        // counts), markerless EDITION-zone frames, which is the only signal Task 5 needs to make
+        // that call.
         val ev = EditionEvidence()
-        ev.add("")
         ev.add("some scuff")
-        ev.add("")
+        ev.add("a dent")
+        ev.add("a smudge")
         assertEquals(EditionEvidence.EditionResult("unlimited", Confidence.HIGH), ev.result())
     }
 
     @Test fun `unlimited at LOW confidence must NOT be mistaken for the override signal`() {
         // Contrast case for the rule above: only HIGH-confidence unlimited beats a 'first' default
-        // per Spec §7 -- exactly 2 legible frames (LOW) is a different, weaker signal.
+        // per Spec §7 -- exactly 2 legible (non-blank) frames (LOW) is a different, weaker signal.
         val ev = EditionEvidence()
-        ev.add("")
-        ev.add("")
+        ev.add("some scuff")
+        ev.add("a dent")
         assertEquals(Confidence.LOW, ev.result().confidence)
     }
 }
