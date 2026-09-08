@@ -1,6 +1,7 @@
 package com.example.yugiohscanner.ml
 
 import com.example.yugiohscanner.cloud.SetCodeMatch
+import com.example.yugiohscanner.cloud.SetOption
 
 // The traffic light (Spec D3 Task 5, plan Section 6.4). PURE: no Android types (no Bitmap,
 // Context, Compose state), just the Kotlin signal types Tasks 2-4 already produce -- consuming
@@ -126,6 +127,54 @@ object ScanConfidence {
         }
 
         return Result(Light.GREEN, null, effectiveEdition)
+    }
+
+    /**
+     * Spec D3 Task 7's own wiring gap: a caller like `ScanScreen` has the RAW per-frame evidence
+     * (a [SetCodeMatch.MatchResult], the full [knownSets] list it was matched against, and one
+     * EDITION-zone-text-per-frame list from [SetCodeEvidence.editionTexts]), not an already-
+     * assembled [Input] -- building the two missing pieces ([EditionEvidence.EditionResult],
+     * [RarityRank.Result]) is pure composition of already-tested objects, so it lives here rather
+     * than being re-implemented at the call site (this task's own brief: "consume, do not
+     * re-derive").
+     *
+     * [editionTexts] is fed to a fresh [EditionEvidence] verbatim, one `add` call per entry --
+     * caller must already have filtered it to frames that actually had the zone (see
+     * [SetCodeEvidence.editionTexts]'s own doc; this function does not re-check that).
+     *
+     * [knownSets] is filtered down to [match]'s own [SetCodeMatch.MatchResult.selected]`.setCode`
+     * for [RarityRank] -- deliberately NOT [match]'s own `candidates`: that field already
+     * collapses to a single entry for the common MATCHED case ([SetCodeMatch.best]'s Case 1 always
+     * returns `listOf(selected)`, never the tied group it picked `selected` from), so it can never
+     * carry a rarity disagreement even when one exists in the catalog. [knownSets] is the same
+     * list the caller already passed to [SetCodeMatch.best] itself -- filtering it by the winning
+     * code, rather than composing a rarity from [match]'s internals, matches [RarityRank]'s own
+     * stated target ("when one set code exists at several rarities...", i.e. rows sharing one
+     * exact `setCode` string) without depending on anything [SetCodeMatch] doesn't already expose.
+     * `null` (not an empty-list ranking) when [match] has no selection at all -- there is nothing
+     * to rank, and RED short-circuits before rarity matters anyway.
+     */
+    fun fromEvidence(
+        match: SetCodeMatch.MatchResult,
+        knownSets: List<SetOption>,
+        editionTexts: List<String>,
+        defaultEdition: String,
+    ): Result {
+        val editionEv = EditionEvidence()
+        for (t in editionTexts) editionEv.add(t)
+        val rarity = match.selected?.let { sel ->
+            RarityRank.lowest(knownSets.filter { it.setCode.equals(sel.setCode, ignoreCase = true) })
+        }
+        return evaluate(
+            Input(
+                matchResult = match,
+                codeExactMatch = match.codeExactMatch,
+                codeFrameCount = match.codeFrameCount,
+                rarity = rarity,
+                edition = editionEv.result(),
+                defaultEdition = defaultEdition,
+            )
+        )
     }
 
     /**

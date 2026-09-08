@@ -80,6 +80,20 @@ class SetCodeEvidence(private val maxPerCard: Int = 8) {
     fun rawTexts(passcode: Int): List<String> =
         frames[passcode]?.map { concatZoneTexts(it.zoneTexts, it.legacyText) } ?: emptyList()
 
+    /**
+     * Every recorded frame's EDITION-zone text for [passcode], one entry per frame -- for
+     * [EditionEvidence.add] (Spec D3 Task 7), which requires exactly this: call it once per frame
+     * the zone was actually cropped and OCR'd, never for a frame where it wasn't (see that
+     * function's own doc on why a layout with no measured EDITION zone must never be recorded at
+     * all). [mapNotNull] is the mechanism that enforces that here: a frame whose [Zone.EDITION]
+     * key is ABSENT from `zoneTexts` (the layout has no measured zone, e.g. PENDULUM) is dropped,
+     * while a frame whose zone was read and came back blank keeps its (blank) entry -- that is
+     * still "we looked and found nothing", a real signal [EditionEvidence.result]'s `unlimited`
+     * case depends on, not the same as never having looked.
+     */
+    fun editionTexts(passcode: Int): List<String> =
+        frames[passcode]?.mapNotNull { it.zoneTexts[Zone.EDITION] } ?: emptyList()
+
     fun forget(passcode: Int) { frames.remove(passcode) }
     fun reset() { frames.clear() }
 

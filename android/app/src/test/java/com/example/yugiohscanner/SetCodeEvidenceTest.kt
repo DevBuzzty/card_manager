@@ -85,6 +85,29 @@ class SetCodeEvidenceTest {
         assertTrue(SetCodeEvidence().rawTexts(999).isEmpty())
     }
 
+    // -- editionTexts (Spec D3 Task 7) -----------------------------------------------------------
+    // EditionEvidence.add() must be called ONLY for a frame whose layout actually had the EDITION
+    // zone measured -- an ABSENT map entry (the zone was never cropped, e.g. PENDULUM) must be
+    // dropped, while a PRESENT but blank entry (the zone was read and found empty) must survive.
+
+    @Test fun `editionTexts collects one entry per frame that actually had the EDITION zone`() {
+        val ev = SetCodeEvidence()
+        ev.record(1234, mapOf(Zone.EDITION to "1st Edition", Zone.SET_CODE to "LOB-DE001"))
+        ev.record(1234, mapOf(Zone.EDITION to "", Zone.SET_CODE to "LOB-DE001"))
+        assertEquals(listOf("1st Edition", ""), ev.editionTexts(1234))
+    }
+
+    @Test fun `a frame whose layout has no measured EDITION zone at all is dropped, not treated as blank`() {
+        val ev = SetCodeEvidence()
+        // No Zone.EDITION key at all -- e.g. PENDULUM, which CardLayout never gives one.
+        ev.record(1234, mapOf(Zone.SET_CODE to "LOB-DE001", Zone.PASSCODE to "12341234"))
+        assertTrue(ev.editionTexts(1234).isEmpty())
+    }
+
+    @Test fun `editionTexts for an unrecorded passcode is empty, not a crash`() {
+        assertTrue(SetCodeEvidence().editionTexts(999).isEmpty())
+    }
+
     @Test fun `nothing recorded for this passcode returns empty, not a crash`() {
         val ev = SetCodeEvidence()
         assertTrue(ev.setCodeCandidates(999).isEmpty())

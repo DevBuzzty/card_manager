@@ -1,9 +1,11 @@
 package com.example.yugiohscanner.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -16,13 +18,18 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
+import com.example.yugiohscanner.ml.ScanConfidence
 import com.example.yugiohscanner.ui.components.SpaceCard
+import com.example.yugiohscanner.ui.theme.ErrorColor
+import com.example.yugiohscanner.ui.theme.Good
+import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
@@ -52,6 +59,12 @@ class ScanStagingEntry(val id: Long, val passcode: String) {
     // below) -- freezes silent improvement for this entry from then on, so a deliberate correction
     // is never silently overwritten by a later automatic re-resolve.
     var userTouched by mutableStateOf(false)
+
+    // Spec D3 Task 7 (traffic light): the ampel ScanScreen already computed (ScanConfidence
+    // .fromEvidence, applied on every resolve and every silent improvement) -- this screen only
+    // DISPLAYS it (dot colour + reason text), it never recomputes green/yellow/red itself. `null`
+    // while the entry is still resolving (same window as `loading`).
+    var confidence by mutableStateOf<ScanConfidence.Result?>(null)
 }
 
 class ExtraPrinting {
@@ -59,6 +72,30 @@ class ExtraPrinting {
     var quantity by mutableIntStateOf(1)
     var edition by mutableStateOf("unknown")
     var condition by mutableStateOf("NM")
+}
+
+// Pure, testable half of the staging sheet's traffic-light display (Spec D3 Task 7) -- extracted
+// so it doesn't need a Compose UI test, which this project has none of (same pattern as
+// CardZones.zoneRect / CardLayout.isArtworkShaped in Spec D2). Both functions only MAP an already-
+// decided ScanConfidence.Light to what this screen shows; neither re-derives green/yellow/red --
+// that stays ScanConfidence's job alone (this task's own brief: "consume, do not re-derive").
+object ScanStagingLogic {
+    /**
+     * "Nur unsichere" shows YELLOW and RED, hides GREEN. `light == null` (still resolving, no
+     * ScanConfidence.Result yet) counts as unsafe too -- there is nothing green to promise about
+     * an entry that hasn't finished resolving. When the switch is off, everything passes.
+     */
+    fun matchesUnsafeFilter(showOnlyUnsafe: Boolean, light: ScanConfidence.Light?): Boolean =
+        !showOnlyUnsafe || light != ScanConfidence.Light.GREEN
+
+    /** The traffic-light dot's colour -- only the three existing theme colours (the brief:
+     *  "keine neuen Farben"). `null` (still resolving) is Muted, not a fourth ampel colour. */
+    fun dotColor(light: ScanConfidence.Light?): Color = when (light) {
+        ScanConfidence.Light.GREEN -> Good
+        ScanConfidence.Light.YELLOW -> Gold
+        ScanConfidence.Light.RED -> ErrorColor
+        null -> Muted
+    }
 }
 
 @Composable
@@ -71,6 +108,7 @@ fun ScanStagingSheet(
     val scope = rememberCoroutineScope()
     var committing by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showOnlyUnsafe by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         Text("Prüfen & übernehmen", style = MaterialTheme.typography.titleLarge, color = OnSurface,
@@ -88,12 +126,33 @@ fun ScanStagingSheet(
             return@Column
         }
 
+        // "Nur unsichere" (yellow + red). Pure display filter (ScanStagingLogic.matchesUnsafeFilter)
+        // -- it never touches `entries` itself, only what the LazyColumn below shows. "Übernehmen"
+        // below always iterates the full `entries`, filter or no filter, per the plan: a filter
+        // must never accidentally skip cards on commit.
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Nur unsichere", style = MaterialTheme.typography.bodyMedium, color = OnSurface,
+                modifier = Modifier.weight(1f))
+            Switch(checked = showOnlyUnsafe, onCheckedChange = { showOnlyUnsafe = it })
+        }
+
+        val visible = entries.filter { ScanStagingLogic.matchesUnsafeFilter(showOnlyUnsafe, it.confidence?.light) }
+        if (showOnlyUnsafe && visible.isEmpty()) {
+            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text("Keine unsicheren Karten – alles Grün.",
+                    color = Muted, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+
         LazyColumn(
             Modifier.weight(1f).padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 8.dp),
         ) {
-            items(entries, key = { it.id }) { entry ->
+            items(visible, key = { it.id }) { entry ->
                 StagingRow(entry, onDelete = { entries.remove(entry) })
             }
         }
@@ -104,7 +163,8 @@ fun ScanStagingSheet(
                 scope.launch {
                     try {
                         // Only the entries actually written are removed; ones still resolving (and
-                        // anything the camera adds while this runs) stay in the sheet.
+                        // anything the camera adds while this runs) stay in the sheet. Iterates the
+                        // FULL `entries`, not `visible` -- see the filter's own comment above.
                         val committed = mutableListOf<ScanStagingEntry>()
                         for (e in entries.toList()) {
                             val b = e.base ?: continue // still resolving — skip
@@ -147,6 +207,13 @@ private fun StagingRow(entry: ScanStagingEntry, onDelete: () -> Unit) {
     SpaceCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Traffic-light dot (Spec D3 Task 7): DISPLAYS entry.confidence, computed
+                // upstream by ScanConfidence via ScanScreen -- see ScanStagingLogic.dotColor.
+                Box(
+                    Modifier.size(10.dp).clip(CircleShape)
+                        .background(ScanStagingLogic.dotColor(entry.confidence?.light)),
+                )
+                Spacer(Modifier.width(8.dp))
                 AsyncImage(model = entry.base?.imageUrl, contentDescription = entry.base?.name,
                     modifier = Modifier.width(48.dp).height(70.dp).clip(RoundedCornerShape(6.dp)))
                 Spacer(Modifier.width(10.dp))
@@ -162,6 +229,12 @@ private fun StagingRow(entry: ScanStagingEntry, onDelete: () -> Unit) {
                     } else {
                         Text(entry.passcode, style = MaterialTheme.typography.labelSmall,
                             fontFamily = MonoFontFamily, color = Muted)
+                        // Reason as a subtitle -- read straight off ScanConfidence (German
+                        // already), never paraphrased here. `null` exactly for GREEN (see
+                        // ScanConfidence.Result's own doc), so nothing renders for a green card.
+                        entry.confidence?.reason?.let { reason ->
+                            Text(reason, style = MaterialTheme.typography.labelSmall, color = Muted, maxLines = 1)
+                        }
                     }
                 }
                 IconButton(onClick = onDelete) {

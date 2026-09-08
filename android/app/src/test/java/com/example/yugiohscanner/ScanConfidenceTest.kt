@@ -247,4 +247,93 @@ class ScanConfidenceTest {
         assertEquals(ScanConfidence.Light.YELLOW, result.light)
         assertEquals("Code unsicher: LOB-DE005", result.reason)
     }
+
+    // --- Task 7: fromEvidence -- the ScanScreen wiring gap ---------------------------------
+    //
+    // fromEvidence composes already-tested pieces (EditionEvidence, RarityRank.lowest, evaluate);
+    // these tests only check the WIRING (raw per-frame texts / the known-sets group reach the
+    // right place), not re-prove any of those pieces' own logic -- see EditionEvidenceTest /
+    // RarityRankTest for that coverage.
+
+    @Test fun `fromEvidence -- edition texts feed a fresh EditionEvidence, one add() per frame`() {
+        val known = listOf(SetOption("LOB-DE005", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("LOB-DE005", "LOB-DE005")
+        val match = SetCodeMatch.best(frames, known, frames)
+        // Two frames reading the LIMITED marker -> EditionEvidence.result() is (limited, HIGH) --
+        // known-and-HIGH is enough to clear the ampel's OWN edition check, which is how this test
+        // proves editionTexts actually reached EditionEvidence (ignored, it would default to
+        // unknown/LOW and stay yellow, per the next test).
+        val result = ScanConfidence.fromEvidence(
+            match, known, editionTexts = listOf("Limitierte Auflage", "LIMITIERTE AUFLAGE"), defaultEdition = "unknown",
+        )
+        assertEquals(ScanConfidence.Light.GREEN, result.light)
+        // The override (Spec Section 7) only fires for defaultEdition=="first" plus a HIGH
+        // "unlimited" detection -- neither holds here ("limited" was detected), so effectiveEdition
+        // just carries the unrelated setting through unchanged; see resolveEdition's own KDoc.
+        assertEquals("unknown", result.effectiveEdition)
+    }
+
+    @Test fun `fromEvidence -- no edition texts at all reports unknown, not a crash`() {
+        val known = listOf(SetOption("LOB-DE005", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("LOB-DE005", "LOB-DE005")
+        val match = SetCodeMatch.best(frames, known, frames)
+        val result = ScanConfidence.fromEvidence(match, known, editionTexts = emptyList(), defaultEdition = "unknown")
+        assertEquals(ScanConfidence.Light.YELLOW, result.light)
+        assertEquals("Edition nicht erkannt", result.reason)
+    }
+
+    @Test fun `fromEvidence -- rarity comes from the FULL knownSets list grouped by the winning code, not match's own (single-entry) candidates`() {
+        // Two rows share the exact winning setCode string but differ in rarity -- RarityRank's own
+        // target case. match.candidates itself would NOT carry this (SetCodeMatch.best's Case 1
+        // always collapses MATCHED down to listOf(selected)) -- that's exactly the gap this
+        // function's own KDoc explains, and this test pins the fix: it must be [knownSets] that
+        // gets filtered, not [match]'s own field.
+        val known = listOf(
+            SetOption("LOB-DE005", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("LOB-DE005", "Secret Rare", 0.0, "DE", verified = true),
+        )
+        val frames = listOf("LOB-DE005", "LOB-DE005")
+        val match = SetCodeMatch.best(frames, known, frames)
+        assertEquals("match.candidates itself is the single-entry gap this function works around",
+            1, match.candidates.size)
+        val result = ScanConfidence.fromEvidence(
+            match, known, editionTexts = listOf("1st Edition", "1st Edition"), defaultEdition = "unknown",
+        )
+        assertEquals(ScanConfidence.Light.YELLOW, result.light)
+        assertEquals("Rarity mehrdeutig: Ultra Rare/Secret Rare", result.reason)
+    }
+
+    @Test fun `fromEvidence -- no rarity disagreement in knownSets for the winning code -- not ambiguous`() {
+        val known = listOf(SetOption("LOB-DE005", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("LOB-DE005", "LOB-DE005")
+        val match = SetCodeMatch.best(frames, known, frames)
+        val result = ScanConfidence.fromEvidence(
+            match, known, editionTexts = listOf("1st Edition", "1st Edition"), defaultEdition = "unknown",
+        )
+        assertEquals(ScanConfidence.Light.GREEN, result.light)
+    }
+
+    @Test fun `fromEvidence -- no selection at all (RED) -- rarity is never even looked up`() {
+        val result = ScanConfidence.fromEvidence(
+            noMatch, emptyList(), editionTexts = emptyList(), defaultEdition = "unknown",
+        )
+        assertEquals(ScanConfidence.Light.RED, result.light)
+        assertEquals("Kein Code-Treffer", result.reason)
+    }
+
+    @Test fun `fromEvidence -- every signal strong end to end reaches green, edition override included`() {
+        val known = listOf(SetOption("LOB-DE005", "Common", 0.0, "DE", verified = true))
+        val frames = listOf("LOB-DE005", "LOB-DE005")
+        val match = SetCodeMatch.best(frames, known, frames)
+        // No marker on any frame, but the zone WAS legible (blank, not absent) on all three --
+        // EditionEvidence.result()'s `unlimited` case, HIGH at >=3 legible frames.
+        val result = ScanConfidence.fromEvidence(
+            match, known, editionTexts = listOf("", "", ""), defaultEdition = "first",
+        )
+        assertEquals(ScanConfidence.Light.GREEN, result.light)
+        assertNull(result.reason)
+        // Card-beats-setting (Spec Section 7): default "first" + detected "unlimited" at HIGH
+        // confidence -> detection wins, end to end through fromEvidence.
+        assertEquals("unlimited", result.effectiveEdition)
+    }
 }
