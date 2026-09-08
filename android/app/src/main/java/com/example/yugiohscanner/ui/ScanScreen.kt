@@ -299,7 +299,22 @@ fun ScanScreen(onClose: () -> Unit) {
     // Identification is by ARTWORK embedding: each detector crop -> pad-to-square 224 -> embedder
     // -> nearest-neighbour over the on-device index (production model, TOP-1 ~0.998).
     val pipeline = remember { com.example.yugiohscanner.ml.HybridPipeline(context, minSim = 0.6f) }
-    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 2) }
+    // need = 4, nicht 2. Der Tracker bestimmt zugleich, wie viele Stimmen die
+    // Set-Code-Abstimmung ueberhaupt zu sehen bekommt: bei Bestaetigung loest
+    // SetCodeEvidence.setCodeCandidates auf und forget() loescht die Belege. Mit need = 2 stimmte
+    // Task 10 also ueber ZWEI Lesungen ab, und eine Mehrheit aus zwei ist ein Losentscheid, den
+    // die Einfuegereihenfolge bricht. Der Beleg fuer Task 10 (eine 29-Stimmen-Mehrheit ueber eine
+    // Fehllesung) stammt aus dem Nachspielen einer dichten Aufnahme und konnte auf dem Geraet gar
+    // nicht vorkommen.
+    //
+    // Der Preis ist zwei Frames mehr bis zur Bestaetigung, bei ~10 Bildern/s also rund 0,2 s --
+    // und Stimmen ueberleben kurze Aussetzer, weil votes erst nach maxMisses = 8 fehlenden Frames
+    // verfallen. Eine Karte, die nur zwei Frames lang sichtbar ist, wird dafuer nicht mehr
+    // erfasst; das ist die bewusst eingegangene Seite des Tauschs.
+    //
+    // NICHT vom Messkorb belegt: ml/ocr_bench.py bewertet Einzelbilder und kennt keinen Tracker.
+    // Das ist eine begruendete Abwaegung, keine Messung.
+    val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 4) }
     // Pools each card's bottom-band OCR text across frames so the set code is voted, not read once.
     val setEvidence = remember { com.example.yugiohscanner.ml.SetCodeEvidence() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
