@@ -3,7 +3,9 @@ package com.example.yugiohscanner
 import android.graphics.RectF
 import com.example.yugiohscanner.ml.Box
 import com.example.yugiohscanner.ml.CardZones
+import com.example.yugiohscanner.ml.Zone
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -58,6 +60,16 @@ class CardZonesTest {
         // x clamps to 0 (not a wraparound negative index); w shrinks from 189 to fit the 150px
         // frame (frameW - x = 150 - 0 = 150) rather than overrunning it.
         assertArrayEquals(intArrayOf(0, 996, 150, 147), result)
+    }
+
+    @Test fun `contrastFor gives SET_CODE the measured 1_0 pivot, everything else the old 1_5 default`() {
+        // Task 8 (Spec D2): measured on-device against ml_ocr_bench.py's 445-image corpus -- see
+        // CardZones.contrastFor's doc for the full before/after table. 1.0 (no contrast boost at
+        // all) beat every other value tried (2.2, 1.5, 1.15, 0.7) on SET_CODE specifically; nothing
+        // else in this comparison touched PASSCODE, so it must keep enhance()'s original default.
+        assertEquals(1.0f, CardZones.contrastFor(Zone.SET_CODE), 0f)
+        assertEquals(1.5f, CardZones.contrastFor(Zone.PASSCODE), 0f)
+        assertEquals(1.5f, CardZones.contrastFor(Zone.EDITION), 0f)
     }
 
     @Test fun `zone below the frame bottom degenerates below 6px and returns null`() {

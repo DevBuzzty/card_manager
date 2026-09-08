@@ -24,7 +24,8 @@ object CardZones {
      *
      * Each zone is run through its own [OcrPrep.enhance] pass rather than a shared one: PASSCODE
      * and SET_CODE have very different aspect ratios, and `enhance` scales by a fixed target
-     * width, so sharing one enhanced image would upscale one of them wrongly.
+     * width, so sharing one enhanced image would upscale one of them wrongly. They also get
+     * different `contrast` values -- see [contrastFor].
      *
      * For [Layout.PENDULUM], [Layout.SKILL] and [Layout.LEGACY] -- the layouts with no measured
      * geometry, where [CardLayout.zones] returns STANDARD's rects as an explicit placeholder --
@@ -37,7 +38,7 @@ object CardZones {
      */
     fun crop(frame: Bitmap, box: Box, layout: Layout): Map<Zone, Bitmap> = buildMap {
         for ((zone, rect) in CardLayout.zones(layout)) {
-            val bitmap = cropZone(frame, box, rect) ?: continue
+            val bitmap = cropZone(frame, box, rect, contrastFor(zone)) ?: continue
             put(zone, bitmap)
         }
     }
@@ -56,16 +57,41 @@ object CardZones {
         return enhanced
     }
 
-    /** Convert one box-relative [rect] to frame pixels, clamp to [frame], crop, and enhance.
-     *  Null if the zone lands off-frame or is too small to be useful. Mirrors
+    /** Convert one box-relative [rect] to frame pixels, clamp to [frame], crop, and enhance with
+     *  [contrast]. Null if the zone lands off-frame or is too small to be useful. Mirrors
      *  [CardStrip.bottomBand]'s clamping arithmetic. */
-    private fun cropZone(frame: Bitmap, box: Box, rect: RectF): Bitmap? {
+    private fun cropZone(frame: Bitmap, box: Box, rect: RectF, contrast: Float): Bitmap? {
         val (x, y, w, h) = zoneRect(box, rect, frame.width, frame.height) ?: return null
 
         val crop = Bitmap.createBitmap(frame, x, y, w, h)
-        val enhanced = OcrPrep.enhance(crop)
+        val enhanced = OcrPrep.enhance(crop, contrast = contrast)
         if (crop != frame) crop.recycle()  // guard: createBitmap may return `frame` for a full-frame rect
         return enhanced
+    }
+
+    /**
+     * Per-zone contrast for [OcrPrep.enhance]. Task 8 (Spec D2) measured this on-device against
+     * `ml/ocr_bench.py`'s 445-image corpus (`ml/ocr_bench/report-2026-09-07.md` baseline):
+     *
+     *  | SET_CODE contrast | ebay STANDARD | ebay SPELL_TRAP | ebay LINK |
+     *  |---|---|---|---|
+     *  | 2.2  | 27.3% | 15.0% | 0.0%  |
+     *  | 1.5 (old shared default) | 42.2% | 36.7% | 25.0% |
+     *  | 1.15 | 49.2% | 41.7% | 25.0% |
+     *  | **1.0 (no contrast boost at all -- chosen)** | **53.9%** | **45.0%** | **41.7%** |
+     *  | 0.7  | 49.2% | 31.7% | 41.7% |
+     *
+     * A clean peak at 1.0, monotonic on both sides -- not a cliff edge picked by one lucky
+     * measurement. The 1.5 pivot every zone shared before this task over-contrasts SET_CODE
+     * specifically: its crop straddles the artwork's lower edge (see class doc), so part of it is
+     * actual card art, and the fixed contrast curve was pushing that art's mid-tones toward flat
+     * black/white right along with the text, adding noise instead of removing it. PASSCODE sits on
+     * a plain background and keeps the original 1.5 -- changing it was never part of this
+     * comparison and it is not touched here.
+     */
+    internal fun contrastFor(zone: Zone): Float = when (zone) {
+        Zone.SET_CODE -> 1.0f
+        else -> 1.5f
     }
 
     /**
