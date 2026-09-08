@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('api', {
     return () => { ipcRenderer.removeListener('phone-connected', on); ipcRenderer.removeListener('phone-disconnected', off); };
   },
   fetchCardData: (passcode) => ipcRenderer.invoke('fetch-card-data', passcode),
+  releaseStaged: (passcodes) => ipcRenderer.invoke('release-staged', passcodes),
   addCardToDb: (card) => ipcRenderer.invoke('add-card-to-db', card),
   getDefaults: () => ipcRenderer.invoke('get-defaults'),
   listCopies: (printing) => ipcRenderer.invoke('list-copies', printing),

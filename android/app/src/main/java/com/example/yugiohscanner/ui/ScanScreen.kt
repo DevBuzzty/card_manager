@@ -125,6 +125,12 @@ fun ScanScreen(onClose: () -> Unit) {
         }
     }
 
+    // Passcodes already captured this session (phone-staged OR sent to desktop). Dedup so panning
+    // over a card captures it once and re-detections don't spam. Committed passcodes are dropped
+    // again when a batch is taken over. Concurrent: the analyzer thread adds while the main thread
+    // adds (manual entry) and removes.
+    val seen = remember { ConcurrentHashMap.newKeySet<String>() }
+
     val connectSocket = { ip: String ->
         try {
             val newSocket = IO.socket("http://$ip:4000")
@@ -134,6 +140,14 @@ fun ScanScreen(onClose: () -> Unit) {
             }
             newSocket.on(Socket.EVENT_DISCONNECT) {
                 isConnected = false
+            }
+            // Spec D4 §6.4: der PC hat diese Karten uebernommen oder verworfen -- sie duerfen
+            // wieder gescannt werden. Laeuft auf dem Socket-Thread; `seen` ist ein
+            // ConcurrentHashMap-Set und genau dafuer da.
+            newSocket.on("staging_released") { args ->
+                val obj = args.firstOrNull() as? JSONObject ?: return@on
+                val arr = obj.optJSONArray("passcodes") ?: return@on
+                for (i in 0 until arr.length()) seen.remove(arr.optString(i))
             }
             newSocket.connect()
             socket = newSocket
@@ -189,11 +203,6 @@ fun ScanScreen(onClose: () -> Unit) {
     // Full-screen "capture" flash — the screen blinks each time a card is recognised, so you can
     // just keep panning without watching the status text.
     val flash = remember { Animatable(0f) }
-    // Passcodes already captured this session (phone-staged OR sent to desktop). Dedup so panning
-    // over a card captures it once and re-detections don't spam. Committed passcodes are dropped
-    // again when a batch is taken over. Concurrent: the analyzer thread adds while the main thread
-    // adds (manual entry) and removes.
-    val seen = remember { ConcurrentHashMap.newKeySet<String>() }
 
     // Phone-side scan staging — a scan always lands here; a connected desktop additionally gets a
     // mirror of the scan (see onConfirmed below).

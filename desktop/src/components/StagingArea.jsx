@@ -245,6 +245,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                     }
                 }
            }
+           // Spec D4 §6.4: die Karte ist durch -- das Handy darf sie wieder scannen.
+           window.api?.releaseStaged?.([card.passcode]);
            setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
        } finally {
            committingRef.current.delete(tempId);
@@ -267,11 +269,14 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   }, [scannedCards]);
 
   const handleDiscard = (tempId) => {
+      const card = scannedCards.find(c => c.tempId === tempId);
+      if (card) window.api?.releaseStaged?.([card.passcode]);
       setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
   };
 
   const handleClearAll = () => {
       if (confirm("Alle gescannten Karten verwerfen? Dies kann nicht rückgängig gemacht werden.")) {
+          window.api?.releaseStaged?.(scannedCards.map(c => c.passcode));
           setScannedCards([]);
       }
   };
