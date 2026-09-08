@@ -83,6 +83,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import java.util.Locale
+import com.example.yugiohscanner.ml.ScanConfidence
 
 // Catalog rows (Task 9: catalog first, network as fallback) map onto the same CardRow/SetOption
 // shapes the network path already produces, so downstream code (ScanStagingEntry, the staging
@@ -168,6 +169,11 @@ fun ScanScreen(onClose: () -> Unit) {
 
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
     var isFlashOn by remember { mutableStateOf(false) }
+    // Spec D4 §6.3: Fortschrittsanzeige bei verbundenem PC. `sentCount` zaehlt gesendete Karten
+    // seit Scannerstart und wird von der Freigabe NICHT verringert -- es ist eine Fortschritts-,
+    // keine Bestandsanzeige. `lastLight` ist die Ampel des zuletzt gesendeten Scans.
+    var sentCount by remember { mutableIntStateOf(0) }
+    var lastLight by remember { mutableStateOf<ScanConfidence.Light?>(null) }
     var scanMode by remember { mutableStateOf(com.example.yugiohscanner.Prefs.scanMode(context)) }
     var isFocusLocked by remember { mutableStateOf(false) }
     var showManualEntry by remember { mutableStateOf(false) }
@@ -217,35 +223,6 @@ fun ScanScreen(onClose: () -> Unit) {
             condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
         }
         stagingCards.add(entry)
-        // Spec D3 Task 8 (plan Section 6.5): mirrors the phone's ALREADY-RESOLVED conclusion to a
-        // connected desktop -- setCode/rarity/language/edition, the traffic light and its German
-        // reason verbatim -- so the desktop shows the SAME preselection instead of re-matching the
-        // candidates itself against a card it never saw the band text of. Sent once `applyConfidence`
-        // has run (both branches below), not eagerly at scan time the way the old mirror was: none
-        // of this is known until the printing list is resolved and SetCodeMatch/ScanConfidence have
-        // judged it. An older desktop build ignores the extra fields it doesn't recognise; a newer
-        // desktop talking to an older phone that never sends them falls back to its own local match
-        // (see StagingArea.jsx's own comment on that fallback).
-        fun mirrorToDesktop(match: SetCodeMatch.MatchResult) {
-            val mirrorSocket = socket
-            if (!isConnected || mirrorSocket == null) return
-            val confidence = entry.confidence ?: return // applyConfidence always ran first; guards a future call-order change
-            val data = JSONObject().put("passcode", pc)
-            val selected = match.selected
-            if (selected != null) {
-                data.put("setCode", selected.setCode)
-                data.put("rarity", selected.rarity)
-                data.put("language", selected.language)
-            }
-            if (match.candidates.isNotEmpty()) {
-                data.put("setCodeCandidates", JSONArray(match.candidates.map { it.setCode }))
-            }
-            data.put("edition", entry.edition)
-            data.put("editionConfidence", confidence.editionConfidence.name.lowercase(Locale.ROOT))
-            data.put("confidence", confidence.light.name.lowercase(Locale.ROOT))
-            data.put("reason", confidence.reason ?: JSONObject.NULL)
-            mirrorSocket.emit("card_scanned", data)
-        }
         scope.launch {
             try {
                 val r = ScanResolver.resolve(
@@ -267,7 +244,6 @@ fun ScanScreen(onClose: () -> Unit) {
                 entry.confidence = r.confidence
                 entry.edition = r.confidence.effectiveEdition
                 entry.loading = false
-                mirrorToDesktop(r.match)
             } catch (e: Exception) {
                 entry.loading = false
                 snackbar.showSnackbar("Fehler beim Laden: ${e.message}")
@@ -376,14 +352,82 @@ fun ScanScreen(onClose: () -> Unit) {
         }
     }
 
+    // Spec D4 §6: fuehrt der PC das Staging, legt das Handy KEINEN Eintrag an -- es loest auf und
+    // sendet. Erste Sichtung wie Wiederholung gehen denselben Weg; zusammengefasst wird am PC (§5).
+    //
+    // [isRepeat] dient nur der Rueckmeldung (§7) und dem Rueckfall, wenn die Verbindung waehrend
+    // der Aufloesung wegbricht. Es geht NICHT auf die Leitung -- der PC braucht kein Modus-Feld.
+    //
+    // Diese Funktion muss VOR `onCapture` und NACH `stageScan`/`aggregateRepeat` stehen: lokale
+    // Funktionen in Kotlin sehen nur, was vor ihnen deklariert ist, und `onCapture` ruft diese
+    // hier auf. Deshalb faellt der Verbindungsabbruch unten direkt auf die beiden anderen zurueck
+    // statt ueber `onCapture` zu gehen -- das waere ein gegenseitiger Aufruf und damit unmoeglich.
+    fun sendScan(
+        pc: String, evidence: List<String>, framesEvidence: List<String>,
+        editionTexts: List<String>, isRepeat: Boolean,
+    ) {
+        scope.launch {
+            flash.snapTo(if (isRepeat) 0.45f else 0.8f)
+            flash.animateTo(0f, animationSpec = tween(300))
+        }
+        scope.launch {
+            try {
+                val r = ScanResolver.resolve(
+                    pc, evidence, framesEvidence, editionTexts,
+                    com.example.yugiohscanner.Prefs.defaultEdition(context),
+                )
+                if (r == null) {
+                    seen.remove(pc)   // eine spaetere Wiederholung erlauben
+                    snackbar.showSnackbar("Karte $pc nicht gefunden")
+                    return@launch
+                }
+                val s = socket
+                if (s == null || !isConnected) {
+                    // Die Verbindung ist waehrend der Aufloesung weggebrochen. Die Karte darf
+                    // nicht verschwinden: sie kommt ins Handy-Staging, wohin sie ohne PC gehoert.
+                    // Eine Wiederholung wird nur dann gebucht, wenn es ueberhaupt einen Eintrag
+                    // gibt -- die frueheren Kopien liegen ja beim PC. Sonst wird sie ein eigener
+                    // Eintrag, damit diese eine Karte nicht still verlorengeht.
+                    if (isRepeat && stagingCards.any { it.passcode == pc }) {
+                        aggregateRepeat(pc, evidence, framesEvidence)
+                    } else {
+                        stageScan(pc, evidence, framesEvidence, editionTexts)
+                    }
+                    return@launch
+                }
+                sendScanToDesktop(s, pc, r)
+                sentCount++
+                lastLight = r.confidence.light
+                if (isRepeat) {
+                    // §7: bei verbundenem PC ist die Meldung NUR informativ -- kein Knopf.
+                    // Korrigiert wird am PC, wo der Eintrag mit seinen +/--Knoepfen sichtbar in
+                    // der Liste steht. Die neue Menge steht bewusst NICHT hier: sie zaehlt am PC,
+                    // das Handy kennt sie nicht und darf sie nicht erfinden.
+                    snackbar.showSnackbar("${r.base.name} nochmal an den PC")
+                }
+            } catch (e: Exception) {
+                seen.remove(pc)
+                snackbar.showSnackbar("Fehler beim Laden: ${e.message}")
+            }
+        }
+    }
+
     // Der einzige Einstieg fuer eine erfasste Karte -- autonome Erkennung wie manuelle Eingabe.
     // Spec D4 §3: im Modus "einzeln" faengt `seen` jede Wiederholung ab (heutiges Verhalten);
     // im Modus "stapel" wird sie zusammengefasst.
     fun onCapture(pc: String, evidence: List<String>, frames: List<String>, editionTexts: List<String>) {
         val isRepeat = !seen.add(pc)
         if (isRepeat && scanMode != "stapel") return
-        if (isRepeat) aggregateRepeat(pc, evidence, frames)
-        else stageScan(pc, evidence, frames, editionTexts)
+        if (isConnected) {
+            // §6: kein Handy-Staging. Erste Sichtung wie gewollte Wiederholung gehen an den PC,
+            // der sie nach derselben Regel zusammenfasst (§5). Deshalb braucht die Leitung auch
+            // kein Modus-Feld: im Modus "einzeln" kommt hier nie eine Wiederholung an.
+            sendScan(pc, evidence, frames, editionTexts, isRepeat)
+        } else if (isRepeat) {
+            aggregateRepeat(pc, evidence, frames)
+        } else {
+            stageScan(pc, evidence, frames, editionTexts)
+        }
     }
 
     // [frames] is [evidence]'s per-frame breakdown (see stageScan's own doc) — a separate
@@ -786,8 +830,20 @@ fun ScanScreen(onClose: () -> Unit) {
             IconButton(onClick = { showManualEntry = true }) { Icon(Icons.Default.Keyboard, "Passcode eingeben", tint = Color.White) }
         }
 
-        // Footer: count of recognised cards + open the review sheet.
-        if (stagingCards.isNotEmpty()) {
+        // Fusszeile: bei verbundenem PC eine Fortschrittsanzeige (Spec D4 §6.3), sonst wie bisher
+        // der Zaehler mit dem Pruefen-Knopf.
+        if (isConnected && sentCount > 0) {
+            Row(
+                Modifier.fillMaxWidth().align(Alignment.BottomCenter)
+                    .background(Color.Black.copy(alpha = 0.55f)).navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("$sentCount an den PC gesendet", color = Color.White, modifier = Modifier.weight(1f))
+                // Dieselben drei Ampelfarben wie im Staging-Sheet -- keine neuen Farben.
+                Box(Modifier.size(10.dp).clip(CircleShape).background(ScanStagingLogic.dotColor(lastLight)))
+            }
+        } else if (stagingCards.isNotEmpty()) {
             Row(
                 Modifier.fillMaxWidth().align(Alignment.BottomCenter)
                     .background(Color.Black.copy(alpha = 0.55f)).navigationBarsPadding()
@@ -984,4 +1040,26 @@ class CardAnalyzer(
     fun close() {
         recognizer.close()
     }
+}
+
+// Spec D3 Task 8, jetzt aus ResolvedScan statt aus einem Staging-Eintrag (Spec D4 §6.2): spiegelt
+// die auf dem Handy BEREITS GEFAELLTE Entscheidung an den PC -- Set-Code, Rarity, Sprache, Edition,
+// Ampel und deutscher Grund woertlich -- damit der PC dieselbe Vorauswahl zeigt, statt die
+// Kandidaten selbst gegen eine Karte zu matchen, deren Bandtext er nie gesehen hat.
+// Ein aelterer PC-Stand ignoriert die Felder, die er nicht kennt.
+private fun sendScanToDesktop(socket: Socket, pc: String, r: ResolvedScan) {
+    val data = JSONObject().put("passcode", pc)
+    r.match.selected?.let {
+        data.put("setCode", it.setCode)
+        data.put("rarity", it.rarity)
+        data.put("language", it.language)
+    }
+    if (r.match.candidates.isNotEmpty()) {
+        data.put("setCodeCandidates", JSONArray(r.match.candidates.map { it.setCode }))
+    }
+    data.put("edition", r.confidence.effectiveEdition)
+    data.put("editionConfidence", r.confidence.editionConfidence.name.lowercase(Locale.ROOT))
+    data.put("confidence", r.confidence.light.name.lowercase(Locale.ROOT))
+    data.put("reason", r.confidence.reason ?: JSONObject.NULL)
+    socket.emit("card_scanned", data)
 }
