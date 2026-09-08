@@ -293,12 +293,12 @@ fun ScanScreen(onClose: () -> Unit) {
         // im Sucher nicht wie eine neue Karte aussieht.
         scope.launch { flash.snapTo(0.45f); flash.animateTo(0f, animationSpec = tween(300)) }
 
+        // Fix-Durchlauf 2, Restbefund: `SetCodeMatch.best` bleibt hier auf dem Analyzer-Hintergrund-
+        // thread -- es liest nur `entry.knownSets`, das nach dem ersten Aufloesen nicht mehr
+        // veraendert wird (siehe stageScan), und ist ein reiner Vergleich ueber eine kurze Liste
+        // (kein Netz, keine Datenbank), verursacht auf dem Hauptthread also keine spuerbare
+        // Blockade -- waere er aber trotzdem noetig gewesen.
         val match = SetCodeMatch.best(evidence, entry.knownSets, framesEvidence)
-        val target = ScanAggregator.target(
-            primary = entry.selectedSet,
-            extras = entry.extraPrintings.map { it.selectedSet },
-            scanned = match.selected,
-        )
         val name = entry.base?.name ?: pc
         // Review-Befund 3: `entry.quantity++`/`--` und das ExtraPrinting-Aequivalent sind
         // Lesen-Aendern-Schreiben auf einem Feld, das der QtyStepper im Pruefen-Blatt (Hauptthread)
@@ -306,6 +306,24 @@ fun ScanScreen(onClose: () -> Unit) {
         // `scope` ist ein rememberCoroutineScope (Main); Buchung UND Ruecknahme laufen deshalb
         // beide hier drin, in Reihenfolge: erst buchen, dann die Snackbar mit der Folgemenge.
         scope.launch {
+            // Fix-Durchlauf 2: der Eintrag kann inzwischen aus `stagingCards` verschwunden sein
+            // (der Nutzer hat die ganze Karte im Pruefen-Blatt geloescht) -- dann darf gar nicht
+            // erst gebucht werden. Dieselbe Identitaetspruefung wie bei der Ruecknahme unten.
+            if (stagingCards.none { it === entry }) return@launch
+            // Fix-Durchlauf 2 (Restfenster aus Fix-Durchlauf 1): `ScanAggregator.target(...)` --
+            // und die von ihm gelesenen `entry.selectedSet`/`entry.extraPrintings` -- werden ERST
+            // HIER ermittelt, im selben Hauptthread-Block wie die Benutzung direkt darunter, statt
+            // vorher auf dem Analyzer-Hintergrundthread. Zwischen einer vorherigen Berechnung und
+            // dieser Benutzung liegt ein Dispatch-Wechsel; in genau diesem Fenster kann das
+            // Pruefen-Blatt eine Zusatzzeile oder die ganze Karte loeschen (es haelt weder Kamera
+            // noch Analyzer an) und der Index von `target` traefe dann daneben. Kein Index
+            // ueberlebt einen Threadwechsel -- dieselbe Regel wie Review-Befund 1, nur mit kuerzerem
+            // Fenster.
+            val target = ScanAggregator.target(
+                primary = entry.selectedSet,
+                extras = entry.extraPrintings.map { it.selectedSet },
+                scanned = match.selected,
+            )
             // Review-Befund 1: das Ziel wird HIER, sofort beim Buchen, zum OBJEKT aufgeloest, nicht
             // zum Index -- der Index kann zwischen Buchen und Rueckgaengig veralten (das
             // Pruefen-Blatt kann waehrenddessen eine Zusatzzeile oder die ganze Karte loeschen; das
