@@ -226,9 +226,12 @@ gleicher Setcode bei mehreren Zusatzdrucken trifft den richtigen; ein
 Zusatzdruck erbt die Voreinstellungen; `null`-Setcode bei einem Eintrag *mit*
 Zusatzdrucken landet trotzdem am Hauptdruck.
 
-Die PC-seitige Fassung derselben Regel bekommt keinen Test — das Projekt hat
-keinen Desktop-Testlauf, und einen dafür einzurichten gehört nicht in diese
-Spec.
+Die PC-seitige Fassung derselben Regel bekommt **denselben Test in JavaScript**.
+Sie kommt als reines Modul `desktop/src/utils/scanAggregate.js` neben
+`setCodeMatch.js`, mit `scanAggregate.test.js` daneben — `node --test` läuft dort
+bereits (13 Tests in `src/utils/`). Eine Regel, die auf zwei Seiten wohnt (§5),
+muss auf beiden Seiten geprüft sein, sonst driften sie auseinander, ohne dass es
+jemand merkt.
 
 `ScanResolver` wird durch die Umstellung erstmals testbar; diese Spec verlangt
 dafür keine Tests (das Verhalten ist unverändert und in D3 abgenommen).
