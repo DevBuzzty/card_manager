@@ -193,10 +193,10 @@ fun ScanScreen(onClose: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Continuous scanning: each newly-seen card is captured automatically (screen blinks) — no
-    // per-card Reset/Prüfen. `evidence` is the pooled raw OCR text of this card's bottom band
-    // across the frames it was visible (see SetCodeEvidence). The set code is resolved from it by
-    // constrained matching against the card's known printings, not by trusting a single clean OCR
-    // token.
+    // per-card Reset/Prüfen. `evidence` is this card's set-code candidates, voted per zone across
+    // every frame it was visible (see SetCodeEvidence.setCodeCandidates / ZoneVote). The set code
+    // is resolved from it by constrained matching against the card's known printings, not by
+    // trusting a single clean OCR token.
     // Shared by autonomous ML detection (onConfirmed below) and manual passcode entry: stage the
     // card locally, then resolve its base data + set code, reporting failures via the snackbar
     // (the success path stays silent — the flash, sound and footer counter already report it).
@@ -316,7 +316,7 @@ fun ScanScreen(onClose: () -> Unit) {
             // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
             for (d in tracker.update(dets)) {
                 Log.i("MlScan", "confirmed card ${d.passcode}")
-                onConfirmed.value(d.passcode, setEvidence.textsFor(d.passcode))
+                onConfirmed.value(d.passcode, setEvidence.setCodeCandidates(d.passcode))
                 setEvidence.forget(d.passcode)
             }
             if (dets.isNotEmpty()) {
