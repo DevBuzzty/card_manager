@@ -123,7 +123,12 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // Keyed off the CATALOG layout, not the resolved one: an inferred layout is a guess from
         // one number, so it keeps the legacy band as its second source just like no layout at all.
         val needsLegacyBand = catalogLayout == null || catalogLayout in PLACEHOLDER_LAYOUTS
-        val layoutLabel = catalogLayout?.toString() ?: layout?.let { "$it?" } ?: "UNKNOWN"
+        // "_INF" marks an inferred layout, and it is deliberately not "?": this label goes into
+        // the dump FILENAME (see dumpFrame), a "?" is an illegal filename character on Windows so
+        // `adb pull` fails on it, and ocr_bench.py's RIG_RE matches ([A-Z_]+) and would silently
+        // drop such a frame from the corpus. The existing rig frames predate inferFromBox, so this
+        // has not bitten yet -- the next dump session would have been the first.
+        val layoutLabel = catalogLayout?.toString() ?: layout?.let { "${it}_INF" } ?: "UNKNOWN"
 
         dumpFrame(frame, b, layoutLabel, knownPasscode)
 
@@ -152,6 +157,20 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
 
         val zoneTexts = LinkedHashMap<Zone, String>()
         for ((zone, bitmap) in CardZones.crop(frame, b, layout ?: Layout.STANDARD)) {
+            // A placeholder layout has no measured SET_CODE geometry — CardLayout.zones() hands it
+            // STANDARD's rectangle, which for a Skill or pre-2004 frame points at whatever happens
+            // to sit there. Recording it anyway would be worse than useless: SetCodeEvidence ranks
+            // Zone.SET_CODE ABOVE the legacy full-width band, and a single grammar-valid token
+            // scraped out of artwork would then outrank the honest band read that needsLegacyBand
+            // exists to provide. So drop it, and let the band speak for these layouts.
+            //
+            // Only SET_CODE. PASSCODE keeps its placeholder read: it is pooled into
+            // OcrText.findPasscode, which validates against the catalog, so a nonsense read there
+            // is discarded rather than promoted.
+            if (zone == Zone.SET_CODE && catalogLayout in PLACEHOLDER_LAYOUTS) {
+                bitmap.recycle()
+                continue
+            }
             val text = Tasks.await(recognizer.process(InputImage.fromBitmap(bitmap, 0))).text
             zoneTexts[zone] = text
             // Spec D2 needs to know WHAT each zone actually saw -- until now the only raw-OCR

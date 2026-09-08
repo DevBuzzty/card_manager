@@ -316,7 +316,15 @@ fun ScanScreen(onClose: () -> Unit) {
             // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
             for (d in tracker.update(dets)) {
                 Log.i("MlScan", "confirmed card ${d.passcode}")
-                onConfirmed.value(d.passcode, setEvidence.setCodeCandidates(d.passcode))
+                // Voted candidates FIRST, then every frame's raw text. SetCodeMatch scores by
+                // edit distance over both, so a grammar-clean winner still matches at 0 — but a
+                // reading the grammar rejects (lost hyphen, line break, region digit) is no longer
+                // silently dropped before the matcher that exists to handle it. See
+                // SetCodeEvidence.rawTexts.
+                onConfirmed.value(
+                    d.passcode,
+                    setEvidence.setCodeCandidates(d.passcode) + setEvidence.rawTexts(d.passcode),
+                )
                 setEvidence.forget(d.passcode)
             }
             if (dets.isNotEmpty()) {

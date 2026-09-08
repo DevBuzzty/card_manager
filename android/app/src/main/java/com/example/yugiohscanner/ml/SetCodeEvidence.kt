@@ -56,6 +56,28 @@ class SetCodeEvidence(private val maxPerCard: Int = 8) {
         return vote.resolve(setCodeZonePriority)
     }
 
+    /**
+     * Every recorded frame's text, flattened and UNCORRECTED — one entry per frame.
+     *
+     * [SetCodeMatch] needs this, not [setCodeCandidates]'s grammar-clean winners, and the two are
+     * not interchangeable. That object exists precisely to survive readings the grammar rejects:
+     * its own header names the cases — "the hyphen is dropped, digits are confused, the code is
+     * split across a line break" — and it normalises with `filter { isLetterOrDigit() }` so a
+     * hyphenless read still aligns at distance 0 against a known printing.
+     *
+     * SET_CODE's pattern, by contrast, demands a literal hyphen, a letter straight after it and
+     * contiguous digits. Feeding only its output to the matcher throws away exactly the readings
+     * the matcher was built for: "SDSE DE013" (hyphen lost), "SDSE-\nDE013" (ML Kit split the crop
+     * into two blocks), "SDSE-0E013" (region D read as 0, a confusion SetCodeMatch scores at 0.5
+     * and the grammar cannot express) all become no candidate at all, and `best()` returns null on
+     * an empty list.
+     *
+     * So the caller passes BOTH. A grammar-clean candidate still wins at distance 0; the raw texts
+     * only matter when nothing survived the grammar, which is the case worth rescuing.
+     */
+    fun rawTexts(passcode: Int): List<String> =
+        frames[passcode]?.map { concatZoneTexts(it.zoneTexts, it.legacyText) } ?: emptyList()
+
     fun forget(passcode: Int) { frames.remove(passcode) }
     fun reset() { frames.clear() }
 }

@@ -61,6 +61,27 @@ class SetCodeEvidenceTest {
         assertEquals(listOf("LOB-DE001"), ev.setCodeCandidates(1234))
     }
 
+    @Test fun `rawTexts liefert genau die Lesungen, die die Grammatik verwirft`() {
+        // Der Regressionstest zum Abschlussreview: SetCodeMatch gleicht die bekannten Drucke gegen
+        // den ROHEN Text ab, Trennzeichen entfernt, und ist genau fuer die Faelle gebaut, an denen
+        // SET_CODEs Muster scheitert. Wuerde man ihm nur setCodeCandidates geben, waeren diese
+        // Frames stumm -- best() bekaeme eine leere Liste und lieferte null.
+        val ev = SetCodeEvidence()
+        ev.record(1234, mapOf(Zone.SET_CODE to "SDSE DE013"))       // Bindestrich verloren
+        ev.record(1234, mapOf(Zone.SET_CODE to "SDSE-\nDE013"))     // ueber zwei Textbloecke
+        ev.record(1234, mapOf(Zone.SET_CODE to "SDSE-0E013"))       // Region D als 0 gelesen
+        assertTrue("keine dieser Lesungen ueberlebt die Grammatik",
+            ev.setCodeCandidates(1234).isEmpty())
+        val raw = ev.rawTexts(1234)
+        assertEquals("aber alle drei bleiben als Rohtext erhalten", 3, raw.size)
+        assertTrue(raw.any { it.contains("SDSE DE013") })
+        assertTrue(raw.any { it.contains("SDSE-0E013") })
+    }
+
+    @Test fun `rawTexts ohne Aufzeichnung ist leer, kein Absturz`() {
+        assertTrue(SetCodeEvidence().rawTexts(999).isEmpty())
+    }
+
     @Test fun `nothing recorded for this passcode returns empty, not a crash`() {
         val ev = SetCodeEvidence()
         assertTrue(ev.setCodeCandidates(999).isEmpty())
