@@ -93,7 +93,7 @@ private fun CatalogCard.toCardRow() = CardRow(
     atk = atk, def = def, level = level, race = race, attribute = attribute,
 )
 
-private fun CatalogPrinting.toSetOption() = SetOption(setCode = code, rarity = rarity, price = 0.0, language = lang ?: "EN")
+private fun CatalogPrinting.toSetOption() = SetOption(setCode = code, rarity = rarity, price = 0.0, language = lang ?: "EN", verified = verified)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -231,7 +231,9 @@ fun ScanScreen(onClose: () -> Unit) {
                 if (catalogCard != null && catalogSets != null) {
                     entry.base = catalogCard.toCardRow()
                     entry.knownSets = catalogSets.map { it.toSetOption() }
-                    entry.selectedSet = SetCodeMatch.best(evidence, entry.knownSets)
+                    // .selected is the preselection; .reason (Region unklar/widerspricht) and
+                    // .candidates feed the traffic light + set picker in Tasks 5/7, not here yet.
+                    entry.selectedSet = SetCodeMatch.best(evidence, entry.knownSets).selected
                     entry.loading = false
                 } else {
                     val base = catalogCard?.toCardRow() ?: CardSearchRepository.search(pc).firstOrNull()
@@ -242,7 +244,7 @@ fun ScanScreen(onClose: () -> Unit) {
                         entry.base = base
                         val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
                         entry.knownSets = known
-                        entry.selectedSet = SetCodeMatch.best(evidence, known)
+                        entry.selectedSet = SetCodeMatch.best(evidence, known).selected
                         entry.loading = false
                     }
                 }
