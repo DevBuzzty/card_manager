@@ -148,17 +148,28 @@ object ScanConfidence {
      * caller must already have filtered it to frames that actually had the zone (see
      * [SetCodeEvidence.editionTexts]'s own doc; this function does not re-check that).
      *
-     * [knownSets] is filtered down to [match]'s own [SetCodeMatch.MatchResult.selected]`.setCode`
-     * for [RarityRank] -- deliberately NOT [match]'s own `candidates`: that field already
-     * collapses to a single entry for the common MATCHED case ([SetCodeMatch.best]'s Case 1 always
-     * returns `listOf(selected)`, never the tied group it picked `selected` from), so it can never
-     * carry a rarity disagreement even when one exists in the catalog. [knownSets] is the same
-     * list the caller already passed to [SetCodeMatch.best] itself -- filtering it by the winning
-     * code, rather than composing a rarity from [match]'s internals, matches [RarityRank]'s own
-     * stated target ("when one set code exists at several rarities...", i.e. rows sharing one
-     * exact `setCode` string) without depending on anything [SetCodeMatch] doesn't already expose.
-     * `null` (not an empty-list ranking) when [match] has no selection at all -- there is nothing
-     * to rank, and RED short-circuits before rarity matters anyway.
+     * [knownSets] is filtered down to [match]'s selected printing's NATURAL KEY -- prefix+number
+     * ([SetCodeMatch.parts]), not the exact `setCode` string -- for [RarityRank]. Deliberately NOT
+     * [match]'s own `candidates`: that field already collapses to a single entry for the common
+     * MATCHED case ([SetCodeMatch.best]'s Case 1 always returns `listOf(selected)`, never the tied
+     * group it picked `selected` from), so it can never carry a rarity disagreement even when one
+     * exists in the catalog. And deliberately NOT an exact string match on `selected.setCode`
+     * either (Spec D3 fix C2): `selected` is frequently a code [SetCodeMatch] COMPOSED from
+     * prefix+region+number (Case 1's "verified beats derived" only reuses a real known row when
+     * one already carries the read region) -- no entry in [knownSets] carries that exact composed
+     * string, so filtering on it yields an EMPTY list, [RarityRank.lowest] returns `null`, and a
+     * real rarity disagreement between e.g. two English rows goes completely unseen ("Rarity
+     * eindeutig" is satisfied only because nothing was even looked at). Rarity is assumed the same
+     * across languages of the same printing (the same assumption [SetCodeMatch]'s Case 1 already
+     * makes when it reuses `bestGroup.first().option.rarity` for a composed code), so grouping by
+     * prefix+number -- the identity a composed code and its real, differently-languaged siblings
+     * all share -- is the correct natural key, not a workaround. [knownSets] is the same list the
+     * caller already passed to [SetCodeMatch.best] itself. Falls back to an exact `setCode` string
+     * match only when [selected]'s code doesn't parse via [SetCodeMatch.parts] at all (should not
+     * happen for anything [SetCodeMatch.best] itself produced, but keeps this total rather than
+     * throwing on a shape it doesn't expect). `null` (not an empty-list ranking) when [match] has
+     * no selection at all -- there is nothing to rank, and RED short-circuits before rarity matters
+     * anyway.
      */
     fun fromEvidence(
         match: SetCodeMatch.MatchResult,
@@ -169,7 +180,18 @@ object ScanConfidence {
         val editionEv = EditionEvidence()
         for (t in editionTexts) editionEv.add(t)
         val rarity = match.selected?.let { sel ->
-            RarityRank.lowest(knownSets.filter { it.setCode.equals(sel.setCode, ignoreCase = true) })
+            val selParts = SetCodeMatch.parts(sel.setCode)
+            val sameIdentity = if (selParts != null) {
+                knownSets.filter { opt ->
+                    val p = SetCodeMatch.parts(opt.setCode)
+                    p != null &&
+                        p.prefix.equals(selParts.prefix, ignoreCase = true) &&
+                        p.number.equals(selParts.number, ignoreCase = true)
+                }
+            } else {
+                knownSets.filter { it.setCode.equals(sel.setCode, ignoreCase = true) }
+            }
+            RarityRank.lowest(sameIdentity)
         }
         return evaluate(
             Input(

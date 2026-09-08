@@ -7,6 +7,7 @@ import com.example.yugiohscanner.ml.RarityRank
 import com.example.yugiohscanner.ml.ScanConfidence
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -353,14 +354,46 @@ class ScanConfidenceTest {
         assertEquals("Kein Code-Treffer", result.reason)
     }
 
+    // -- C2 regression: rarity ambiguity must be seen even when `selected` is a COMPOSED code -----
+    //
+    // SetCodeMatch composes `selected.setCode` from prefix+region+number when no real known row
+    // already carries the read region (Case 1's "verified beats derived"). Before the fix,
+    // fromEvidence filtered knownSets by an EXACT string match on that composed code, which no row
+    // in knownSets ever carries by construction -- the filter came back empty, RarityRank.lowest
+    // returned null, and "Rarity eindeutig" was satisfied vacuously in exactly the case with the
+    // least evidence. Reviewer's reproduction, kept verbatim as the pinning test.
+
+    @Test fun `C2 -- Rarity-Mehrdeutigkeit wird auch bei komponiertem Code erkannt, nicht nur bei exaktem String-Treffer`() {
+        val known = listOf(
+            SetOption("LOB-EN005", "Ultra Rare", 0.0, "EN", verified = false),
+            SetOption("LOB-EN005", "Secret Rare", 0.0, "EN", verified = false),
+        )
+        // Der Bandtext liest zuverlaessig "DE" -- kein bekanntes Printing traegt diese Region, also
+        // komponiert SetCodeMatch "LOB-DE005". Dieser exakte String taucht in `known` nirgends auf.
+        val frames = listOf("LOB-DE005", "LOB-DE005 blah")
+        val match = SetCodeMatch.best(frames, known, frames)
+        assertEquals(SetCodeMatch.MatchReason.MATCHED, match.reason)
+        assertEquals("LOB-DE005", match.selected?.setCode)
+        assertTrue(match.codeExactMatch)
+        assertEquals(2, match.codeFrameCount)
+
+        val result = ScanConfidence.fromEvidence(
+            match, known, editionTexts = listOf("1st Edition", "1st Edition"), defaultEdition = "unknown",
+        )
+        // Vorher: leerer Filter -> rarity=null -> nicht mehrdeutig -> faelschlich GRUEN.
+        assertEquals(ScanConfidence.Light.YELLOW, result.light)
+        assertEquals("Rarity mehrdeutig: Ultra Rare/Secret Rare", result.reason)
+    }
+
     @Test fun `fromEvidence -- every signal strong end to end reaches green, edition override included`() {
         val known = listOf(SetOption("LOB-DE005", "Common", 0.0, "DE", verified = true))
         val frames = listOf("LOB-DE005", "LOB-DE005")
         val match = SetCodeMatch.best(frames, known, frames)
-        // No marker on any frame, but the zone WAS legible (blank, not absent) on all three --
+        // No marker on any frame, but the zone WAS legible (non-blank, unrelated text -- a blank
+        // read no longer counts, see Spec D3 fix I1 / EditionEvidenceTest) on all three --
         // EditionEvidence.result()'s `unlimited` case, HIGH at >=3 legible frames.
         val result = ScanConfidence.fromEvidence(
-            match, known, editionTexts = listOf("", "", ""), defaultEdition = "first",
+            match, known, editionTexts = listOf("some scuff", "a dent", "a smudge"), defaultEdition = "first",
         )
         assertEquals(ScanConfidence.Light.GREEN, result.light)
         assertNull(result.reason)
