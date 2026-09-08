@@ -111,8 +111,15 @@ object CardZones {
 
         val x = left.toInt().coerceIn(0, frameW - 1)
         val y = top.toInt().coerceIn(0, frameH - 1)
-        val w = (right - left).toInt().coerceIn(1, frameW - x)
-        val h = (bottom - top).toInt().coerceIn(1, frameH - y)
+        // Width and height are measured from the CLAMPED origin to the zone's right/bottom edge,
+        // not from the unclamped one. Taking (right - left) while x has been clamped up to 0 makes
+        // the crop reach |left| pixels PAST the zone's right edge -- for a PASSCODE zone, whose
+        // left edge sits at -0.1651 box widths, that happens whenever the card is near the frame's
+        // left edge, which is routine when scanning a laid-out row. The crop then pulls the
+        // neighbouring copyright/edition text into the passcode read. Inherited from CardStrip;
+        // the old tests pinned the wrong numbers rather than catching it.
+        val w = (right.toInt() - x).coerceIn(1, frameW - x)
+        val h = (bottom.toInt() - y).coerceIn(1, frameH - y)
         if (w < 6 || h < 6) return null
 
         return intArrayOf(x, y, w, h)

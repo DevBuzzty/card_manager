@@ -46,20 +46,26 @@ class CardZonesTest {
         // isn't itself clipped by the frame bottom -- that clamping case is covered separately
         // below. Worked by hand: bw=bh=600, left=100+(-0.1651*600)=0.94, top=800+(0.327*600)=996.2,
         // right=100+(0.1507*600)=190.42, bottom=800+(0.5724*600)=1143.44 ->
-        // x=0 (0.94 truncates to 0), y=996, w=(190.42-0.94)->189, h=(1143.44-996.2)->147.
+        // x=0 (0.94 truncates to 0), y=996, w=(190-0)=190, h=(1143-996)=147.
+        //
+        // w is 190, not the 189 this test asserted before the final review: the width runs from
+        // the CLAMPED origin to the zone's right edge. Measuring (right - left) from the unclamped
+        // left made the crop overshoot the zone by |left| px -- barely here (0.94), badly when the
+        // card sits at the frame edge, see the next test.
         val result = CardZones.zoneRect(box(100f, 200f, 700f, 800f), passcode, 1000, 1200)
-        assertArrayEquals(intArrayOf(0, 996, 189, 147), result)
+        assertArrayEquals(intArrayOf(0, 996, 190, 147), result)
     }
 
     @Test fun `negative left clamps to 0 and width shrinks to the frame edge instead of wrapping`() {
         // Box near the left frame edge: box.x1 + rect.left*bw = 10 + (-0.1651*600) = -89.06,
-        // solidly negative. A narrow 150px-wide frame then forces the width clamp to actually
-        // bite: unclamped width is (right-left) = (100.42 - -89.06) -> 189, wider than the frame,
-        // which would make createBitmap(frame, 0, y, 189, h) reach past the frame's right edge.
+        // solidly negative. right = 10 + (0.1507*600) = 100.42.
         val result = CardZones.zoneRect(box(10f, 200f, 610f, 800f), passcode, 150, 1200)
-        // x clamps to 0 (not a wraparound negative index); w shrinks from 189 to fit the 150px
-        // frame (frameW - x = 150 - 0 = 150) rather than overrunning it.
-        assertArrayEquals(intArrayOf(0, 996, 150, 147), result)
+        // x clamps to 0 (not a wraparound negative index), and the width is the VISIBLE part of
+        // the zone: right(100) - x(0) = 100. The old code computed (right - left) = 189 and then
+        // let the frame clamp trim it to 150 -- which looked like a clamp doing its job but was
+        // really the crop running 89 px past the zone's own right edge, straight into the
+        // copyright and edition text beside the passcode. The frame clamp only hid it.
+        assertArrayEquals(intArrayOf(0, 996, 100, 147), result)
     }
 
     @Test fun `contrastFor gives SET_CODE the measured 1_0 pivot, everything else the old 1_5 default`() {
