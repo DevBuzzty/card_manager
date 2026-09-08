@@ -87,13 +87,13 @@ import java.util.Locale
 // sheet, SetCodeMatch) doesn't need to know which source resolved a scan. Mirrors the conventions
 // CardSearchRepository.parseData uses for a fresh network hit: no exact printing chosen yet
 // ("Unknown"), German-first name.
-private fun CatalogCard.toCardRow() = CardRow(
+internal fun CatalogCard.toCardRow() = CardRow(
     id = id, setCode = "Unknown", language = "DE", name = nameDe, imageUrl = image,
     rarity = null, quantity = 0, price = null, type = type, desc = descDe,
     atk = atk, def = def, level = level, race = race, attribute = attribute,
 )
 
-private fun CatalogPrinting.toSetOption() = SetOption(setCode = code, rarity = rarity, price = 0.0, language = lang ?: "EN", verified = verified)
+internal fun CatalogPrinting.toSetOption() = SetOption(setCode = code, rarity = rarity, price = 0.0, language = lang ?: "EN", verified = verified)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -214,24 +214,6 @@ fun ScanScreen(onClose: () -> Unit) {
             condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
         }
         stagingCards.add(entry)
-        // Spec D3 Task 7: assemble the traffic light from this scan's evidence and apply it to
-        // `entry` -- both branches below need the exact same three lines, so it's pulled out once.
-        // Reads `entry.knownSets`, which both branches below already set BEFORE calling this (same
-        // list `match` was itself matched against) -- see ScanConfidence.fromEvidence's own doc on
-        // why the full known-sets list, not `match.candidates`, is what RarityRank needs.
-        // `.effectiveEdition` always overwrites `entry.edition` here because this is the entry's
-        // FIRST resolve: `userTouched` cannot yet be true (the user has had no chance to edit an
-        // entry that just appeared), the same reasoning that already lets `.selectedSet` below be
-        // set unconditionally on first resolve. The silent-improvement loop (below, Task 6) is
-        // where a later resolve must respect `userTouched` instead.
-        fun applyConfidence(match: SetCodeMatch.MatchResult) {
-            val confidence = com.example.yugiohscanner.ml.ScanConfidence.fromEvidence(
-                match, entry.knownSets, editionTexts, com.example.yugiohscanner.Prefs.defaultEdition(context),
-            )
-            entry.confidence = confidence
-            entry.edition = confidence.effectiveEdition
-            logScanDecision("erst", pc, match, confidence, entry.knownSets)
-        }
         // Spec D3 Task 8 (plan Section 6.5): mirrors the phone's ALREADY-RESOLVED conclusion to a
         // connected desktop -- setCode/rarity/language/edition, the traffic light and its German
         // reason verbatim -- so the desktop shows the SAME preselection instead of re-matching the
@@ -263,47 +245,26 @@ fun ScanScreen(onClose: () -> Unit) {
         }
         scope.launch {
             try {
-                // Catalog first (Task 9): a local hit resolves the base card instantly, offline,
-                // no network. Off the UI thread — this is a SQLite read.
-                val catalogCard = withContext(Dispatchers.IO) {
-                    runCatching { CatalogRepository.card(pc) }.getOrNull()
+                val r = ScanResolver.resolve(
+                    pc, evidence, framesEvidence, editionTexts,
+                    com.example.yugiohscanner.Prefs.defaultEdition(context),
+                )
+                if (r == null) {
+                    stagingCards.remove(entry); seen.remove(pc)   // eine spaetere Wiederholung erlauben
+                    snackbar.showSnackbar("Karte $pc nicht gefunden")
+                    return@launch
                 }
-                // The base card (name, stats, image) always comes from the catalog when it's
-                // there — pure win. The PRINTING list only does when the catalog holds verified
-                // (German) printings for this passcode; unverified rows are the English dump, and
-                // taking them as complete would preselect an EN code for a German collection.
-                // Everything else falls through to the network union (and its ScanCache).
-                val catalogSets = catalogCard?.printings?.takeIf { p -> p.any { it.verified } }
-                if (catalogCard != null && catalogSets != null) {
-                    entry.base = catalogCard.toCardRow()
-                    entry.knownSets = catalogSets.map { it.toSetOption() }
-                    // .selected is the preselection; .reason (Region unklar/widerspricht) and
-                    // .candidates feed the traffic light + set picker (Task 7's applyConfidence
-                    // below). .codeMatch is kept so a later frame's silent improvement (Task 6) has
-                    // something to compare against — see SetCodeEvidence.shouldSilentlyImprove.
-                    val match = SetCodeMatch.best(evidence, entry.knownSets, framesEvidence)
-                    entry.codeMatch = match
-                    entry.selectedSet = match.selected
-                    applyConfidence(match)
-                    entry.loading = false
-                    mirrorToDesktop(match)
-                } else {
-                    val base = catalogCard?.toCardRow() ?: CardSearchRepository.search(pc).firstOrNull()
-                    if (base == null) {
-                        stagingCards.remove(entry); seen.remove(pc)   // allow a later re-scan
-                        snackbar.showSnackbar("Karte $pc nicht gefunden")
-                    } else {
-                        entry.base = base
-                        val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
-                        entry.knownSets = known
-                        val match = SetCodeMatch.best(evidence, known, framesEvidence)
-                        entry.codeMatch = match
-                        entry.selectedSet = match.selected
-                        applyConfidence(match)
-                        entry.loading = false
-                        mirrorToDesktop(match)
-                    }
-                }
+                entry.base = r.base
+                entry.knownSets = r.knownSets
+                // .codeMatch bleibt liegen, damit eine spaetere, besser belegte Aufnahme sich damit
+                // vergleichen kann (D3 Task 6, SetCodeEvidence.shouldSilentlyImprove) -- gegen die
+                // SetOption allein ginge das nicht, sie traegt weder Distanz noch Frameanzahl.
+                entry.codeMatch = r.match
+                entry.selectedSet = r.match.selected
+                entry.confidence = r.confidence
+                entry.edition = r.confidence.effectiveEdition
+                entry.loading = false
+                mirrorToDesktop(r.match)
             } catch (e: Exception) {
                 entry.loading = false
                 snackbar.showSnackbar("Fehler beim Laden: ${e.message}")
@@ -889,42 +850,4 @@ class CardAnalyzer(
     fun close() {
         recognizer.close()
     }
-}
-
-/**
- * Eine Zeile je Ampel-Entscheidung, im key=value-Format, das `ml/ocr_bench.py` ohnehin liest.
- *
- * Warum das noetig ist, und zwar dringend: die Geraeteabnahme zu D3 ergab 31 von 31 gruen, und das
- * Abschlussreview fand danach ZWEI kritische Fehler, die genau diese Abnahme ueberlebt hatten --
- * eine Rarity-Pruefung, die bei komponierten Codes leer erfuellt war, und ein `unlimited`, das aus
- * dreimal leerem Ausschnitt entstand. Beide erzeugten GRUEN, und Gruen zeigt keinen Grund an. Eine
- * leer-gruene Karte war vom Bildschirm aus nicht von einer echt-gruenen zu unterscheiden.
- *
- * Das entscheidende Feld ist `composed`: es sagt, ob der Set-Code in der Printing-Liste GEFUNDEN
- * oder aus Praefix + gelesener Region + Nummer ZUSAMMENGESETZT wurde. Allein dieses Feld haette
- * den Rarity-Fehler sichtbar gemacht, denn er trat ausschliesslich im komponierten Fall auf.
- *
- * `stage` unterscheidet die erste Aufloesung von der stillen Verbesserung. Ohne das sind eine
- * Verbesserung und eine Nicht-Verbesserung im Protokoll identisch -- und die Verbesserung ersetzt
- * einen Druck, NACHDEM der Nutzer den alten bereits gesehen hat.
- */
-private fun logScanDecision(
-    stage: String,
-    passcode: String,
-    match: com.example.yugiohscanner.cloud.SetCodeMatch.MatchResult,
-    confidence: com.example.yugiohscanner.ml.ScanConfidence.Result,
-    knownSets: List<com.example.yugiohscanner.cloud.SetOption>,
-) {
-    val sel = match.selected
-    val composed = sel != null && knownSets.none { it.setCode.equals(sel.setCode, ignoreCase = true) }
-    android.util.Log.i(
-        "ScanDecision",
-        "stage=$stage pc=$passcode " +
-            "code=${sel?.setCode ?: "-"} rarity=${sel?.rarity ?: "-"} lang=${sel?.language ?: "-"} " +
-            "composed=$composed match=${match.reason.name} " +
-            "exact=${match.codeExactMatch} frames=${match.codeFrameCount} " +
-            "known=${knownSets.size} " +
-            "light=${confidence.light.name} grund='${confidence.reason ?: ""}' " +
-            "edition=${confidence.effectiveEdition} editionConf=${confidence.editionConfidence.name}"
-    )
 }
