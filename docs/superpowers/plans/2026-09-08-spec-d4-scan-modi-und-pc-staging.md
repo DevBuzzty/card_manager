@@ -29,7 +29,7 @@
 | Kotlin-Unit-Tests | `cd android && ./gradlew :app:testDebugUnitTest` |
 | Ein einzelner Kotlin-Test | `cd android && ./gradlew :app:testDebugUnitTest --tests '*ScanAggregatorTest*'` |
 | Kotlin kompiliert | `cd android && ./gradlew :app:compileDebugKotlin` |
-| Desktop-Modultests | `cd desktop && node --test src/utils/` |
+| Desktop-Modultests | `cd desktop && node --test src/utils/*.test.js src/utils/*.test.mjs` |
 | Desktop-Lint | `cd desktop && npm run lint` |
 
 ## File Structure
@@ -243,7 +243,9 @@ object ScanAggregator {
         if (wanted == primaryKey) return Target.Primary
         val i = extras.indexOfFirst { it != null && key(it) == wanted }
         if (i >= 0) return Target.Extra(i)
-        return Target.NewExtra(scanned)
+        // key(scanned) war oben nicht null, also ist scanned selbst hier nicht null; der Compiler
+        // sieht das durch den Funktionsaufruf hindurch nicht, daher die Zusicherung.
+        return Target.NewExtra(scanned!!)
     }
 }
 ```
@@ -256,7 +258,7 @@ Expected: PASS, 9 Tests.
 - [ ] **Step 5: Gesamte Kotlin-Testsuite laufen lassen**
 
 Run: `cd android && ./gradlew :app:testDebugUnitTest`
-Expected: PASS — die vorhandenen 17 Testklassen bleiben grün.
+Expected: PASS — die vorhandenen 16 Testklassen bleiben grün.
 
 - [ ] **Step 6: Commit**
 
@@ -1190,8 +1192,8 @@ Und den Rumpf von `onCardScanned` (ca. Zeile 36–68) ersetzen:
 
 - [ ] **Step 6: Alle Desktop-Tests und Lint**
 
-Run: `cd desktop && node --test src/utils/`
-Expected: PASS — die vorhandenen Tests (13 in `setCodeMatch.test.js`, dazu `i18n-de`, `rarity`, `routes`, `valuation`) bleiben grün, plus die 11 neuen.
+Run: `cd desktop && node --test src/utils/*.test.js src/utils/*.test.mjs`
+Expected: PASS — **28 Tests**: die 17 vorhandenen (13 davon in `setCodeMatch.test.js`) bleiben grün, plus die 11 neuen.
 
 Run: `cd desktop && npm run lint`
 Expected: **genau 5** Fehler — die bekannte Baseline.
