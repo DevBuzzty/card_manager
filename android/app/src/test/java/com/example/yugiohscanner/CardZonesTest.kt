@@ -68,14 +68,17 @@ class CardZonesTest {
         assertArrayEquals(intArrayOf(0, 996, 100, 147), result)
     }
 
-    @Test fun `contrastFor gives SET_CODE the measured 1_0 pivot, everything else the old 1_5 default`() {
+    @Test fun `contrastFor gibt jeder Zone den gemessenen 1_0 Pivot, nicht den geerbten 1_5 Default`() {
         // Task 8 (Spec D2): measured on-device against ml_ocr_bench.py's 445-image corpus -- see
         // CardZones.contrastFor's doc for the full before/after table. 1.0 (no contrast boost at
         // all) beat every other value tried (2.2, 1.5, 1.15, 0.7) on SET_CODE specifically; nothing
-        // else in this comparison touched PASSCODE, so it must keep enhance()'s original default.
+        // PASSCODE followed after the final review: 1.0 lifted ebay LINK 57.6 -> 72.8 and
+        // SPELL_TRAP 75.0 -> 80.4 with no cell worse, so both zones now measure best at no boost.
         assertEquals(1.0f, CardZones.contrastFor(Zone.SET_CODE), 0f)
-        assertEquals(1.5f, CardZones.contrastFor(Zone.PASSCODE), 0f)
-        assertEquals(1.5f, CardZones.contrastFor(Zone.EDITION), 0f)
+        assertEquals(1.0f, CardZones.contrastFor(Zone.PASSCODE), 0f)
+        // EDITION wird von keiner Layout-Map geliefert und ist damit unerreichbar; der Wert
+        // steht hier nur, damit ein spaeteres Hinzufuegen nicht stillschweigend 1.5 erbt.
+        assertEquals(1.0f, CardZones.contrastFor(Zone.EDITION), 0f)
     }
 
     @Test fun `zone below the frame bottom degenerates below 6px and returns null`() {

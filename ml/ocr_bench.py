@@ -112,7 +112,13 @@ def even_split_with_caps(target_total, avail):
     while remaining > 0 and active:
         share = max(1, remaining // len(active))
         progressed = False
-        for k in list(active):
+        # Iterate in `avail`'s insertion order (= LAYOUTS), never over the set itself. Python
+        # randomises string hashing per process, so `for k in list(active)` visits the layouts in a
+        # different order on every run and the final leftover unit lands on a different layout each
+        # time. Measured: two builds from the identical labels.csv and seed produced 92/92/93/39 and
+        # 92/93/92/39, and only 353 of 446 sampled files matched. A benchmark whose corpus cannot be
+        # rebuilt from its own inputs cannot be trusted to compare anything across days.
+        for k in [x for x in avail if x in active]:
             room = avail[k] - quotas[k]
             if room <= 0:
                 active.discard(k)

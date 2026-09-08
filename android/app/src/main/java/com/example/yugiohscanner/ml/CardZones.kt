@@ -82,16 +82,31 @@ object CardZones {
      *  | 0.7  | 49.2% | 31.7% | 41.7% |
      *
      * A clean peak at 1.0, monotonic on both sides -- not a cliff edge picked by one lucky
-     * measurement. The 1.5 pivot every zone shared before this task over-contrasts SET_CODE
-     * specifically: its crop straddles the artwork's lower edge (see class doc), so part of it is
-     * actual card art, and the fixed contrast curve was pushing that art's mid-tones toward flat
-     * black/white right along with the text, adding noise instead of removing it. PASSCODE sits on
-     * a plain background and keeps the original 1.5 -- changing it was never part of this
-     * comparison and it is not touched here.
+     * measurement.
+     *
+     * PASSCODE followed later, after the final review pointed at LINK's numbers and predicted the
+     * cause: a Link frame has a dark blue bottom border with darker text on it, and at contrast 1.5
+     * the pivot t = (0.5 - 0.5*1.5)*255 = -63.75 clips everything below luminance 42.5 to pure
+     * black -- measured at 41% of one LINK passcode crop, the digits included. Re-measured on the
+     * rebuilt 446-image corpus:
+     *
+     *  | PASSCODE contrast | ebay LINK | ebay SPELL_TRAP | ebay STANDARD | ebay PENDULUM |
+     *  |---|---|---|---|---|
+     *  | 1.5 (inherited default) | 57.6% | 75.0% | 91.4% | 76.9% |
+     *  | **1.0 (chosen)** | **72.8%** | **80.4%** | 91.4% | 76.9% |
+     *
+     * Nineteen more hits, no cell worse. So the measured optimum is "no contrast boost at all" for
+     * BOTH zones, and the 1.5 every zone inherited was simply wrong for this material: the fixed
+     * curve pushes mid-tones toward flat black and white along with the text, adding noise instead
+     * of removing it -- on SET_CODE because its crop straddles the artwork's lower edge and carries
+     * real card art, on PASSCODE because dark card borders sit below the clipping point.
+     *
+     * The per-zone hook stays even though both values now agree: it carries the evidence, and the
+     * two zones were measured separately and could diverge again.
      */
     internal fun contrastFor(zone: Zone): Float = when (zone) {
         Zone.SET_CODE -> 1.0f
-        else -> 1.5f
+        else -> 1.0f
     }
 
     /**
