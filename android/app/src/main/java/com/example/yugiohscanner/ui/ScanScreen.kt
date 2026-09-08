@@ -359,6 +359,14 @@ fun ScanScreen(onClose: () -> Unit) {
                 // improve on them. The silent-improvement loop below keeps resolving from whatever
                 // record() adds on every later frame, for as long as the card stays in `dets`.
             }
+            // Belege einer Karte abraeumen, sobald sie endgueltig aus dem Bild ist. Seit Task 6
+            // wird bei der Bestaetigung bewusst NICHT mehr vergessen -- die stille Verbesserung
+            // braucht die Historie. Ohne diesen Abgang waechst die Map dann ueber eine lange
+            // Sitzung unbegrenzt, und der Speed-Scan aus D4 schiebt Hunderte Karten durch eine
+            // einzige. BoxTracker ist die einzige Stelle, die "weg" von "kurz verdeckt"
+            // unterscheiden kann: es meldet erst nach maxMisses Frames ohne Sichtung.
+            for (gone in tracker.droppedThisFrame) setEvidence.forget(gone)
+
             // Silent improvement (Spec D3 Task 6, plan Section 6.2): a card already staged
             // (`seen`) but still visible gets its set code re-resolved from ALL evidence gathered
             // so far on every frame — a later, cleaner frame can genuinely beat the one(s) that won
