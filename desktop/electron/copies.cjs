@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { CONDITIONS, EDITIONS, conditionFactor } = require('./valuation.cjs');
+const { CONDITIONS, EDITIONS, conditionFactor, factorCaseSql } = require('./valuation.cjs');
 
 const norm = (p) => ({ id: String(p.id), set_code: p.set_code || 'Unknown', language: p.language || 'DE', rarity: p.rarity || 'Unknown' });
 const KEY = 'card_id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity';
@@ -100,4 +100,129 @@ function softDeletePrinting(db, printing) {
   db.prepare('UPDATE cards SET deleted = 1, quantity = 0 WHERE id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity AND deleted = 0').run(p);
 }
 
-module.exports = { defaults, listCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting };
+// Box und Deckbox haben keine Seiten. Die Regel liegt HIER und nicht in der Oberflaeche, damit
+// sie fuer jeden Aufrufer gilt -- Desktop, Handy ueber die Cloud, und spaeter der Einsortier-
+// Modus aus B2.
+function setCopyLocation(db, { copy_id, container_id, page, slot }) {
+  const kind = container_id
+    ? (db.prepare('SELECT kind FROM containers WHERE container_id = ? AND deleted = 0').get(container_id) || {}).kind
+    : null;
+  if (container_id && !kind) throw new Error('Behälter nicht gefunden');
+  const isBinder = kind === 'binder';
+  db.prepare(`UPDATE card_copies
+                 SET container_id = @container_id, page = @page, slot = @slot,
+                     updated_at = CURRENT_TIMESTAMP
+               WHERE copy_id = @copy_id`)
+    .run({
+      copy_id,
+      container_id: container_id ?? null,
+      page: container_id && isBinder ? (page ?? null) : null,
+      slot: container_id && isBinder ? (slot ?? null) : null,
+    });
+}
+
+// Dieselbe Normalisierung wie parseTags()/serializeTags() in ../src/utils/tags.js (ESM,
+// Renderer) und android/app/src/main/java/com/example/yugiohscanner/ml/Tags.kt: Raender
+// trimmen, Duplikate ohne Ruecksicht auf Gross-/Kleinschreibung verwerfen, Einfuegereihenfolge
+// behalten, nie werfen. Hier absichtlich dupliziert -- der Hauptprozess ist CommonJS und kann
+// das ESM-Modul des Renderers nicht importieren.
+function normalizeTagList(tags) {
+  const out = [];
+  const seen = new Set();
+  for (const item of Array.isArray(tags) ? tags : []) {
+    if (typeof item !== 'string') continue;
+    const t = item.trim();
+    if (!t || seen.has(t.toLowerCase())) continue;
+    seen.add(t.toLowerCase());
+    out.push(t);
+  }
+  return out;
+}
+
+function setCopyTagsNote(db, { copy_id, tags, note }) {
+  const clean = normalizeTagList(tags);
+  db.prepare(`UPDATE card_copies
+                 SET tags = @tags, note = @note, updated_at = CURRENT_TIMESTAMP
+               WHERE copy_id = @copy_id`)
+    .run({
+      copy_id,
+      tags: clean.length ? JSON.stringify(clean) : null,
+      note: note ?? null,
+    });
+}
+
+// Lebende Exemplare ohne Behaelter, mit den zugehoerigen Kartendaten (fuer den Einsortier-Modus).
+function listUnsortedCopies(db) {
+  return db.prepare(`
+    SELECT cp.*, c.*
+      FROM card_copies cp
+      JOIN cards c ON c.id = cp.card_id AND c.set_code = cp.set_code
+                  AND c.language = cp.language AND c.rarity = cp.rarity
+     WHERE cp.deleted = 0 AND c.deleted = 0 AND cp.container_id IS NULL
+     ORDER BY cp.created_at, cp.copy_id`).all();
+}
+
+// Vorschlagsliste ueber alle lebenden Exemplare: entdoppelt (ohne Ruecksicht auf
+// Gross-/Kleinschreibung, erste Schreibweise gewinnt), alphabetisch sortiert. Eine kaputte
+// tags-Zelle wird uebersprungen statt zu werfen -- der Inhalt kann aus der Cloud stammen.
+function listTags(db) {
+  const rows = db.prepare(`SELECT tags FROM card_copies WHERE deleted = 0 AND tags IS NOT NULL
+                            ORDER BY created_at, copy_id`).all();
+  const seen = new Map(); // lowercase -> erste gesehene Schreibweise
+  for (const row of rows) {
+    let arr;
+    try { arr = JSON.parse(row.tags); } catch { continue; }
+    if (!Array.isArray(arr)) continue;
+    for (const item of arr) {
+      if (typeof item !== 'string') continue;
+      const t = item.trim();
+      if (!t) continue;
+      const k = t.toLowerCase();
+      if (!seen.has(k)) seen.set(k, t);
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, 'de'));
+}
+
+// Behaelter mit Belegung: Anzahl lebender Exemplare und ihr Wert (Preis x Zustandsfaktor,
+// derselbe Weg wie valuation.cjs#totalValue -- keine zweite Formel).
+function listContainers(db) {
+  const rows = db.prepare(`
+    SELECT ct.*,
+           COUNT(cp.copy_id) AS copies_count,
+           COALESCE(SUM(COALESCE(c.price, 0) * ${factorCaseSql('cp.condition')}), 0) AS value
+      FROM containers ct
+      LEFT JOIN card_copies cp ON cp.container_id = ct.container_id AND cp.deleted = 0
+      LEFT JOIN cards c ON c.id = cp.card_id AND c.set_code = cp.set_code
+                       AND c.language = cp.language AND c.rarity = cp.rarity AND c.deleted = 0
+     WHERE ct.deleted = 0
+     GROUP BY ct.container_id
+     ORDER BY ct.sort_order, ct.name`).all();
+  return rows.map((r) => ({ ...r, value: Math.round((r.value || 0) * 100) / 100 }));
+}
+
+function saveContainer(db, { container_id, name, kind, pockets_per_page, color, sort_order }) {
+  const data = {
+    container_id: container_id || crypto.randomUUID(),
+    name,
+    kind,
+    pockets_per_page: pockets_per_page ?? null,
+    color: color ?? null,
+    sort_order: sort_order ?? 0,
+  };
+  if (container_id) {
+    db.prepare(`UPDATE containers
+                   SET name = @name, kind = @kind, pockets_per_page = @pockets_per_page,
+                       color = @color, sort_order = @sort_order, updated_at = CURRENT_TIMESTAMP
+                 WHERE container_id = @container_id`).run(data);
+  } else {
+    db.prepare(`INSERT INTO containers (container_id, name, kind, pockets_per_page, color, sort_order)
+                VALUES (@container_id, @name, @kind, @pockets_per_page, @color, @sort_order)`).run(data);
+  }
+  return data.container_id;
+}
+
+module.exports = {
+  defaults, listCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting,
+  setCopyLocation, setCopyTagsNote, listUnsortedCopies, listTags, listContainers, saveContainer,
+};

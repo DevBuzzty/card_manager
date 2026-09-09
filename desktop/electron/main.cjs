@@ -13,6 +13,7 @@ const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = 
 const { recordPrice } = require('./price-history.cjs');
 const { totalValue, copyCount } = require('./valuation.cjs');
 const copies = require('./copies.cjs');
+const { deleteContainer } = require('./containers-schema.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 
 // Initialize Database
@@ -334,6 +335,26 @@ ipcMain.handle('update-copy-group', (event, { from, to, ...printing }) => {
     try { return { success: true, changed: copies.updateCopyGroup(db, printing, from, to) }; }
     catch (e) { return { success: false, error: e.message }; }
 });
+
+ipcMain.handle('list-containers', () => copies.listContainers(db));
+ipcMain.handle('save-container', (event, c) => {
+    try { return { success: true, container_id: copies.saveContainer(db, c) }; }
+    catch (e) { return { success: false, error: e.message }; }
+});
+ipcMain.handle('delete-container', (event, containerId) => {
+    try { return { success: true, cleared: deleteContainer(db, containerId) }; }
+    catch (e) { return { success: false, error: e.message }; }
+});
+ipcMain.handle('set-copy-location', (event, loc) => {
+    try { copies.setCopyLocation(db, loc); return { success: true }; }
+    catch (e) { return { success: false, error: e.message }; }
+});
+ipcMain.handle('set-copy-tags-note', (event, d) => {
+    try { copies.setCopyTagsNote(db, d); return { success: true }; }
+    catch (e) { return { success: false, error: e.message }; }
+});
+ipcMain.handle('list-unsorted-copies', () => copies.listUnsortedCopies(db));
+ipcMain.handle('list-tags', () => copies.listTags(db));
 
 ipcMain.handle('delete-card', (event, { id, set_code, language, rarity }) => {
     try {
