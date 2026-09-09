@@ -1,6 +1,5 @@
 package com.example.yugiohscanner.ui
 
-import android.util.Log
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CardSearchRepository
 import com.example.yugiohscanner.cloud.CatalogRepository

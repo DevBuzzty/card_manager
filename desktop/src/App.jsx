@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
@@ -31,6 +31,15 @@ function App() {
   const rawBackground = location.state?.background;
   const background = /^\/karte\//.test(rawBackground?.pathname || '') ? undefined : rawBackground;
 
+  // Spec-Fix I3: applyScan braucht die Voreinstellungen, um einen neu angelegten Zusatzdruck damit
+  // zu belegen (wie der Kotlin-Zwilling). Ueber einen Ref statt direkt aus dem State gelesen, damit
+  // der onCardScanned-Listener unten (registriert mit `[]`-Deps, siehe dort) nicht den Stand von
+  // beim Mounten einfriert, sondern immer die zuletzt geladenen Voreinstellungen sieht.
+  const [defaults, setDefaults] = useState({ edition: 'unknown', condition: 'NM' });
+  const defaultsRef = useRef(defaults);
+  useEffect(() => { defaultsRef.current = defaults; }, [defaults]);
+  useEffect(() => { window.api?.getDefaults?.().then(d => d && setDefaults(d)); }, []);
+
   useEffect(() => {
     if (window.api) {
       // Listen for scans
@@ -39,7 +48,7 @@ function App() {
         // Spec D4 §5: eine Wiederholung wird zusammengefasst, statt verworfen zu werden --
         // gleicher Druck erhoeht die Menge, ein anderer macht eine Zusatzzeile auf. Die Regel
         // steht in utils/scanAggregate.js, ihr Kotlin-Zwilling in ScanAggregator.kt.
-        setScannedCards(prev => applyScan(prev, data));
+        setScannedCards(prev => applyScan(prev, data, defaultsRef.current));
       });
 
       // Listen for progress

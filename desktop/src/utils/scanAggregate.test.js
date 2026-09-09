@@ -73,6 +73,11 @@ test('geladene Karte ohne Hauptdruck zaehlt trotzdem den Hauptdruck', () => {
   assert.deepEqual(aggregateTarget(card, scan()), { kind: 'primary' });
 });
 
+test('M4(b): kein gelesener Setcode zaehlt den Hauptdruck auch mit vorhandenen Zusatzdrucken', () => {
+  const card = loaded({ extraPrintings: [{ id: 'x', selectedSet: sdy, quantity: 1 }] });
+  assert.deepEqual(aggregateTarget(card, scan({ setCode: undefined })), { kind: 'primary' });
+});
+
 test('applyScan haengt eine unbekannte Karte hinten an', () => {
   const out = applyScan([], scan());
   assert.equal(out.length, 1);
@@ -81,26 +86,73 @@ test('applyScan haengt eine unbekannte Karte hinten an', () => {
   assert.equal(out[0].scannedSetCode, 'LOB-DE005');
 });
 
-test('applyScan erhoeht die Menge des Hauptdrucks', () => {
-  const out = applyScan([loaded()], scan());
+test('applyScan legt eine erste Sichtung auch ohne mode-Feld an', () => {
+  // I2: die erste Sichtung wird IMMER angelegt -- nur eine Wiederholung wird vom Modus-Feld
+  // entschieden.
+  const out = applyScan([], scan({ mode: undefined }));
+  assert.equal(out.length, 1);
+  assert.equal(out[0].passcode, '46986414');
+});
+
+test('applyScan im Modus "stapel" erhoeht die Menge des Hauptdrucks bei einer Wiederholung', () => {
+  const out = applyScan([loaded()], scan({ mode: 'stapel' }));
   assert.equal(out.length, 1);
   assert.equal(out[0].quantity, 2);
 });
 
-test('applyScan legt einen neuen Zusatzdruck mit Menge 1 an', () => {
-  const out = applyScan([loaded()], scan({ setCode: 'SDY-G005' }));
+test('I2: applyScan im Modus "einzeln" laesst die Liste bei einer Wiederholung unveraendert', () => {
+  const cards = [loaded()];
+  const out = applyScan(cards, scan({ mode: 'einzeln' }));
+  assert.equal(out, cards); // dieselbe Array-Referenz, nicht nur derselbe Inhalt
+  assert.equal(out[0].quantity, 1);
+});
+
+test('I2: applyScan OHNE mode-Feld laesst die Liste bei einer Wiederholung unveraendert', () => {
+  // Ein aelteres Handy schickt kein `mode` -- muss wie "einzeln" behandelt werden, nicht wie
+  // "stapel".
+  const cards = [loaded()];
+  const out = applyScan(cards, scan({ mode: undefined }));
+  assert.equal(out, cards);
+  assert.equal(out[0].quantity, 1);
+});
+
+test('applyScan legt im Modus "stapel" einen neuen Zusatzdruck mit Menge 1 an', () => {
+  const out = applyScan([loaded()], scan({ setCode: 'SDY-G005', mode: 'stapel' }));
   assert.equal(out.length, 1);
   assert.equal(out[0].quantity, 1);
   assert.equal(out[0].extraPrintings.length, 1);
   assert.equal(out[0].extraPrintings[0].quantity, 1);
   assert.equal(out[0].extraPrintings[0].selectedSet.set_code, 'SDY-G005');
-  // Edition und Zustand bleiben leer -- handleAdd setzt beim Uebernehmen die Voreinstellungen ein.
-  assert.equal(out[0].extraPrintings[0].edition, null);
+  // C1: der automatisch angelegte Zusatzdruck braucht eine id, sonst schluesselt das gesamte
+  // Zusatzdruck-UI in StagingArea.jsx (updatePrinting/removePrinting/key) auf `undefined`.
+  assert.ok(out[0].extraPrintings[0].id);
+  // Ohne uebergebene `defaults` greift der Rueckfall -- dieselben Werte, die CopyChip.jsx als
+  // Standardparameter kennt.
+  assert.equal(out[0].extraPrintings[0].edition, 'unknown');
+  assert.equal(out[0].extraPrintings[0].condition, 'NM');
 });
 
-test('applyScan fasst nur den passenden Eintrag an', () => {
+test('I3: M4(a): ein neuer Zusatzdruck erbt die uebergebenen Voreinstellungen', () => {
+  const defaults = { edition: 'first', condition: 'EX' };
+  const out = applyScan([loaded()], scan({ setCode: 'SDY-G005', mode: 'stapel' }), defaults);
+  assert.equal(out[0].extraPrintings[0].edition, 'first');
+  assert.equal(out[0].extraPrintings[0].condition, 'EX');
+});
+
+test('C1: zwei automatisch angelegte Zusatzdrucke bekommen unterschiedliche ids', () => {
+  let cards = [loaded()];
+  cards = applyScan(cards, scan({ setCode: 'SDY-G005', mode: 'stapel' }));
+  cards = applyScan(cards, scan({ setCode: 'LOB-EN005', rarity: 'Ultra Rare', language: 'EN', mode: 'stapel' }));
+  const [first, second] = cards[0].extraPrintings;
+  assert.equal(cards[0].extraPrintings.length, 2);
+  assert.ok(first.id);
+  assert.ok(second.id);
+  assert.notEqual(first.id, second.id);
+});
+
+test('applyScan fasst im Modus "stapel" nur den passenden Eintrag an', () => {
   const other = loaded({ tempId: 9, passcode: '11111111' });
-  const out = applyScan([other, loaded()], scan());
+  const out = applyScan([other, loaded()], scan({ mode: 'stapel' }));
   assert.equal(out[0].quantity, 1);
   assert.equal(out[1].quantity, 2);
 });

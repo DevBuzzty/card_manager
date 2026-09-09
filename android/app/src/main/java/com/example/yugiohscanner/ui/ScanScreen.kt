@@ -263,7 +263,7 @@ fun ScanScreen(onClose: () -> Unit) {
     // Spec D4 §4: ein WIEDERHOLTES Erkennen derselben Karte im Modus "stapel". Kein Netz, kein
     // Katalog -- `entry.knownSets` steht bereits, `SetCodeMatch.best` laeuft direkt dagegen.
     // Wohin gebucht wird, entscheidet ScanAggregator (rein und getestet); hier wird nur gebucht.
-    fun aggregateRepeat(pc: String, evidence: List<String>, framesEvidence: List<String>) {
+    fun aggregateRepeat(pc: String, evidence: List<String>, framesEvidence: List<String>, editionTexts: List<String>) {
         val entry = stagingCards.lastOrNull { it.passcode == pc } ?: run {
             // Review-Befund 2: der Eintrag kann fehlen, weil der Nutzer die ganze Karte im
             // Pruefen-Blatt geloescht hat -- ihr Passcode steht aber weiterhin in `seen`. Stiller
@@ -271,7 +271,11 @@ fun ScanScreen(onClose: () -> Unit) {
             // der schlechteste aller Ausgaenge. Stattdessen wie eine neue Erfassung behandeln.
             // (Nicht `onCapture` -- zwei lokale Funktionen koennen sich in Kotlin nicht gegenseitig
             // aufrufen, und `stageScan` steht bereits vor dieser Funktion.)
-            stageScan(pc, evidence, framesEvidence, emptyList())
+            // Fix M1: `editionTexts` wird durchgereicht statt durch `emptyList()` ersetzt -- sonst
+            // loest dieser Rueckfall die Karte mit leerer Editions-Beleglage auf (edition =
+            // unknown), waehrend derselbe Passcode ueber den `stageScan`-Zweig direkt daneben sie
+            // mitbekommen haette.
+            stageScan(pc, evidence, framesEvidence, editionTexts)
             return
         }
         // Anderes Aufblitzen als bei einer Neuaufnahme (die blitzt mit 0.8f), damit ein "+1"
@@ -365,7 +369,12 @@ fun ScanScreen(onClose: () -> Unit) {
     // sendet. Erste Sichtung wie Wiederholung gehen denselben Weg; zusammengefasst wird am PC (§5).
     //
     // [isRepeat] dient nur der Rueckmeldung (§7) und dem Rueckfall, wenn die Verbindung waehrend
-    // der Aufloesung wegbricht. Es geht NICHT auf die Leitung -- der PC braucht kein Modus-Feld.
+    // der Aufloesung wegbricht -- es geht selbst NICHT auf die Leitung. Der aktuelle `scanMode`
+    // dagegen schon (siehe `sendScanToDesktop`, Spec-Fix I2): die urspruengliche Annahme, im Modus
+    // "einzeln" koenne beim PC nie eine Wiederholung ankommen, war falsch -- `seen` unten haelt
+    // eine Wiederholung nur ab, solange DIESER Scanner offen bleibt; ein Schliessen/Wiederoeffnen
+    // loescht `seen`, waehrend die Staging-Liste des PCs bestehen bleibt. Der PC muss deshalb
+    // selbst wissen, ob er zusammenfassen darf.
     //
     // Diese Funktion muss VOR `onCapture` und NACH `stageScan`/`aggregateRepeat` stehen: lokale
     // Funktionen in Kotlin sehen nur, was vor ihnen deklariert ist, und `onCapture` ruft diese
@@ -398,13 +407,13 @@ fun ScanScreen(onClose: () -> Unit) {
                     // gibt -- die frueheren Kopien liegen ja beim PC. Sonst wird sie ein eigener
                     // Eintrag, damit diese eine Karte nicht still verlorengeht.
                     if (isRepeat && stagingCards.any { it.passcode == pc }) {
-                        aggregateRepeat(pc, evidence, framesEvidence)
+                        aggregateRepeat(pc, evidence, framesEvidence, editionTexts)
                     } else {
                         stageScan(pc, evidence, framesEvidence, editionTexts)
                     }
                     return@launch
                 }
-                sendScanToDesktop(s, pc, r)
+                sendScanToDesktop(s, pc, r, scanMode)
                 sentCount++
                 lastLight = r.confidence.light
                 if (isRepeat) {
@@ -429,11 +438,12 @@ fun ScanScreen(onClose: () -> Unit) {
         if (isRepeat && scanMode != "stapel") return
         if (isConnected) {
             // §6: kein Handy-Staging. Erste Sichtung wie gewollte Wiederholung gehen an den PC,
-            // der sie nach derselben Regel zusammenfasst (§5). Deshalb braucht die Leitung auch
-            // kein Modus-Feld: im Modus "einzeln" kommt hier nie eine Wiederholung an.
+            // der sie nach derselben Regel zusammenfasst (§5). `scanMode` reist als eigenes Feld
+            // mit (siehe `sendScanToDesktop`, Spec-Fix I2) -- der PC braucht es, um im Modus
+            // "einzeln" eine Wiederholung zu verwerfen statt sie zu buchen.
             sendScan(pc, evidence, frames, editionTexts, isRepeat)
         } else if (isRepeat) {
-            aggregateRepeat(pc, evidence, frames)
+            aggregateRepeat(pc, evidence, frames, editionTexts)
         } else {
             stageScan(pc, evidence, frames, editionTexts)
         }
@@ -1065,7 +1075,13 @@ class CardAnalyzer(
 // Ampel und deutscher Grund woertlich -- damit der PC dieselbe Vorauswahl zeigt, statt die
 // Kandidaten selbst gegen eine Karte zu matchen, deren Bandtext er nie gesehen hat.
 // Ein aelterer PC-Stand ignoriert die Felder, die er nicht kennt.
-private fun sendScanToDesktop(socket: Socket, pc: String, r: ResolvedScan) {
+//
+// Spec-Fix I2: dazu `mode` ("einzeln"/"stapel", woertlich wie am Handy). Die urspruengliche
+// Annahme -- der PC brauche kein Modus-Feld, weil das Handy im Modus "einzeln" nie eine
+// Wiederholung schickt -- ist widerlegt: `seen` (ScanScreen) lebt nur, solange der Scanner offen
+// ist, die Staging-Liste des PCs ueberlebt ein Schliessen/Wiederoeffnen. Ohne das Feld zaehlte
+// Modus "einzeln" bei verbundenem PC doppelt. Ein aelterer PC ignoriert auch dieses Feld.
+private fun sendScanToDesktop(socket: Socket, pc: String, r: ResolvedScan, mode: String) {
     val data = JSONObject().put("passcode", pc)
     r.match.selected?.let {
         data.put("setCode", it.setCode)
@@ -1079,5 +1095,6 @@ private fun sendScanToDesktop(socket: Socket, pc: String, r: ResolvedScan) {
     data.put("editionConfidence", r.confidence.editionConfidence.name.lowercase(Locale.ROOT))
     data.put("confidence", r.confidence.light.name.lowercase(Locale.ROOT))
     data.put("reason", r.confidence.reason ?: JSONObject.NULL)
+    data.put("mode", mode)
     socket.emit("card_scanned", data)
 }

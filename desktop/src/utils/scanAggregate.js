@@ -8,9 +8,13 @@ import { phoneSelectedSet } from './setCodeMatch.js';
 // wohnt dort, wo das Staging steht -- offline am Handy, verbunden am PC. Wer hier etwas aendert,
 // aendert dort mit.
 //
-// Ueber die Leitung kommt KEIN Modus-Feld. Im Modus "einzeln" faengt das Handy jede Wiederholung
-// selbst ab; erreicht uns eine, war sie gewollt. Deshalb darf hier bedingungslos zusammengefasst
-// werden.
+// Spec-Fix I2: ueber die Leitung kommt EIN Modus-Feld ("einzeln"/"stapel", woertlich wie am Handy).
+// Die urspruengliche Annahme -- das Handy fange im Modus "einzeln" jede Wiederholung selbst ab,
+// also brauche die Leitung kein Modus-Feld -- ist widerlegt: die Merkliste des Handys (`seen` in
+// ScanScreen.kt) lebt nur, solange der Scanner offen ist; die Staging-Liste des PCs ueberlebt ein
+// Schliessen/Wiederoeffnen des Scanners. Ohne das Feld zaehlte Modus "einzeln" bei verbundenem PC
+// doppelt. Ein FEHLENDES Feld (aelteres Handy) gilt als "einzeln" -- das ist die Richtung, die
+// niemals stillschweigend eine Menge erhoeht.
 
 // Verglichen wird die volle Druck-Identitaet, nicht nur der Set-Code: die Sammlung schluesselt auf
 // (id, set_code, language, rarity) -- ein Secret Rare in einen Common zu falten schriebe den
@@ -39,9 +43,10 @@ export function aggregateTarget(card, scanned) {
   // ~Zeile 121). Ohne diese Pruefung wuerde eine solche Karte faelschlich gegen `extraPrintings`
   // verglichen statt bedingungslos den Hauptdruck zu zaehlen.
   if (!card.selectedSet) return { kind: 'primary' };
-  // Statusproxy fuer den separaten Wettlauf-Fall: waehrend eine Karte noch laedt (status !==
-  // 'loaded'), gibt es noch gar keine `allPrintings`, gegen die sich der gemeldete Code aufloesen
-  // liesse -- unabhaengig davon, ob `selectedSet` (das oben schon fehlen wuerde) gesetzt ist.
+  // M3: defensive Redundanz nach der Pruefung direkt darueber -- sobald `card.selectedSet` gesetzt
+  // ist, ist die Karte im heutigen Code immer bereits `status: 'loaded'` und traegt `allPrintings`
+  // (beides setzt StagingArea gemeinsam). Diese Zeile greift also nie eigenstaendig; sie bleibt als
+  // Absicherung stehen, falls sich das je aendert.
   if (card.status !== 'loaded' || !card.allPrintings) return { kind: 'primary' };
   const set = phoneSelectedSet(scanned.setCode, scanned.rarity, scanned.language, card.allPrintings);
   if (!set) return { kind: 'primary' };
@@ -52,19 +57,35 @@ export function aggregateTarget(card, scanned) {
   return { kind: 'newExtra', set };
 }
 
+// Rueckfall-Voreinstellungen, falls der Aufrufer keine (oder keine vollstaendigen) `defaults`
+// mitgibt -- dieselben Werte, die CopyChip.jsx als Standardparameter kennt (edition='unknown',
+// condition='NM'), damit eine neu angelegte Zusatzzeile nie von der Anzeige abweicht.
+const FALLBACK_DEFAULTS = { edition: 'unknown', condition: 'NM' };
+
 /**
  * Die Staging-Liste nach einer Handy-Meldung. Gibt immer ein NEUES Array zurueck (React-Zustand)
  * und fasst nur den Eintrag mit demselben Passcode an.
  *
  * Ein neuer Eintrag wird hinten angehaengt, damit die zuerst gescannte Karte oben stehen bleibt --
  * eine neu hinzukommende Karte laesst die Liste nach unten wachsen, ihre aufgeklappten Zeilen
- * koennen also nicht unten abgeschnitten werden.
+ * koennen also nicht unten abgeschnitten werden. Das gilt UNABHAENGIG vom Modus-Feld: eine erste
+ * Sichtung wird immer angelegt, auch wenn `scanned.mode` fehlt.
+ *
+ * @param {object} defaults Vorbelegung fuer einen neu angelegten Zusatzdruck ({ edition, condition
+ *   }), z.B. aus `window.api.getDefaults()`. Spec-Fix I3: ein neuer Zusatzdruck erbt sie, wie der
+ *   Kotlin-Zwilling in ScanScreen.kt:328-334 -- vorher blieben edition/condition `null`, was
+ *   CopyChip.jsx als "vom Standard abweichend" gold markierte, obwohl beim Uebernehmen exakt die
+ *   Voreinstellung greift.
  */
-export function applyScan(cards, scanned) {
+export function applyScan(cards, scanned, defaults = FALLBACK_DEFAULTS) {
   const idx = cards.findIndex(c => c.passcode === scanned.passcode);
   if (idx < 0) {
     return [...cards, newEntry(scanned)];
   }
+  // Spec-Fix I2: eine Wiederholung wird nur im Modus "stapel" zusammengefasst. Ist `scanned.mode`
+  // etwas anderes oder fehlt es ganz, bleibt die Liste unveraendert (dieselbe Array-Referenz) --
+  // sicherer, als stillschweigend eine Menge zu erhoehen.
+  if (scanned.mode !== 'stapel') return cards;
   const card = cards[idx];
   const target = aggregateTarget(card, scanned);
   let updated;
@@ -75,8 +96,16 @@ export function applyScan(cards, scanned) {
       i === target.index ? { ...p, quantity: (p.quantity || 1) + 1 } : p);
     updated = { ...card, extraPrintings: extras };
   } else {
-    // edition/condition bleiben leer -- handleAdd setzt beim Uebernehmen die Voreinstellungen ein.
-    const extra = { selectedSet: target.set, quantity: 1, edition: null, condition: null };
+    // Spec-Fix C1: eine id nach demselben Muster wie `addPrinting` in StagingArea.jsx -- ohne sie
+    // schluesselt das gesamte Zusatzdruck-UI (updatePrinting/removePrinting/key) auf `undefined`
+    // und trifft bei zwei automatisch angelegten Zeilen versehentlich beide gleichzeitig.
+    const extra = {
+      id: `${Date.now()}-${Math.random()}`,
+      selectedSet: target.set,
+      quantity: 1,
+      edition: defaults.edition,
+      condition: defaults.condition,
+    };
     updated = { ...card, extraPrintings: [...(card.extraPrintings || []), extra] };
   }
   return cards.map((c, i) => (i === idx ? updated : c));

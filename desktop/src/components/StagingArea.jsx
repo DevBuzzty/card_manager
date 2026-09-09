@@ -206,7 +206,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                edition: card.edition,
                condition: card.condition,
            };
-           const printings = [primary, ...(card.extraPrintings || [])];
+           const extrasSnapshot = card.extraPrintings || [];
+           const printings = [primary, ...extrasSnapshot];
 
            const buildCardData = (p, isPrimary) => {
                const cardData = { ...card.data, quantity: p.quantity || 1 };
@@ -234,20 +235,73 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                return cardData;
            };
 
+           // Spec-Fix I1: wie viel von jeder Zeile TATSAECHLICH geschrieben wurde. Der Hauptdruck
+           // hat keine id (eigenes Feld), Zusatzzeilen ueber ihre id (Fix C1). Bleibt eine Zeile bei
+           // 0 stehen, weil `buildCardData` nichts zu schreiben fand (keine Auswahl getroffen),
+           // wird sie unten wie bisher stillschweigend uebersprungen -- das ist kein Wettlauf,
+           // sondern strukturell unveraendert seit dem Anlegen der Zeile.
+           let primaryWritten = 0;
+           const extraWritten = new Map();
+
            if (window.api) {
                 for (let i = 0; i < printings.length; i++) {
-                    const data = buildCardData(printings[i], i === 0);
+                    const p = printings[i];
+                    const isPrimary = i === 0;
+                    const data = buildCardData(p, isPrimary);
                     if (!data) continue;
                     const result = await window.api.addCardToDb(data);
                     if (!result.success) {
                         alert("Speichern fehlgeschlagen: " + result.error);
                         return; // keep the card in staging so nothing is silently lost
                     }
+                    if (isPrimary) primaryWritten = p.quantity || 1;
+                    else extraWritten.set(p.id, p.quantity || 1);
                 }
+           } else {
+                // Kein window.api (Browser-Dev) -- es wird ohnehin nichts persistiert, die Karte
+                // verschwindet wie bisher unbedingt aus dem Staging.
+                primaryWritten = primary.quantity || 1;
+                extrasSnapshot.forEach(p => extraWritten.set(p.id, p.quantity || 1));
            }
-           // Spec D4 §6.4: die Karte ist durch -- das Handy darf sie wieder scannen.
-           window.api?.releaseStaged?.([card.passcode]);
-           setScannedCards(prev => prev.filter(c => c.tempId !== tempId));
+
+           // Spec-Fix I1: waehrend der awaits oben kann applyScan (ein Wiederholscan vom Handy)
+           // die Menge dieser Karte erhoeht oder eine neue Zusatzzeile angelegt haben -- der oben
+           // aus dem Render-Schnappschuss gelesene `card` weiss davon nichts. Der DANN aktuelle
+           // Zustand entscheidet: ist er groesser als das tatsaechlich Geschriebene, bleibt die
+           // Differenz stehen, statt dass die Karte komplett verschwindet. Nur bei Gleichstand
+           // (ueberall Differenz <= 0) wird der Eintrag entfernt und der Passcode freigegeben.
+           // Die id-Menge der urspruenglichen Zusatzzeilen unterscheidet eine waehrenddessen NEU
+           // angelegte Zeile (unangetastet stehen lassen) von einer schon damals leeren, nie
+           // geschriebenen Zeile (weiterhin stillschweigend uebersprungen, wie bisher).
+           const originalExtraIds = new Set(extrasSnapshot.map(p => p.id));
+           let removedFully = false;
+           setScannedCards(prev => {
+               const idx = prev.findIndex(c => c.tempId === tempId);
+               if (idx < 0) return prev; // anderswo schon entfernt (z.B. verworfen)
+               const cur = prev[idx];
+               const remainingQuantity = (cur.quantity || 1) - primaryWritten;
+               const remainingExtras = (cur.extraPrintings || []).reduce((acc, p) => {
+                   if (extraWritten.has(p.id)) {
+                       const rem = (p.quantity || 1) - extraWritten.get(p.id);
+                       if (rem > 0) acc.push({ ...p, quantity: rem });
+                   } else if (!originalExtraIds.has(p.id)) {
+                       acc.push(p); // waehrend des awaits neu angelegt -- unangetastet stehen lassen
+                   }
+                   return acc;
+               }, []);
+               if (remainingQuantity <= 0 && remainingExtras.length === 0) {
+                   removedFully = true;
+                   return prev.filter(c => c.tempId !== tempId);
+               }
+               removedFully = false;
+               return prev.map((c, i) => (i === idx
+                   ? { ...c, quantity: Math.max(remainingQuantity, 0), extraPrintings: remainingExtras }
+                   : c));
+           });
+           if (removedFully) {
+               // Spec D4 §6.4: die Karte ist durch -- das Handy darf sie wieder scannen.
+               window.api?.releaseStaged?.([card.passcode]);
+           }
        } finally {
            committingRef.current.delete(tempId);
        }

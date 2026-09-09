@@ -96,4 +96,15 @@ class ScanAggregatorTest {
             ScanAggregator.target(primary = lob, extras = listOf(null), scanned = sdy),
         )
     }
+
+    @Test
+    fun `ohne gelesenen Setcode zaehlt der Hauptdruck auch mit vorhandenen Zusatzdrucken`() {
+        // M4(b): der Frueh-Ausstieg auf `scanned` darf nicht nur bei leerer Zusatzliste greifen --
+        // ein Eintrag mit bereits vorhandenen Zusatzdrucken landet bei fehlendem Code trotzdem am
+        // Hauptdruck, nicht an einem der Zusatzdrucke.
+        assertEquals(
+            ScanAggregator.Target.Primary,
+            ScanAggregator.target(primary = lob, extras = listOf(sdy), scanned = null),
+        )
+    }
 }
