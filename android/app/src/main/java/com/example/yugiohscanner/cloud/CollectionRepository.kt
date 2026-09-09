@@ -238,6 +238,18 @@ object CollectionRepository {
         patchCopy(copyId, body)
     }
 
+    // Copy_id-genauer Soft-Delete -- das exemplarbezogene Gegenstueck zu removeCopies() (waehlt
+    // ueber Edition/Zustand/Erstellzeit aus einer ganzen Gruppe). Seit jedes Exemplar eigene
+    // Standort-, Tag- und Notizdaten traegt, ist es NICHT mehr egal, welches physische Exemplar
+    // geloescht wird -- CopySheet kennt die copy_id des geoeffneten Exemplars und muss genau
+    // dieses treffen (derselbe Fehler war am Desktop in Task 6, Befund A, kritisch). Niemals hart
+    // loeschen; `updated_at` wird serverseitig gestempelt, also nicht mitgeschickt -- gleiches
+    // Muster wie setCopyLocation/setCopyTagsNote oben (patchCopy uebernimmt Fehlerbehandlung und
+    // Neuanmeldung).
+    suspend fun deleteCopy(copyId: String) = withContext(Dispatchers.IO) {
+        patchCopy(copyId, JSONObject().put("deleted", true))
+    }
+
     // Lebende Exemplare ohne Behaelter (fuer den Einsortier-Modus, Task 9/10).
     suspend fun listUnsortedCopies(): List<CopyRow> = withContext(Dispatchers.IO) {
         val out = ArrayList<CopyRow>()

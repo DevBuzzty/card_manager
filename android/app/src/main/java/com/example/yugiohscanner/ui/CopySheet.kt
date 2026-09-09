@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -72,9 +73,16 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
 
     var error by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
-    // Plain (non-Compose-state) guard, geprueft SYNCHRON ganz am Anfang von save() -- ein
-    // Doppel-Tap auf "Speichern" waehrend ein Speichern noch laeuft wird sofort verworfen, nicht
-    // erst nach der naechsten Neuzeichnung. Gleiches Muster wie BindersScreen.kt's savingRef.
+    // Spec B1 §10.4 Befund 2: "Entfernen" (Soft-Delete des Exemplars) mit Rueckfrage, wie am
+    // Desktop (CopySheet.jsx#removeExemplar). `removing` ist die eigene Label-/Enabled-Anzeige,
+    // faellt aber unter dieselbe Doppel-Tap-Sperre wie Speichern (savingRef unten) -- ein Tap auf
+    // Entfernen waehrend gerade gespeichert wird (oder umgekehrt) wird sofort verworfen.
+    var removing by remember { mutableStateOf(false) }
+    var pendingRemove by remember { mutableStateOf(false) }
+    // Plain (non-Compose-state) guard, geprueft SYNCHRON ganz am Anfang von save()/remove() -- ein
+    // Doppel-Tap auf "Speichern" bzw. "Entfernen" waehrend eine der beiden Aktionen noch laeuft
+    // wird sofort verworfen, nicht erst nach der naechsten Neuzeichnung. Gleiches Muster wie
+    // BindersScreen.kt's savingRef.
     val savingRef = remember { BooleanArray(1) }
 
     LaunchedEffect(Unit) {
@@ -135,7 +143,30 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
         }
     }
 
-    ModalBottomSheet(onDismissRequest = { if (!saving) onDismiss() }, sheetState = sheetState) {
+    // Copy_id-genau ueber CollectionRepository.deleteCopy, NICHT removeCopies: removeCopies waehlt
+    // ueber Edition/Zustand/Erstellzeit aus einer ganzen Gruppe aus, ohne Ruecksicht auf Standort/
+    // Tags/Notiz des einzelnen Exemplars -- hier ist aber genau EIN Exemplar (copy.copyId)
+    // gemeint, das der Nutzer gerade vor sich hat (derselbe Desktop-Bug wie in Task 6, Befund A).
+    fun remove() {
+        if (savingRef[0]) return
+        savingRef[0] = true
+        removing = true
+        error = null
+        scope.launch {
+            try {
+                CollectionRepository.deleteCopy(copy.copyId)
+                onSaved()
+                onDismiss()
+            } catch (e: Exception) {
+                error = e.message ?: "Entfernen fehlgeschlagen."
+            } finally {
+                removing = false
+                savingRef[0] = false
+            }
+        }
+    }
+
+    ModalBottomSheet(onDismissRequest = { if (!saving && !removing) onDismiss() }, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)
                 .verticalScroll(rememberScrollState()),
@@ -221,14 +252,35 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
 
             error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss, enabled = !saving) { Text("Abbrechen") }
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = { save() }, enabled = !saving) {
-                    Text(if (saving) "Wird gespeichert…" else "Speichern")
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { pendingRemove = true }, enabled = !saving && !removing) {
+                    Icon(Icons.Default.Delete, "Entfernen", tint = ErrorColor, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (removing) "Wird entfernt…" else "Entfernen", color = ErrorColor)
+                }
+                Row {
+                    TextButton(onClick = onDismiss, enabled = !saving && !removing) { Text("Abbrechen") }
+                    Spacer(Modifier.width(8.dp))
+                    Button(onClick = { save() }, enabled = !saving && !removing) {
+                        Text(if (saving) "Wird gespeichert…" else "Speichern")
+                    }
                 }
             }
         }
+    }
+
+    if (pendingRemove) {
+        AlertDialog(
+            onDismissRequest = { pendingRemove = false },
+            title = { Text("Exemplar entfernen?") },
+            text = { Text("Dieses Exemplar wird entfernt. Das kann nicht rückgängig gemacht werden.") },
+            confirmButton = { TextButton(onClick = { pendingRemove = false; remove() }) { Text("Entfernen", color = ErrorColor) } },
+            dismissButton = { TextButton(onClick = { pendingRemove = false }) { Text("Abbrechen") } },
+        )
     }
 }
 

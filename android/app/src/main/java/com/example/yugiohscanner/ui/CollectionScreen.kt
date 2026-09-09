@@ -160,8 +160,16 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
 
         val out = ArrayList<CardGroup>()
         for (g0 in groupCards(cards, byKey)) {
+            // Spec B1 §10.4 Befund 1 (wie Task 7 am Desktop, CollectionList.jsx): die Textsuche
+            // findet zusaetzlich Tags und Notizen der Exemplare -- ausschliesslich ueber
+            // Tags.parse, kein eigenes Zerlegen der JSON-Spalte. Gleiche Entscheidungen wie
+            // Desktop uebernommen: gross-/kleinschreibungsunabhaengig, Teiltreffer genuegt, keine
+            // zusaetzliche Beschneidung des Suchbegriffs.
             if (query.isNotBlank() &&
-                !((g0.name ?: "").contains(query, true) || g0.variants.any { it.setCode.contains(query, true) })
+                !((g0.name ?: "").contains(query, true) ||
+                    g0.variants.any { it.setCode.contains(query, true) } ||
+                    copiesOfGroup(g0).any { cp -> Tags.parse(cp.tags).any { it.contains(query, true) } } ||
+                    copiesOfGroup(g0).any { cp -> cp.note?.contains(query, true) == true })
             ) continue
             if (fSet != null && g0.variants.none { it.setCode.substringBefore('-') == fSet }) continue
             if (fRarity != null && !g0.rarities.contains(fRarity)) continue
