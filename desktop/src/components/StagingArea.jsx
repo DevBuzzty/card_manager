@@ -198,7 +198,10 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
            // Each printing's language comes from the picked set (its flag), so there's no separate
            // language field to track.
            const primary = {
-               quantity: card.quantity || 1,
+               // `??` statt `||`: eine explizite 0 (Huelle nach vollstaendigem Schreiben, siehe
+               // Zeile ~298) muss als 0 erhalten bleiben, damit der Wächter unten sie erkennt --
+               // `|| 1` wuerde sie hier schon vor der Pruefung wieder auf 1 zurueckfallen lassen.
+               quantity: card.quantity ?? 1,
                selectedSet: card.selectedSet,
                isManualEntry: card.isManualEntry,
                manualSetCode: card.manualSetCode,
@@ -247,6 +250,11 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 for (let i = 0; i < printings.length; i++) {
                     const p = printings[i];
                     const isPrimary = i === 0;
+                    // Fixwelle-Nachreview: quantity <= 0 heisst, diese Zeile ist bereits
+                    // vollstaendig geschrieben und steht nur noch als Huelle fuer ihre
+                    // Geschwister-Zeilen (siehe Zeile ~298) -- `|| 1` weiter unten wuerde sie
+                    // sonst als 1 zuruecklesen und eine nie gescannte Kopie schreiben.
+                    if ((p.quantity ?? 1) <= 0) continue;
                     const data = buildCardData(p, isPrimary);
                     if (!data) continue;
                     const result = await window.api.addCardToDb(data);
