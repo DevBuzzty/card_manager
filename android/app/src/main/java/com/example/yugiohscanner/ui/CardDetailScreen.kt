@@ -2,6 +2,7 @@ package com.example.yugiohscanner.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,10 +28,14 @@ import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CatalogCard
 import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.ContainerRow
+import com.example.yugiohscanner.cloud.ContainersRepository
+import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.WishlistRepository
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.Tags
 import com.example.yugiohscanner.ui.components.RarityChip
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
@@ -57,6 +62,16 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
     // this card; the owned printings below (rarity, set code, valuation) stay collection data,
     // unchanged. Off the UI thread — this is a SQLite read.
     var catalogCard by remember(cardId) { mutableStateOf<CatalogCard?>(null) }
+
+    // Spec B1 §10.3: Behaelterliste fuer den Standort-Chip. Faellt bei einem Ladefehler defensiv
+    // auf eine leere Liste zurueck (Chip zeigt dann "—") -- anders als im Exemplar-Sheet selbst
+    // (CopySheet.kt), wo ein stiller Fehler echten Datenverlust ausloesen koennte, ist das hier
+    // nur eine Anzeige ohne Schreibpfad.
+    var containers by remember { mutableStateOf<List<ContainerRow>>(emptyList()) }
+    var sheetCopy by remember { mutableStateOf<CopyRow?>(null) }
+    LaunchedEffect(Unit) {
+        containers = runCatching { ContainersRepository.list() }.getOrDefault(emptyList())
+    }
 
     LaunchedEffect(cardId) {
         runCatching { WishlistRepository.loadWishlist() }
@@ -172,6 +187,11 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
                             Spacer(Modifier.weight(1f))
                             ValueText(Valuation.valueOf(v.price, mine.filter { it.edition == g.edition && it.condition == g.condition }), style = MaterialTheme.typography.bodySmall)
                         }
+                        // Spec B1 §10.3: je Exemplar der Gruppe eine anklickbare Zeile mit
+                        // Standort- und Tag-Chips -- oeffnet das Exemplar-Sheet fuer GENAU dieses
+                        // copy_id (nicht die Gruppe). Gegenstueck zu CardDetailPanel.jsx.
+                        mine.filter { !it.deleted && it.edition == g.edition && it.condition == g.condition }
+                            .forEach { c -> CopyLocationRow(c, containers.find { ct -> ct.containerId == c.containerId }, onClick = { sheetCopy = c }) }
                     }
                     TextButton(enabled = migrated, onClick = {
                         scope.launch { try { CollectionRepository.addCopies(v, Prefs.defaultEdition(ctx), Prefs.defaultCondition(ctx)); error = null; refresh() } catch (e: Exception) { error = e.message } }
@@ -206,6 +226,10 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
             }
         }
     }
+
+    sheetCopy?.let { c ->
+        CopySheet(copy = c, onDismiss = { sheetCopy = null }, onSaved = { scope.launch { refresh() } })
+    }
 }
 
 // Small stat tile: label over a mono value, inside a SpaceCard.
@@ -218,6 +242,45 @@ private fun StatTile(label: String, value: String) {
                 fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         }
     }
+}
+
+// Spec B1 §10.3: eine Zeile je Exemplar -- Standort-Chip links (CopyLocation.format, zeichengleich
+// zum Desktop), Tag-Chips rechts. Ein Klick oeffnet das Exemplar-Sheet fuer genau dieses Exemplar.
+@Composable
+private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 2.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Muted.copy(alpha = 0.08f))
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            CopyLocation.format(copy, container),
+            style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = Muted,
+            maxLines = 1, modifier = Modifier.weight(1f),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Tags.parse(copy.tags).forEach { t -> TagChipSmall(t) }
+        }
+    }
+}
+
+// Small violet pill for a single tag -- same shape/border style as NeutralChip, tinted like the
+// desktop's tag chip (space-violet).
+@Composable
+private fun TagChipSmall(text: String) {
+    val shape = RoundedCornerShape(50)
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = Primary,
+        modifier = Modifier
+            .background(Primary.copy(alpha = 0.15f), shape)
+            .border(1.dp, Primary.copy(alpha = 0.3f), shape)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
 
 // Neutral (uncolored) pill for attribute/race metadata.

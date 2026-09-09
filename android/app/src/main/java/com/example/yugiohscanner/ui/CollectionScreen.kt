@@ -30,9 +30,13 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.ContainerRow
+import com.example.yugiohscanner.cloud.ContainersRepository
+import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.Tags
 import com.example.yugiohscanner.ui.components.RarityChip
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
@@ -52,6 +56,11 @@ private data class CardGroup(
     val maxPrice: Double,
     val rarities: List<String>,
     val variants: List<CardRow>,
+    // Spec B1 §10.4: nur gesetzt, waehrend ein Behaelterfilter aktiv ist -- der vorformatierte
+    // Standort-Chip-Text (CopyLocation.format) DES ERSTEN passenden Exemplars (siehe groups
+    // unten), nicht der Gruppe. Bereits hier statt erst beim Rendern aufgeloest, weil zu diesem
+    // Zeitpunkt die Behaelterliste bereits vorliegt.
+    val locationLabel: String? = null,
 )
 
 private fun groupCards(cards: List<CardRow>, byKey: Map<String, List<CopyRow>>): List<CardGroup> =
@@ -89,6 +98,15 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     var fLang by remember { mutableStateOf<String?>(null) }
     var fCondition by remember { mutableStateOf<String?>(null) }
     var fEdition by remember { mutableStateOf<String?>(null) }
+    // Spec B1 §10.4: Behaelter-/Tag-Filter, mehrfach waehlbar (leer = nicht filtern) -- greifen
+    // am EXEMPLAR, nicht am Printing (siehe groups unten, "GRUPPIERUNGSFALLE").
+    val fContainers = remember { mutableStateListOf<String>() }
+    val fTags = remember { mutableStateListOf<String>() }
+    var containers by remember { mutableStateOf<List<ContainerRow>>(emptyList()) }
+    var tagOptions by remember { mutableStateOf<List<String>>(emptyList()) }
+    // Eigener Fehlerzustand, unconditional angezeigt (nicht hinter filterOpen versteckt) -- ein
+    // Ladefehler des Behaelter-/Tag-Vokabulars darf nicht wie "keine Behaelter vorhanden" aussehen.
+    var vocabError by remember { mutableStateOf<String?>(null) }
 
     suspend fun reload() {
         cards = CollectionRepository.loadCards()
@@ -97,6 +115,15 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     }
     LaunchedEffect(Unit) {
         try { reload() } catch (e: Exception) { errorMsg = e.message ?: "Laden fehlgeschlagen"; loading = false }
+    }
+    LaunchedEffect(Unit) {
+        try {
+            containers = ContainersRepository.list()
+            tagOptions = CollectionRepository.listTags()
+            vocabError = null
+        } catch (e: Exception) {
+            vocabError = e.message ?: "Behälter und Tags konnten nicht geladen werden."
+        }
     }
 
     // Full-screen sub-view takes over the whole tab — system back closes it instead of the tab.
@@ -119,35 +146,53 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     val typeOptions = remember(cards) { cards.mapNotNull { it.type }.distinct().sorted() }
     val langOptions = remember(cards) { cards.map { it.language }.distinct().sorted() }
 
-    val activeFilterCount = listOf(fSet, fRarity, fType, fLang, fCondition, fEdition).count { it != null }
+    val activeFilterCount = listOf(fSet, fRarity, fType, fLang, fCondition, fEdition).count { it != null } +
+        fContainers.size + fTags.size
 
-    val groups = remember(cards, copies, query, sort, fSet, fRarity, fType, fLang, fCondition, fEdition) {
-        groupCards(cards, byKey)
-            .filter { g ->
-                query.isBlank() || (g.name ?: "").contains(query, true) ||
-                    g.variants.any { it.setCode.contains(query, true) }
-            }
-            .filter { g -> fSet == null || g.variants.any { it.setCode.substringBefore('-') == fSet } }
-            .filter { g -> fRarity == null || g.rarities.contains(fRarity) }
-            .filter { g -> fType == null || g.variants.any { it.type == fType } }
-            .filter { g -> fLang == null || g.variants.any { it.language == fLang } }
-            .filter { g ->
-                fCondition == null || g.variants.any { v ->
-                    byKey[v.printingKey()]?.any { !it.deleted && it.condition == fCondition } == true
+    val groups = remember(cards, copies, query, sort, fSet, fRarity, fType, fLang, fCondition, fEdition, fContainers.toList(), fTags.toList(), containers) {
+        fun copiesOfGroup(g: CardGroup): List<CopyRow> = g.variants.flatMap { byKey[it.printingKey()] ?: emptyList() }
+        fun copyMatchesContainer(cp: CopyRow) = fContainers.isEmpty() || (cp.containerId != null && fContainers.contains(cp.containerId))
+        fun copyMatchesTags(cp: CopyRow): Boolean {
+            if (fTags.isEmpty()) return true
+            val copyTags = Tags.parse(cp.tags).map { it.lowercase() }
+            return fTags.any { copyTags.contains(it.lowercase()) }
+        }
+
+        val out = ArrayList<CardGroup>()
+        for (g0 in groupCards(cards, byKey)) {
+            if (query.isNotBlank() &&
+                !((g0.name ?: "").contains(query, true) || g0.variants.any { it.setCode.contains(query, true) })
+            ) continue
+            if (fSet != null && g0.variants.none { it.setCode.substringBefore('-') == fSet }) continue
+            if (fRarity != null && !g0.rarities.contains(fRarity)) continue
+            if (fType != null && g0.variants.none { it.type == fType }) continue
+            if (fLang != null && g0.variants.none { it.language == fLang }) continue
+            if (fCondition != null && g0.variants.none { v -> byKey[v.printingKey()]?.any { !it.deleted && it.condition == fCondition } == true }) continue
+            if (fEdition != null && g0.variants.none { v -> byKey[v.printingKey()]?.any { !it.deleted && it.edition == fEdition } == true }) continue
+
+            // GRUPPIERUNGSFALLE (Spec B1 §10.4, wie Task 7 am Desktop): diese Liste gruppiert
+            // nach Passcode (eine Gruppe kann mehrere Printings buendeln), Behaelter/Tag sitzen
+            // aber am EXEMPLAR (card_copies). Eine Gruppe bleibt daher sichtbar, sobald
+            // MINDESTENS EIN lebendes Exemplar eines ihrer Printings BEIDE aktiven Filter
+            // ZUGLEICH erfuellt (nicht zwei verschiedene Exemplare je einen) -- der Chip unten
+            // gehoert zu GENAU DIESEM Exemplar, nicht zur Gruppe. Liegen mehrere passende
+            // Exemplare in verschiedenen Behaeltern, zeigt die Zeile bewusst nur das erste.
+            var locationLabel: String? = null
+            if (fContainers.isNotEmpty() || fTags.isNotEmpty()) {
+                val match = copiesOfGroup(g0).firstOrNull { copyMatchesContainer(it) && copyMatchesTags(it) } ?: continue
+                if (fContainers.isNotEmpty()) {
+                    locationLabel = CopyLocation.format(match, containers.find { it.containerId == match.containerId })
                 }
             }
-            .filter { g ->
-                fEdition == null || g.variants.any { v ->
-                    byKey[v.printingKey()]?.any { !it.deleted && it.edition == fEdition } == true
-                }
+            out.add(if (locationLabel != null) g0.copy(locationLabel = locationLabel) else g0)
+        }
+        out.sortedWith(
+            when (sort) {
+                "name" -> compareBy { it.name ?: it.id }
+                "single" -> compareByDescending { it.maxPrice }
+                else -> compareByDescending { it.totalValue }
             }
-            .sortedWith(
-                when (sort) {
-                    "name" -> compareBy { it.name ?: it.id }
-                    "single" -> compareByDescending { it.maxPrice }
-                    else -> compareByDescending { it.totalValue }
-                }
-            )
+        )
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -183,10 +228,20 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                     fLang?.let { ActiveFilterChip(it) { fLang = null } }
                     fCondition?.let { ActiveFilterChip(it) { fCondition = null } }
                     fEdition?.let { ActiveFilterChip(Valuation.EDITION_LABELS[it] ?: it) { fEdition = null } }
+                    fContainers.forEach { id ->
+                        ActiveFilterChip(containers.find { it.containerId == id }?.name ?: id) { fContainers.remove(id) }
+                    }
+                    fTags.forEach { t -> ActiveFilterChip(t) { fTags.remove(t) } }
                 }
             }
             Spacer(Modifier.height(8.dp))
             errorMsg?.let {
+                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                Spacer(Modifier.height(8.dp))
+            }
+            // Unconditional (nicht hinter filterOpen versteckt): ein Ladefehler des Behaelter-/
+            // Tag-Vokabulars darf nicht wie "keine Behaelter/Tags vorhanden" aussehen.
+            vocabError?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(8.dp))
             }
@@ -233,7 +288,22 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                     FilterGroup("Sprache", langOptions, fLang) { fLang = it }
                     FilterGroup("Zustand", Valuation.CONDITIONS, fCondition) { fCondition = it }
                     FilterGroup("Edition", Valuation.EDITIONS, fEdition, { Valuation.EDITION_LABELS[it] ?: it }) { fEdition = it }
-                    TextButton(onClick = { fSet = null; fRarity = null; fType = null; fLang = null; fCondition = null; fEdition = null }) {
+                    // Spec B1 §10.4: Behaelter/Tag mehrfach waehlbar -- deshalb Toggle-Chips
+                    // statt der Einfachauswahl von FilterGroup oben.
+                    if (containers.isNotEmpty()) {
+                        MultiFilterGroup("Behälter", containers.map { it.name to it.containerId }, fContainers) { id ->
+                            if (fContainers.contains(id)) fContainers.remove(id) else fContainers.add(id)
+                        }
+                    }
+                    if (tagOptions.isNotEmpty()) {
+                        MultiFilterGroup("Tags", tagOptions.map { it to it }, fTags) { t ->
+                            if (fTags.contains(t)) fTags.remove(t) else fTags.add(t)
+                        }
+                    }
+                    TextButton(onClick = {
+                        fSet = null; fRarity = null; fType = null; fLang = null; fCondition = null; fEdition = null
+                        fContainers.clear(); fTags.clear()
+                    }) {
                         Text("Alle Filter entfernen")
                     }
                 }
@@ -250,6 +320,20 @@ private fun FilterGroup(title: String, options: List<String>, selected: String?,
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             options.forEach { o ->
                 FilterChip(selected == o, { onSelect(if (selected == o) null else o) }, label = { Text(label(o)) })
+            }
+        }
+    }
+}
+
+// One multi-select filter row: several chips may be active at once (Behälter/Tag, Spec B1
+// §10.4) -- unlike FilterGroup above (single choice), tapping any chip only toggles that one.
+@Composable
+private fun MultiFilterGroup(title: String, options: List<Pair<String, String>>, selected: List<String>, onToggle: (String) -> Unit) {
+    Column {
+        Text(title, style = MaterialTheme.typography.labelMedium, color = Muted)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.forEach { (label, value) ->
+                FilterChip(selected.contains(value), { onToggle(value) }, label = { Text(label) })
             }
         }
     }
@@ -304,6 +388,15 @@ private fun CardGroupItem(group: CardGroup, onOpen: () -> Unit) {
                     Spacer(Modifier.width(10.dp))
                     ValueText(v.price ?: 0.0, style = MaterialTheme.typography.bodySmall)
                 }
+            }
+            // Spec B1 §10.4: nur sichtbar, waehrend ein Behaelterfilter aktiv ist -- gehoert zum
+            // ERSTEN passenden Exemplar (siehe groups oben), nicht zur Gruppe als Ganzes.
+            group.locationLabel?.let {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    it, style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily,
+                    color = Muted, maxLines = 1,
+                )
             }
         }
     }
