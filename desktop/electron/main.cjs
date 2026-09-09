@@ -13,6 +13,7 @@ const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = 
 const { recordPrice } = require('./price-history.cjs');
 const { totalValue, copyCount } = require('./valuation.cjs');
 const copies = require('./copies.cjs');
+const { deleteContainer } = require('./containers-schema.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 
 // Initialize Database
@@ -321,7 +322,16 @@ ipcMain.handle('get-collection', () => {
     return db.prepare(collectionSql()).all({ def_condition: def.condition, def_edition: def.edition });
 });
 ipcMain.handle('get-defaults', () => copies.defaults(db));
-ipcMain.handle('list-copies', (event, printing) => copies.listCopies(db, printing));
+ipcMain.handle('list-copies', (event, printing) => {
+    try { return copies.listCopies(db, printing); }
+    catch (e) { console.error('[list-copies]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
+});
+// Spec B1 Task 7, Fix-Durchlauf 1, Befund 2: EIN Kanal fuer alle lebenden Exemplare der Sammlung,
+// statt dass der Renderer listCopies() je Printing einzeln aufruft.
+ipcMain.handle('list-all-copies', () => {
+    try { return copies.listAllCopies(db); }
+    catch (e) { console.error('[list-all-copies]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
+});
 ipcMain.handle('add-copy', (event, { edition, condition, count, ...printing }) => {
     try { return { success: true, copyIds: copies.addCopies(db, printing, { edition, condition, count }) }; }
     catch (e) { return { success: false, error: e.message }; }
@@ -333,6 +343,51 @@ ipcMain.handle('remove-copy', (event, { edition, condition, count, ...printing }
 ipcMain.handle('update-copy-group', (event, { from, to, ...printing }) => {
     try { return { success: true, changed: copies.updateCopyGroup(db, printing, from, to) }; }
     catch (e) { return { success: false, error: e.message }; }
+});
+
+// Unerwartete Fehler (z.B. ein rohes better-sqlite3-Fehlerobjekt) sollen den Nutzer nie mit
+// englischem Text erreichen: copies.ValidationError traegt bereits eine deutsche, fuer den
+// Nutzer gedachte Meldung und wird unveraendert durchgereicht; alles andere wird durch eine
+// generische deutsche Meldung ersetzt, der Originaltext geht in die Konsole (sonst waere er beim
+// Suchen verloren).
+const CONTAINER_COPY_ERROR_MSG = 'Unerwarteter Datenbankfehler. Bitte versuchen Sie es erneut.';
+function containerCopyErrorMessage(e, channel) {
+    if (e instanceof copies.ValidationError) return e.message;
+    console.error(`[${channel}]`, e);
+    return CONTAINER_COPY_ERROR_MSG;
+}
+
+ipcMain.handle('list-containers', () => {
+    try { return copies.listContainers(db); }
+    catch (e) { console.error('[list-containers]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
+});
+ipcMain.handle('save-container', (event, c) => {
+    try { return { success: true, container_id: copies.saveContainer(db, c) }; }
+    catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'save-container') }; }
+});
+ipcMain.handle('delete-container', (event, containerId) => {
+    try { return { success: true, cleared: deleteContainer(db, containerId) }; }
+    catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'delete-container') }; }
+});
+ipcMain.handle('set-copy-location', (event, loc) => {
+    try { copies.setCopyLocation(db, loc); return { success: true }; }
+    catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'set-copy-location') }; }
+});
+ipcMain.handle('set-copy-tags-note', (event, d) => {
+    try { copies.setCopyTagsNote(db, d); return { success: true }; }
+    catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'set-copy-tags-note') }; }
+});
+ipcMain.handle('delete-copy', (event, d) => {
+    try { copies.deleteCopy(db, d); return { success: true }; }
+    catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'delete-copy') }; }
+});
+ipcMain.handle('list-unsorted-copies', () => {
+    try { return copies.listUnsortedCopies(db); }
+    catch (e) { console.error('[list-unsorted-copies]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
+});
+ipcMain.handle('list-tags', () => {
+    try { return copies.listTags(db); }
+    catch (e) { console.error('[list-tags]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
 });
 
 ipcMain.handle('delete-card', (event, { id, set_code, language, rarity }) => {

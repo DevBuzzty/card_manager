@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { totalValue, copyCount } = require('./valuation.cjs');
+const { CONTAINER_COLS, clearContainerLocations } = require('./containers-schema.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
@@ -12,6 +13,25 @@ const MIRROR_COLS = ['id', 'set_code', 'language', 'name', 'type', 'desc',
 const COPY_COLS = ['copy_id', 'card_id', 'set_code', 'language', 'rarity', 'edition', 'condition', 'deleted',
   'container_id', 'page', 'slot', 'tags', 'note', 'needs_review', 'review_reason', 'for_sale'];
 const COPY_BOOLS = new Set(['deleted', 'needs_review', 'for_sale']);
+
+// CONTAINER_COLS (from containers-schema.cjs) is the full local column set -- used as-is only for
+// schema checks. Neither direction of the sync may touch the two timestamp columns directly, same
+// as MIRROR_COLS/COPY_COLS above: the push payload drops updated_at (Supabase stamps that column
+// server-side, like user_id via auth.uid(), so sending our local value would be pointless) and
+// created_at (same reasoning as the other two streams, neither of which mirrors it: the local
+// value is a naive-UTC SQLite string, the cloud column is timestamptz, and interpreting a
+// timezone-less string server-side risks shifting it — the column already defaults to now()).
+// CONTAINER_LOCAL_COLS is the pull-direction analogue of CONTAINER_PUSH_COLS: applying a pulled
+// row must never write Supabase's own timestamptz string (e.g. "2026-09-05T10:00:00.123456+00:00")
+// into the local, sekundengenaue DATETIME column -- every comparison against it is a string
+// comparison, and 'T' (0x54) sorts above the space (0x20) the local format uses, so a pulled row
+// from an EARLIER day would still satisfy the push cursor's `updated_at > cursor` and get pushed
+// right back. Local rows get their own fresh stamp instead, exactly like MIRROR_COLS/COPY_COLS
+// already do for cards/card_copies (trg_containers_updated in containers-schema.cjs re-stamps
+// updated_at on UPDATE; CURRENT_TIMESTAMP defaults handle INSERT).
+const CONTAINER_BOOLS = new Set(['deleted']);
+const CONTAINER_PUSH_COLS = CONTAINER_COLS.filter(c => c !== 'updated_at' && c !== 'created_at');
+const CONTAINER_LOCAL_COLS = CONTAINER_COLS.filter(c => c !== 'updated_at' && c !== 'created_at');
 
 // Local SQLite row -> remote upsert payload. `updated_at` is server-stamped, never sent.
 function rowToRemote(row) {
@@ -90,6 +110,39 @@ function applyRemoteCopy(db, r) {
   db.prepare(`UPDATE card_copies SET ${sets} WHERE copy_id = @copy_id`).run(l);
 }
 
+function containerToRemote(row) {
+  const out = {};
+  for (const c of CONTAINER_PUSH_COLS) out[c] = CONTAINER_BOOLS.has(c) ? !!row[c] : (row[c] ?? null);
+  return out;
+}
+function remoteToLocalContainer(r) {
+  const out = {};
+  for (const c of CONTAINER_LOCAL_COLS) out[c] = CONTAINER_BOOLS.has(c) ? (r[c] ? 1 : 0) : (r[c] ?? null);
+  out.container_id = String(r.container_id);
+  out.name = out.name || 'Ohne Namen';
+  out.kind = out.kind || 'box';
+  out.sort_order = out.sort_order ?? 0;
+  return out;
+}
+// Ein Behaelter, der bereits geloescht ankommt (ein anderes Geraet hat ihn geloescht, moeglicherweise
+// bevor der Desktop ein inzwischen zugewiesenes Exemplar gezogen hatte), muss dieselbe Aufraeumpflicht
+// ausloesen wie das lokale Loeschen (deleteContainer) -- sonst zeigt ein Exemplar auf einen Behaelter,
+// den es lokal nicht mehr (oder nie) lebend gab, und ist nirgends mehr sichtbar (Befund 1).
+function applyRemoteContainer(db, r) {
+  const l = remoteToLocalContainer(r);
+  const cur = db.prepare('SELECT * FROM containers WHERE container_id = ?').get(l.container_id);
+  if (l.deleted && (!cur || !cur.deleted)) clearContainerLocations(db, l.container_id);
+  if (!cur) {
+    db.prepare(`INSERT INTO containers (${CONTAINER_LOCAL_COLS.join(',')})
+                VALUES (${CONTAINER_LOCAL_COLS.map(c => '@' + c).join(',')})`).run(l);
+    return;
+  }
+  const changed = CONTAINER_LOCAL_COLS.some(c => c !== 'container_id' && (cur[c] ?? null) !== (l[c] ?? null));
+  if (!changed) return;
+  const sets = CONTAINER_LOCAL_COLS.filter(c => c !== 'container_id').map(c => `${c} = @${c}`).join(', ');
+  db.prepare(`UPDATE containers SET ${sets} WHERE container_id = @container_id`).run(l);
+}
+
 function getSetting(db, key) {
   try { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? r.value : null; }
   catch { return null; }
@@ -103,6 +156,24 @@ function setSetting(db, key, value) {
 // doesn't re-dirty local state. Keyed by composite key -> the cloud updated_at we created.
 const recentlyPushed = new Map();
 const recentlyPushedCopies = new Map();
+const recentlyPushedContainers = new Map();
+
+// Apply a page of pulled container rows, skipping any that are the echo of our own push
+// (same container_id, same updated_at as what Supabase just handed back on push). Factored
+// out of pullContainers so the echo-lock behaviour can be unit-tested directly via the
+// _applyPulledContainers export below (see test-sync.cjs).
+function applyPulledContainers(db, rows) {
+  let applied = 0;
+  for (const r of rows) {
+    if (recentlyPushedContainers.get(r.container_id) === r.updated_at) {
+      recentlyPushedContainers.delete(r.container_id);
+      continue;
+    }
+    applyRemoteContainer(db, r);
+    applied++;
+  }
+  return applied;
+}
 
 function startSync(db, getWindow) {
   let client = null;
@@ -239,6 +310,36 @@ function startSync(db, getWindow) {
     setSetting(db, 'sync_copies_last_push', changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor));
   }
 
+  async function pullContainers(c) {
+    const cursor = getSetting(db, 'sync_containers_last_pull') || '1970-01-01T00:00:00Z';
+    const PAGE = 1000; let applied = 0; let lastTs = null;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await c.from('containers').select('*')
+        .gt('updated_at', cursor).order('updated_at', { ascending: true }).order('container_id', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error('Pull containers failed: ' + error.message);
+      if (!data || data.length === 0) break;
+      db.transaction(() => { applied += applyPulledContainers(db, data); })();
+      lastTs = data[data.length - 1].updated_at;
+      if (data.length < PAGE) break;
+    }
+    if (lastTs) setSetting(db, 'sync_containers_last_pull', lastTs);
+    return applied;
+  }
+
+  async function pushContainers(c) {
+    const cursor = getSetting(db, 'sync_containers_last_push') || '1970-01-01T00:00:00Z';
+    const changed = db.prepare("SELECT * FROM containers WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
+    if (changed.length === 0) return;
+    for (let i = 0; i < changed.length; i += 500) {
+      const { data, error } = await c.from('containers')
+        .upsert(changed.slice(i, i + 500).map(containerToRemote), { onConflict: 'container_id' }).select('container_id,updated_at');
+      if (error) throw new Error('Push containers failed: ' + error.message);
+      for (const r of (data || [])) recentlyPushedContainers.set(r.container_id, r.updated_at);
+    }
+    setSetting(db, 'sync_containers_last_push', changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor));
+  }
+
   // Append-only: the desktop pushes price history, never pulls it (phone charts read the cloud table).
   async function pushPriceHistory(c) {
     const cursor = getSetting(db, 'sync_price_history_last_push') || '1970-01-01T00:00:00Z';
@@ -271,13 +372,20 @@ function startSync(db, getWindow) {
       if (!c) { running = false; return; }
       emit('syncing');
       const pulled = await pull(c);
+      // Containers before copies, both ways: a card_copies row can point at a container_id, and
+      // there is deliberately NO foreign key enforcing that the container exists locally (see
+      // containers-schema.cjs). This pull/push order is the only thing that keeps an incoming
+      // copy from ever pointing at a container the desktop doesn't have yet. Do not reorder.
+      const pulledContainers = await pullContainers(c);
       const pulledCopies = await pullCopies(c);
       await push(c);
+      await pushContainers(c);
       await pushCopies(c);
       await pushPriceHistory(c);
       await syncSnapshot(c);
-      if (pulled + pulledCopies > 0) { const w = getWindow(); if (w) w.webContents.send('collection-changed'); }
-      emit('idle', pulled + pulledCopies > 0 ? `pulled ${pulled + pulledCopies}` : 'up to date');
+      const totalPulled = pulled + pulledContainers + pulledCopies;
+      if (totalPulled > 0) { const w = getWindow(); if (w) w.webContents.send('collection-changed'); }
+      emit('idle', totalPulled > 0 ? `pulled ${totalPulled}` : 'up to date');
     } catch (e) {
       // Only drop the session on auth/token failures; keep it through transient
       // network blips so we don't re-authenticate every cycle (rate-limit risk).
@@ -298,4 +406,13 @@ function startSync(db, getWindow) {
   return { ensureClient };
 }
 
-module.exports = { startSync, rowToRemote, remoteToLocalPatch, remoteToLocalFull, applyRemoteRow, copyToRemote, remoteToLocalCopy, applyRemoteCopy };
+module.exports = {
+  startSync, rowToRemote, remoteToLocalPatch, remoteToLocalFull, applyRemoteRow,
+  copyToRemote, remoteToLocalCopy, applyRemoteCopy,
+  containerToRemote, remoteToLocalContainer, applyRemoteContainer,
+  // Test-only hooks into the containers echo-lock (see test-sync.cjs): the module-level map and
+  // apply function that pullContainers itself uses internally. Not called by production code
+  // outside sync.cjs; calling startSync() just to reach them would also start its real timers.
+  _recentlyPushedContainers: recentlyPushedContainers,
+  _applyPulledContainers: applyPulledContainers,
+};

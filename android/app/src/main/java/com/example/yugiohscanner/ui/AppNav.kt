@@ -92,6 +92,9 @@ fun AppNav() {
                     onOpenScan = { nav.navigate(Routes.SCAN) { launchSingleTop = true } },
                     onOpenDeals = { nav.navigateTop(Routes.DEALS) },
                     onOpenEinstellungen = { nav.navigate(Routes.EINSTELLUNGEN) },
+                    // Spec B1 Task 10: der Zähler "Nicht einsortiert" springt gezielt in den
+                    // Binder-Reiter der Sammlung, nicht in den Standard-Reiter "Karten".
+                    onOpenBinder = { nav.navigateTop(Routes.sammlung("binder")) },
                 ) else CloudLoginScreen(prefs) { cloudReady = true }
             }
             composable(

@@ -12,12 +12,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.CircularProgressIndicator
@@ -59,6 +61,7 @@ import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
+import com.example.yugiohscanner.ui.theme.TypeSpell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -77,6 +80,7 @@ fun StartScreen(
     onOpenScan: () -> Unit,
     onOpenDeals: () -> Unit,
     onOpenEinstellungen: () -> Unit,
+    onOpenBinder: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
@@ -88,6 +92,11 @@ fun StartScreen(
     var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+    // Spec B1 §10.5: Zähler „Nicht einsortiert" (Gegenstück zu Start.jsx). Eigener Fehlerzustand
+    // -- listUnsortedCopies() wirft bei einem Ladefehler, ein leerer Fangzweig würde sonst "0
+    // nicht einsortiert" zeigen, wo in Wahrheit einfach nichts geladen werden konnte.
+    var unsortedCount by remember { mutableStateOf(0) }
+    var unsortedError by remember { mutableStateOf(false) }
     val catalogState by CatalogSync.state.collectAsState()
     // Catalog readiness is a SQLite read, so it is hoisted into state instead of being called
     // from composition: this screen recomposes on every Downloading percent tick, and reading
@@ -141,6 +150,11 @@ fun StartScreen(
                 dealAlertCount = alerts.size
                 topDeals = alerts.take(2)
             } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
+
+            try {
+                unsortedCount = CollectionRepository.listUnsortedCopies().size
+                unsortedError = false
+            } catch (e: Exception) { unsortedError = true }
 
             loading = false
         }
@@ -255,6 +269,28 @@ fun StartScreen(
                 QuickAction("Scannen", Icons.Default.CameraAlt, Modifier.weight(1f), onOpenScan)
                 QuickAction("Sammlung", Icons.Default.Style, Modifier.weight(1f), onOpenSammlung)
                 QuickAction("Deals", Icons.Default.Sell, Modifier.weight(1f), onOpenDeals)
+            }
+
+            // Spec B1 §10.5: Zähler „Nicht einsortiert", springt in den Binder-Reiter der
+            // Sammlung. TypeSpell (bereits Teil der Theme-Palette, u.a. in BindersScreen.kt
+            // als Farbvoreinstellung) statt einer neuen Farbe -- hebt sich von Primary (Scannen/
+            // Sammlung) und Gold (Gesamtwert) ab, genau wie "frame-spell" es am Desktop tut.
+            SpaceCard(Modifier.fillMaxWidth().clickable { onOpenBinder() }) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Inbox, null, tint = TypeSpell)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            if (unsortedError) "—" else "$unsortedCount",
+                            style = MaterialTheme.typography.titleLarge, fontFamily = MonoFontFamily,
+                            fontWeight = FontWeight.Bold, color = TypeSpell,
+                        )
+                        Text(
+                            "Nicht einsortiert" + if (unsortedError) " (Ladefehler)" else "",
+                            style = MaterialTheme.typography.labelSmall, color = Muted,
+                        )
+                    }
+                }
             }
 
             // Deals.

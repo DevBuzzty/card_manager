@@ -3,10 +3,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import CustomSelect from './CustomSelect';
 import Flag from './Flag';
+import CopySheet from './CopySheet';
 import { groupCopies, valueOf, CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
+import { parseTags } from '../utils/tags';
 import { fmtEUR } from '../utils/format';
 import { printingFromParams, cardRoute, ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
+import { formatCopyLocation } from '../utils/copyLocation';
 
 export default function CardDetailPanel({ paletteOpen = false }) {
   const params = useParams();
@@ -20,6 +23,8 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   const [selectedNewSet, setSelectedNewSet] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [copiesByKey, setCopiesByKey] = useState({}); // "set|rarity|lang" -> [copy rows]
+  const [containers, setContainers] = useState([]); // fuer den Standort-Chip -- Name/Art je Behaelter
+  const [sheetCopy, setSheetCopy] = useState(null); // das im Exemplar-Sheet geoeffnete Exemplar, oder null
   const vKey = (v) => `${v.set_code}|${v.rarity}|${v.language || 'DE'}`;
   const printingOf = (v) => ({ id: String(card.id), set_code: v.set_code, language: v.language || 'DE', rarity: v.rarity });
 
@@ -47,13 +52,29 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   };
 
   useEffect(() => {
-    // The palette owns Escape while it is open — otherwise one press closes it and navigates the
-    // panel away in the same keystroke.
-    if (paletteOpen) return;
+    // The palette owns Escape while it is open, and so does the CopySheet -- otherwise one press
+    // closes it and navigates the panel away in the same keystroke.
+    if (paletteOpen || sheetCopy) return;
     const onKey = (e) => { if (e.key === 'Escape') close(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [paletteOpen, close]);
+  }, [paletteOpen, sheetCopy, close]);
+
+  // Fuer den Standort-Chip -- welche Behaelter es gibt und wie sie heissen. window.api fehlt im
+  // reinen Browser-Modus; list-containers wirft bei einem DB-Fehler statt {success:false} zu
+  // liefern (main.cjs), der Chip faellt dann defensiv auf „—" zurueck statt die Ansicht zu sprengen.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const c = await window.api?.listContainers?.();
+        if (alive) setContainers(Array.isArray(c) ? c : []);
+      } catch {
+        if (alive) setContainers([]);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   const reloadCopies = async (variants) => {
       if (!window.api?.listCopies) return;
@@ -175,6 +196,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   const levelLabel = isLink ? 'Link Rating' : (isXYZ ? 'Rank' : 'Level');
 
   return (
+    <>
     <aside className="w-[420px] shrink-0 h-full overflow-y-auto custom-scrollbar bg-obsidian-800 border-l border-line p-6 flex flex-col gap-5">
       <div className="flex items-center gap-2">
         <button onClick={() => goRelative(-1)} disabled={idx <= 0}
@@ -251,8 +273,12 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                       </div>
 
                       <div>
-                          {groupCopies(copiesByKey[vKey(variant)] || []).map(g => (
-                              <div key={`${g.edition}|${g.condition}`} className="flex items-center gap-2 py-1 flex-wrap">
+                          {groupCopies(copiesByKey[vKey(variant)] || []).map(g => {
+                              const groupRows = (copiesByKey[vKey(variant)] || [])
+                                  .filter(c => (c.edition || 'unknown') === g.edition && (c.condition || 'NM') === g.condition);
+                              return (
+                              <div key={`${g.edition}|${g.condition}`} className="py-1">
+                              <div className="flex items-center gap-2 flex-wrap">
                                   <div className="flex items-center bg-[#1E1E1E] rounded border border-gray-600">
                                       <button onClick={() => changeGroup(variant, g, -1)} className="p-1 hover:bg-gray-700 rounded-l text-gray-400 hover:text-white"><Minus className="w-3 h-3" /></button>
                                       <span className="w-8 text-center font-mono text-sm font-bold">{g.count}×</span>
@@ -268,7 +294,25 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   </select>
                                   <span className="ml-auto font-mono text-xs text-gold">{fmtEUR(valueOf(variant.price, [g]))}</span>
                               </div>
-                          ))}
+                              {/* Spec B1 §7.3: je Exemplar der Gruppe eine Zeile mit Standort- und Tag-Chips; ein Klick oeffnet das Exemplar-Sheet. */}
+                              <div className="mt-1 space-y-1">
+                                  {groupRows.map(c => (
+                                      <button key={c.copy_id} type="button" onClick={() => setSheetCopy(c)}
+                                          className="w-full flex items-center gap-2 px-2 py-1 rounded-lg bg-black/20 hover:bg-black/40 border border-gray-800 text-left transition-colors">
+                                          <span className="text-[11px] text-gray-400 font-mono truncate">
+                                              {formatCopyLocation(c, containers.find(ct => ct.container_id === c.container_id))}
+                                          </span>
+                                          <div className="ml-auto flex gap-1 flex-wrap justify-end">
+                                              {parseTags(c.tags).map(t => (
+                                                  <span key={t} className="px-1.5 py-0.5 rounded-full bg-space-violet/15 text-space-violet text-[10px] border border-space-violet/30">{t}</span>
+                                              ))}
+                                          </div>
+                                      </button>
+                                  ))}
+                              </div>
+                              </div>
+                              );
+                          })}
                           <button onClick={() => addStandardCopy(variant)} className="mt-1 text-xs text-gray-400 hover:text-space-violet flex items-center gap-1">
                               <Plus className="w-3 h-3" /> Exemplar hinzufügen
                           </button>
@@ -358,5 +402,14 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           </p>
       </div>
     </aside>
+
+    {sheetCopy && (
+        <CopySheet
+            copy={sheetCopy}
+            onClose={() => setSheetCopy(null)}
+            onSaved={() => refreshVariant({ set_code: sheetCopy.set_code, rarity: sheetCopy.rarity, language: sheetCopy.language })}
+        />
+    )}
+    </>
   );
 }

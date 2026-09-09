@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.Tags
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -20,6 +21,10 @@ class NotMigratedException(message: String) : RuntimeException(message)
 // so the phone inserts or soft-deletes copies rather than PATCHing quantity directly.
 object CollectionRepository {
     private const val PAGE = 1000
+
+    // Spec B1: die fuenf Standort-/Tag-Felder gehoeren zu jedem card_copies-Read dazu.
+    private const val COPY_COLS =
+        "copy_id,card_id,set_code,language,rarity,edition,condition,deleted,container_id,page,slot,tags,note"
 
     // PostgREST caps every response at a server-side max (1000 rows by default), so a single
     // GET silently truncates a large collection — the newest rows fall off the end and never
@@ -75,7 +80,7 @@ object CollectionRepository {
     // Single-page fetch of one card's live copies, for the detail screen.
     suspend fun loadCopiesFor(cardId: String): List<CopyRow> = withContext(Dispatchers.IO) {
         val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "copy_id,card_id,set_code,language,rarity,edition,condition,deleted")
+            .addQueryParameter("select", COPY_COLS)
             .addQueryParameter("card_id", "eq.$cardId")
             .addQueryParameter("deleted", "eq.false")
             .build()
@@ -95,7 +100,7 @@ object CollectionRepository {
         var offset = 0
         while (true) {
             val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
-                .addQueryParameter("select", "copy_id,card_id,set_code,language,rarity,edition,condition,deleted")
+                .addQueryParameter("select", COPY_COLS)
                 .addQueryParameter("deleted", "eq.false")
                 .addQueryParameter("order", "copy_id.asc")
                 .addQueryParameter("limit", PAGE.toString())
@@ -115,7 +120,7 @@ object CollectionRepository {
 
     private suspend fun copiesOf(p: CardRow, edition: String? = null, condition: String? = null): List<CopyRow> = withContext(Dispatchers.IO) {
         val b = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "copy_id,card_id,set_code,language,rarity,edition,condition,deleted")
+            .addQueryParameter("select", COPY_COLS)
             .addQueryParameter("card_id", "eq.${p.id}")
             .addQueryParameter("set_code", "eq.${p.setCode}")
             .addQueryParameter("language", "eq.${p.language}")
@@ -190,7 +195,112 @@ object CollectionRepository {
             setCode = o.optString("set_code", "Unknown"), language = o.optString("language", "DE"),
             rarity = o.optString("rarity", "Unknown"), edition = o.optString("edition", "unknown"),
             condition = o.optString("condition", "NM"), deleted = o.optBoolean("deleted", false),
+            containerId = if (o.isNull("container_id")) null else o.optString("container_id"),
+            page = if (o.isNull("page")) null else o.optInt("page"),
+            slot = if (o.isNull("slot")) null else o.optInt("slot"),
+            tags = if (o.isNull("tags")) null else o.optString("tags"),
+            note = if (o.isNull("note")) null else o.optString("note"),
         )
+    }
+
+    // Bindet die "Box und Deckbox haben keine Seiten"-Regel an den Aufruf selbst, nicht an die
+    // Oberflaeche -- genau wie setCopyLocation() in desktop/electron/copies.cjs. Ein Behaelter,
+    // der kein `binder` ist (oder gar keiner), bekommt niemals page/slot.
+    private suspend fun containerKind(containerId: String): String? = withContext(Dispatchers.IO) {
+        val url = "${SupabaseCloud.base()}/rest/v1/containers".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "kind")
+            .addQueryParameter("container_id", "eq.$containerId")
+            .addQueryParameter("deleted", "eq.false")
+            .build()
+        executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
+            val text = resp.body?.string() ?: "[]"
+            if (!resp.isSuccessful) throw RuntimeException("Behälter nachschlagen fehlgeschlagen (${resp.code}): $text")
+            val arr = JSONArray(text)
+            if (arr.length() == 0) null else arr.getJSONObject(0).optString("kind")
+        }
+    }
+
+    suspend fun setCopyLocation(copyId: String, containerId: String?, page: Int?, slot: Int?) = withContext(Dispatchers.IO) {
+        val isBinder = containerId != null &&
+            (containerKind(containerId) ?: throw RuntimeException("Behälter nicht gefunden.")) == "binder"
+        val body = JSONObject()
+            .put("container_id", containerId ?: JSONObject.NULL)
+            .put("page", if (isBinder) (page ?: JSONObject.NULL) else JSONObject.NULL)
+            .put("slot", if (isBinder) (slot ?: JSONObject.NULL) else JSONObject.NULL)
+        patchCopy(copyId, body)
+    }
+
+    // Schreibt Tags ausschliesslich ueber Tags.serialize() -- nie eine selbst gebaute Zeichenkette.
+    suspend fun setCopyTagsNote(copyId: String, tags: List<String>, note: String?) = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("tags", Tags.serialize(tags) ?: JSONObject.NULL)
+            .put("note", note ?: JSONObject.NULL)
+        patchCopy(copyId, body)
+    }
+
+    // Copy_id-genauer Soft-Delete -- das exemplarbezogene Gegenstueck zu removeCopies() (waehlt
+    // ueber Edition/Zustand/Erstellzeit aus einer ganzen Gruppe). Seit jedes Exemplar eigene
+    // Standort-, Tag- und Notizdaten traegt, ist es NICHT mehr egal, welches physische Exemplar
+    // geloescht wird -- CopySheet kennt die copy_id des geoeffneten Exemplars und muss genau
+    // dieses treffen (derselbe Fehler war am Desktop in Task 6, Befund A, kritisch). Niemals hart
+    // loeschen; `updated_at` wird serverseitig gestempelt, also nicht mitgeschickt -- gleiches
+    // Muster wie setCopyLocation/setCopyTagsNote oben (patchCopy uebernimmt Fehlerbehandlung und
+    // Neuanmeldung).
+    suspend fun deleteCopy(copyId: String) = withContext(Dispatchers.IO) {
+        patchCopy(copyId, JSONObject().put("deleted", true))
+    }
+
+    // Lebende Exemplare ohne Behaelter (fuer den Einsortier-Modus, Task 9/10).
+    suspend fun listUnsortedCopies(): List<CopyRow> = withContext(Dispatchers.IO) {
+        val out = ArrayList<CopyRow>()
+        var offset = 0
+        while (true) {
+            val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
+                .addQueryParameter("select", COPY_COLS)
+                .addQueryParameter("deleted", "eq.false")
+                .addQueryParameter("container_id", "is.null")
+                .addQueryParameter("order", "created_at.asc,copy_id.asc")
+                .addQueryParameter("limit", PAGE.toString())
+                .addQueryParameter("offset", offset.toString())
+                .build()
+            val page = executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
+                val text = resp.body?.string() ?: "[]"
+                if (!resp.isSuccessful) throw RuntimeException("Unsortierte Exemplare laden fehlgeschlagen (${resp.code}): $text")
+                parseCopies(JSONArray(text))
+            }
+            out.addAll(page)
+            if (page.size < PAGE) break
+            offset += PAGE
+        }
+        out
+    }
+
+    // Vorschlagsliste ueber alle lebenden Exemplare: jede Zeile geht durch Tags.parse, die
+    // Zusammenfuehrung ueber alle Zeilen durch Tags.add -- kein eigenes Zerlegen/Entdoppeln hier.
+    suspend fun listTags(): List<String> = withContext(Dispatchers.IO) {
+        var result = emptyList<String>()
+        var offset = 0
+        while (true) {
+            val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
+                .addQueryParameter("select", "tags")
+                .addQueryParameter("deleted", "eq.false")
+                .addQueryParameter("tags", "not.is.null")
+                .addQueryParameter("order", "created_at.asc,copy_id.asc")
+                .addQueryParameter("limit", PAGE.toString())
+                .addQueryParameter("offset", offset.toString())
+                .build()
+            val arr = executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
+                val text = resp.body?.string() ?: "[]"
+                if (!resp.isSuccessful) throw RuntimeException("Tags laden fehlgeschlagen (${resp.code}): $text")
+                JSONArray(text)
+            }
+            for (i in 0 until arr.length()) {
+                for (t in Tags.parse(arr.getJSONObject(i).optString("tags", ""))) result = Tags.add(result, t)
+            }
+            if (arr.length() < PAGE) break
+            offset += PAGE
+        }
+        result.sortedWith(String.CASE_INSENSITIVE_ORDER)
     }
 
     suspend fun softDelete(row: CardRow) = withContext(Dispatchers.IO) {

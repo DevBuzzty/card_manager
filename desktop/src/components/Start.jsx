@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning, Award } from 'lucide-react';
+import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning, Award, PackageOpen } from 'lucide-react';
 import CardTile from './CardTile';
 import SetCompletion from './SetCompletion';
 import { fmtEUR, fmtSignedEUR } from '../utils/format';
@@ -13,12 +13,20 @@ export default function Start({ onOpenPalette }) {
   const [cards, setCards] = useState([]);
   const [history, setHistory] = useState([]);
   const [quickAddCode, setQuickAddCode] = useState('');
+  const [unsortedCount, setUnsortedCount] = useState(0);
+  // list-unsorted-copies WIRFT bei einem DB-Fehler statt {success:false} zu liefern (main.cjs) --
+  // ohne diesen eigenen Fehlerzustand saehe ein Ladefehler wie "0 nicht einsortiert" aus, genau
+  // der Fehler, der bei Binders.jsx (Task 5) erst nachtraeglich behoben werden musste.
+  const [unsortedError, setUnsortedError] = useState(false);
 
   useEffect(() => {
     if (!window.api) return;
     window.api.getPortfolio().then(d => setStats(d || { totalValue: 0, totalCards: 0, uniqueCards: 0 }));
     window.api.getCollection().then(c => setCards(c || []));
     window.api.getPriceHistory().then(h => setHistory(h || []));
+    (window.api.listUnsortedCopies?.() ?? Promise.resolve([]))
+      .then(u => { setUnsortedCount(Array.isArray(u) ? u.length : 0); setUnsortedError(false); })
+      .catch(() => setUnsortedError(true));
   }, []);
 
   const recent = useMemo(
@@ -156,7 +164,7 @@ export default function Start({ onOpenPalette }) {
             <div className="w-9 h-9 rounded-lg grid place-items-center bg-good/10 border border-good/30"><ScanLine className="w-5 h-5 text-good" strokeWidth={1.8} /></div>
             <div><div className="text-sm font-bold text-ink">Bereit zum Scannen</div><div className="text-xs text-ink-muted">Handy-Kamera auf eine Karte richten</div></div>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button onClick={() => navigate(ROUTES.karten)} className="flex-1 text-left rounded-xl p-3 border border-space-violet/30 bg-space-violet/5 hover:bg-space-violet/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-violet-soft"><TriangleAlert className="w-4 h-4" />{unknownCount}</div>
               <div className="text-[11px] text-ink-muted mt-0.5">Unbekanntes Set</div>
@@ -164,6 +172,10 @@ export default function Start({ onOpenPalette }) {
             <button onClick={() => navigate(ROUTES.karten)} className="flex-1 text-left rounded-xl p-3 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-gold"><FileWarning className="w-4 h-4" />{incompleteCount}</div>
               <div className="text-[11px] text-ink-muted mt-0.5">Fehlende Daten</div>
+            </button>
+            <button onClick={() => navigate(ROUTES.binder)} className="flex-1 text-left rounded-xl p-3 border border-frame-spell/30 bg-frame-spell/5 hover:bg-frame-spell/10 transition-colors">
+              <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-frame-spell"><PackageOpen className="w-4 h-4" />{unsortedError ? '—' : unsortedCount}</div>
+              <div className="text-[11px] text-ink-muted mt-0.5">Nicht einsortiert{unsortedError ? ' (Ladefehler)' : ''}</div>
             </button>
           </div>
           <button onClick={() => navigate(ROUTES.scannen)} className="mt-auto flex items-center justify-center gap-2 bg-gradient-to-br from-space-violet to-space-violet-dark text-white font-display font-semibold text-sm py-3 rounded-xl shadow-[0_10px_24px_-10px_#9D00FF]">

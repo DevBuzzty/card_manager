@@ -10,7 +10,8 @@ import java.io.File
 
 class ValuationTest {
     private fun copy(cond: String, ed: String = "unknown") =
-        CopyRow("id-$cond-$ed-${System.nanoTime()}", "1", "LOB-DE001", "DE", "Ultra Rare", ed, cond, false)
+        CopyRow("id-$cond-$ed-${System.nanoTime()}", "1", "LOB-DE001", "DE", "Ultra Rare", ed, cond, false,
+            containerId = null, page = null, slot = null, tags = null, note = null)
 
     @Test
     fun factorsMatchTheSharedJsonFile() {

@@ -2,6 +2,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const { ensureCopiesSchema, backfillCopies, reconcileCopies } = require('./copies-schema.cjs');
+const { ensureContainersSchema } = require('./containers-schema.cjs');
 
 let db;
 
@@ -275,6 +276,7 @@ function runMigrations() {
 
         // Spec A: physical copies + price history + cross-spec columns. Backfill is desktop-only and guarded.
         ensureCopiesSchema(db);
+        ensureContainersSchema(db);
         const bf = backfillCopies(db);
         if (!bf.skipped) console.log(`Copies backfill: created ${bf.created} copies from quantities.`);
         const rc = reconcileCopies(db);
