@@ -184,6 +184,16 @@ function detailsFromApi(apiCard) {
 
 ipcMain.handle('get-ip-address', () => getLocalIpAddress());
 
+// Spec D4 §6.4: der PC meldet dem Handy, dass es eine Karte wieder freigeben darf -- nach dem
+// Uebernehmen, dem Verwerfen und dem Alles-Verwerfen. Ohne das waechst die Merkliste des Handys
+// unbegrenzt, sobald der PC das Staging fuehrt, und dieselbe Karte waere in einem spaeteren
+// Stapel nie wieder scannbar. Ist kein Handy verbunden, ist das emit wirkungslos -- kein Sonderfall.
+ipcMain.handle('release-staged', (_e, passcodes) => {
+  if (!io || !Array.isArray(passcodes) || passcodes.length === 0) return { success: true };
+  io.emit('staging_released', { passcodes: passcodes.map(String) });
+  return { success: true };
+});
+
 // --- Deal-scraper: watches + alerts (Supabase cloud — same source as the phone) ---
 async function dealsClient() {
     const c = sync && await sync.ensureClient();

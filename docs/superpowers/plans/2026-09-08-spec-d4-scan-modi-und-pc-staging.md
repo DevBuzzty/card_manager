@@ -29,7 +29,7 @@
 | Kotlin-Unit-Tests | `cd android && ./gradlew :app:testDebugUnitTest` |
 | Ein einzelner Kotlin-Test | `cd android && ./gradlew :app:testDebugUnitTest --tests '*ScanAggregatorTest*'` |
 | Kotlin kompiliert | `cd android && ./gradlew :app:compileDebugKotlin` |
-| Desktop-Modultests | `cd desktop && node --test src/utils/` |
+| Desktop-Modultests | `cd desktop && node --test src/utils/*.test.js src/utils/*.test.mjs` |
 | Desktop-Lint | `cd desktop && npm run lint` |
 
 ## File Structure
@@ -243,7 +243,9 @@ object ScanAggregator {
         if (wanted == primaryKey) return Target.Primary
         val i = extras.indexOfFirst { it != null && key(it) == wanted }
         if (i >= 0) return Target.Extra(i)
-        return Target.NewExtra(scanned)
+        // key(scanned) war oben nicht null, also ist scanned selbst hier nicht null; der Compiler
+        // sieht das durch den Funktionsaufruf hindurch nicht, daher die Zusicherung.
+        return Target.NewExtra(scanned!!)
     }
 }
 ```
@@ -256,7 +258,7 @@ Expected: PASS, 9 Tests.
 - [ ] **Step 5: Gesamte Kotlin-Testsuite laufen lassen**
 
 Run: `cd android && ./gradlew :app:testDebugUnitTest`
-Expected: PASS — die vorhandenen 17 Testklassen bleiben grün.
+Expected: PASS — die vorhandenen 16 Testklassen bleiben grün.
 
 - [ ] **Step 6: Commit**
 
@@ -496,7 +498,7 @@ In der Overlay-Zeile **vor** dem Fokus-Knopf (ca. Zeile 655) einfügen:
                     com.example.yugiohscanner.Prefs.setScanMode(context, scanMode)
                     Toast.makeText(
                         context,
-                        if (scanMode == "stapel") "Stapel: Wiederholungen zaehlen"
+                        if (scanMode == "stapel") "Stapel: Wiederholungen zählen"
                         else "Einzeln: jede Karte einmal",
                         Toast.LENGTH_SHORT,
                     ).show()
@@ -538,7 +540,7 @@ In `ScanScreen.kt` direkt hinter `stageScan` einfügen. Sie löst **ohne Netz** 
             extras = entry.extraPrintings.map { it.selectedSet },
             scanned = match.selected,
         )
-        // Was rueckgaengig gemacht werden muesste, wird hier festgehalten -- nach dem Buchen ist
+        // Was rueckgaengig gemacht werden muesste (Objekt, nicht Index), wird hier festgehalten -- nach dem Buchen ist
         // aus dem Zustand nicht mehr ablesbar, WELCHE Zeile dieses eine "+1" bekommen hat.
         val added: ExtraPrinting? = when (target) {
             is ScanAggregator.Target.Primary -> { entry.quantity++; null }
@@ -557,7 +559,7 @@ In `ScanScreen.kt` direkt hinter `stageScan` einfügen. Sie löst **ohne Netz** 
         val name = entry.base?.name ?: pc
         scope.launch {
             val r = snackbar.showSnackbar(
-                message = "$name ×$menge", actionLabel = "rueckgaengig",
+                message = "$name ×$menge", actionLabel = "rückgängig",
                 duration = SnackbarDuration.Short,
             )
             if (r != SnackbarResult.ActionPerformed) return@launch
@@ -577,7 +579,11 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarResult
 ```
 
-**Zum Rückgängig bei `Extra`:** Der Index bleibt gültig, weil zwischen Buchen und Rückgängig nur *angehängt* werden kann (`extraPrintings.add`) — die Staging-Liste entfernt Zusatzzeilen nur durch eine Nutzeraktion im Sheet, und das Sheet ist beim Scannen geschlossen. Sinkt die Menge dabei auf 0, bleibt die Zeile stehen; sie stand vor diesem Scan schon da und ist nicht diese Buchung.
+**Zum Rückgängig: kein Index darf das Snackbar überleben.** Der ursprüngliche Entwurf hob `target.index` auf und indizierte beim Antippen neu in die *dann aktuelle* Liste, begründet damit, zwischen Buchen und Rückgängig könne nur angehängt werden, weil das Prüfen-Blatt beim Scannen geschlossen sei. **Diese Begründung ist falsch** und wurde im Review widerlegt: `showSheet = true` hält weder Kamera noch Analyzer an, und im Blatt gibt es zwei echte Lösch-Aktionen — `entries.remove(entry)` (`ScanStagingScreen.kt:156`) und `entry.extraPrintings.remove(ep)` (`ScanStagingScreen.kt:269`). Löscht der Nutzer dazwischen eine frühere Zusatzzeile, rutschen die Indizes: das Rückgängig trifft die falsche Zeile oder fliegt mit `IndexOutOfBoundsException` aus der Koroutine.
+
+Gemerkt wird deshalb das betroffene **Objekt**, nicht seine Position: bei `Primary` der Eintrag selbst, bei `Extra` und `NewExtra` das jeweilige `ExtraPrinting`. Vor der Rücknahme wird per Identitätsvergleich geprüft, ob das Ziel überhaupt noch in der Liste steht — ist es weg, hat der Nutzer es selbst gelöscht, und das Rückgängig tut nichts, statt zu werfen. `ScanAggregator.Target.Extra(index)` bleibt unverändert; der Index wird nur **sofort beim Buchen** zum Objekt aufgelöst.
+
+Sinkt eine Menge dabei auf 0, bleibt die Zeile stehen; sie stand vor diesem Scan schon da und ist nicht diese Buchung.
 
 - [ ] **Step 4: Die Erfassungsweiche einziehen**
 
@@ -621,7 +627,7 @@ Expected: beides PASS.
 1. Modus **Einzeln** (Symbol weiß): dieselbe Karte zweimal über die Kamera ziehen → **ein** Eintrag, Menge 1. Unverändertes heutiges Verhalten.
 2. Modus **Stapel** (Symbol gelb): dieselbe Karte zweimal → **ein** Eintrag, Menge **2**, dazwischen die Meldung „«Name» ×2".
 3. Modus **Stapel**: zwei verschiedene Drucke derselben Karte (z. B. eine deutsche und eine englische) → **ein** Eintrag mit Hauptdruck **und** einer Zusatzzeile, jede Menge 1.
-4. Modus **Stapel**: nach einem „+1" auf „rueckgaengig" tippen → die Menge steht wieder auf 1.
+4. Modus **Stapel**: nach einem „+1" auf „rückgängig" tippen → die Menge steht wieder auf 1.
 5. App beenden und neu starten → der Modus steht noch so, wie er zuletzt war.
 
 - [ ] **Step 7: Commit**
@@ -1190,8 +1196,8 @@ Und den Rumpf von `onCardScanned` (ca. Zeile 36–68) ersetzen:
 
 - [ ] **Step 6: Alle Desktop-Tests und Lint**
 
-Run: `cd desktop && node --test src/utils/`
-Expected: PASS — die vorhandenen Tests (13 in `setCodeMatch.test.js`, dazu `i18n-de`, `rarity`, `routes`, `valuation`) bleiben grün, plus die 11 neuen.
+Run: `cd desktop && node --test src/utils/*.test.js src/utils/*.test.mjs`
+Expected: PASS — **28 Tests**: die 17 vorhandenen (13 davon in `setCodeMatch.test.js`) bleiben grün, plus die 11 neuen.
 
 Run: `cd desktop && npm run lint`
 Expected: **genau 5** Fehler — die bekannte Baseline.

@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -81,19 +83,20 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
 import java.util.Locale
+import com.example.yugiohscanner.ml.ScanConfidence
 
 // Catalog rows (Task 9: catalog first, network as fallback) map onto the same CardRow/SetOption
 // shapes the network path already produces, so downstream code (ScanStagingEntry, the staging
 // sheet, SetCodeMatch) doesn't need to know which source resolved a scan. Mirrors the conventions
 // CardSearchRepository.parseData uses for a fresh network hit: no exact printing chosen yet
 // ("Unknown"), German-first name.
-private fun CatalogCard.toCardRow() = CardRow(
+internal fun CatalogCard.toCardRow() = CardRow(
     id = id, setCode = "Unknown", language = "DE", name = nameDe, imageUrl = image,
     rarity = null, quantity = 0, price = null, type = type, desc = descDe,
     atk = atk, def = def, level = level, race = race, attribute = attribute,
 )
 
-private fun CatalogPrinting.toSetOption() = SetOption(setCode = code, rarity = rarity, price = 0.0, language = lang ?: "EN", verified = verified)
+internal fun CatalogPrinting.toSetOption() = SetOption(setCode = code, rarity = rarity, price = 0.0, language = lang ?: "EN", verified = verified)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,6 +125,12 @@ fun ScanScreen(onClose: () -> Unit) {
         }
     }
 
+    // Passcodes already captured this session (phone-staged OR sent to desktop). Dedup so panning
+    // over a card captures it once and re-detections don't spam. Committed passcodes are dropped
+    // again when a batch is taken over. Concurrent: the analyzer thread adds while the main thread
+    // adds (manual entry) and removes.
+    val seen = remember { ConcurrentHashMap.newKeySet<String>() }
+
     val connectSocket = { ip: String ->
         try {
             val newSocket = IO.socket("http://$ip:4000")
@@ -131,6 +140,14 @@ fun ScanScreen(onClose: () -> Unit) {
             }
             newSocket.on(Socket.EVENT_DISCONNECT) {
                 isConnected = false
+            }
+            // Spec D4 §6.4: der PC hat diese Karten uebernommen oder verworfen -- sie duerfen
+            // wieder gescannt werden. Laeuft auf dem Socket-Thread; `seen` ist ein
+            // ConcurrentHashMap-Set und genau dafuer da.
+            newSocket.on("staging_released") { args ->
+                val obj = args.firstOrNull() as? JSONObject ?: return@on
+                val arr = obj.optJSONArray("passcodes") ?: return@on
+                for (i in 0 until arr.length()) seen.remove(arr.optString(i))
             }
             newSocket.connect()
             socket = newSocket
@@ -166,6 +183,12 @@ fun ScanScreen(onClose: () -> Unit) {
 
     var lastScannedCode by remember { mutableStateOf<String?>(null) }
     var isFlashOn by remember { mutableStateOf(false) }
+    // Spec D4 §6.3: Fortschrittsanzeige bei verbundenem PC. `sentCount` zaehlt gesendete Karten
+    // seit Scannerstart und wird von der Freigabe NICHT verringert -- es ist eine Fortschritts-,
+    // keine Bestandsanzeige. `lastLight` ist die Ampel des zuletzt gesendeten Scans.
+    var sentCount by remember { mutableIntStateOf(0) }
+    var lastLight by remember { mutableStateOf<ScanConfidence.Light?>(null) }
+    var scanMode by remember { mutableStateOf(com.example.yugiohscanner.Prefs.scanMode(context)) }
     var isFocusLocked by remember { mutableStateOf(false) }
     var showManualEntry by remember { mutableStateOf(false) }
     var manualCode by remember { mutableStateOf("") }
@@ -180,11 +203,6 @@ fun ScanScreen(onClose: () -> Unit) {
     // Full-screen "capture" flash — the screen blinks each time a card is recognised, so you can
     // just keep panning without watching the status text.
     val flash = remember { Animatable(0f) }
-    // Passcodes already captured this session (phone-staged OR sent to desktop). Dedup so panning
-    // over a card captures it once and re-detections don't spam. Committed passcodes are dropped
-    // again when a batch is taken over. Concurrent: the analyzer thread adds while the main thread
-    // adds (manual entry) and removes.
-    val seen = remember { ConcurrentHashMap.newKeySet<String>() }
 
     // Phone-side scan staging — a scan always lands here; a connected desktop additionally gets a
     // mirror of the scan (see onConfirmed below).
@@ -214,100 +232,220 @@ fun ScanScreen(onClose: () -> Unit) {
             condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
         }
         stagingCards.add(entry)
-        // Spec D3 Task 7: assemble the traffic light from this scan's evidence and apply it to
-        // `entry` -- both branches below need the exact same three lines, so it's pulled out once.
-        // Reads `entry.knownSets`, which both branches below already set BEFORE calling this (same
-        // list `match` was itself matched against) -- see ScanConfidence.fromEvidence's own doc on
-        // why the full known-sets list, not `match.candidates`, is what RarityRank needs.
-        // `.effectiveEdition` always overwrites `entry.edition` here because this is the entry's
-        // FIRST resolve: `userTouched` cannot yet be true (the user has had no chance to edit an
-        // entry that just appeared), the same reasoning that already lets `.selectedSet` below be
-        // set unconditionally on first resolve. The silent-improvement loop (below, Task 6) is
-        // where a later resolve must respect `userTouched` instead.
-        fun applyConfidence(match: SetCodeMatch.MatchResult) {
-            val confidence = com.example.yugiohscanner.ml.ScanConfidence.fromEvidence(
-                match, entry.knownSets, editionTexts, com.example.yugiohscanner.Prefs.defaultEdition(context),
-            )
-            entry.confidence = confidence
-            entry.edition = confidence.effectiveEdition
-            logScanDecision("erst", pc, match, confidence, entry.knownSets)
-        }
-        // Spec D3 Task 8 (plan Section 6.5): mirrors the phone's ALREADY-RESOLVED conclusion to a
-        // connected desktop -- setCode/rarity/language/edition, the traffic light and its German
-        // reason verbatim -- so the desktop shows the SAME preselection instead of re-matching the
-        // candidates itself against a card it never saw the band text of. Sent once `applyConfidence`
-        // has run (both branches below), not eagerly at scan time the way the old mirror was: none
-        // of this is known until the printing list is resolved and SetCodeMatch/ScanConfidence have
-        // judged it. An older desktop build ignores the extra fields it doesn't recognise; a newer
-        // desktop talking to an older phone that never sends them falls back to its own local match
-        // (see StagingArea.jsx's own comment on that fallback).
-        fun mirrorToDesktop(match: SetCodeMatch.MatchResult) {
-            val mirrorSocket = socket
-            if (!isConnected || mirrorSocket == null) return
-            val confidence = entry.confidence ?: return // applyConfidence always ran first; guards a future call-order change
-            val data = JSONObject().put("passcode", pc)
-            val selected = match.selected
-            if (selected != null) {
-                data.put("setCode", selected.setCode)
-                data.put("rarity", selected.rarity)
-                data.put("language", selected.language)
-            }
-            if (match.candidates.isNotEmpty()) {
-                data.put("setCodeCandidates", JSONArray(match.candidates.map { it.setCode }))
-            }
-            data.put("edition", entry.edition)
-            data.put("editionConfidence", confidence.editionConfidence.name.lowercase(Locale.ROOT))
-            data.put("confidence", confidence.light.name.lowercase(Locale.ROOT))
-            data.put("reason", confidence.reason ?: JSONObject.NULL)
-            mirrorSocket.emit("card_scanned", data)
-        }
         scope.launch {
             try {
-                // Catalog first (Task 9): a local hit resolves the base card instantly, offline,
-                // no network. Off the UI thread — this is a SQLite read.
-                val catalogCard = withContext(Dispatchers.IO) {
-                    runCatching { CatalogRepository.card(pc) }.getOrNull()
+                val r = ScanResolver.resolve(
+                    pc, evidence, framesEvidence, editionTexts,
+                    com.example.yugiohscanner.Prefs.defaultEdition(context),
+                )
+                if (r == null) {
+                    stagingCards.remove(entry); seen.remove(pc)   // eine spaetere Wiederholung erlauben
+                    snackbar.showSnackbar("Karte $pc nicht gefunden")
+                    return@launch
                 }
-                // The base card (name, stats, image) always comes from the catalog when it's
-                // there — pure win. The PRINTING list only does when the catalog holds verified
-                // (German) printings for this passcode; unverified rows are the English dump, and
-                // taking them as complete would preselect an EN code for a German collection.
-                // Everything else falls through to the network union (and its ScanCache).
-                val catalogSets = catalogCard?.printings?.takeIf { p -> p.any { it.verified } }
-                if (catalogCard != null && catalogSets != null) {
-                    entry.base = catalogCard.toCardRow()
-                    entry.knownSets = catalogSets.map { it.toSetOption() }
-                    // .selected is the preselection; .reason (Region unklar/widerspricht) and
-                    // .candidates feed the traffic light + set picker (Task 7's applyConfidence
-                    // below). .codeMatch is kept so a later frame's silent improvement (Task 6) has
-                    // something to compare against — see SetCodeEvidence.shouldSilentlyImprove.
-                    val match = SetCodeMatch.best(evidence, entry.knownSets, framesEvidence)
-                    entry.codeMatch = match
-                    entry.selectedSet = match.selected
-                    applyConfidence(match)
-                    entry.loading = false
-                    mirrorToDesktop(match)
-                } else {
-                    val base = catalogCard?.toCardRow() ?: CardSearchRepository.search(pc).firstOrNull()
-                    if (base == null) {
-                        stagingCards.remove(entry); seen.remove(pc)   // allow a later re-scan
-                        snackbar.showSnackbar("Karte $pc nicht gefunden")
-                    } else {
-                        entry.base = base
-                        val known = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
-                        entry.knownSets = known
-                        val match = SetCodeMatch.best(evidence, known, framesEvidence)
-                        entry.codeMatch = match
-                        entry.selectedSet = match.selected
-                        applyConfidence(match)
-                        entry.loading = false
-                        mirrorToDesktop(match)
-                    }
-                }
+                entry.base = r.base
+                entry.knownSets = r.knownSets
+                // .codeMatch bleibt liegen, damit eine spaetere, besser belegte Aufnahme sich damit
+                // vergleichen kann (D3 Task 6, SetCodeEvidence.shouldSilentlyImprove) -- gegen die
+                // SetOption allein ginge das nicht, sie traegt weder Distanz noch Frameanzahl.
+                entry.codeMatch = r.match
+                entry.selectedSet = r.match.selected
+                entry.confidence = r.confidence
+                entry.edition = r.confidence.effectiveEdition
+                entry.loading = false
             } catch (e: Exception) {
                 entry.loading = false
                 snackbar.showSnackbar("Fehler beim Laden: ${e.message}")
             }
+        }
+    }
+
+    // Spec D4 §4: ein WIEDERHOLTES Erkennen derselben Karte im Modus "stapel". Kein Netz, kein
+    // Katalog -- `entry.knownSets` steht bereits, `SetCodeMatch.best` laeuft direkt dagegen.
+    // Wohin gebucht wird, entscheidet ScanAggregator (rein und getestet); hier wird nur gebucht.
+    fun aggregateRepeat(pc: String, evidence: List<String>, framesEvidence: List<String>, editionTexts: List<String>) {
+        val entry = stagingCards.lastOrNull { it.passcode == pc } ?: run {
+            // Review-Befund 2: der Eintrag kann fehlen, weil der Nutzer die ganze Karte im
+            // Pruefen-Blatt geloescht hat -- ihr Passcode steht aber weiterhin in `seen`. Stiller
+            // Ausstieg wuerde die Karte fuer den Rest der Sitzung kommentarlos unscannbar machen,
+            // der schlechteste aller Ausgaenge. Stattdessen wie eine neue Erfassung behandeln.
+            // (Nicht `onCapture` -- zwei lokale Funktionen koennen sich in Kotlin nicht gegenseitig
+            // aufrufen, und `stageScan` steht bereits vor dieser Funktion.)
+            // Fix M1: `editionTexts` wird durchgereicht statt durch `emptyList()` ersetzt -- sonst
+            // loest dieser Rueckfall die Karte mit leerer Editions-Beleglage auf (edition =
+            // unknown), waehrend derselbe Passcode ueber den `stageScan`-Zweig direkt daneben sie
+            // mitbekommen haette.
+            stageScan(pc, evidence, framesEvidence, editionTexts)
+            return
+        }
+        // Anderes Aufblitzen als bei einer Neuaufnahme (die blitzt mit 0.8f), damit ein "+1"
+        // im Sucher nicht wie eine neue Karte aussieht.
+        scope.launch { flash.snapTo(0.45f); flash.animateTo(0f, animationSpec = tween(300)) }
+
+        // Fix-Durchlauf 2, Restbefund: `SetCodeMatch.best` bleibt hier auf dem Analyzer-Hintergrund-
+        // thread -- es liest nur `entry.knownSets`, das nach dem ersten Aufloesen nicht mehr
+        // veraendert wird (siehe stageScan), und ist ein reiner Vergleich ueber eine kurze Liste
+        // (kein Netz, keine Datenbank), verursacht auf dem Hauptthread also keine spuerbare
+        // Blockade -- waere er aber trotzdem noetig gewesen.
+        val match = SetCodeMatch.best(evidence, entry.knownSets, framesEvidence)
+        val name = entry.base?.name ?: pc
+        // Review-Befund 3: `entry.quantity++`/`--` und das ExtraPrinting-Aequivalent sind
+        // Lesen-Aendern-Schreiben auf einem Feld, das der QtyStepper im Pruefen-Blatt (Hauptthread)
+        // ebenfalls beschreibt -- diese Funktion selbst laeuft auf dem Analyzer-Hintergrundthread.
+        // `scope` ist ein rememberCoroutineScope (Main); Buchung UND Ruecknahme laufen deshalb
+        // beide hier drin, in Reihenfolge: erst buchen, dann die Snackbar mit der Folgemenge.
+        scope.launch {
+            // Fix-Durchlauf 2: der Eintrag kann inzwischen aus `stagingCards` verschwunden sein
+            // (der Nutzer hat die ganze Karte im Pruefen-Blatt geloescht) -- dann darf gar nicht
+            // erst gebucht werden. Dieselbe Identitaetspruefung wie bei der Ruecknahme unten.
+            if (stagingCards.none { it === entry }) return@launch
+            // Fix-Durchlauf 2 (Restfenster aus Fix-Durchlauf 1): `ScanAggregator.target(...)` --
+            // und die von ihm gelesenen `entry.selectedSet`/`entry.extraPrintings` -- werden ERST
+            // HIER ermittelt, im selben Hauptthread-Block wie die Benutzung direkt darunter, statt
+            // vorher auf dem Analyzer-Hintergrundthread. Zwischen einer vorherigen Berechnung und
+            // dieser Benutzung liegt ein Dispatch-Wechsel; in genau diesem Fenster kann das
+            // Pruefen-Blatt eine Zusatzzeile oder die ganze Karte loeschen (es haelt weder Kamera
+            // noch Analyzer an) und der Index von `target` traefe dann daneben. Kein Index
+            // ueberlebt einen Threadwechsel -- dieselbe Regel wie Review-Befund 1, nur mit kuerzerem
+            // Fenster.
+            val target = ScanAggregator.target(
+                primary = entry.selectedSet,
+                extras = entry.extraPrintings.map { it.selectedSet },
+                scanned = match.selected,
+            )
+            // Review-Befund 1: das Ziel wird HIER, sofort beim Buchen, zum OBJEKT aufgeloest, nicht
+            // zum Index -- der Index kann zwischen Buchen und Rueckgaengig veralten (das
+            // Pruefen-Blatt kann waehrenddessen eine Zusatzzeile oder die ganze Karte loeschen; das
+            // Sheet haelt weder Kamera noch Analyzer an). `bookedExtra` haelt das getroffene bzw.
+            // neu angelegte ExtraPrinting-Objekt fest; die Ruecknahme unten prueft per Identitaet
+            // (===), ob es das noch gibt, statt es erneut zu indizieren.
+            var bookedExtra: ExtraPrinting? = null
+            var isNewExtra = false
+            val menge = when (target) {
+                is ScanAggregator.Target.Primary -> {
+                    entry.quantity++
+                    entry.quantity
+                }
+                is ScanAggregator.Target.Extra -> {
+                    val ep = entry.extraPrintings[target.index]
+                    ep.quantity++
+                    bookedExtra = ep
+                    ep.quantity
+                }
+                is ScanAggregator.Target.NewExtra -> {
+                    val ep = ExtraPrinting().apply {
+                        selectedSet = target.set
+                        edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
+                        condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
+                    }
+                    entry.extraPrintings.add(ep)
+                    bookedExtra = ep
+                    isNewExtra = true
+                    1
+                }
+            }
+            val r = snackbar.showSnackbar(
+                message = "$name ×$menge", actionLabel = "rückgängig",
+                duration = SnackbarDuration.Short,
+            )
+            if (r != SnackbarResult.ActionPerformed) return@launch
+            when (target) {
+                is ScanAggregator.Target.Primary ->
+                    // `entry` selbst kann der Nutzer inzwischen aus der Liste geloescht haben.
+                    if (stagingCards.any { it === entry }) entry.quantity--
+                is ScanAggregator.Target.Extra, is ScanAggregator.Target.NewExtra -> {
+                    val ep = bookedExtra ?: return@launch
+                    // Ist die Zeile weg, hat der Nutzer sie selbst geloescht: Ruecknahme tut dann
+                    // nichts und wirft nicht.
+                    if (entry.extraPrintings.any { it === ep }) {
+                        if (isNewExtra) entry.extraPrintings.remove(ep) else ep.quantity--
+                    }
+                }
+            }
+        }
+    }
+
+    // Spec D4 §6: fuehrt der PC das Staging, legt das Handy KEINEN Eintrag an -- es loest auf und
+    // sendet. Erste Sichtung wie Wiederholung gehen denselben Weg; zusammengefasst wird am PC (§5).
+    //
+    // [isRepeat] dient nur der Rueckmeldung (§7) und dem Rueckfall, wenn die Verbindung waehrend
+    // der Aufloesung wegbricht -- es geht selbst NICHT auf die Leitung. Der aktuelle `scanMode`
+    // dagegen schon (siehe `sendScanToDesktop`, Spec-Fix I2): die urspruengliche Annahme, im Modus
+    // "einzeln" koenne beim PC nie eine Wiederholung ankommen, war falsch -- `seen` unten haelt
+    // eine Wiederholung nur ab, solange DIESER Scanner offen bleibt; ein Schliessen/Wiederoeffnen
+    // loescht `seen`, waehrend die Staging-Liste des PCs bestehen bleibt. Der PC muss deshalb
+    // selbst wissen, ob er zusammenfassen darf.
+    //
+    // Diese Funktion muss VOR `onCapture` und NACH `stageScan`/`aggregateRepeat` stehen: lokale
+    // Funktionen in Kotlin sehen nur, was vor ihnen deklariert ist, und `onCapture` ruft diese
+    // hier auf. Deshalb faellt der Verbindungsabbruch unten direkt auf die beiden anderen zurueck
+    // statt ueber `onCapture` zu gehen -- das waere ein gegenseitiger Aufruf und damit unmoeglich.
+    fun sendScan(
+        pc: String, evidence: List<String>, framesEvidence: List<String>,
+        editionTexts: List<String>, isRepeat: Boolean,
+    ) {
+        scope.launch {
+            flash.snapTo(if (isRepeat) 0.45f else 0.8f)
+            flash.animateTo(0f, animationSpec = tween(300))
+        }
+        scope.launch {
+            try {
+                val r = ScanResolver.resolve(
+                    pc, evidence, framesEvidence, editionTexts,
+                    com.example.yugiohscanner.Prefs.defaultEdition(context),
+                )
+                if (r == null) {
+                    seen.remove(pc)   // eine spaetere Wiederholung erlauben
+                    snackbar.showSnackbar("Karte $pc nicht gefunden")
+                    return@launch
+                }
+                val s = socket
+                if (s == null || !isConnected) {
+                    // Die Verbindung ist waehrend der Aufloesung weggebrochen. Die Karte darf
+                    // nicht verschwinden: sie kommt ins Handy-Staging, wohin sie ohne PC gehoert.
+                    // Eine Wiederholung wird nur dann gebucht, wenn es ueberhaupt einen Eintrag
+                    // gibt -- die frueheren Kopien liegen ja beim PC. Sonst wird sie ein eigener
+                    // Eintrag, damit diese eine Karte nicht still verlorengeht.
+                    if (isRepeat && stagingCards.any { it.passcode == pc }) {
+                        aggregateRepeat(pc, evidence, framesEvidence, editionTexts)
+                    } else {
+                        stageScan(pc, evidence, framesEvidence, editionTexts)
+                    }
+                    return@launch
+                }
+                sendScanToDesktop(s, pc, r, scanMode)
+                sentCount++
+                lastLight = r.confidence.light
+                if (isRepeat) {
+                    // §7: bei verbundenem PC ist die Meldung NUR informativ -- kein Knopf.
+                    // Korrigiert wird am PC, wo der Eintrag mit seinen +/--Knoepfen sichtbar in
+                    // der Liste steht. Die neue Menge steht bewusst NICHT hier: sie zaehlt am PC,
+                    // das Handy kennt sie nicht und darf sie nicht erfinden.
+                    snackbar.showSnackbar("${r.base.name} nochmal an den PC")
+                }
+            } catch (e: Exception) {
+                seen.remove(pc)
+                snackbar.showSnackbar("Fehler beim Laden: ${e.message}")
+            }
+        }
+    }
+
+    // Der einzige Einstieg fuer eine erfasste Karte -- autonome Erkennung wie manuelle Eingabe.
+    // Spec D4 §3: im Modus "einzeln" faengt `seen` jede Wiederholung ab (heutiges Verhalten);
+    // im Modus "stapel" wird sie zusammengefasst.
+    fun onCapture(pc: String, evidence: List<String>, frames: List<String>, editionTexts: List<String>) {
+        val isRepeat = !seen.add(pc)
+        if (isRepeat && scanMode != "stapel") return
+        if (isConnected) {
+            // §6: kein Handy-Staging. Erste Sichtung wie gewollte Wiederholung gehen an den PC,
+            // der sie nach derselben Regel zusammenfasst (§5). `scanMode` reist als eigenes Feld
+            // mit (siehe `sendScanToDesktop`, Spec-Fix I2) -- der PC braucht es, um im Modus
+            // "einzeln" eine Wiederholung zu verwerfen statt sie zu buchen.
+            sendScan(pc, evidence, frames, editionTexts, isRepeat)
+        } else if (isRepeat) {
+            aggregateRepeat(pc, evidence, frames, editionTexts)
+        } else {
+            stageScan(pc, evidence, frames, editionTexts)
         }
     }
 
@@ -316,8 +454,7 @@ fun ScanScreen(onClose: () -> Unit) {
     // always have the same list to offer for both. [editionTexts] is stageScan's own new
     // parameter (Task 7), threaded through the same way.
     val onConfirmed = rememberUpdatedState<(Int, List<String>, List<String>, List<String>) -> Unit> { passcode, evidence, frames, editionTexts ->
-        val pc = passcode.toString()
-        if (passcode > 0 && seen.add(pc)) stageScan(pc, evidence, frames, editionTexts)
+        if (passcode > 0) onCapture(passcode.toString(), evidence, frames, editionTexts)
     }
 
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
@@ -652,6 +789,27 @@ fun ScanScreen(onClose: () -> Unit) {
                     },
             )
             Spacer(Modifier.weight(1f))
+            // Spec D4 §3: Einzeln = jede Karte einmal pro Stapel. Stapel = ein erneutes Erkennen
+            // erhoeht die Menge. Gemerkt in scanner_prefs, damit der Modus einen Neustart ueberlebt.
+            IconButton(
+                onClick = {
+                    scanMode = if (scanMode == "stapel") "einzeln" else "stapel"
+                    com.example.yugiohscanner.Prefs.setScanMode(context, scanMode)
+                    Toast.makeText(
+                        context,
+                        if (scanMode == "stapel") "Stapel: Wiederholungen zählen"
+                        else "Einzeln: jede Karte einmal",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                },
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50)),
+            ) {
+                Icon(
+                    imageVector = if (scanMode == "stapel") Icons.Default.Layers else Icons.Default.LooksOne,
+                    contentDescription = "Scan-Modus",
+                    tint = if (scanMode == "stapel") Color.Yellow else Color.White,
+                )
+            }
             // Auto Focus Reset
             IconButton(
                 onClick = {
@@ -691,16 +849,37 @@ fun ScanScreen(onClose: () -> Unit) {
             IconButton(onClick = { showManualEntry = true }) { Icon(Icons.Default.Keyboard, "Passcode eingeben", tint = Color.White) }
         }
 
-        // Footer: count of recognised cards + open the review sheet.
-        if (stagingCards.isNotEmpty()) {
-            Row(
-                Modifier.fillMaxWidth().align(Alignment.BottomCenter)
-                    .background(Color.Black.copy(alpha = 0.55f)).navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        // Fusszeile: die Fortschrittsanzeige (Spec D4 §6.3) und die Staging-Zeile sind zwei
+        // unabhaengige Sachverhalte und erscheinen unabhaengig voneinander -- kein "else if"
+        // mehr, sonst verschwindet der Pruefen-Knopf (einziger Zugang zum Pruefen-Blatt),
+        // sobald der PC waehrend eines laufenden Handy-Staging-Stapels verbindet.
+        if ((isConnected && sentCount > 0) || stagingCards.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding()
             ) {
-                Text("${stagingCards.size} Karten erkannt", color = Color.White, modifier = Modifier.weight(1f))
-                Button(onClick = { showSheet = true }) { Text("Prüfen (${stagingCards.size})") }
+                if (isConnected && sentCount > 0) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("$sentCount an den PC gesendet", color = Color.White, modifier = Modifier.weight(1f))
+                        // Dieselben drei Ampelfarben wie im Staging-Sheet -- keine neuen Farben.
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(ScanStagingLogic.dotColor(lastLight)))
+                    }
+                }
+                if (stagingCards.isNotEmpty()) {
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("${stagingCards.size} Karten erkannt", color = Color.White, modifier = Modifier.weight(1f))
+                        Button(onClick = { showSheet = true }) { Text("Prüfen (${stagingCards.size})") }
+                    }
+                }
             }
         }
         if (showSheet) {
@@ -770,7 +949,7 @@ fun ScanScreen(onClose: () -> Unit) {
                                     triggerFeedback()
 
                                     // Stage like a scan; the desktop mirror (if connected) happens inside stageScan.
-                                    if (seen.add(manualCode)) stageScan(manualCode, emptyList())
+                                    onCapture(manualCode, emptyList(), emptyList(), emptyList())
 
                                     showManualEntry = false
                                     manualCode = ""
@@ -891,40 +1070,31 @@ class CardAnalyzer(
     }
 }
 
-/**
- * Eine Zeile je Ampel-Entscheidung, im key=value-Format, das `ml/ocr_bench.py` ohnehin liest.
- *
- * Warum das noetig ist, und zwar dringend: die Geraeteabnahme zu D3 ergab 31 von 31 gruen, und das
- * Abschlussreview fand danach ZWEI kritische Fehler, die genau diese Abnahme ueberlebt hatten --
- * eine Rarity-Pruefung, die bei komponierten Codes leer erfuellt war, und ein `unlimited`, das aus
- * dreimal leerem Ausschnitt entstand. Beide erzeugten GRUEN, und Gruen zeigt keinen Grund an. Eine
- * leer-gruene Karte war vom Bildschirm aus nicht von einer echt-gruenen zu unterscheiden.
- *
- * Das entscheidende Feld ist `composed`: es sagt, ob der Set-Code in der Printing-Liste GEFUNDEN
- * oder aus Praefix + gelesener Region + Nummer ZUSAMMENGESETZT wurde. Allein dieses Feld haette
- * den Rarity-Fehler sichtbar gemacht, denn er trat ausschliesslich im komponierten Fall auf.
- *
- * `stage` unterscheidet die erste Aufloesung von der stillen Verbesserung. Ohne das sind eine
- * Verbesserung und eine Nicht-Verbesserung im Protokoll identisch -- und die Verbesserung ersetzt
- * einen Druck, NACHDEM der Nutzer den alten bereits gesehen hat.
- */
-private fun logScanDecision(
-    stage: String,
-    passcode: String,
-    match: com.example.yugiohscanner.cloud.SetCodeMatch.MatchResult,
-    confidence: com.example.yugiohscanner.ml.ScanConfidence.Result,
-    knownSets: List<com.example.yugiohscanner.cloud.SetOption>,
-) {
-    val sel = match.selected
-    val composed = sel != null && knownSets.none { it.setCode.equals(sel.setCode, ignoreCase = true) }
-    android.util.Log.i(
-        "ScanDecision",
-        "stage=$stage pc=$passcode " +
-            "code=${sel?.setCode ?: "-"} rarity=${sel?.rarity ?: "-"} lang=${sel?.language ?: "-"} " +
-            "composed=$composed match=${match.reason.name} " +
-            "exact=${match.codeExactMatch} frames=${match.codeFrameCount} " +
-            "known=${knownSets.size} " +
-            "light=${confidence.light.name} grund='${confidence.reason ?: ""}' " +
-            "edition=${confidence.effectiveEdition} editionConf=${confidence.editionConfidence.name}"
-    )
+// Spec D3 Task 8, jetzt aus ResolvedScan statt aus einem Staging-Eintrag (Spec D4 §6.2): spiegelt
+// die auf dem Handy BEREITS GEFAELLTE Entscheidung an den PC -- Set-Code, Rarity, Sprache, Edition,
+// Ampel und deutscher Grund woertlich -- damit der PC dieselbe Vorauswahl zeigt, statt die
+// Kandidaten selbst gegen eine Karte zu matchen, deren Bandtext er nie gesehen hat.
+// Ein aelterer PC-Stand ignoriert die Felder, die er nicht kennt.
+//
+// Spec-Fix I2: dazu `mode` ("einzeln"/"stapel", woertlich wie am Handy). Die urspruengliche
+// Annahme -- der PC brauche kein Modus-Feld, weil das Handy im Modus "einzeln" nie eine
+// Wiederholung schickt -- ist widerlegt: `seen` (ScanScreen) lebt nur, solange der Scanner offen
+// ist, die Staging-Liste des PCs ueberlebt ein Schliessen/Wiederoeffnen. Ohne das Feld zaehlte
+// Modus "einzeln" bei verbundenem PC doppelt. Ein aelterer PC ignoriert auch dieses Feld.
+private fun sendScanToDesktop(socket: Socket, pc: String, r: ResolvedScan, mode: String) {
+    val data = JSONObject().put("passcode", pc)
+    r.match.selected?.let {
+        data.put("setCode", it.setCode)
+        data.put("rarity", it.rarity)
+        data.put("language", it.language)
+    }
+    if (r.match.candidates.isNotEmpty()) {
+        data.put("setCodeCandidates", JSONArray(r.match.candidates.map { it.setCode }))
+    }
+    data.put("edition", r.confidence.effectiveEdition)
+    data.put("editionConfidence", r.confidence.editionConfidence.name.lowercase(Locale.ROOT))
+    data.put("confidence", r.confidence.light.name.lowercase(Locale.ROOT))
+    data.put("reason", r.confidence.reason ?: JSONObject.NULL)
+    data.put("mode", mode)
+    socket.emit("card_scanned", data)
 }
