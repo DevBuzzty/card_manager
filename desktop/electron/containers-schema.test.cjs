@@ -38,6 +38,8 @@ test('ensureContainersSchema ist idempotent', () => {
 test('kind ist auf die drei erlaubten Werte beschraenkt', () => {
   const db = freshDb();
   assert.throws(() => insertContainer(db, 'c1', 'Falsch', 'karton', null));
+  assert.doesNotThrow(() => insertContainer(db, 'c2', 'Kiste', 'box', null));
+  assert.doesNotThrow(() => insertContainer(db, 'c3', 'Deckbox', 'deckbox', null));
 });
 
 test('der Standort-Index auf card_copies existiert', () => {
@@ -81,6 +83,30 @@ test('deleteContainer stempelt updated_at auf beiden Seiten neu', () => {
   const k = db.prepare('SELECT updated_at FROM card_copies WHERE copy_id = ?').get('k1');
   assert.notEqual(c.updated_at, '2000-01-01 00:00:00', 'Behaelter wuerde sonst nie gepusht');
   assert.notEqual(k.updated_at, '2000-01-01 00:00:00', 'Exemplar wuerde sonst nie gepusht');
+});
+
+test('deleteContainer rollt beide Updates zurueck, wenn eines mitten in der Transaktion scheitert', () => {
+  const db = freshDb();
+  insertContainer(db, 'c1', 'Blau');
+  insertCopy(db, 'k1', 'c1', 3, 7);
+
+  // Trigger simuliert einen Fehler, der erst beim zweiten UPDATE (containers) auftritt --
+  // NACHDEM card_copies schon geraeumt worden waere, wenn deleteContainer nicht atomar waere.
+  db.exec(`
+    CREATE TRIGGER guard_c1_delete BEFORE UPDATE OF deleted ON containers
+    WHEN NEW.container_id = 'c1' AND NEW.deleted = 1
+    BEGIN SELECT RAISE(ABORT, 'simulierter Fehler'); END;
+  `);
+
+  assert.throws(() => deleteContainer(db, 'c1'));
+
+  const copy = db.prepare('SELECT container_id, page, slot FROM card_copies WHERE copy_id = ?').get('k1');
+  assert.equal(copy.container_id, 'c1', 'Standort waere sonst schon geraeumt, obwohl der Behaelter nicht geloescht wurde');
+  assert.equal(copy.page, 3);
+  assert.equal(copy.slot, 7);
+
+  const row = db.prepare('SELECT deleted FROM containers WHERE container_id = ?').get('c1');
+  assert.equal(row.deleted, 0, 'Behaelter darf nicht als geloescht stehen bleiben');
 });
 
 test('deleteContainer eines unbekannten Behaelters tut nichts und wirft nicht', () => {

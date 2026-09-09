@@ -3,7 +3,7 @@
 
 create table if not exists public.containers (
   container_id     text primary key,
-  user_id          uuid not null references auth.users (id) on delete cascade,
+  user_id          uuid not null default auth.uid() references auth.users (id) on delete cascade,
   name             text not null,
   kind             text not null check (kind in ('binder','box','deckbox')),
   pockets_per_page integer,
@@ -25,17 +25,10 @@ create policy "containers sind privat" on public.containers
 
 -- updated_at wird IMMER serverseitig gestempelt: der Cursor des Clients liest gegen diese
 -- Spalte, ein vom Client mitgeschickter Wert koennte einen Pull ueberspringen lassen.
-create or replace function public.touch_containers_updated_at()
-returns trigger language plpgsql as $$
-begin
-  new.updated_at = now();
-  return new;
-end $$;
-
 drop trigger if exists containers_touch_updated_at on public.containers;
 create trigger containers_touch_updated_at
   before insert or update on public.containers
-  for each row execute function public.touch_containers_updated_at();
+  for each row execute function public.set_updated_at();
 
 -- Der Standort-Index auf card_copies. Die fuenf Spalten selbst existieren bereits (Spec A).
 create index if not exists card_copies_location_idx
