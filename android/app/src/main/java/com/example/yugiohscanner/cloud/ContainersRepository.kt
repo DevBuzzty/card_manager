@@ -15,6 +15,9 @@ data class ContainerRow(
     val pocketsPerPage: Int?, val color: String?, val sortOrder: Int,
 )
 
+private val CONTAINER_KINDS = setOf("binder", "box", "deckbox")
+private val BINDER_POCKETS = setOf(4, 9, 12)
+
 // Reads/writes the Supabase `containers` table over REST, so the phone's Einsortier-Modus
 // (Task 9/10) works without the desktop. Mirrors DecksRepository's auth/reauth pattern -- the
 // table itself already exists in Supabase (created by hand); this repository does not touch
@@ -33,12 +36,26 @@ object ContainersRepository {
     // Upsert ueber die Primaerschluessel-Spalte container_id: legt neu an oder aktualisiert,
     // je nachdem ob die Zeile schon existiert. Der Aufrufer erzeugt die container_id (UUID) beim
     // Neuanlegen selbst -- genau wie insertCopies() in CollectionRepository die copy_id erzeugt.
+    //
+    // Die Pruefung wohnt HIER, nicht nur in BindersScreen: der Cloud-Weg des Handys geht direkt
+    // in die Supabase-Tabelle, an keinem Desktop-Helfer vorbei -- dieselbe Ueberlegung wie bei
+    // setCopyLocation() oben. Mirrors saveContainer() in desktop/electron/copies.cjs.
     suspend fun save(row: ContainerRow) = withContext(Dispatchers.IO) {
+        val cleanName = row.name.trim()
+        if (cleanName.isEmpty()) throw RuntimeException("Der Behälter braucht einen Namen.")
+        if (row.kind !in CONTAINER_KINDS) throw RuntimeException("Unbekannte Behälterart.")
+        // Box und Deckbox haben keine Seiten: pocketsPerPage wird verworfen, nicht abgelehnt --
+        // dieselbe Bauart wie setCopyLocation es mit page/slot bei Nicht-Ordnern macht.
+        val pockets = if (row.kind == "binder") {
+            if (row.pocketsPerPage !in BINDER_POCKETS) throw RuntimeException("Ein Ordner hat 4, 9 oder 12 Fächer pro Seite.")
+            row.pocketsPerPage
+        } else null
+
         val body = JSONObject()
             .put("container_id", row.containerId)
-            .put("name", row.name)
+            .put("name", cleanName)
             .put("kind", row.kind)
-            .put("pockets_per_page", row.pocketsPerPage ?: JSONObject.NULL)
+            .put("pockets_per_page", pockets ?: JSONObject.NULL)
             .put("color", row.color ?: JSONObject.NULL)
             .put("sort_order", row.sortOrder)
             .toString()

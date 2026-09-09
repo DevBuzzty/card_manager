@@ -153,8 +153,22 @@ fun BindersScreen() {
     fun deleteContainer(c: ContainerRow) {
         pendingDelete = null
         scope.launch {
-            try { ContainersRepository.delete(c.containerId); reload(); error = null }
-            catch (e: Exception) { error = e.message ?: "Löschen fehlgeschlagen" }
+            // reload() steht in BEIDEN Zweigen: delete() raeumt Standorte und Behaelter in zwei
+            // getrennten REST-Aufrufen (bewusst nicht atomar) -- bricht der zweite ab, sind
+            // Exemplare serverseitig bereits standortlos, obwohl der Behaelter noch existiert.
+            // Dieser Zwischenzustand ist echt und muss sichtbar werden, auch im Fehlerfall.
+            var deleteError: String? = null
+            try {
+                ContainersRepository.delete(c.containerId)
+            } catch (e: Exception) {
+                deleteError = e.message ?: "Löschen fehlgeschlagen"
+            }
+            try {
+                reload()
+                error = deleteError
+            } catch (e: Exception) {
+                error = deleteError ?: (e.message ?: "Laden fehlgeschlagen")
+            }
         }
     }
 
@@ -182,8 +196,20 @@ fun BindersScreen() {
                         if (unsortedCopies.isEmpty()) {
                             Text("Alle Exemplare sind einsortiert.", color = Muted, style = MaterialTheme.typography.bodySmall)
                         } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                unsortedCopies.forEach { copy ->
+                            // Eigene, lazy gerenderte und hoehenbegrenzte Liste statt einer
+                            // schlichten Column: am ersten Tag nach dieser Funktion sind praktisch
+                            // ALLE Exemplare "nicht einsortiert" (noch keine Behaelter angelegt).
+                            // Eine Column wuerde dann jede Zeile auf einmal aufbauen und die
+                            // Behaelterliste darunter aus dem Bild draengen, ohne Weg dorthin --
+                            // die aeussere Column ist selbst nicht scrollbar. Diese Liste scrollt
+                            // stattdessen innerhalb ihrer eigenen Hoehenbegrenzung; dank LazyColumn
+                            // werden auch bei 2000 nicht einsortierten Exemplaren nur die paar
+                            // sichtbaren Zeilen aufgebaut, nicht alle 2000 auf einmal.
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                items(unsortedCopies, key = { it.copyId }) { copy ->
                                     val card = cardsByKey[copy.printingKey()]
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
