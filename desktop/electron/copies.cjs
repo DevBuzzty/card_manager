@@ -1,6 +1,12 @@
 const crypto = require('crypto');
 const { CONDITIONS, EDITIONS, conditionFactor, factorCaseSql } = require('./valuation.cjs');
 
+// Erwartete, benutzersichtbare Fehler (falsche Eingabe, unbekannte ID) -- main.cjs erkennt sie an
+// dieser Klasse und reicht ihre deutsche Meldung unveraendert durch. Alles andere (z.B. ein
+// rohes better-sqlite3-Fehlerobjekt) gilt dort als unerwartet und wird durch eine generische
+// deutsche Meldung ersetzt, der Originaltext landet in der Konsole.
+class ValidationError extends Error {}
+
 const norm = (p) => ({ id: String(p.id), set_code: p.set_code || 'Unknown', language: p.language || 'DE', rarity: p.rarity || 'Unknown' });
 const KEY = 'card_id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity';
 
@@ -107,9 +113,9 @@ function setCopyLocation(db, { copy_id, container_id, page, slot }) {
   const kind = container_id
     ? (db.prepare('SELECT kind FROM containers WHERE container_id = ? AND deleted = 0').get(container_id) || {}).kind
     : null;
-  if (container_id && !kind) throw new Error('Behälter nicht gefunden');
+  if (container_id && !kind) throw new ValidationError('Behälter nicht gefunden.');
   const isBinder = kind === 'binder';
-  db.prepare(`UPDATE card_copies
+  const info = db.prepare(`UPDATE card_copies
                  SET container_id = @container_id, page = @page, slot = @slot,
                      updated_at = CURRENT_TIMESTAMP
                WHERE copy_id = @copy_id`)
@@ -119,6 +125,7 @@ function setCopyLocation(db, { copy_id, container_id, page, slot }) {
       page: container_id && isBinder ? (page ?? null) : null,
       slot: container_id && isBinder ? (slot ?? null) : null,
     });
+  if (info.changes === 0) throw new ValidationError('Exemplar nicht gefunden.');
 }
 
 // Dieselbe Normalisierung wie parseTags()/serializeTags() in ../src/utils/tags.js (ESM,
@@ -141,7 +148,7 @@ function normalizeTagList(tags) {
 
 function setCopyTagsNote(db, { copy_id, tags, note }) {
   const clean = normalizeTagList(tags);
-  db.prepare(`UPDATE card_copies
+  const info = db.prepare(`UPDATE card_copies
                  SET tags = @tags, note = @note, updated_at = CURRENT_TIMESTAMP
                WHERE copy_id = @copy_id`)
     .run({
@@ -149,12 +156,23 @@ function setCopyTagsNote(db, { copy_id, tags, note }) {
       tags: clean.length ? JSON.stringify(clean) : null,
       note: note ?? null,
     });
+  if (info.changes === 0) throw new ValidationError('Exemplar nicht gefunden.');
 }
 
 // Lebende Exemplare ohne Behaelter, mit den zugehoerigen Kartendaten (fuer den Einsortier-Modus).
+// AUSGESCHRIEBENE Spaltenliste statt `cp.*, c.*`: beide Tabellen haben created_at, updated_at
+// und deleted, und better-sqlite3 baut das Ergebnisobjekt spaltenweise auf -- die spaeter
+// selektierten c.*-Spalten wuerden die gleichnamigen cp.*-Spalten stillschweigend ueberschreiben.
+// Das Exemplar behaelt seine eigenen Namen (created_at/updated_at/deleted MUESSEN die des
+// Exemplars sein, nicht der Karte); die paar Kartenfelder, die die Oberflaeche fuer den
+// Einsortier-Modus braucht, bekommen ein card_-Praefix, damit nichts mehrdeutig ist.
 function listUnsortedCopies(db) {
   return db.prepare(`
-    SELECT cp.*, c.*
+    SELECT cp.copy_id, cp.card_id, cp.set_code, cp.language, cp.rarity,
+           cp.edition, cp.condition, cp.container_id, cp.page, cp.slot,
+           cp.tags, cp.note, cp.needs_review, cp.review_reason, cp.for_sale,
+           cp.created_at, cp.updated_at, cp.deleted,
+           c.name AS card_name, c.image_url AS card_image_url, c.price AS card_price
       FROM card_copies cp
       JOIN cards c ON c.id = cp.card_id AND c.set_code = cp.set_code
                   AND c.language = cp.language AND c.rarity = cp.rarity
@@ -201,20 +219,42 @@ function listContainers(db) {
   return rows.map((r) => ({ ...r, value: Math.round((r.value || 0) * 100) / 100 }));
 }
 
+const CONTAINER_KINDS = ['binder', 'box', 'deckbox'];
+const BINDER_POCKETS = [4, 9, 12];
+
+// Die Pruefung wohnt HIER, im Anwendungscode, nicht als CHECK in containers-schema.cjs: die
+// containers-Tabelle ist in Supabase bereits von Hand angelegt, ein neues CHECK bräuchte dort
+// eine zweite, von Hand nachzuziehende Migration -- und CREATE TABLE IF NOT EXISTS wuerde eine
+// bereits bestehende lokale Tabelle ohnehin nicht mehr aendern. Der Helfer ist der Ort, an dem
+// die Regel fuer jeden Aufrufer (Desktop, Sync, spaetere B2-Oberflaeche) gleichermassen gilt.
 function saveContainer(db, { container_id, name, kind, pockets_per_page, color, sort_order }) {
+  const cleanName = String(name ?? '').trim();
+  if (!cleanName) throw new ValidationError('Der Behälter braucht einen Namen.');
+  if (!CONTAINER_KINDS.includes(kind)) throw new ValidationError('Unbekannte Behälterart.');
+
+  // Box und Deckbox haben keine Seiten: pockets_per_page wird verworfen, nicht abgelehnt --
+  // dieselbe Bauart wie setCopyLocation es mit page/slot bei Nicht-Ordnern macht.
+  let pockets = null;
+  if (kind === 'binder') {
+    const p = Number(pockets_per_page);
+    if (!BINDER_POCKETS.includes(p)) throw new ValidationError('Ein Ordner hat 4, 9 oder 12 Taschen pro Seite.');
+    pockets = p;
+  }
+
   const data = {
     container_id: container_id || crypto.randomUUID(),
-    name,
+    name: cleanName,
     kind,
-    pockets_per_page: pockets_per_page ?? null,
+    pockets_per_page: pockets,
     color: color ?? null,
     sort_order: sort_order ?? 0,
   };
   if (container_id) {
-    db.prepare(`UPDATE containers
+    const info = db.prepare(`UPDATE containers
                    SET name = @name, kind = @kind, pockets_per_page = @pockets_per_page,
                        color = @color, sort_order = @sort_order, updated_at = CURRENT_TIMESTAMP
-                 WHERE container_id = @container_id`).run(data);
+                 WHERE container_id = @container_id AND deleted = 0`).run(data);
+    if (info.changes === 0) throw new ValidationError('Behälter nicht gefunden.');
   } else {
     db.prepare(`INSERT INTO containers (container_id, name, kind, pockets_per_page, color, sort_order)
                 VALUES (@container_id, @name, @kind, @pockets_per_page, @color, @sort_order)`).run(data);
@@ -223,6 +263,7 @@ function saveContainer(db, { container_id, name, kind, pockets_per_page, color, 
 }
 
 module.exports = {
+  ValidationError,
   defaults, listCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting,
   setCopyLocation, setCopyTagsNote, listUnsortedCopies, listTags, listContainers, saveContainer,
 };

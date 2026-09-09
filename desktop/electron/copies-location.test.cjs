@@ -10,9 +10,14 @@ function freshDb() {
   // portfolio_history muss vor ensureCopiesSchema existieren: sie haengt dort per
   // addColumnIfMissing eine Spalte an (siehe copies-schema.cjs) -- derselbe Grund, aus dem
   // containers-schema.test.cjs (Task 1) die Tabelle in seiner freshDb() mit anlegt.
+  // name/image_url/created_at/updated_at ergaenzt (ueber das Minimum hinaus), damit
+  // listUnsortedCopies' card_name/card_image_url-Spalten und die created_at/updated_at-
+  // Kollisionstests gegen ein realistisches cards-Schema laufen (siehe database.cjs).
   db.exec(`CREATE TABLE cards (
     id TEXT, set_code TEXT, language TEXT DEFAULT 'DE', rarity TEXT DEFAULT 'Unknown',
+    name TEXT, image_url TEXT,
     quantity INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0, price REAL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, set_code, language, rarity));
   CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY AUTOINCREMENT, total_value REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);`);
   ensureCopiesSchema(db);
@@ -155,4 +160,83 @@ test('kein Helfer schreibt jemals cards.quantity oder cards.deleted', () => {
   copies.setCopyTagsNote(db, { copy_id: 'k1', tags: ['X'], note: 'Y' });
   const nachher = db.prepare('SELECT quantity, deleted FROM cards').get();
   assert.deepEqual(nachher, vorher);
+});
+
+// --- Fix-Durchlauf 1: Spaltenkollision in listUnsortedCopies (Befund 1) ---------------------
+
+test('listUnsortedCopies liefert created_at/updated_at DES EXEMPLARS, nicht der Karte', () => {
+  // Regression: SELECT cp.*, c.* liess die gleichnamigen c.-Spalten die cp.-Spalten
+  // ueberschreiben (better-sqlite3 baut das Ergebnisobjekt spaltenweise auf, letzte Spalte
+  // gewinnt) -- Testdaten so gebaut, dass sich Exemplar- und Kartenwerte nachweislich unterscheiden.
+  const db = freshDb();
+  addCopy(db, 'frei1');
+  db.prepare(`UPDATE card_copies SET created_at = '2020-01-01 00:00:00', updated_at = '2020-01-02 00:00:00'
+              WHERE copy_id = 'frei1'`).run();
+  db.prepare(`UPDATE cards SET created_at = '2021-05-05 00:00:00', updated_at = '2021-06-06 00:00:00'
+              WHERE id = '46986414'`).run();
+  const [row] = copies.listUnsortedCopies(db);
+  assert.equal(row.created_at, '2020-01-01 00:00:00', 'created_at muss das des Exemplars sein, nicht der Karte');
+  assert.equal(row.updated_at, '2020-01-02 00:00:00', 'updated_at muss das des Exemplars sein, nicht der Karte');
+});
+
+test('listUnsortedCopies liefert deleted DES EXEMPLARS, nicht der Karte', () => {
+  const db = freshDb();
+  addCopy(db, 'frei1');
+  const [row] = copies.listUnsortedCopies(db);
+  assert.equal(row.deleted, 0, 'deleted muss aus card_copies stammen, nicht aus cards');
+});
+
+// --- Fix-Durchlauf 1: saveContainer validiert und meldet deutsch (Befund 2) -----------------
+
+test('saveContainer lehnt einen leeren (auch nur aus Leerraum bestehenden) Namen ab', () => {
+  const db = freshDb();
+  assert.throws(() => copies.saveContainer(db, { name: '   ', kind: 'binder', pockets_per_page: 9 }),
+    /Name/);
+});
+
+test('saveContainer speichert den beschnittenen Namen, nicht den rohen', () => {
+  const db = freshDb();
+  const id = copies.saveContainer(db, { name: '  Blau  ', kind: 'binder', pockets_per_page: 9 });
+  assert.equal(db.prepare('SELECT name FROM containers WHERE container_id = ?').get(id).name, 'Blau');
+});
+
+test('saveContainer lehnt eine unbekannte Behaelterart ab', () => {
+  const db = freshDb();
+  assert.throws(() => copies.saveContainer(db, { name: 'Blau', kind: 'karton', pockets_per_page: 9 }),
+    /Behälterart/);
+});
+
+test('saveContainer erlaubt bei binder nur 4, 9 oder 12 Taschen pro Seite', () => {
+  const db = freshDb();
+  assert.throws(() => copies.saveContainer(db, { name: 'Blau', kind: 'binder', pockets_per_page: 7 }),
+    /Taschen/);
+});
+
+test('saveContainer verwirft pockets_per_page bei box, statt es abzulehnen', () => {
+  // Box und Deckbox haben keine Seiten -- dieselbe Bauart wie setCopyLocation es mit page/slot macht.
+  const db = freshDb();
+  const id = copies.saveContainer(db, { name: 'Karton', kind: 'box', pockets_per_page: 9 });
+  assert.equal(db.prepare('SELECT pockets_per_page FROM containers WHERE container_id = ?').get(id).pockets_per_page, null);
+});
+
+// --- Fix-Durchlauf 1: saveContainer meldet nicht faelschlich Erfolg (Befund 3) --------------
+
+test('saveContainer wirft bei unbekannter oder geloeschter container_id, statt {success:true} vorzutaeuschen', () => {
+  const db = freshDb();
+  addContainer(db, 'weg', 'Alt');
+  db.prepare("UPDATE containers SET deleted = 1 WHERE container_id = 'weg'").run();
+  assert.throws(() => copies.saveContainer(db, { container_id: 'weg', name: 'Neu', kind: 'binder', pockets_per_page: 9 }));
+  assert.throws(() => copies.saveContainer(db, { container_id: 'gibtsnicht', name: 'Neu', kind: 'binder', pockets_per_page: 9 }));
+});
+
+// --- Fix-Durchlauf 1: setCopyLocation/setCopyTagsNote melden nicht faelschlich Erfolg (Befund 4) --
+
+test('setCopyLocation wirft bei unbekanntem copy_id, statt {success:true} vorzutaeuschen', () => {
+  const db = freshDb();
+  assert.throws(() => copies.setCopyLocation(db, { copy_id: 'gibtsnicht', container_id: null }));
+});
+
+test('setCopyTagsNote wirft bei unbekanntem copy_id, statt {success:true} vorzutaeuschen', () => {
+  const db = freshDb();
+  assert.throws(() => copies.setCopyTagsNote(db, { copy_id: 'gibtsnicht', tags: [], note: null }));
 });
