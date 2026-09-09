@@ -33,6 +33,9 @@ export default function Binders() {
   const menuRef = useRef(null);
   const savingRef = useRef(false); // Sperrt submitDialog gegen Doppelaufruf, gleiche Bauart wie StagingArea.jsx's committingRef
 
+  // Gibt zurueck, ob das Laden geklappt hat, damit ein Aufrufer wie move() seine eigene
+  // Fehlermeldung nur setzen darf, wenn load() hier nicht schon eine eigene (schwerwiegendere,
+  // weil die Ansicht dann nichts Verlaessliches mehr zeigt) gesetzt hat.
   const load = async () => {
     try {
       const [c, u] = await Promise.all([
@@ -46,8 +49,10 @@ export default function Binders() {
       setContainers(c || []);
       setUnsorted(u || []);
       setError(null);
+      return true;
     } catch (e) {
       setError(e?.message || 'Laden fehlgeschlagen.');
+      return false;
     }
   };
 
@@ -153,8 +158,11 @@ export default function Binders() {
     })));
     // load() setzt error selbst (auf null bei Erfolg) -- erst danach ueberschreiben, sonst wischt
     // der Erfolgsfall des Neuladens die hier erkannte Umsortier-Fehlermeldung sofort wieder weg.
-    await load();
-    if (results.some(r => r && r.success === false)) {
+    // Schlaegt load() dabei selbst fehl, hat es bereits seine eigene (schwerwiegendere) Meldung
+    // gesetzt -- die darf hier nicht ueberschrieben werden, sonst erfaehrt der Nutzer nichts vom
+    // Ladefehler und die Ansicht zeigt weiterhin nichts Verlaessliches.
+    const loaded = await load();
+    if (loaded && results.some(r => r && r.success === false)) {
       setError('Umsortieren fehlgeschlagen — die Reihenfolge wurde nicht vollständig gespeichert.');
     }
   };
