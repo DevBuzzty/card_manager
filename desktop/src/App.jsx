@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
 import SammlungLayout from './components/SammlungLayout';
 import CollectionList from './components/CollectionList';
+import Binders from './components/Binders';
 import Wishlist from './components/Wishlist';
 import SetCompletion from './components/SetCompletion';
 import Settings from './components/Settings';
@@ -109,6 +110,7 @@ function App() {
                     <Route path="/sammlung" element={<SammlungLayout />}>
                       <Route index element={<Navigate to="/sammlung/karten" replace />} />
                       <Route path="karten" element={<CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />} />
+                      <Route path="binder" element={<Binders />} />
                       <Route path="wunschliste" element={<Wishlist />} />
                       <Route path="sets" element={<SetCompletion />} />
                       <Route path="decks" element={<DeckBuilder />} />

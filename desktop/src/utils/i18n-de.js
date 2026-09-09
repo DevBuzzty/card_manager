@@ -6,6 +6,7 @@ export const T = {
   scannen: 'Scannen',
   sammlung: 'Sammlung',
   karten: 'Karten',
+  binder: 'Binder',
   wunschliste: 'Wunschliste',
   sets: 'Sets',
   decks: 'Decks',

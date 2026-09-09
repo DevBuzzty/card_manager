@@ -5,6 +5,7 @@ import { T } from '../utils/i18n-de';
 
 const SEGMENTS = [
   { to: ROUTES.karten, label: T.karten },
+  { to: ROUTES.binder, label: T.binder },
   { to: ROUTES.wunschliste, label: T.wunschliste },
   { to: ROUTES.sets, label: T.sets },
   { to: ROUTES.decks, label: T.decks },

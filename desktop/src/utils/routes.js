@@ -4,6 +4,7 @@ export const ROUTES = {
   start: '/start',
   scannen: '/scannen',
   karten: '/sammlung/karten',
+  binder: '/sammlung/binder',
   wunschliste: '/sammlung/wunschliste',
   sets: '/sammlung/sets',
   decks: '/sammlung/decks',
