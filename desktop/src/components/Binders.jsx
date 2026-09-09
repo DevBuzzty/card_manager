@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Trash2, Pencil, ChevronUp, ChevronDown, X, PackageOpen } from 'lucide-react';
+import { Plus, Trash2, Pencil, ChevronUp, ChevronDown, X, PackageOpen, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import CustomSelect from './CustomSelect';
 import { fmtEUR } from '../utils/format';
@@ -27,16 +27,28 @@ export default function Binders() {
   const [containers, setContainers] = useState([]);
   const [unsorted, setUnsorted] = useState([]);
   const [showUnsorted, setShowUnsorted] = useState(false);
-  const [dialog, setDialog] = useState(null); // { form, error } | null
+  const [dialog, setDialog] = useState(null); // { form, error, saving } | null
   const [menu, setMenu] = useState(null); // { x, y, container } | null
+  const [error, setError] = useState(null); // Lade- oder Umsortierfehler -- eine Anzeigestelle fuer beide
+  const menuRef = useRef(null);
+  const savingRef = useRef(false); // Sperrt submitDialog gegen Doppelaufruf, gleiche Bauart wie StagingArea.jsx's committingRef
 
   const load = async () => {
-    const [c, u] = await Promise.all([
-      window.api?.listContainers?.() ?? [],
-      window.api?.listUnsortedCopies?.() ?? [],
-    ]);
-    setContainers(c || []);
-    setUnsorted(u || []);
+    try {
+      const [c, u] = await Promise.all([
+        window.api?.listContainers?.() ?? [],
+        window.api?.listUnsortedCopies?.() ?? [],
+      ]);
+      // list-containers/list-unsorted-copies werfen bei einem DB-Fehler (main.cjs) und liefern
+      // deshalb regulaer nie {success:false} -- wird trotzdem defensiv erkannt, falls sich das aendert.
+      if (c?.success === false) throw new Error(c.error || 'Laden fehlgeschlagen.');
+      if (u?.success === false) throw new Error(u.error || 'Laden fehlgeschlagen.');
+      setContainers(c || []);
+      setUnsorted(u || []);
+      setError(null);
+    } catch (e) {
+      setError(e?.message || 'Laden fehlgeschlagen.');
+    }
   };
 
   // Deferred one tick, same as Wishlist.jsx's initial load -- a setState call made
@@ -51,7 +63,19 @@ export default function Binders() {
     return () => window.removeEventListener('click', close);
   }, [menu]);
 
-  const openCreate = () => { setDialog({ form: { ...emptyForm }, error: null }); setMenu(null); };
+  // Clamps the menu into the viewport after it renders (its real size isn't known before that) --
+  // without this a right-click near the right/bottom edge pushes it partly off-screen.
+  useLayoutEffect(() => {
+    if (!menu || !menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    const maxX = Math.max(8, window.innerWidth - rect.width - 8);
+    const maxY = Math.max(8, window.innerHeight - rect.height - 8);
+    const x = Math.min(menu.x, maxX);
+    const y = Math.min(menu.y, maxY);
+    if (x !== menu.x || y !== menu.y) setMenu(m => (m ? { ...m, x, y } : m));
+  }, [menu]);
+
+  const openCreate = () => { setDialog({ form: { ...emptyForm }, error: null, saving: false }); setMenu(null); };
   const openEdit = (c) => {
     setDialog({
       form: {
@@ -62,6 +86,7 @@ export default function Binders() {
         color: c.color || COLOR_PRESETS[0],
       },
       error: null,
+      saving: false,
     });
     setMenu(null);
   };
@@ -71,24 +96,34 @@ export default function Binders() {
 
   const submitDialog = async (e) => {
     e.preventDefault();
-    if (!dialog) return;
-    const { form } = dialog;
-    const existing = form.container_id ? containers.find(c => c.container_id === form.container_id) : null;
-    const payload = {
-      container_id: form.container_id || crypto.randomUUID(),
-      name: form.name,
-      kind: form.kind,
-      pockets_per_page: form.kind === 'binder' ? Number(form.pockets_per_page) : undefined,
-      color: form.color,
-      sort_order: existing ? existing.sort_order : containers.length,
-    };
-    const result = await window.api?.saveContainer?.(payload);
-    if (!result?.success) {
-      setDialog(d => ({ ...d, error: result?.error || 'Speichern fehlgeschlagen.' }));
-      return;
+    // Sperrt einen Doppelklick oder zweimal Enter, bevor saveContainer zurueckkommt -- sonst ist
+    // form.container_id beim zweiten Aufruf immer noch null und crypto.randomUUID() legt einen
+    // zweiten Behaelter an. Der Ref wirkt synchron (anders als ein State), daher gleiche Bauart
+    // wie StagingArea.jsx's committingRef.
+    if (!dialog || savingRef.current) return;
+    savingRef.current = true;
+    setDialog(d => (d ? { ...d, saving: true } : d));
+    try {
+      const { form } = dialog;
+      const existing = form.container_id ? containers.find(c => c.container_id === form.container_id) : null;
+      const payload = {
+        container_id: form.container_id || crypto.randomUUID(),
+        name: form.name,
+        kind: form.kind,
+        pockets_per_page: form.kind === 'binder' ? Number(form.pockets_per_page) : undefined,
+        color: form.color,
+        sort_order: existing ? existing.sort_order : containers.length,
+      };
+      const result = await window.api?.saveContainer?.(payload);
+      if (!result?.success) {
+        setDialog(d => (d ? { ...d, error: result?.error || 'Speichern fehlgeschlagen.', saving: false } : d));
+        return;
+      }
+      setDialog(null);
+      load();
+    } finally {
+      savingRef.current = false;
     }
-    setDialog(null);
-    load();
   };
 
   const removeContainer = async (c) => {
@@ -108,7 +143,7 @@ export default function Binders() {
     if (j < 0 || j >= containers.length) return;
     const next = [...containers];
     [next[index], next[j]] = [next[j], next[index]];
-    await Promise.all(next.map((c, i) => window.api?.saveContainer?.({
+    const results = await Promise.all(next.map((c, i) => window.api?.saveContainer?.({
       container_id: c.container_id,
       name: c.name,
       kind: c.kind,
@@ -116,7 +151,12 @@ export default function Binders() {
       color: c.color,
       sort_order: i,
     })));
-    load();
+    // load() setzt error selbst (auf null bei Erfolg) -- erst danach ueberschreiben, sonst wischt
+    // der Erfolgsfall des Neuladens die hier erkannte Umsortier-Fehlermeldung sofort wieder weg.
+    await load();
+    if (results.some(r => r && r.success === false)) {
+      setError('Umsortieren fehlgeschlagen — die Reihenfolge wurde nicht vollständig gespeichert.');
+    }
   };
 
   const openCard = (copy) => {
@@ -128,6 +168,13 @@ export default function Binders() {
 
   return (
     <div className="h-full flex flex-col gap-4">
+      {error && (
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => setShowUnsorted(o => !o)}
@@ -180,7 +227,7 @@ export default function Binders() {
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {containers.length === 0 ? (
+        {containers.length === 0 && !error ? (
           <div className="h-full flex flex-col items-center justify-center text-ink-faint">
             <PackageOpen className="w-16 h-16 mb-4 opacity-40" />
             <p>Noch keine Behälter angelegt.</p>
@@ -223,6 +270,7 @@ export default function Binders() {
 
       {menu && (
         <div
+          ref={menuRef}
           style={{ position: 'fixed', left: menu.x, top: menu.y }}
           className="z-[100] bg-obsidian-800 border border-line rounded-xl shadow-2xl p-1 min-w-[160px]"
           onClick={(e) => e.stopPropagation()}
@@ -289,7 +337,10 @@ export default function Binders() {
 
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={closeDialog} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">Abbrechen</button>
-              <button type="submit" className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium transition-colors">Speichern</button>
+              <button type="submit" disabled={dialog.saving}
+                      className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                {dialog.saving ? 'Wird gespeichert…' : 'Speichern'}
+              </button>
             </div>
           </form>
         </div>
