@@ -55,9 +55,10 @@ object ContainersRepository {
         // Umstaenden noch Seite/Fach aus der Zeit, als er ein Ordner war -- setCopyLocation raeumt
         // nur EIN einzelnes Exemplar in dem Moment, in dem es geschrieben wird, nicht die anderen.
         // VOR dem Upsert, gleiche Reihenfolge-Logik wie delete() (erst raeumen, dann schreiben):
-        // bricht der zweite Aufruf ab, bleiben hoechstens ueberzaehlige Faecher an einer Box
-        // stehen, nie umgekehrt ein Ordner-Exemplar ohne sein Fach. Mirrors saveContainer() in
-        // desktop/electron/copies.cjs.
+        // schlaegt der Upsert NACH erfolgreich geraeumten Faechern fehl, bleibt der Behaelter in
+        // der Datenbank noch ein Ordner, aber seine Exemplare haben Seite und Fach schon
+        // verloren -- nie umgekehrt ein Exemplar mit Fach an einem bereits umgestellten Behaelter.
+        // Mirrors saveContainer() in desktop/electron/copies.cjs.
         if (pockets == null) {
             val clearUrl = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
                 .addQueryParameter("container_id", "eq.${row.containerId}")

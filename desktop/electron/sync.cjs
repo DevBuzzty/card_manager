@@ -30,7 +30,14 @@ const COPY_BOOLS = new Set(['deleted', 'needs_review', 'for_sale']);
 // already do for cards/card_copies (trg_containers_updated in containers-schema.cjs re-stamps
 // updated_at on UPDATE; CURRENT_TIMESTAMP defaults handle INSERT).
 const CONTAINER_BOOLS = new Set(['deleted']);
+// Zwei eigene Konstanten statt einer gemeinsamen, obwohl der Filter heute identisch aussieht --
+// sie schliessen die Zeitstempel aus verschiedenen Gruenden aus und duerfen kuenftig
+// auseinanderlaufen: PUSH liesse den Server ueberschrieben zurueckbekommen, wenn wir sie
+// mitschickten (der Server stempelt updated_at selbst, wie user_id via auth.uid()).
 const CONTAINER_PUSH_COLS = CONTAINER_COLS.filter(c => c !== 'updated_at' && c !== 'created_at');
+// LOCAL darf die Cloud-Zeitstempel nicht in die lokalen Spalten schreiben: dort gilt das
+// sekundengenaue SQLite-Format, und jeder Vergleich (auch der Push-Cursor) ist ein
+// Zeichenkettenvergleich -- ein Postgres-timestamptz-String wuerde ihn verfaelschen.
 const CONTAINER_LOCAL_COLS = CONTAINER_COLS.filter(c => c !== 'updated_at' && c !== 'created_at');
 
 // Local SQLite row -> remote upsert payload. `updated_at` is server-stamped, never sent.
