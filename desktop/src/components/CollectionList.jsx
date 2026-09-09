@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, LayoutGrid, List as ListIcon, FilterX, SlidersHorizontal, Coins, X } from 'lucide-react';
+import { Search, LayoutGrid, List as ListIcon, FilterX, SlidersHorizontal, Coins, X, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { Grid } from 'react-window';
 import CustomSelect from './CustomSelect';
@@ -8,6 +8,8 @@ import CardTile from './CardTile';
 import { getRarityInfo } from '../utils/rarity.js';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { cardRoute } from '../utils/routes';
+import { parseTags } from '../utils/tags';
+import { formatCopyLocation } from '../utils/copyLocation';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -46,6 +48,10 @@ const scrollbarWidth = () => {
     return sbWidth;
 };
 
+// Spec B1 §7.4: card_copies kommt ueber listCopies() je Printing herein -- derselbe vierteilige
+// Schluessel wie ueberall sonst im Projekt (id/set_code/language/rarity).
+const printingKey = (p) => `${p.id}|${p.set_code}|${p.language || 'DE'}|${p.rarity}`;
+
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,6 +70,14 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [filterRarity, setFilterRarity] = useState('All');
   const [filterCondition, setFilterCondition] = useState('All');
   const [filterEdition, setFilterEdition] = useState('All');
+  // Spec B1 §7.4: Behaelter/Tag-Filter, mehrfach waehlbar; leer heisst "nicht filtern".
+  const [filterContainers, setFilterContainers] = useState([]);
+  const [filterTags, setFilterTags] = useState([]);
+  const [containers, setContainers] = useState([]); // fuer Filter-Chips und den Standort-Chip in der Zeile
+  const [tagOptions, setTagOptions] = useState([]); // Tag-Vokabular aus listTags() fuer die Filter-Chips
+  const [copiesByPrinting, setCopiesByPrinting] = useState({}); // printingKey() -> card_copies-Zeilen dieses Printings
+  const [containersTagsError, setContainersTagsError] = useState(null);
+  const [copiesLoadError, setCopiesLoadError] = useState(null);
   const [segment, setSegment] = useState('all'); // all | unknown | incomplete | foils
   const [segmentBusy, setSegmentBusy] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -163,6 +177,53 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     return () => window.removeEventListener('collection-dirty', onDirty);
   }, []);
 
+  // Behaelter- und Tag-Vokabular fuer die Filter-Chips (Spec B1 §7.4) -- list-containers/list-tags
+  // WERFEN bei einem DB-Fehler statt {success:false} zu liefern (main.cjs), gleiche Bauart wie
+  // Binders.jsx/CopySheet.jsx: ein Ladefehler bleibt sichtbar statt wie eine leere Liste auszusehen.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const [c, t] = await Promise.all([
+          window.api?.listContainers?.() ?? [],
+          window.api?.listTags?.() ?? [],
+        ]);
+        if (!alive) return;
+        setContainers(Array.isArray(c) ? c : []);
+        setTagOptions(Array.isArray(t) ? t : []);
+        setContainersTagsError(null);
+      } catch (e) {
+        if (!alive) return;
+        setContainersTagsError(e?.message || 'Behälter und Tags konnten nicht geladen werden.');
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Behaelter/Tag/Notiz-Filter und die Textsuche darauf greifen am EXEMPLAR (card_copies), diese
+  // Liste gruppiert aber nach Printing (rawCards: ein Eintrag je Set/Sprache/Rarity) -- deshalb
+  // hier je Printing die Exemplare nachladen, denselben Weg wie CardDetailPanel.jsx es fuer die
+  // Printings EINER Karte tut, hier nur ueber die ganze Sammlung.
+  useEffect(() => {
+    let alive = true;
+    if (!window.api?.listCopies || rawCards.length === 0) { setCopiesByPrinting({}); return; }
+    (async () => {
+      try {
+        const entries = await Promise.all(rawCards.map(async (c) => {
+          const rows = await window.api.listCopies({ id: c.id, set_code: c.set_code, language: c.language, rarity: c.rarity });
+          return [printingKey(c), rows];
+        }));
+        if (!alive) return;
+        setCopiesByPrinting(Object.fromEntries(entries));
+        setCopiesLoadError(null);
+      } catch (e) {
+        if (!alive) return;
+        setCopiesLoadError(e?.message || 'Exemplardaten konnten nicht geladen werden.');
+      }
+    })();
+    return () => { alive = false; };
+  }, [rawCards]);
+
   const handleUpdate = async (mode) => {
     if (!window.api || updating) return;
     if (!confirm(mode === 'all' ? "Alle Karten aktualisieren?" : "Fehlende Daten nachladen?")) return;
@@ -240,10 +301,39 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   }), [groupedCards]);
 
   const filtered = useMemo(() => {
-      return groupedCards.filter(c => {
-        if (segment === 'unknown' && !hasUnknownVariant(c)) return false;
-        if (segment === 'incomplete' && !isIncomplete(c)) return false;
-        if (segment === 'foils' && !hasFoilVariant(c)) return false;
+      // card_copies-Zeilen ALLER Printings einer Gruppe (groupedCards buendelt einen Passcode --
+      // das kann mehrere Printings umfassen). Grundlage fuer den Behaelter/Tag-Filter und die
+      // Textsuche in Tags/Notizen, die beide am Exemplar sitzen statt am Printing.
+      const copiesOfGroup = (c) => (c.variants || []).flatMap(v => copiesByPrinting[printingKey(v)] || []);
+      const copyMatchesContainer = (cp) => filterContainers.length === 0 || (cp.container_id && filterContainers.includes(cp.container_id));
+      const copyMatchesTags = (cp) => {
+          if (filterTags.length === 0) return true;
+          const copyTags = parseTags(cp.tags).map(t => t.toLowerCase());
+          return filterTags.some(t => copyTags.includes(t.toLowerCase()));
+      };
+
+      const matches = [];
+      for (const c of groupedCards) {
+        if (segment === 'unknown' && !hasUnknownVariant(c)) continue;
+        if (segment === 'incomplete' && !isIncomplete(c)) continue;
+        if (segment === 'foils' && !hasFoilVariant(c)) continue;
+
+        // ACHTUNG, ECHTE FALLE (Spec B1 §7.4): Diese Liste gruppiert nach Printing (genauer nach
+        // Passcode -- eine Gruppe kann mehrere Printings buendeln), Behaelter und Tag sitzen aber
+        // am EXEMPLAR (card_copies). Eine Gruppe bleibt daher sichtbar, sobald MINDESTENS EIN
+        // lebendes Exemplar eines ihrer Printings BEIDE aktiven Filter zugleich erfuellt (nicht
+        // zwei verschiedene Exemplare je einen) -- und der Standort-Chip unten gehoert zu GENAU
+        // DIESEM Exemplar, nicht zur Gruppe. Liegen mehrere passende Exemplare in verschiedenen
+        // Behaeltern, zeigt die Zeile bewusst nur das erste (Reihenfolge von listCopies:
+        // created_at, copy_id) -- die Kachel hat keinen Platz fuer eine zweite Zeile, und die
+        // vollstaendige Aufschluesselung steht im Kartendetail (Task 6) einen Klick entfernt.
+        let locationCopy = null;
+        if (filterContainers.length > 0 || filterTags.length > 0) {
+          const match = copiesOfGroup(c).find(cp => copyMatchesContainer(cp) && copyMatchesTags(cp));
+          if (!match) continue;
+          if (filterContainers.length > 0) locationCopy = match;
+        }
+
         const q = filter.trim().toLowerCase();
         const matchesSearch = !q
             || (c.name && c.name.toLowerCase().includes(q))
@@ -251,18 +341,23 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
             || (c.race && c.race.toLowerCase().includes(q))
             || (c.attribute && c.attribute.toLowerCase().includes(q))
             || Array.from(c.sets).some(s => s.toLowerCase().includes(q))
-            || Array.from(c.rarities).some(r => r.toLowerCase().includes(q));
-        if (!matchesSearch) return false;
-        if (filterType !== 'All' && (!c.type || !c.type.includes(filterType))) return false;
-        if (filterAttribute !== 'All' && c.attribute !== filterAttribute) return false;
-        if (filterRace !== 'All' && c.race !== filterRace) return false;
-        if (filterSet !== 'All' && !Array.from(c.sets).includes(filterSet)) return false;
-        if (filterLang !== 'All' && !Array.from(c.languages).includes(filterLang)) return false;
-        if (filterRarity !== 'All' && !Array.from(c.rarities).includes(filterRarity)) return false;
-        if (filterCondition !== 'All' && !c.conditions.has(filterCondition)) return false;
-        if (filterEdition !== 'All' && !c.editions.has(filterEdition)) return false;
-        return true;
-      }).sort((a, b) => {
+            || Array.from(c.rarities).some(r => r.toLowerCase().includes(q))
+            // Spec B1 §7.4: die Textsuche findet zusaetzlich Tags und Notizen der Exemplare.
+            || copiesOfGroup(c).some(cp => parseTags(cp.tags).some(t => t.toLowerCase().includes(q)))
+            || copiesOfGroup(c).some(cp => cp.note && cp.note.toLowerCase().includes(q));
+        if (!matchesSearch) continue;
+        if (filterType !== 'All' && (!c.type || !c.type.includes(filterType))) continue;
+        if (filterAttribute !== 'All' && c.attribute !== filterAttribute) continue;
+        if (filterRace !== 'All' && c.race !== filterRace) continue;
+        if (filterSet !== 'All' && !Array.from(c.sets).includes(filterSet)) continue;
+        if (filterLang !== 'All' && !Array.from(c.languages).includes(filterLang)) continue;
+        if (filterRarity !== 'All' && !Array.from(c.rarities).includes(filterRarity)) continue;
+        if (filterCondition !== 'All' && !c.conditions.has(filterCondition)) continue;
+        if (filterEdition !== 'All' && !c.editions.has(filterEdition)) continue;
+
+        matches.push(locationCopy ? { ...c, _locationCopy: locationCopy } : c);
+      }
+      return matches.sort((a, b) => {
           switch (sortType) {
               case 'name': return (a.name || '').localeCompare(b.name || '');
               case 'total': return b.totalValue - a.totalValue;
@@ -274,7 +369,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               default: return 0;
           }
       });
-  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, segment]);
+  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, segment, filterContainers, filterTags, copiesByPrinting]);
+
+  const toggleContainerFilter = (id) => setFilterContainers(list => list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
+  const toggleTagFilter = (t) => setFilterTags(list => list.includes(t) ? list.filter(x => x !== t) : [...list, t]);
 
   // Which filters are set, as removable chips.
   const activeFilters = [
@@ -286,7 +384,14 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     filterCondition !== 'All' && { key: 'cond', label: `Zustand ${filterCondition}`, clear: () => setFilterCondition('All') },
     filterEdition !== 'All' && { key: 'ed', label: EDITION_LABELS[filterEdition] || filterEdition, clear: () => setFilterEdition('All') },
     filterSet !== 'All' && { key: 'set', label: filterSet, clear: () => setFilterSet('All') },
-  ].filter(Boolean);
+  ].filter(Boolean).concat(
+    filterContainers.map(id => ({
+      key: `container-${id}`,
+      label: containers.find(ct => ct.container_id === id)?.name || id,
+      clear: () => toggleContainerFilter(id),
+    })),
+    filterTags.map(t => ({ key: `tag-${t}`, label: t, clear: () => toggleTagFilter(t) })),
+  );
 
   // The panel walks the list with the arrow buttons, so it gets the current order handed over.
   const openCard = (card) => {
@@ -297,6 +402,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
   const clearFilters = () => {
       setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All'); setFilterRarity('All'); setFilterCondition('All'); setFilterEdition('All');
+      setFilterContainers([]); setFilterTags([]);
   };
 
   // Virtualized Grid Cell Renderer
@@ -311,10 +417,22 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       const index = rowIndex * columnCount + columnIndex;
       if (index >= items.length) return null;
       const card = items[index];
+      // Spec B1 §7.4: der Chip gehoert zum EXEMPLAR, das den aktiven Behaelterfilter erfuellt hat
+      // (card._locationCopy, siehe filtered oben), nicht zum Printing -- deshalb hier und nicht
+      // in CardTile.jsx (das kennt keine Exemplare, nur aggregierte Printing-Zeilen).
+      const locationCopy = card._locationCopy;
+      const locationContainer = locationCopy ? containers.find(ct => ct.container_id === locationCopy.container_id) : null;
 
       return (
           <div style={{ ...style, padding: 8 }}>
               <CardTile card={card} onClick={() => openCard(card)} />
+              {filterContainers.length > 0 && locationCopy && (
+                  <div className="mt-1 px-0.5">
+                      <span className="inline-flex items-center font-mono text-[9.5px] text-ink-faint bg-obsidian-700 border border-line rounded px-1.5 py-0.5 truncate max-w-full">
+                          {formatCopyLocation(locationCopy, locationContainer)}
+                      </span>
+                  </div>
+              )}
           </div>
       );
   };
@@ -443,6 +561,46 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                   <CustomSelect value={filterEdition} onChange={setFilterEdition} placeholder="Edition" className="w-[120px]" options={[{ value: 'All', label: 'Edition' }, ...EDITIONS.map(e => ({ value: e, label: EDITION_LABELS[e] }))]} />
                   <CustomSelect value={filterSet} onChange={setFilterSet} placeholder="Set" className="w-[120px]" options={[{ value: "All", label: "Set" }, ...sets]} />
                   <button onClick={clearFilters} title="Filter zurücksetzen" className="p-2 text-gray-500 hover:text-red-400"><FilterX className="w-4 h-4" /></button>
+              </div>
+            )}
+
+            {/* Row 3b: Behaelter- und Tag-Filter (Spec B1 §7.4) -- beide mehrfach waehlbar, deshalb
+                Toggle-Chips statt CustomSelect (das ist Einfachauswahl). */}
+            {filtersOpen && containersTagsError && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{containersTagsError}</span>
+                </div>
+            )}
+            {filtersOpen && copiesLoadError && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{copiesLoadError}</span>
+                </div>
+            )}
+            {filtersOpen && containers.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-ink-faint mr-1 shrink-0">Behälter</span>
+                  {containers.map(ct => (
+                      <button key={ct.container_id} type="button" onClick={() => toggleContainerFilter(ct.container_id)}
+                              className={clsx('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors',
+                                filterContainers.includes(ct.container_id) ? 'bg-space-violet/20 border-space-violet/50 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink')}>
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ct.color || '#6b6383' }} />
+                          {ct.name}
+                      </button>
+                  ))}
+              </div>
+            )}
+            {filtersOpen && tagOptions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-ink-faint mr-1 shrink-0">Tags</span>
+                  {tagOptions.map(t => (
+                      <button key={t} type="button" onClick={() => toggleTagFilter(t)}
+                              className={clsx('px-2.5 py-1 rounded-full text-xs border transition-colors',
+                                filterTags.includes(t) ? 'bg-space-violet/20 border-space-violet/50 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink')}>
+                          {t}
+                      </button>
+                  ))}
               </div>
             )}
 
