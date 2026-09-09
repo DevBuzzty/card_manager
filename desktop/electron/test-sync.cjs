@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const { rowToRemote, remoteToLocalPatch, remoteToLocalFull, applyRemoteRow,
-  _recentlyPushedContainers, _applyPulledContainers } = require('./sync.cjs');
+  containerToRemote, _recentlyPushedContainers, _applyPulledContainers } = require('./sync.cjs');
 const { ensureCopiesSchema } = require('./copies-schema.cjs');
 const { ensureContainersSchema } = require('./containers-schema.cjs');
 
@@ -105,12 +105,21 @@ function freshSyncDb() {
 // setTimeout-Zeitgeber lostreten, die den Testprozess offen halten. Der kleinste Weg, der die
 // Reihenfolge wirklich prueft, ohne einen neuen Netzwerk-Test-Zugang einzufuehren: den Quelltext
 // von cycle() lesen und die Aufrufreihenfolge der vier Stromfunktionen textuell verifizieren.
+//
+// Das ist ein Quelltext-Zaun, KEIN Verhaltenstest: er schlaegt zuverlaessig an, wenn die vier
+// Aufrufe vertauscht werden, wuerde aber auch dann rot, wenn sie unveraendert in Reihenfolge
+// bleiben, aber in eine Hilfsfunktion wandern oder umbenannt werden -- in dem Fall ist der Test
+// anzupassen, nicht die Reihenfolge. Kommentare werden vor dem Vergleich entfernt, damit ein
+// Kommentar, der zufaellig einen der vier Aufrufe als Text enthaelt, den Test nicht faelschlich
+// gruen macht.
 {
   const src = fs.readFileSync(path.join(__dirname, 'sync.cjs'), 'utf8');
   const start = src.indexOf('async function cycle(');
   const end = src.indexOf('setInterval(cycle', start);
   assert.ok(start >= 0 && end > start, 'cycle() muss gefunden werden');
-  const body = src.slice(start, end);
+  const rawBody = src.slice(start, end);
+  // Block- und Zeilenkommentare raus, bevor auf Textreihenfolge geprueft wird.
+  const body = rawBody.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   const iPullC = body.indexOf('pullContainers(c)');
   const iPullK = body.indexOf('pullCopies(c)');
   const iPushC = body.indexOf('pushContainers(c)');
@@ -144,6 +153,17 @@ function freshSyncDb() {
   assert.equal(applied, 1);
   assert.equal(db.prepare('SELECT name FROM containers WHERE container_id = ?').get('c1').name, 'Blau neu');
   console.log('sync containers foreign-change test: PASS');
+}
+
+// created_at wird wie bei den beiden anderen Stroemen nie gepusht: SQLite schreibt eine
+// zeitzonenlose Zeichenkette, die Cloud-Spalte ist timestamptz mit eigenem default now().
+{
+  const c = containerToRemote({ container_id: 'c1', name: 'Blau', kind: 'binder',
+    pockets_per_page: 9, color: null, sort_order: 0, deleted: 0,
+    created_at: '2026-01-01 00:00:00', updated_at: '2026-01-01 00:00:00' });
+  assert.ok(!('created_at' in c), 'created_at is not pushed');
+  assert.ok(!('updated_at' in c), 'updated_at is server-stamped, never sent');
+  console.log('sync containers created_at not pushed test: PASS');
 }
 
 // deleted kommt aus Supabase als Boolean und wird lokal zu 0/1.

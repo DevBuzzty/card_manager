@@ -15,10 +15,13 @@ const COPY_COLS = ['copy_id', 'card_id', 'set_code', 'language', 'rarity', 'edit
 const COPY_BOOLS = new Set(['deleted', 'needs_review', 'for_sale']);
 
 // CONTAINER_COLS (from containers-schema.cjs) is the full local column set, used as-is for
-// applying pulled rows. The push payload drops updated_at: Supabase stamps that column
-// server-side (like user_id via auth.uid()), so sending our local value would be pointless.
+// applying pulled rows. The push payload drops updated_at (Supabase stamps that column
+// server-side, like user_id via auth.uid(), so sending our local value would be pointless) and
+// created_at (same reasoning as the other two streams, neither of which mirrors it: the local
+// value is a naive-UTC SQLite string, the cloud column is timestamptz, and interpreting a
+// timezone-less string server-side risks shifting it — the column already defaults to now()).
 const CONTAINER_BOOLS = new Set(['deleted']);
-const CONTAINER_PUSH_COLS = CONTAINER_COLS.filter(c => c !== 'updated_at');
+const CONTAINER_PUSH_COLS = CONTAINER_COLS.filter(c => c !== 'updated_at' && c !== 'created_at');
 
 // Local SQLite row -> remote upsert payload. `updated_at` is server-stamped, never sent.
 function rowToRemote(row) {
