@@ -44,3 +44,27 @@ test('removeTag entfernt ohne Ruecksicht auf Gross-Kleinschreibung', () => {
   assert.deepEqual(removeTag(['Kratzer', 'Tausch'], 'TAUSCH'), ['Kratzer']);
   assert.deepEqual(removeTag(['Kratzer'], 'gibtsnicht'), ['Kratzer']);
 });
+
+test('parseTags beschneidet NBSP (U+00A0) an beiden Raendern', () => {
+  const nbsp = String.fromCharCode(0xa0);
+  assert.deepEqual(parseTags(`["${nbsp}Tausch${nbsp}"]`), ['Tausch']);
+});
+
+test('parseTags beschneidet das Byte-Order-Zeichen (U+FEFF) am Rand', () => {
+  const bom = String.fromCharCode(0xfeff);
+  assert.deepEqual(parseTags(`["${bom}Tausch"]`), ['Tausch']);
+});
+
+test('parseTags entfernt einen Tag, der nur aus NBSP besteht', () => {
+  const nbsp = String.fromCharCode(0xa0);
+  assert.deepEqual(parseTags(`["${nbsp}${nbsp}", "Tausch"]`), ['Tausch']);
+});
+
+test('parseTags haelt "Tausch" und NBSP-Tausch fuer denselben Tag', () => {
+  const nbsp = String.fromCharCode(0xa0);
+  assert.deepEqual(parseTags(`["Tausch", "${nbsp}Tausch"]`), ['Tausch']);
+});
+
+test('parseTags liefert bei Muell nach einem gueltigen Array eine leere Liste', () => {
+  assert.deepEqual(parseTags('["a"] extra'), []);
+});
