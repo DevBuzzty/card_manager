@@ -290,3 +290,43 @@ test('deleteCopy schreibt cards.quantity/cards.deleted nicht selbst -- der Trigg
   assert.equal(card.quantity, 0, 'der Trigger muss die Karte auf 0 gesetzt haben');
   assert.equal(card.deleted, 1, 'der Trigger muss die Karte tombstonen');
 });
+
+// --- Fix-Durchlauf 1: listAllCopies liefert alle lebenden Exemplare in einer Abfrage (Befund 2) --
+
+test('listAllCopies liefert nur lebende Exemplare', () => {
+  const db = freshDb();
+  addCopy(db, 'lebt1');
+  addCopy(db, 'lebt2');
+  addCopy(db, 'weg', { deleted: 1 });
+  const ids = copies.listAllCopies(db).map(r => r.copy_id).sort();
+  assert.deepEqual(ids, ['lebt1', 'lebt2']);
+});
+
+test('listAllCopies liefert ein Exemplar ohne Behaelter mit container_id = null', () => {
+  const db = freshDb();
+  addCopy(db, 'frei');
+  const [row] = copies.listAllCopies(db);
+  assert.equal(row.container_id, null);
+});
+
+test('listAllCopies traegt die Werte DES EXEMPLARS, nicht der Karte', () => {
+  // Kein JOIN mit cards (Befund 2 warnt ausdruecklich vor der Spaltenkollision aus Befund 1) --
+  // Testdaten so gebaut, dass sich Exemplar- und Kartenwerte nachweislich unterscheiden.
+  const db = freshDb();
+  addContainer(db, 'c1', 'Blau');
+  addCopy(db, 'k1', { container_id: 'c1', page: 2, slot: 4, tags: '["Kratzer"]', note: 'Ecke bestossen' });
+  db.prepare(`UPDATE card_copies SET created_at = '2020-01-01 00:00:00' WHERE copy_id = 'k1'`).run();
+  db.prepare(`UPDATE cards SET created_at = '2021-05-05 00:00:00' WHERE id = '46986414'`).run();
+  const [row] = copies.listAllCopies(db);
+  assert.equal(row.copy_id, 'k1');
+  assert.equal(row.card_id, '46986414');
+  assert.equal(row.set_code, 'LOB-DE005');
+  assert.equal(row.language, 'DE');
+  assert.equal(row.rarity, 'Common');
+  assert.equal(row.container_id, 'c1');
+  assert.equal(row.page, 2);
+  assert.equal(row.slot, 4);
+  assert.deepEqual(JSON.parse(row.tags), ['Kratzer']);
+  assert.equal(row.note, 'Ecke bestossen');
+  assert.equal(row.created_at, '2020-01-01 00:00:00', 'created_at muss das des Exemplars sein, nicht der Karte');
+});

@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('api', {
   addCardToDb: (card) => ipcRenderer.invoke('add-card-to-db', card),
   getDefaults: () => ipcRenderer.invoke('get-defaults'),
   listCopies: (printing) => ipcRenderer.invoke('list-copies', printing),
+  listAllCopies: () => ipcRenderer.invoke('list-all-copies'),
   addCopy: (data) => ipcRenderer.invoke('add-copy', data),
   removeCopy: (data) => ipcRenderer.invoke('remove-copy', data),
   updateCopyGroup: (data) => ipcRenderer.invoke('update-copy-group', data),

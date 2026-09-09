@@ -151,6 +151,26 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     } finally { setCmBulkBusy(false); }
   };
 
+  // Behaelter- und Tag-Vokabular fuer die Filter-Chips (Spec B1 §7.4) -- list-containers/list-tags
+  // WERFEN bei einem DB-Fehler statt {success:false} zu liefern (main.cjs), gleiche Bauart wie
+  // Binders.jsx/CopySheet.jsx: ein Ladefehler bleibt sichtbar statt wie eine leere Liste auszusehen.
+  // Fix-Durchlauf 1, Befund 4: wird bei jedem loadCollection() neu geladen (statt nur beim
+  // Einhaengen), sonst zeigt ein Filter-Chip nach einem Behaelter-Loeschen/-Anlegen in einer
+  // anderen Ansicht weiter das veraltete Vokabular.
+  const loadVocabulary = async () => {
+    try {
+      const [c, t] = await Promise.all([
+        window.api?.listContainers?.() ?? [],
+        window.api?.listTags?.() ?? [],
+      ]);
+      setContainers(Array.isArray(c) ? c : []);
+      setTagOptions(Array.isArray(t) ? t : []);
+      setContainersTagsError(null);
+    } catch (e) {
+      setContainersTagsError(e?.message || 'Behälter und Tags konnten nicht geladen werden.');
+    }
+  };
+
   const loadCollection = async () => {
     if (window.api) {
       const result = await window.api.getCollection();
@@ -158,6 +178,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       const s = await window.api?.cardmarketBulkStatus?.();
       if (s) setCmStatus(s);
     }
+    loadVocabulary();
   };
 
   useEffect(() => { loadCollection(); }, [updating]);
@@ -177,44 +198,25 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     return () => window.removeEventListener('collection-dirty', onDirty);
   }, []);
 
-  // Behaelter- und Tag-Vokabular fuer die Filter-Chips (Spec B1 §7.4) -- list-containers/list-tags
-  // WERFEN bei einem DB-Fehler statt {success:false} zu liefern (main.cjs), gleiche Bauart wie
-  // Binders.jsx/CopySheet.jsx: ein Ladefehler bleibt sichtbar statt wie eine leere Liste auszusehen.
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const [c, t] = await Promise.all([
-          window.api?.listContainers?.() ?? [],
-          window.api?.listTags?.() ?? [],
-        ]);
-        if (!alive) return;
-        setContainers(Array.isArray(c) ? c : []);
-        setTagOptions(Array.isArray(t) ? t : []);
-        setContainersTagsError(null);
-      } catch (e) {
-        if (!alive) return;
-        setContainersTagsError(e?.message || 'Behälter und Tags konnten nicht geladen werden.');
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
-
   // Behaelter/Tag/Notiz-Filter und die Textsuche darauf greifen am EXEMPLAR (card_copies), diese
   // Liste gruppiert aber nach Printing (rawCards: ein Eintrag je Set/Sprache/Rarity) -- deshalb
-  // hier je Printing die Exemplare nachladen, denselben Weg wie CardDetailPanel.jsx es fuer die
-  // Printings EINER Karte tut, hier nur ueber die ganze Sammlung.
+  // hier ALLE lebenden Exemplare der Sammlung in EINEM Kanal laden (Fix-Durchlauf 1, Befund 2:
+  // vorher listCopies(printing) je Printing einzeln in einem Promise.all, bei mehreren tausend
+  // Printings entsprechend viele einzelne IPC-Rundreisen auf dem Single-Thread-Hauptprozess) und
+  // hier im Renderer nach Printing gruppieren.
   useEffect(() => {
     let alive = true;
-    if (!window.api?.listCopies || rawCards.length === 0) { setCopiesByPrinting({}); return; }
+    if (!window.api?.listAllCopies) { setCopiesByPrinting({}); return; }
     (async () => {
       try {
-        const entries = await Promise.all(rawCards.map(async (c) => {
-          const rows = await window.api.listCopies({ id: c.id, set_code: c.set_code, language: c.language, rarity: c.rarity });
-          return [printingKey(c), rows];
-        }));
+        const rows = await window.api.listAllCopies();
         if (!alive) return;
-        setCopiesByPrinting(Object.fromEntries(entries));
+        const grouped = {};
+        for (const cp of rows) {
+          const key = printingKey({ id: cp.card_id, set_code: cp.set_code, language: cp.language, rarity: cp.rarity });
+          (grouped[key] || (grouped[key] = [])).push(cp);
+        }
+        setCopiesByPrinting(grouped);
         setCopiesLoadError(null);
       } catch (e) {
         if (!alive) return;
@@ -519,6 +521,24 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 </div>
             </div>
 
+            {/* Fix-Durchlauf 1, Befund 1: diese Banner muessen sichtbar sein, egal ob das
+                Filter-Panel offen ist -- sonst sieht der Nutzer bei geschlossenem Panel nicht,
+                dass Behaelter-/Tag-Filter und die Notiz-/Tag-Textsuche gerade still leere
+                Ergebnisse liefern (dieselbe Fehlerklasse wie in Task 5). Gleicher Anzeigebau wie
+                Binders.jsx (roter crit-Kasten mit Symbol). */}
+            {containersTagsError && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{containersTagsError}</span>
+                </div>
+            )}
+            {copiesLoadError && (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{copiesLoadError}</span>
+                </div>
+            )}
+
             {/* Row 2: segment control */}
             <div className="flex flex-wrap items-center gap-2">
                 {[
@@ -566,18 +586,6 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
             {/* Row 3b: Behaelter- und Tag-Filter (Spec B1 §7.4) -- beide mehrfach waehlbar, deshalb
                 Toggle-Chips statt CustomSelect (das ist Einfachauswahl). */}
-            {filtersOpen && containersTagsError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{containersTagsError}</span>
-                </div>
-            )}
-            {filtersOpen && copiesLoadError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{copiesLoadError}</span>
-                </div>
-            )}
             {filtersOpen && containers.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-[10px] uppercase tracking-wide text-ink-faint mr-1 shrink-0">Behälter</span>

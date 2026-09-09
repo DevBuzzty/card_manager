@@ -195,6 +195,22 @@ function listUnsortedCopies(db) {
      ORDER BY cp.created_at, cp.copy_id`).all();
 }
 
+// Alle lebenden Exemplare der ganzen Sammlung in EINER Abfrage (Spec B1 Task 7, Fix-Durchlauf 1,
+// Befund 2) -- Ersatz fuer den frueheren Weg, listCopies(printing) je Printing einzeln aufzurufen
+// (bei mehreren tausend Printings entsprechend viele IPC-Rundreisen auf dem Single-Thread-
+// Hauptprozess). KEIN JOIN mit cards: card_copies und cards haben beide created_at, updated_at
+// und deleted, ein Join haette (wie schon einmal in listUnsortedCopies, siehe Kommentar dort) die
+// Exemplarwerte durch die Kartenwerte ueberschrieben. Die Printing-Identitaet (card_id, set_code,
+// language, rarity) reicht dem Aufrufer, um die Zeilen im Renderer nach Printing zu gruppieren.
+function listAllCopies(db) {
+  return db.prepare(`
+    SELECT copy_id, card_id, set_code, language, rarity,
+           container_id, page, slot, tags, note, created_at
+      FROM card_copies
+     WHERE deleted = 0
+     ORDER BY created_at, copy_id`).all();
+}
+
 // Vorschlagsliste ueber alle lebenden Exemplare: entdoppelt (ohne Ruecksicht auf
 // Gross-/Kleinschreibung, erste Schreibweise gewinnt), alphabetisch sortiert. Eine kaputte
 // tags-Zelle wird uebersprungen statt zu werfen -- der Inhalt kann aus der Cloud stammen.
@@ -279,6 +295,6 @@ function saveContainer(db, { container_id, name, kind, pockets_per_page, color, 
 
 module.exports = {
   ValidationError,
-  defaults, listCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting,
+  defaults, listCopies, listAllCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting,
   setCopyLocation, deleteCopy, setCopyTagsNote, listUnsortedCopies, listTags, listContainers, saveContainer,
 };

@@ -322,7 +322,16 @@ ipcMain.handle('get-collection', () => {
     return db.prepare(collectionSql()).all({ def_condition: def.condition, def_edition: def.edition });
 });
 ipcMain.handle('get-defaults', () => copies.defaults(db));
-ipcMain.handle('list-copies', (event, printing) => copies.listCopies(db, printing));
+ipcMain.handle('list-copies', (event, printing) => {
+    try { return copies.listCopies(db, printing); }
+    catch (e) { console.error('[list-copies]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
+});
+// Spec B1 Task 7, Fix-Durchlauf 1, Befund 2: EIN Kanal fuer alle lebenden Exemplare der Sammlung,
+// statt dass der Renderer listCopies() je Printing einzeln aufruft.
+ipcMain.handle('list-all-copies', () => {
+    try { return copies.listAllCopies(db); }
+    catch (e) { console.error('[list-all-copies]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
+});
 ipcMain.handle('add-copy', (event, { edition, condition, count, ...printing }) => {
     try { return { success: true, copyIds: copies.addCopies(db, printing, { edition, condition, count }) }; }
     catch (e) { return { success: false, error: e.message }; }
