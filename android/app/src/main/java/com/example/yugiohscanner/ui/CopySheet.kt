@@ -116,6 +116,13 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
 
     fun save() {
         if (savingRef[0]) return
+        // Ein eingetippter, aber nicht per Enter/Fertig bestaetigter Tag geht sonst verloren:
+        // tagInput lebt nur im Eingabefeld, bisher schickte save() ausschliesslich den tags-
+        // Zustand. VOR dem ersten suspend-Aufruf uebernehmen (synchron, wie savingRef oben) und
+        // DIESE Liste senden -- ein spaeteres commitTagInput() kaeme erst nach dem Speichern und
+        // damit zu spaet. Gleiche Loesung wie am Desktop (CopySheet.jsx#save).
+        val t = tagInput.trim()
+        val tagsToSave = if (t.isNotEmpty()) Tags.add(tags, t) else tags
         savingRef[0] = true
         saving = true
         error = null
@@ -129,7 +136,7 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
                 )
                 CollectionRepository.setCopyTagsNote(
                     copyId = copy.copyId,
-                    tags = tags,
+                    tags = tagsToSave,
                     note = note.trim().ifEmpty { null },
                 )
                 onSaved()

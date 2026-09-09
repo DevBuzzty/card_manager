@@ -235,10 +235,15 @@ function listTags(db) {
 
 // Behaelter mit Belegung: Anzahl lebender Exemplare und ihr Wert (Preis x Zustandsfaktor,
 // derselbe Weg wie valuation.cjs#totalValue -- keine zweite Formel).
+// max_page ist die hoechste belegte Seite eines Behaelters (Spec 5.3: "die hoechste belegte Seite
+// bestimmt die Anzeige") -- NULL, wenn kein lebendes Exemplar eine Seite traegt (kein Binder, oder
+// ein leerer). MAX() ignoriert NULLs von selbst, kein CASE noetig. Der Aufrufer (Binders.jsx,
+// BindersScreen.kt) faellt bei NULL auf ceil(copies_count / pockets_per_page) zurueck.
 function listContainers(db) {
   const rows = db.prepare(`
     SELECT ct.*,
            COUNT(cp.copy_id) AS copies_count,
+           MAX(cp.page) AS max_page,
            COALESCE(SUM(COALESCE(c.price, 0) * ${factorCaseSql('cp.condition')}), 0) AS value
       FROM containers ct
       LEFT JOIN card_copies cp ON cp.container_id = ct.container_id AND cp.deleted = 0
@@ -268,7 +273,7 @@ function saveContainer(db, { container_id, name, kind, pockets_per_page, color, 
   let pockets = null;
   if (kind === 'binder') {
     const p = Number(pockets_per_page);
-    if (!BINDER_POCKETS.includes(p)) throw new ValidationError('Ein Ordner hat 4, 9 oder 12 Taschen pro Seite.');
+    if (!BINDER_POCKETS.includes(p)) throw new ValidationError('Ein Ordner hat 4, 9 oder 12 Fächer pro Seite.');
     pockets = p;
   }
 
@@ -281,11 +286,23 @@ function saveContainer(db, { container_id, name, kind, pockets_per_page, color, 
     sort_order: sort_order ?? 0,
   };
   if (container_id) {
-    const info = db.prepare(`UPDATE containers
-                   SET name = @name, kind = @kind, pockets_per_page = @pockets_per_page,
-                       color = @color, sort_order = @sort_order, updated_at = CURRENT_TIMESTAMP
-                 WHERE container_id = @container_id AND deleted = 0`).run(data);
-    if (info.changes === 0) throw new ValidationError('Behälter nicht gefunden.');
+    db.transaction(() => {
+      const info = db.prepare(`UPDATE containers
+                     SET name = @name, kind = @kind, pockets_per_page = @pockets_per_page,
+                         color = @color, sort_order = @sort_order, updated_at = CURRENT_TIMESTAMP
+                   WHERE container_id = @container_id AND deleted = 0`).run(data);
+      if (info.changes === 0) throw new ValidationError('Behälter nicht gefunden.');
+      // Wechselt die Art auf nicht-binder, tragen die Exemplare dieses Behaelters unter
+      // Umstaenden noch Seite/Fach aus der Zeit, als er ein Ordner war -- setCopyLocation
+      // verwirft page/slot nur bei EINEM einzelnen Exemplar in DEM Moment, in dem es geschrieben
+      // wird, raeumt aber nichts bei den anderen nach. Ohne das hier zeigt der Standort-Chip
+      // "S2 · F3" fuer eine Box, und stellt der Nutzer die Art zurueck auf binder, tauchen
+      // Phantom-Belegungen in Faechern auf, in die nie jemand etwas gelegt hat.
+      if (kind !== 'binder') {
+        db.prepare(`UPDATE card_copies SET page = NULL, slot = NULL, updated_at = CURRENT_TIMESTAMP
+                     WHERE container_id = ? AND (page IS NOT NULL OR slot IS NOT NULL)`).run(container_id);
+      }
+    })();
   } else {
     db.prepare(`INSERT INTO containers (container_id, name, kind, pockets_per_page, color, sort_order)
                 VALUES (@container_id, @name, @kind, @pockets_per_page, @color, @sort_order)`).run(data);

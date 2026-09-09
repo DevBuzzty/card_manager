@@ -51,6 +51,25 @@ object ContainersRepository {
             row.pocketsPerPage
         } else null
 
+        // Wechselt die Art auf nicht-binder, tragen die Exemplare dieses Behaelters unter
+        // Umstaenden noch Seite/Fach aus der Zeit, als er ein Ordner war -- setCopyLocation raeumt
+        // nur EIN einzelnes Exemplar in dem Moment, in dem es geschrieben wird, nicht die anderen.
+        // VOR dem Upsert, gleiche Reihenfolge-Logik wie delete() (erst raeumen, dann schreiben):
+        // bricht der zweite Aufruf ab, bleiben hoechstens ueberzaehlige Faecher an einer Box
+        // stehen, nie umgekehrt ein Ordner-Exemplar ohne sein Fach. Mirrors saveContainer() in
+        // desktop/electron/copies.cjs.
+        if (pockets == null) {
+            val clearUrl = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
+                .addQueryParameter("container_id", "eq.${row.containerId}")
+                .addQueryParameter("or", "(page.not.is.null,slot.not.is.null)")
+                .build()
+            val clearBody = JSONObject().put("page", JSONObject.NULL).put("slot", JSONObject.NULL).toString()
+            executeWithReauth {
+                base(clearUrl).addHeader("Content-Type", "application/json")
+                    .patch(clearBody.toRequestBody(SupabaseCloud.jsonMedia)).build()
+            }.use { r -> if (!r.isSuccessful) err("Fächer räumen", r) }
+        }
+
         val body = JSONObject()
             .put("container_id", row.containerId)
             .put("name", cleanName)

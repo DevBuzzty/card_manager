@@ -6,7 +6,9 @@
 //
 // KEIN Fremdschluessel von card_copies auf containers: der Sync zieht beide Stroeme getrennt, und
 // ein Exemplar darf waehrend eines Zyklus kurz auf einen noch nicht angekommenen Behaelter zeigen.
-// Die Aufraeumpflicht traegt stattdessen deleteContainer.
+// Die Aufraeumpflicht traegt clearContainerLocations() unten -- es gibt ZWEI Wege, auf denen ein
+// Behaelter lokal geloescht wird (deleteContainer hier lokal, applyRemoteContainer in sync.cjs per
+// Pull), und beide rufen denselben Helfer.
 
 const CONTAINER_COLS = [
   'container_id', 'name', 'kind', 'pockets_per_page', 'color',
@@ -29,6 +31,33 @@ function ensureContainersSchema(db) {
     CREATE INDEX IF NOT EXISTS card_copies_location_idx
       ON card_copies (container_id, page, slot);
   `);
+  // Analog zu trg_copies_updated (copies-schema.cjs): stempelt updated_at bei jedem UPDATE neu,
+  // das es nicht schon selbst setzt. saveContainer/deleteContainer setzen es heute von Hand --
+  // dieser Trigger ist das Sicherheitsnetz fuer den naechsten Schreiber, der es vergisst, sonst
+  // entstuende eine Aenderung, die der Sync (er zieht ueber `updated_at > cursor`) nie abholt.
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS trg_containers_updated AFTER UPDATE ON containers FOR EACH ROW
+    WHEN NEW.updated_at = OLD.updated_at
+    BEGIN UPDATE containers SET updated_at = CURRENT_TIMESTAMP WHERE container_id = NEW.container_id; END;
+  `);
+}
+
+/**
+ * Setzt Behaelter, Seite und Fach aller Exemplare zurueck, die auf diesen Behaelter zeigen.
+ * Gemeinsamer Kern von deleteContainer (lokales Loeschen) und applyRemoteContainer in sync.cjs
+ * (ein Behaelter kommt per Pull bereits geloescht herunter, weil ein anderes Geraet ihn geloescht
+ * hat) -- beide Wege muessen dieselbe Regel anwenden, sonst bleibt ein Exemplar auf einen
+ * geloeschten Behaelter zeigend haengen: nicht im Behaelter, weil der weg ist, nicht in
+ * "nicht einsortiert", weil container_id nicht NULL ist -- es zaehlt nirgends mehr.
+ *
+ * @returns Anzahl der Exemplare, deren Standort geraeumt wurde.
+ */
+function clearContainerLocations(db, containerId) {
+  return db.prepare(`
+    UPDATE card_copies
+       SET container_id = NULL, page = NULL, slot = NULL,
+           updated_at = CURRENT_TIMESTAMP
+     WHERE container_id = ?`).run(containerId).changes;
 }
 
 /**
@@ -42,17 +71,13 @@ function ensureContainersSchema(db) {
  */
 function deleteContainer(db, containerId) {
   return db.transaction(() => {
-    const info = db.prepare(`
-      UPDATE card_copies
-         SET container_id = NULL, page = NULL, slot = NULL,
-             updated_at = CURRENT_TIMESTAMP
-       WHERE container_id = ?`).run(containerId);
+    const changes = clearContainerLocations(db, containerId);
     db.prepare(`
       UPDATE containers
          SET deleted = 1, updated_at = CURRENT_TIMESTAMP
        WHERE container_id = ?`).run(containerId);
-    return info.changes;
+    return changes;
   })();
 }
 
-module.exports = { ensureContainersSchema, deleteContainer, CONTAINER_COLS };
+module.exports = { ensureContainersSchema, deleteContainer, clearContainerLocations, CONTAINER_COLS };

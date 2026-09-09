@@ -176,3 +176,43 @@ function freshSyncDb() {
   assert.equal(db.prepare('SELECT deleted FROM containers WHERE container_id = ?').get('c1').deleted, 1);
   console.log('sync containers deleted boolean test: PASS');
 }
+
+// Befund 1 (Abschlussreview, der schwerste): ein Exemplar zeigt auf einen Behaelter, der per Pull
+// bereits geloescht hereinkommt (ein anderes Geraet hat ihn geloescht) -- danach darf es nicht
+// mehr darauf zeigen, sonst zaehlt es nirgends mehr (nicht im Behaelter, der weg ist; nicht in
+// "nicht einsortiert", weil container_id nicht NULL ist).
+{
+  const db = freshSyncDb();
+  db.prepare(`INSERT INTO containers (container_id, name, kind, pockets_per_page) VALUES ('c1','Blau','binder',9)`).run();
+  db.prepare(`INSERT INTO card_copies (copy_id, card_id, set_code, language, rarity, container_id, page, slot)
+              VALUES ('k1','1','LOB-EN001','DE','Common','c1',3,7)`).run();
+  db.prepare("UPDATE card_copies SET updated_at = '2000-01-01 00:00:00' WHERE copy_id = 'k1'").run();
+  _recentlyPushedContainers.clear();
+  _applyPulledContainers(db, [
+    { container_id: 'c1', name: 'Blau', kind: 'binder', deleted: true, updated_at: '2026-09-09T12:00:00Z' },
+  ]);
+  const k = db.prepare('SELECT container_id, page, slot, updated_at FROM card_copies WHERE copy_id = ?').get('k1');
+  assert.equal(k.container_id, null, 'Exemplar darf nicht mehr auf den geloeschten Behaelter zeigen');
+  assert.equal(k.page, null);
+  assert.equal(k.slot, null);
+  assert.notEqual(k.updated_at, '2000-01-01 00:00:00', 'updated_at muss frisch sein, sonst zieht der Sync die Aenderung nie ab');
+  console.log('sync containers pull-delete clears copy locations test: PASS');
+}
+
+// Befund 3 (Abschlussreview): ein gezogener Behaelter darf die Cloud-eigene Mikrosekunden-
+// Zeitstempelform NIE in die lokale, sekundengenaue Spalte schreiben -- sonst vergleicht der
+// naechste Push-Cursor Zeichenketten, in denen 'T' (0x54) groesser ist als das Leerzeichen (0x20)
+// des lokalen Formats, und ein aelterer gezogener Behaelter wuerde die Push-Bedingung
+// `updated_at > cursor` sofort wieder erfuellen und zurueckgepusht werden.
+{
+  const db = freshSyncDb();
+  _recentlyPushedContainers.clear();
+  _applyPulledContainers(db, [
+    { container_id: 'c1', name: 'Blau', kind: 'binder', pockets_per_page: 9,
+      created_at: '2020-01-01T00:00:00.123456+00:00', updated_at: '2020-01-01T00:00:00.123456+00:00' },
+  ]);
+  const row = db.prepare('SELECT created_at, updated_at FROM containers WHERE container_id = ?').get('c1');
+  assert.ok(!String(row.updated_at).includes('T'), 'updated_at muss im lokalen Format stehen, nicht dem der Cloud: ' + row.updated_at);
+  assert.ok(!String(row.created_at).includes('T'), 'created_at muss im lokalen Format stehen, nicht dem der Cloud: ' + row.created_at);
+  console.log('sync containers local timestamp format test: PASS');
+}

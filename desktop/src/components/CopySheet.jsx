@@ -90,6 +90,12 @@ export default function CopySheet({ copy, onClose, onSaved }) {
     setSaving(true);
     setError(null);
     try {
+      // Ein eingetippter, aber nicht per Enter bestaetigter Tag geht sonst verloren: tagInput
+      // lebt nur im Eingabefeld, save() schickte bisher ausschliesslich den tags-Zustand. VOR dem
+      // ersten await uebernehmen (synchron, wie busyRef oben) und DIESE Liste senden -- der
+      // spaetere setTags-Aufruf aus commitTagInput() kaeme erst nach dem Speichern und damit zu spaet.
+      const t = tagInput.trim();
+      const tagsToSave = t ? addTag(tags, t) : tags;
       // page/slot gehen ROH mit -- setCopyLocation (electron/copies.cjs) verwirft sie bei
       // Nicht-Bindern bereits selbst anhand der Behaelterart in der Datenbank. Die Regel liegt
       // dort und nicht hier, damit sie fuer jeden Aufrufer gilt (Befund B): ein clientseitiges
@@ -107,7 +113,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
       }
       const notResult = await window.api?.setCopyTagsNote?.({
         copy_id: copy.copy_id,
-        tags,
+        tags: tagsToSave,
         note: note.trim() === '' ? null : note,
       });
       if (notResult && notResult.success === false) {

@@ -206,10 +206,10 @@ test('saveContainer lehnt eine unbekannte Behaelterart ab', () => {
     /Behälterart/);
 });
 
-test('saveContainer erlaubt bei binder nur 4, 9 oder 12 Taschen pro Seite', () => {
+test('saveContainer erlaubt bei binder nur 4, 9 oder 12 Fächer pro Seite', () => {
   const db = freshDb();
   assert.throws(() => copies.saveContainer(db, { name: 'Blau', kind: 'binder', pockets_per_page: 7 }),
-    /Taschen/);
+    /Fächer/);
 });
 
 test('saveContainer verwirft pockets_per_page bei box, statt es abzulehnen', () => {
@@ -329,4 +329,47 @@ test('listAllCopies traegt die Werte DES EXEMPLARS, nicht der Karte', () => {
   assert.deepEqual(JSON.parse(row.tags), ['Kratzer']);
   assert.equal(row.note, 'Ecke bestossen');
   assert.equal(row.created_at, '2020-01-01 00:00:00', 'created_at muss das des Exemplars sein, nicht der Karte');
+});
+
+// --- Fix-Durchlauf Abschlussreview: saveContainer raeumt Seite/Fach beim Wechsel weg von binder (Befund 2) ---
+
+test('saveContainer raeumt Seite und Fach aller Exemplare, wenn die Art von binder auf box wechselt', () => {
+  const db = freshDb();
+  addContainer(db, 'c1', 'Blau', 'binder', 9);
+  addCopy(db, 'k1', { container_id: 'c1', page: 1, slot: 1 });
+  addCopy(db, 'k2', { container_id: 'c1', page: 2, slot: 3 });
+  copies.saveContainer(db, { container_id: 'c1', name: 'Blau', kind: 'box', pockets_per_page: null });
+  const k1 = readCopy(db, 'k1'), k2 = readCopy(db, 'k2');
+  assert.equal(k1.page, null); assert.equal(k1.slot, null);
+  assert.equal(k2.page, null); assert.equal(k2.slot, null);
+  assert.equal(k1.container_id, 'c1', 'der Behaelter selbst bleibt zugewiesen -- nur Seite/Fach werden geraeumt');
+});
+
+test('saveContainer laesst Seite und Fach in Ruhe, wenn die Art binder bleibt', () => {
+  const db = freshDb();
+  addContainer(db, 'c1', 'Blau', 'binder', 9);
+  addCopy(db, 'k1', { container_id: 'c1', page: 1, slot: 1 });
+  copies.saveContainer(db, { container_id: 'c1', name: 'Blau neu', kind: 'binder', pockets_per_page: 12 });
+  const k1 = readCopy(db, 'k1');
+  assert.equal(k1.page, 1);
+  assert.equal(k1.slot, 1);
+});
+
+// --- Fix-Durchlauf Abschlussreview: listContainers meldet die hoechste belegte Seite (Befund 7) ---
+
+test('listContainers liefert die hoechste belegte Seite, nicht ceil(Anzahl/Faecher)', () => {
+  // Spec 5.3: liegen 10 Karten alle auf Seite 7 eines 9-Fach-Ordners, muss "7" herauskommen,
+  // nicht ceil(10/9) = 2.
+  const db = freshDb();
+  addContainer(db, 'c1', 'Ordner', 'binder', 9);
+  for (let i = 0; i < 10; i++) addCopy(db, `k${i}`, { container_id: 'c1', page: 7, slot: (i % 9) + 1 });
+  const [row] = copies.listContainers(db);
+  assert.equal(row.max_page, 7);
+});
+
+test('listContainers liefert keine belegte Seite, wenn kein Exemplar eine Seite traegt', () => {
+  const db = freshDb();
+  addContainer(db, 'c1', 'Leerer Ordner', 'binder', 9);
+  const [row] = copies.listContainers(db);
+  assert.equal(row.max_page, null);
 });

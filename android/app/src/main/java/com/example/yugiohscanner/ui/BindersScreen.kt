@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,7 +49,6 @@ import kotlin.math.ceil
 
 private val KIND_OPTIONS = listOf("binder" to "Ordner", "box" to "Box", "deckbox" to "Deckbox")
 private val KIND_LABELS = KIND_OPTIONS.toMap()
-private val KIND_VALUES = KIND_OPTIONS.map { it.first }.toSet()
 private val POCKET_OPTIONS = listOf(4, 9, 12)
 // Same hexes as the desktop swatch (Binders.jsx COLOR_PRESETS) -- all already in the theme palette.
 private val COLOR_PRESETS = listOf(Primary, Gold, Good, ErrorColor, RarityRare, RaritySuper, TypeMonster, TypeSpell)
@@ -79,6 +79,10 @@ fun BindersScreen() {
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var showUnsorted by remember { mutableStateOf(false) }
+    // Spec B1 §7.1 Befund 6: Tipp auf ein nicht einsortiertes Exemplar springt ins Kartendetail --
+    // das ist der Weg, auf dem der Nutzer es einsortiert. Gleiche Bauart wie CollectionScreen.kt
+    // (detailId, volle Seite ersetzt den Tab-Inhalt statt eines NavController).
+    var detailId by remember { mutableStateOf<String?>(null) }
 
     var dialog by remember { mutableStateOf<BinderForm?>(null) }
     var dialogError by remember { mutableStateOf<String?>(null) }
@@ -110,21 +114,38 @@ fun BindersScreen() {
         finally { loading = false }
     }
 
+    // Full-screen sub-view takes over the whole tab, wie in CollectionScreen.kt.
+    BackHandler(detailId != null) { detailId = null }
+    detailId?.let { id ->
+        CardDetailScreen(
+            cardId = id,
+            initial = cards,
+            initialCopies = copies,
+            onClose = { detailId = null },
+            onChanged = { scope.launch { runCatching { reload() } } },
+        )
+        return
+    }
+
     val cardsByKey = remember(cards) { cards.associateBy { it.printingKey() } }
     val copiesByContainer = remember(copies) { copies.filter { it.containerId != null }.groupBy { it.containerId!! } }
     fun countFor(id: String) = copiesByContainer[id]?.size ?: 0
     fun valueFor(id: String) = copiesByContainer[id]?.sumOf { c -> (cardsByKey[c.printingKey()]?.price ?: 0.0) * Valuation.factor(c.condition) } ?: 0.0
+    // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nicht ceil(Anzahl/Faecher) --
+    // null, wenn kein Exemplar dieses Behaelters eine Seite traegt (BinderRow faellt dann auf
+    // ceil zurueck). Gleiche Regel wie listContainers' max_page am Desktop (copies.cjs).
+    fun maxPageFor(id: String): Int? = copiesByContainer[id]?.mapNotNull { it.page }?.maxOrNull()
 
     fun submitDialog() {
         val form = dialog ?: return
         if (savingRef[0]) return
-        val name = form.name.trim()
-        if (name.isBlank()) { dialogError = "Name darf nicht leer sein."; return }
-        if (form.kind !in KIND_VALUES) { dialogError = "Ungültige Art."; return }
-        val pockets = if (form.kind == "binder") {
-            if (form.pocketsPerPage !in POCKET_OPTIONS) { dialogError = "Fächer pro Seite muss 4, 9 oder 12 sein."; return }
-            form.pocketsPerPage
-        } else null
+        // Keine eigene Pruefung hier: ContainersRepository.save() prueft dieselben drei Regeln
+        // bereits (markiert, mit Verweis auf den Desktop) -- der Desktop macht es genauso
+        // (Binders.jsx schraenkt nur die Eingaben ein und laesst saveContainer entscheiden). Eine
+        // zweite Pruefung hier mit eigenen Texten und ohne Verweis lief unmarkiert auseinander.
+        // Die Einschraenkung der EINGABEN (Faecher-Auswahl nur bei binder, nur 4/9/12) bleibt in
+        // der Oberflaeche weiter unten (BinderDialog).
+        val pockets = if (form.kind == "binder") form.pocketsPerPage else null
 
         savingRef[0] = true
         saving = true
@@ -134,7 +155,7 @@ fun BindersScreen() {
                 ContainersRepository.save(
                     ContainerRow(
                         containerId = form.containerId ?: UUID.randomUUID().toString(),
-                        name = name, kind = form.kind, pocketsPerPage = pockets,
+                        name = form.name, kind = form.kind, pocketsPerPage = pockets,
                         color = form.color, sortOrder = form.sortOrder,
                     )
                 )
@@ -211,7 +232,10 @@ fun BindersScreen() {
                             ) {
                                 items(unsortedCopies, key = { it.copyId }) { copy ->
                                     val card = cardsByKey[copy.printingKey()]
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth().clickable { detailId = copy.cardId },
+                                    ) {
                                         Text(
                                             card?.name ?: copy.cardId, color = OnSurface, maxLines = 1,
                                             style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
@@ -248,7 +272,7 @@ fun BindersScreen() {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(containers, key = { it.containerId }) { c ->
                         BinderRow(
-                            c, count = countFor(c.containerId), value = valueFor(c.containerId),
+                            c, count = countFor(c.containerId), value = valueFor(c.containerId), maxPage = maxPageFor(c.containerId),
                             onEdit = {
                                 dialog = BinderForm(
                                     containerId = c.containerId, name = c.name, kind = c.kind,
@@ -283,7 +307,7 @@ fun BindersScreen() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BinderRow(c: ContainerRow, count: Int, value: Double, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun BinderRow(c: ContainerRow, count: Int, value: Double, maxPage: Int?, onEdit: () -> Unit, onDelete: () -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     SpaceCard(Modifier.fillMaxWidth()) {
         Box {
@@ -306,7 +330,9 @@ private fun BinderRow(c: ContainerRow, count: Int, value: Double, onEdit: () -> 
                 val occupancy = buildString {
                     append(count); append(if (count == 1) " Exemplar" else " Exemplare")
                     if (c.kind == "binder" && pockets != null && pockets > 0) {
-                        append(" · "); append(ceil(count.toDouble() / pockets).toInt()); append(" Seiten")
+                        // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige -- ceil bleibt
+                        // nur der Rueckfall, wenn kein Exemplar eine Seite traegt (maxPage null).
+                        append(" · "); append(maxPage ?: ceil(count.toDouble() / pockets).toInt()); append(" Seiten")
                     }
                 }
                 Text(occupancy, color = Muted, style = MaterialTheme.typography.bodySmall)

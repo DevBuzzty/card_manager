@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { totalValue, copyCount } = require('./valuation.cjs');
-const { CONTAINER_COLS } = require('./containers-schema.cjs');
+const { CONTAINER_COLS, clearContainerLocations } = require('./containers-schema.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
@@ -14,14 +14,24 @@ const COPY_COLS = ['copy_id', 'card_id', 'set_code', 'language', 'rarity', 'edit
   'container_id', 'page', 'slot', 'tags', 'note', 'needs_review', 'review_reason', 'for_sale'];
 const COPY_BOOLS = new Set(['deleted', 'needs_review', 'for_sale']);
 
-// CONTAINER_COLS (from containers-schema.cjs) is the full local column set, used as-is for
-// applying pulled rows. The push payload drops updated_at (Supabase stamps that column
+// CONTAINER_COLS (from containers-schema.cjs) is the full local column set -- used as-is only for
+// schema checks. Neither direction of the sync may touch the two timestamp columns directly, same
+// as MIRROR_COLS/COPY_COLS above: the push payload drops updated_at (Supabase stamps that column
 // server-side, like user_id via auth.uid(), so sending our local value would be pointless) and
 // created_at (same reasoning as the other two streams, neither of which mirrors it: the local
 // value is a naive-UTC SQLite string, the cloud column is timestamptz, and interpreting a
 // timezone-less string server-side risks shifting it — the column already defaults to now()).
+// CONTAINER_LOCAL_COLS is the pull-direction analogue of CONTAINER_PUSH_COLS: applying a pulled
+// row must never write Supabase's own timestamptz string (e.g. "2026-09-05T10:00:00.123456+00:00")
+// into the local, sekundengenaue DATETIME column -- every comparison against it is a string
+// comparison, and 'T' (0x54) sorts above the space (0x20) the local format uses, so a pulled row
+// from an EARLIER day would still satisfy the push cursor's `updated_at > cursor` and get pushed
+// right back. Local rows get their own fresh stamp instead, exactly like MIRROR_COLS/COPY_COLS
+// already do for cards/card_copies (trg_containers_updated in containers-schema.cjs re-stamps
+// updated_at on UPDATE; CURRENT_TIMESTAMP defaults handle INSERT).
 const CONTAINER_BOOLS = new Set(['deleted']);
 const CONTAINER_PUSH_COLS = CONTAINER_COLS.filter(c => c !== 'updated_at' && c !== 'created_at');
+const CONTAINER_LOCAL_COLS = CONTAINER_COLS.filter(c => c !== 'updated_at' && c !== 'created_at');
 
 // Local SQLite row -> remote upsert payload. `updated_at` is server-stamped, never sent.
 function rowToRemote(row) {
@@ -107,24 +117,29 @@ function containerToRemote(row) {
 }
 function remoteToLocalContainer(r) {
   const out = {};
-  for (const c of CONTAINER_COLS) out[c] = CONTAINER_BOOLS.has(c) ? (r[c] ? 1 : 0) : (r[c] ?? null);
+  for (const c of CONTAINER_LOCAL_COLS) out[c] = CONTAINER_BOOLS.has(c) ? (r[c] ? 1 : 0) : (r[c] ?? null);
   out.container_id = String(r.container_id);
   out.name = out.name || 'Ohne Namen';
   out.kind = out.kind || 'box';
   out.sort_order = out.sort_order ?? 0;
   return out;
 }
+// Ein Behaelter, der bereits geloescht ankommt (ein anderes Geraet hat ihn geloescht, moeglicherweise
+// bevor der Desktop ein inzwischen zugewiesenes Exemplar gezogen hatte), muss dieselbe Aufraeumpflicht
+// ausloesen wie das lokale Loeschen (deleteContainer) -- sonst zeigt ein Exemplar auf einen Behaelter,
+// den es lokal nicht mehr (oder nie) lebend gab, und ist nirgends mehr sichtbar (Befund 1).
 function applyRemoteContainer(db, r) {
   const l = remoteToLocalContainer(r);
   const cur = db.prepare('SELECT * FROM containers WHERE container_id = ?').get(l.container_id);
+  if (l.deleted && (!cur || !cur.deleted)) clearContainerLocations(db, l.container_id);
   if (!cur) {
-    db.prepare(`INSERT INTO containers (${CONTAINER_COLS.join(',')})
-                VALUES (${CONTAINER_COLS.map(c => '@' + c).join(',')})`).run(l);
+    db.prepare(`INSERT INTO containers (${CONTAINER_LOCAL_COLS.join(',')})
+                VALUES (${CONTAINER_LOCAL_COLS.map(c => '@' + c).join(',')})`).run(l);
     return;
   }
-  const changed = CONTAINER_COLS.some(c => c !== 'container_id' && (cur[c] ?? null) !== (l[c] ?? null));
+  const changed = CONTAINER_LOCAL_COLS.some(c => c !== 'container_id' && (cur[c] ?? null) !== (l[c] ?? null));
   if (!changed) return;
-  const sets = CONTAINER_COLS.filter(c => c !== 'container_id').map(c => `${c} = @${c}`).join(', ');
+  const sets = CONTAINER_LOCAL_COLS.filter(c => c !== 'container_id').map(c => `${c} = @${c}`).join(', ');
   db.prepare(`UPDATE containers SET ${sets} WHERE container_id = @container_id`).run(l);
 }
 

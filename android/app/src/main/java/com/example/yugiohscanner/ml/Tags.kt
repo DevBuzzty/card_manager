@@ -16,11 +16,11 @@ import org.json.JSONTokener
 object Tags {
 
     /**
-     * Zeichensatz von JavaScripts `String.prototype.trim()` (ECMA-262 WhiteSpace + LineTerminator).
-     * Weicht bewusst von Kotlins `Character.isWhitespace()` ab: JS trimmt zusaetzlich U+00A0
-     * (NBSP), U+2007, U+202F und U+FEFF (Byte-Order-Zeichen) -- genau diese vier schliesst
-     * `Character.isWhitespace()` aus. Ohne diese Konstante liefen `trim()` in Kotlin und
-     * JavaScript bei genau diesen Zeichen auseinander und die Zwillingsregel wuerde brechen.
+     * Zeichensatz von JavaScripts `String.prototype.trim()` (ECMA-262 WhiteSpace + LineTerminator),
+     * ausdruecklich aufgezaehlt statt auf Character-Kategorien (`Character.isWhitespace()`)
+     * gebaut -- die haengen von JVM-Version und ICU-Tabelle ab. Die tatsaechlichen Unterschiede zu
+     * Kotlins eingebautem `trim()`: U+FEFF (Byte-Order-Zeichen) wird von JS beschnitten, von
+     * Kotlin nicht; U+001C bis U+001F werden von Kotlin beschnitten, von JS nicht.
      */
     private val JS_TRIM_CHARS = charArrayOf(
         0x0009.toChar(), 0x000A.toChar(), 0x000B.toChar(), 0x000C.toChar(), 0x000D.toChar(),

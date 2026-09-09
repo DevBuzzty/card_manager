@@ -267,7 +267,11 @@ export default function Binders() {
                 <span className="text-xs text-ink-muted">{KIND_LABELS[c.kind] || c.kind}</span>
                 <span className="text-sm text-ink-muted">
                   {c.copies_count} {c.copies_count === 1 ? 'Exemplar' : 'Exemplare'}
-                  {c.kind === 'binder' && c.pockets_per_page ? ` · ${Math.ceil((c.copies_count || 0) / c.pockets_per_page)} Seiten` : ''}
+                  {/* Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nicht ceil(Anzahl/Faecher) --
+                      ceil bleibt nur der Rueckfall, wenn kein Exemplar eine Seite traegt (max_page ist dann null). */}
+                  {c.kind === 'binder' && c.pockets_per_page
+                    ? ` · ${c.max_page ?? Math.ceil((c.copies_count || 0) / c.pockets_per_page)} Seiten`
+                    : ''}
                 </span>
                 <span className="text-sm font-mono text-space-violet">{fmtEUR(c.value)}</span>
               </div>
