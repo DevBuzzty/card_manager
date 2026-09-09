@@ -1,6 +1,11 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const Database = require('better-sqlite3');
-const { rowToRemote, remoteToLocalPatch, remoteToLocalFull, applyRemoteRow } = require('./sync.cjs');
+const { rowToRemote, remoteToLocalPatch, remoteToLocalFull, applyRemoteRow,
+  _recentlyPushedContainers, _applyPulledContainers } = require('./sync.cjs');
+const { ensureCopiesSchema } = require('./copies-schema.cjs');
+const { ensureContainersSchema } = require('./containers-schema.cjs');
 
 // Local SQLite row -> remote upsert payload: booleans, only mirrored columns.
 const local = { id: '1', set_code: 'LOB-EN001', language: 'DE', name: 'X',
@@ -76,3 +81,78 @@ assert.deepStrictEqual(
 }
 
 console.log('sync mapping test: PASS');
+
+// Behaelter als dritter Sync-Strom (Spec B1 Task 2). Ein card_copies-Eintrag darf nie auf einen
+// Behaelter zeigen, den es lokal noch nicht gibt -- es gibt bewusst keinen Fremdschluessel dafuer
+// (siehe containers-schema.cjs), die Zugreihenfolge in cycle() ist die einzige Absicherung.
+
+function freshSyncDb() {
+  const db = new Database(':memory:');
+  db.exec(`
+    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+    CREATE TABLE cards (id TEXT, quantity INTEGER DEFAULT 1, rarity TEXT DEFAULT 'Unknown', set_code TEXT,
+      price REAL, language TEXT DEFAULT 'DE', updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      deleted INTEGER DEFAULT 0, PRIMARY KEY (id, set_code, language, rarity));
+    CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY, total_value REAL);
+  `);
+  ensureCopiesSchema(db); // creates card_copies + price_history; containers' index needs card_copies first
+  ensureContainersSchema(db);
+  return db;
+}
+
+// Ordnungstest: startSync() selbst gegen eine Attrappe laufen zu lassen wuerde entweder eine
+// echte Supabase-Verbindung brauchen (verboten in Tests) oder dessen produktive setInterval/
+// setTimeout-Zeitgeber lostreten, die den Testprozess offen halten. Der kleinste Weg, der die
+// Reihenfolge wirklich prueft, ohne einen neuen Netzwerk-Test-Zugang einzufuehren: den Quelltext
+// von cycle() lesen und die Aufrufreihenfolge der vier Stromfunktionen textuell verifizieren.
+{
+  const src = fs.readFileSync(path.join(__dirname, 'sync.cjs'), 'utf8');
+  const start = src.indexOf('async function cycle(');
+  const end = src.indexOf('setInterval(cycle', start);
+  assert.ok(start >= 0 && end > start, 'cycle() muss gefunden werden');
+  const body = src.slice(start, end);
+  const iPullC = body.indexOf('pullContainers(c)');
+  const iPullK = body.indexOf('pullCopies(c)');
+  const iPushC = body.indexOf('pushContainers(c)');
+  const iPushK = body.indexOf('pushCopies(c)');
+  assert.ok(iPullC >= 0 && iPullC < iPullK, 'pullContainers muss vor pullCopies laufen');
+  assert.ok(iPushC >= 0 && iPushC < iPushK, 'pushContainers muss vor pushCopies laufen');
+  console.log('sync cycle order (Behaelter vor Exemplaren) test: PASS');
+}
+
+// Echo-Sperre: ein gepushter Behaelter wird beim naechsten Pull nicht erneut angewandt.
+{
+  const db = freshSyncDb();
+  _recentlyPushedContainers.clear();
+  _recentlyPushedContainers.set('c1', '2026-09-09T10:00:00Z');
+  const applied = _applyPulledContainers(db, [
+    { container_id: 'c1', name: 'Blau', kind: 'binder', updated_at: '2026-09-09T10:00:00Z' },
+  ]);
+  assert.equal(applied, 0);
+  assert.equal(_recentlyPushedContainers.has('c1'), false, 'Echo-Eintrag muss verbraucht sein');
+  console.log('sync containers echo-lock test: PASS');
+}
+
+// Ein fremd (auf dem Handy) geaenderter Behaelter wird angewandt, auch wenn er zuvor gepusht wurde.
+{
+  const db = freshSyncDb();
+  _recentlyPushedContainers.clear();
+  _recentlyPushedContainers.set('c1', '2026-09-09T10:00:00Z');
+  const applied = _applyPulledContainers(db, [
+    { container_id: 'c1', name: 'Blau neu', kind: 'binder', updated_at: '2026-09-09T11:00:00Z' },
+  ]);
+  assert.equal(applied, 1);
+  assert.equal(db.prepare('SELECT name FROM containers WHERE container_id = ?').get('c1').name, 'Blau neu');
+  console.log('sync containers foreign-change test: PASS');
+}
+
+// deleted kommt aus Supabase als Boolean und wird lokal zu 0/1.
+{
+  const db = freshSyncDb();
+  _recentlyPushedContainers.clear();
+  _applyPulledContainers(db, [
+    { container_id: 'c1', name: 'Blau', kind: 'binder', deleted: true, updated_at: '2026-09-09T10:00:00Z' },
+  ]);
+  assert.equal(db.prepare('SELECT deleted FROM containers WHERE container_id = ?').get('c1').deleted, 1);
+  console.log('sync containers deleted boolean test: PASS');
+}
