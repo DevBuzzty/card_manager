@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, AlertCircle } from 'lucide-react';
 import { parseTags, addTag, removeTag } from '../utils/tags';
 import { EDITION_LABELS } from '../utils/valuation';
 
@@ -28,6 +28,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
   const [tagInput, setTagInput] = useState('');
   const [note, setNote] = useState(copy?.note || '');
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null); // Lade- oder Umsortierfehler -- eigener Zustand, gleiche Bauart wie Binders.jsx
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const busyRef = useRef(false); // gleiche Bauart wie Binders.jsx's savingRef -- wirkt synchron, eine State-Flag kaeme zu spaet gegen einen zweiten Klick
@@ -43,10 +44,15 @@ export default function CopySheet({ copy, onClose, onSaved }) {
         if (!alive) return;
         setContainers(Array.isArray(c) ? c : []);
         setTagSuggestions(Array.isArray(t) ? t : []);
-      } catch {
+        setLoadError(null);
+      } catch (e) {
         // list-containers/list-tags werfen bei einem DB-Fehler statt {success:false} zu liefern
-        // (main.cjs) -- Behaelterauswahl/Vorschlaege bleiben dann schlicht leer, kein eigener
-        // Fehlertext dafuer (Standort/Tags sind hier nicht die einzige Funktion des Sheets).
+        // (main.cjs). Anders als bei CardDetailPanel.jsx (dort faellt der Standort-Chip defensiv
+        // auf „—" zurueck) MUSS das hier sichtbar sein: eine leer gebliebene Behaelterliste macht
+        // isBinder faelschlich false, und ein Speichern danach loescht den echten Standort still
+        // (Befund B) -- gleiche Anzeige wie Binders.jsx.
+        if (!alive) return;
+        setLoadError(e?.message || 'Behälter und Tags konnten nicht geladen werden.');
       }
     })();
     return () => { alive = false; };
@@ -84,11 +90,16 @@ export default function CopySheet({ copy, onClose, onSaved }) {
     setSaving(true);
     setError(null);
     try {
+      // page/slot gehen ROH mit -- setCopyLocation (electron/copies.cjs) verwirft sie bei
+      // Nicht-Bindern bereits selbst anhand der Behaelterart in der Datenbank. Die Regel liegt
+      // dort und nicht hier, damit sie fuer jeden Aufrufer gilt (Befund B): ein clientseitiges
+      // `isBinder &&` wuerde faelschlich `false` sein, solange containers noch laedt oder das
+      // Laden fehlgeschlagen ist, und dann Seite/Fach eines echten Ordner-Exemplars loeschen.
       const locResult = await window.api?.setCopyLocation?.({
         copy_id: copy.copy_id,
         container_id: containerId || null,
-        page: isBinder && page !== '' ? Number(page) : null,
-        slot: isBinder && slot !== '' ? Number(slot) : null,
+        page: page !== '' ? Number(page) : null,
+        slot: slot !== '' ? Number(slot) : null,
       });
       if (locResult && locResult.success === false) {
         setError(locResult.error || 'Speichern fehlgeschlagen.');
@@ -111,8 +122,10 @@ export default function CopySheet({ copy, onClose, onSaved }) {
     }
   };
 
-  // In B1 gibt es keinen Vorschlag fuer das naechste freie Fach (SlotMath kommt erst in B2) --
-  // Seite/Fach hier leer zu lassen ist zulaessig.
+  // Copy_id-genau ueber deleteCopy, NICHT removeCopy: removeCopy waehlt ueber Edition/Zustand/
+  // Erstellzeit aus einer ganzen Gruppe aus, ohne Ruecksicht auf Standort/Tags/Notiz des
+  // einzelnen Exemplars (Befund A) -- hier im Sheet ist aber genau EIN Exemplar (copy.copy_id)
+  // gemeint, das der Nutzer gerade vor sich hat.
   const removeExemplar = async () => {
     if (busyRef.current) return;
     if (!confirm('Dieses Exemplar entfernen?')) return;
@@ -120,10 +133,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
     setRemoving(true);
     setError(null);
     try {
-      const result = await window.api?.removeCopy?.({
-        id: copy.card_id, set_code: copy.set_code, language: copy.language || 'DE', rarity: copy.rarity,
-        edition: copy.edition, condition: copy.condition, count: 1,
-      });
+      const result = await window.api?.deleteCopy?.({ copy_id: copy.copy_id });
       if (!result?.success) {
         setError(result?.error || 'Entfernen fehlgeschlagen.');
         return;
@@ -152,6 +162,13 @@ export default function CopySheet({ copy, onClose, onSaved }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-4">
+          {loadError && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{loadError}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Standort</label>
             <select

@@ -368,6 +368,10 @@ ipcMain.handle('set-copy-tags-note', (event, d) => {
     try { copies.setCopyTagsNote(db, d); return { success: true }; }
     catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'set-copy-tags-note') }; }
 });
+ipcMain.handle('delete-copy', (event, d) => {
+    try { copies.deleteCopy(db, d); return { success: true }; }
+    catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'delete-copy') }; }
+});
 ipcMain.handle('list-unsorted-copies', () => {
     try { return copies.listUnsortedCopies(db); }
     catch (e) { console.error('[list-unsorted-copies]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }

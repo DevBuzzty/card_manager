@@ -26,7 +26,10 @@ contextBridge.exposeInMainWorld('api', {
   saveContainer: (c) => ipcRenderer.invoke('save-container', c),
   deleteContainer: (id) => ipcRenderer.invoke('delete-container', id),
   setCopyLocation: (loc) => ipcRenderer.invoke('set-copy-location', loc),
+  // d.tags ist ein ROHES string[], KEIN vorserialisierter JSON-String -- copies.cjs#setCopyTagsNote
+  // serialisiert selbst noch einmal, siehe Kommentar dort.
   setCopyTagsNote: (d) => ipcRenderer.invoke('set-copy-tags-note', d),
+  deleteCopy: (d) => ipcRenderer.invoke('delete-copy', d),
   listUnsortedCopies: () => ipcRenderer.invoke('list-unsorted-copies'),
   listTags: () => ipcRenderer.invoke('list-tags'),
   getCollection: () => ipcRenderer.invoke('get-collection'),

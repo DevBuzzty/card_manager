@@ -128,6 +128,18 @@ function setCopyLocation(db, { copy_id, container_id, page, slot }) {
   if (info.changes === 0) throw new ValidationError('Exemplar nicht gefunden.');
 }
 
+// Copy_id-genauer Soft-Delete -- das exemplarbezogene Gegenstueck zu removeCopies() (Gruppe nach
+// Edition/Zustand/Erstellzeit), nicht dessen Ersatz. Seit jedes Exemplar eigene Standort-, Tag-
+// und Notizdaten traegt, ist es NICHT mehr egal, welches physische Exemplar einer Gruppe geloescht
+// wird -- CopySheet.jsx kennt die copy_id des geoeffneten Exemplars und muss genau dieses treffen.
+// Folgt exakt dem Muster von setCopyLocation oben: stempelt updated_at neu, prueft info.changes,
+// wirft bei null getroffenen Zeilen mit deutscher Meldung.
+function deleteCopy(db, { copy_id }) {
+  const info = db.prepare('UPDATE card_copies SET deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE copy_id = @copy_id')
+    .run({ copy_id });
+  if (info.changes === 0) throw new ValidationError('Exemplar nicht gefunden.');
+}
+
 // Dieselbe Normalisierung wie parseTags()/serializeTags() in ../src/utils/tags.js (ESM,
 // Renderer) und android/app/src/main/java/com/example/yugiohscanner/ml/Tags.kt: Raender
 // trimmen, Duplikate ohne Ruecksicht auf Gross-/Kleinschreibung verwerfen, Einfuegereihenfolge
@@ -146,6 +158,9 @@ function normalizeTagList(tags) {
   return out;
 }
 
+// `tags` ist ein ROHES string[], NICHT vorserialisiert -- normalizeTagList()/JSON.stringify()
+// erledigen die Serialisierung erst hier. Ein bereits serialisierter JSON-String faellt bei
+// Array.isArray(tags) durch und wuerde als leere Liste gespeichert, alle Tags waeren weg.
 function setCopyTagsNote(db, { copy_id, tags, note }) {
   const clean = normalizeTagList(tags);
   const info = db.prepare(`UPDATE card_copies
@@ -265,5 +280,5 @@ function saveContainer(db, { container_id, name, kind, pockets_per_page, color, 
 module.exports = {
   ValidationError,
   defaults, listCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting,
-  setCopyLocation, setCopyTagsNote, listUnsortedCopies, listTags, listContainers, saveContainer,
+  setCopyLocation, deleteCopy, setCopyTagsNote, listUnsortedCopies, listTags, listContainers, saveContainer,
 };

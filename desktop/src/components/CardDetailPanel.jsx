@@ -9,18 +9,7 @@ import { parseTags } from '../utils/tags';
 import { fmtEUR } from '../utils/format';
 import { printingFromParams, cardRoute, ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
-
-// Spec B1 §7.3: Standort-Chip-Text fuer ein Exemplar -- eine Funktion fuer alle Darstellungsorte
-// (hier, die Sammlungsliste aus Task 7 importiert sie von hier, das Handy aus Task 10 baut sie
-// zeichengleich nach), sonst weicht die Formatierung irgendwann auseinander.
-// `container` ist die zum Exemplar gehoerende Zeile aus listContainers() (oder undefined/null,
-// wenn keine gefunden wird -- z.B. waehrend Behaelter noch nachgeladen werden).
-// eslint-disable-next-line react-refresh/only-export-components -- muss laut Brief in dieser Datei stehen, Task 7 importiert sie von hier
-export function formatCopyLocation(copy, container) {
-  if (!copy?.container_id || !container) return '—';
-  if (copy.page != null && copy.slot != null) return `${container.name} · S${copy.page} · F${copy.slot}`;
-  return container.name;
-}
+import { formatCopyLocation } from '../utils/copyLocation';
 
 export default function CardDetailPanel({ paletteOpen = false }) {
   const params = useParams();

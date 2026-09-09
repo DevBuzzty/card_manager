@@ -240,3 +240,53 @@ test('setCopyTagsNote wirft bei unbekanntem copy_id, statt {success:true} vorzut
   const db = freshDb();
   assert.throws(() => copies.setCopyTagsNote(db, { copy_id: 'gibtsnicht', tags: [], note: null }));
 });
+
+// --- Fix-Durchlauf 1: deleteCopy loescht copy_id-genau (Befund A) --------------------------
+
+test('deleteCopy loescht genau dieses Exemplar weich', () => {
+  const db = freshDb();
+  addCopy(db, 'k1');
+  copies.deleteCopy(db, { copy_id: 'k1' });
+  assert.equal(readCopy(db, 'k1').deleted, 1);
+});
+
+test('deleteCopy laesst ein zweites Exemplar gleicher Edition/Zustand, aber anderem Standort, unversehrt', () => {
+  // Genau der Fall aus Befund A: zwei NM/Unlimited-Exemplare, eines in Binder A, eines in
+  // Binder B -- removeCopies waehlt ueber Edition/Zustand/created_at, nicht ueber copy_id, und
+  // haette das falsche treffen koennen. deleteCopy ist copy_id-genau.
+  const db = freshDb();
+  addContainer(db, 'a', 'Binder A');
+  addContainer(db, 'b', 'Binder B');
+  addCopy(db, 'inA', { container_id: 'a', page: 1, slot: 1, note: 'Notiz A' });
+  addCopy(db, 'inB', { container_id: 'b', page: 2, slot: 5, note: 'Notiz B' });
+  copies.deleteCopy(db, { copy_id: 'inA' });
+  assert.equal(readCopy(db, 'inA').deleted, 1);
+  const b = readCopy(db, 'inB');
+  assert.equal(b.deleted, 0, 'das andere Exemplar darf nicht geloescht werden');
+  assert.equal(b.container_id, 'b');
+  assert.equal(b.page, 2);
+  assert.equal(b.slot, 5);
+  assert.equal(b.note, 'Notiz B');
+});
+
+test('deleteCopy stempelt updated_at neu', () => {
+  const db = freshDb();
+  addCopy(db, 'k1');
+  db.prepare("UPDATE card_copies SET updated_at = '2000-01-01 00:00:00' WHERE copy_id = 'k1'").run();
+  copies.deleteCopy(db, { copy_id: 'k1' });
+  assert.notEqual(readCopy(db, 'k1').updated_at, '2000-01-01 00:00:00');
+});
+
+test('deleteCopy auf eine unbekannte copy_id wirft', () => {
+  const db = freshDb();
+  assert.throws(() => copies.deleteCopy(db, { copy_id: 'gibtsnicht' }));
+});
+
+test('deleteCopy schreibt cards.quantity/cards.deleted nicht selbst -- der Trigger erledigt das', () => {
+  const db = freshDb();
+  addCopy(db, 'k1');
+  copies.deleteCopy(db, { copy_id: 'k1' });
+  const card = db.prepare('SELECT quantity, deleted FROM cards').get();
+  assert.equal(card.quantity, 0, 'der Trigger muss die Karte auf 0 gesetzt haben');
+  assert.equal(card.deleted, 1, 'der Trigger muss die Karte tombstonen');
+});
