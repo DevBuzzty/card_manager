@@ -645,7 +645,19 @@ fun ScanScreen(onClose: () -> Unit) {
                     entries = capture.stagingCards,
                     // Only forget what was actually committed — entries left in the sheet (still
                     // resolving) must not be staged a second time.
-                    onCommitted = { passcodes -> capture.forget(passcodes); showSheet = false },
+                    onCommitted = { passcodes, locationWarnings ->
+                        // Vergessen wird IMMER: die Eintraege sind angelegt, nur ihr Fach fehlt
+                        // womoeglich -- sie duerfen nicht ein zweites Mal im Staging landen.
+                        capture.forget(passcodes)
+                        // Das Blatt bleibt offen, solange Standort-Hinweise anstehen (Spec B2
+                        // Task 5, Fixrunde 1). Sonst schliesst es im selben Snapshot, in dem der
+                        // Hinweis gesetzt wird, und der Nutzer saehe nie, dass eine Karte, die er
+                        // physisch schon eingesteckt hat, digital ohne Fach liegt. Ein Hinweis,
+                        // der von selbst wieder verschwindet, kann uebersehen werden; hier laufen
+                        // physischer und digitaler Zustand auseinander, das muss der Nutzer
+                        // wegtippen. Wischen/Hintergrund schliesst das Blatt weiterhin normal.
+                        if (locationWarnings.isEmpty()) showSheet = false
+                    },
                 )
             }
         }

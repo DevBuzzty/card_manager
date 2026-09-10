@@ -122,7 +122,12 @@ fun ScanStagingSheet(
     entries: SnapshotStateList<ScanStagingEntry>,
     // Passcodes of the entries that were actually committed — the camera keeps running behind the
     // sheet, so the caller may only forget exactly these.
-    onCommitted: (List<String>) -> Unit,
+    // Zweite Liste (Spec B2 Task 5, Fixrunde 1): die Standort-Hinweise dieses Durchgangs. Der
+    // Aufrufer MUSS das Blatt offen lassen, solange sie nicht leer ist -- `error` unten lebt in
+    // dieser Komposition, ein sofortiges Schliessen wuerde den Hinweis ungezeichnet wegwerfen.
+    // Ein Hinweis, der von selbst verschwindet (Schnipsel), waere hier zu wenig: physischer und
+    // digitaler Zustand laufen auseinander, das muss der Nutzer wegtippen, nicht verpassen koennen.
+    onCommitted: (List<String>, List<String>) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var committing by remember { mutableStateOf(false) }
@@ -180,16 +185,17 @@ fun ScanStagingSheet(
             onClick = {
                 committing = true
                 scope.launch {
+                    // Only the entries actually written are removed; ones still resolving (and
+                    // anything the camera adds while this runs) stay in the sheet. Iterates the
+                    // FULL `entries`, not `visible` -- see the filter's own comment above.
+                    val committed = mutableListOf<ScanStagingEntry>()
+                    // Sichtbare Hinweise fuer Reservierungen, die beim Uebernehmen nicht gesetzt
+                    // werden konnten (Entscheidung 1 im Bericht) -- gesammelt statt sofort in
+                    // `error` geschrieben, damit ein einzelner Hinweis nicht vom `error = null`
+                    // einer spaeter erfolgreichen Karte im selben Durchgang ueberschrieben wird.
+                    // Ausserhalb des try, damit der catch unten sie ANHAENGEN statt ersetzen kann.
+                    val locationWarnings = mutableListOf<String>()
                     try {
-                        // Only the entries actually written are removed; ones still resolving (and
-                        // anything the camera adds while this runs) stay in the sheet. Iterates the
-                        // FULL `entries`, not `visible` -- see the filter's own comment above.
-                        val committed = mutableListOf<ScanStagingEntry>()
-                        // Sichtbare Hinweise fuer Reservierungen, die beim Uebernehmen nicht gesetzt
-                        // werden konnten (Entscheidung 1 im Bericht) -- gesammelt statt sofort in
-                        // `error` geschrieben, damit ein einzelner Hinweis nicht vom `error = null`
-                        // einer spaeter erfolgreichen Karte im selben Durchgang ueberschrieben wird.
-                        val locationWarnings = mutableListOf<String>()
                         for (e in entries.toList()) {
                             val b = e.base ?: continue // still resolving — skip
                             val s = e.selectedSet
@@ -238,9 +244,15 @@ fun ScanStagingSheet(
                         }
                         entries.removeAll(committed)
                         error = if (locationWarnings.isEmpty()) null else locationWarnings.joinToString("\n")
-                        onCommitted(committed.map { it.passcode })
+                        // Der Aufrufer schliesst das Blatt nur bei leerer Hinweisliste -- sonst
+                        // bliebe `error` (ein remember-Zustand DIESER Komposition) im selben
+                        // Snapshot wie showSheet = false und wuerde nie gezeichnet.
+                        onCommitted(committed.map { it.passcode }, locationWarnings.toList())
                     } catch (ex: Exception) {
-                        error = ex.message ?: "Übernehmen fehlgeschlagen"
+                        // Anhaengen statt ersetzen: scheitert ein spaeterer Eintrag am Netz, darf
+                        // das die schon gesammelten Standort-Hinweise nicht verschlucken.
+                        error = (locationWarnings + (ex.message ?: "Übernehmen fehlgeschlagen"))
+                            .joinToString("\n")
                     } finally {
                         committing = false
                     }
