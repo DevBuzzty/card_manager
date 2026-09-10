@@ -58,7 +58,11 @@ object ContainersRepository {
         // schlaegt der Upsert NACH erfolgreich geraeumten Faechern fehl, bleibt der Behaelter in
         // der Datenbank noch ein Ordner, aber seine Exemplare haben Seite und Fach schon
         // verloren -- nie umgekehrt ein Exemplar mit Fach an einem bereits umgestellten Behaelter.
-        // Mirrors saveContainer() in desktop/electron/copies.cjs.
+        // Gespiegelt wird hier die REGEL aus saveContainer() in desktop/electron/copies.cjs (Wechsel
+        // weg von binder raeumt Seite/Fach aller Exemplare), nicht diese Reihenfolge: der Desktop
+        // schreibt zuerst UPDATE containers und erst danach UPDATE card_copies, aber beides in einer
+        // einzigen db.transaction() -- er braucht die Vorher-nachher-Absicherung hier nicht, weil es
+        // dort keinen sichtbaren Teilzustand zwischen den beiden Schreibvorgaengen geben kann.
         if (pockets == null) {
             val clearUrl = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
                 .addQueryParameter("container_id", "eq.${row.containerId}")

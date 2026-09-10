@@ -52,6 +52,26 @@ test('firstFree wirft auch bei sehr vielen belegten Faechern nicht (kein Math.ma
   // den Kotlins maxOf (kein Argument-Spread) so nicht kennt.
   const volleSeiten = [];
   for (let pg = 1; pg <= 150000; pg++) volleSeiten.push({ page: pg, slot: 1 });
-  assert.doesNotThrow(() => firstFree(volleSeiten, 9));
   assert.deepEqual(firstFree(volleSeiten, 9), { page: 1, slot: 2 });
+});
+
+test('next rechnet Zeichenketten und Bruchzahlen aus dem untypisierten Renderer richtig', () => {
+  // CustomSelect und <input> liefern Strings, gelegentlich Bruchzahlen. Ohne Number()+trunc()
+  // wuerde '4' + 1 zu '41' verkettet statt zu 5 addiert.
+  assert.deepEqual(next(3, '4', 9), { page: 3, slot: 5 });
+  assert.deepEqual(next('3', 9, 9), { page: 4, slot: 1 });
+  assert.deepEqual(next(3, 4.5, 9), { page: 3, slot: 5 });
+  assert.deepEqual(next(3, 'abc', 9), { page: 3, slot: 2 });
+});
+
+test('firstFree behandelt ein nicht-Array occupied wie leer, statt zu werfen', () => {
+  // Zwillings-Kreuzprobe: Kotlins Set<Pair<Int,Int>> ist nicht-nullbar und kann diesen Fall
+  // nicht haben -- eine Ansicht kann hier rendern, bevor die Exemplarliste geladen ist.
+  assert.deepEqual(firstFree(undefined, 9), { page: 1, slot: 1 });
+  assert.deepEqual(firstFree(null, 9), { page: 1, slot: 1 });
+});
+
+test('firstFree zieht Bruchzahl-Seiten auf ganze Zahlen, statt einen eigenen Schluessel zu erzeugen', () => {
+  const belegt = [{ page: 1.5, slot: 1 }];
+  assert.deepEqual(firstFree(belegt, 9), { page: 1, slot: 2 });
 });

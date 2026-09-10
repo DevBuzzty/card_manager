@@ -19,10 +19,20 @@
 // - firstFree: ein belegtes Fach jenseits der aktuellen Seitengroesse (Rest einer frueheren,
 //   groesseren Seitengroesse) zaehlt weder als belegt noch als vorhandene Seite -- es wird
 //   vollstaendig ignoriert, so als gaebe es die Zeile nicht.
+//
+// Zwei Stellen sind NICHT identisch, weil der Renderer -- anders als Kotlin -- nichts typisiert:
+// - Alle drei Clamps sowie die page/slot-Werte in firstFree laufen hier zusaetzlich durch
+//   Number(...) + Math.trunc(...), bevor sie mit 0 verglichen werden. CustomSelect und <input>
+//   liefern Zeichenketten ("4"), gelegentlich Bruchzahlen; ohne die Umwandlung wuerde eine
+//   Zeichenkette per + verkettet statt addiert ("41" statt 5) und eine Bruchzahl unveraendert
+//   durchgereicht. Kotlins Signatur (Int) kann beides nicht entgegennehmen.
+// - firstFree behandelt ein nicht-Array occupied (undefined, null) wie ein leeres Array, statt zu
+//   werfen. Kotlins Set<Pair<Int,Int>> ist nicht-nullbar und kennt diesen Fall nicht.
 
-const clampPockets = (pockets) => (pockets > 0 ? pockets : 4);
-const clampPage = (page) => (page > 0 ? page : 1);
-const clampSlot = (slot) => (slot > 0 ? slot : 1);
+const toInt = (n) => Math.trunc(Number(n));
+const clampPockets = (pockets) => (toInt(pockets) > 0 ? toInt(pockets) : 4);
+const clampPage = (page) => (toInt(page) > 0 ? toInt(page) : 1);
+const clampSlot = (slot) => (toInt(slot) > 0 ? toInt(slot) : 1);
 
 export function next(page, slot, pockets) {
   const p = clampPockets(pockets);
@@ -33,20 +43,23 @@ export function next(page, slot, pockets) {
 
 export function firstFree(occupied, pockets) {
   const p = clampPockets(pockets);
-  const valid = new Set(
-    occupied
-      .filter((o) => o.page >= 1 && o.slot >= 1 && o.slot <= p)
-      .map((o) => `${o.page},${o.slot}`),
-  );
-  if (valid.size === 0) return { page: 1, slot: 1 };
-  // Kein Math.max(...arr): bei sehr vielen belegten Faechern sprengt das Auseinanderziehen als
-  // Funktionsargumente die Aufrufstapel-Grenze der Engine -- ein Wurf, den es laut Kopfkommentar
-  // nie geben darf und den Kotlins maxOf (kein Argument-Spread) nicht kennt.
+  const list = Array.isArray(occupied) ? occupied : [];
+  // Kein Math.max(...arr) fuer highestPage: bei sehr vielen belegten Faechern sprengt das
+  // Auseinanderziehen als Funktionsargumente die Aufrufstapel-Grenze der Engine -- ein Wurf, den
+  // es laut Kopfkommentar nie geben darf und den Kotlins maxOf (kein Argument-Spread) nicht kennt.
+  // Deshalb wird highestPage gleich in dieser Schleife mitgefuehrt statt hinterher aus den
+  // Schluesseln zurueckgerechnet.
+  const valid = new Set();
   let highestPage = 0;
-  for (const k of valid) {
-    const pg = Number(k.split(',')[0]);
-    if (pg > highestPage) highestPage = pg;
+  for (const o of list) {
+    const pg = toInt(o.page);
+    const sl = toInt(o.slot);
+    if (pg >= 1 && sl >= 1 && sl <= p) {
+      valid.add(`${pg},${sl}`);
+      if (pg > highestPage) highestPage = pg;
+    }
   }
+  if (valid.size === 0) return { page: 1, slot: 1 };
   for (let pg = 1; pg <= highestPage; pg++) {
     for (let sl = 1; sl <= p; sl++) {
       if (!valid.has(`${pg},${sl}`)) return { page: pg, slot: sl };
