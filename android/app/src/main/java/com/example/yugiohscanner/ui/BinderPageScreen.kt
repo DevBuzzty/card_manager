@@ -67,15 +67,26 @@ import kotlinx.coroutines.launch
  *   mit, ohne ein `if (isBinder)` davor (dieselbe Ueberlegung wie in `CopySheet.kt`).
  * - Der Standort-Text kommt aus `CopyLocation.format`, dem Zwilling der Desktop-Fassung.
  *
- * `onEinsortieren` ist der Einstieg, den Task 6 einhaengt; solange er `null` ist, ist der Knopf
- * sichtbar, aber ausgegraut -- der Kopf soll schon dieselbe Form haben, in die Task 6 hineingreift.
+ * `onEinsortieren` ist der Einstieg in den Einsortier-Modus (Task 6, Route `Routes.EINSORTIEREN`);
+ * solange er `null` ist, ist der Knopf sichtbar, aber ausgegraut.
+ *
+ * `seiteNachEinsortieren` ist der Rueckweg von dort: die zuletzt bearbeitete Seite (Spec §6.6).
+ * Ist sie gesetzt, wird neu geladen -- der Modus hat Standorte geschrieben, die diese Ansicht noch
+ * nicht kennt -- und dann dorthin geblaettert. `onSeiteAufgeschlagen` raeumt den Wert danach weg,
+ * damit dasselbe Aufschlagen nicht bei jeder Neuzusammensetzung wieder passiert.
  */
 // HorizontalPager/rememberPagerState sind in dieser Compose-Fassung (BOM 2024.02.02) noch als
 // experimentell gekennzeichnet -- gleiche Zustimmung wie BindersScreen sie fuer combinedClickable
 // gibt.
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: (() -> Unit)?) {
+fun BinderPageScreen(
+    containerId: String,
+    onBack: () -> Unit,
+    onEinsortieren: (() -> Unit)?,
+    seiteNachEinsortieren: Int? = null,
+    onSeiteAufgeschlagen: () -> Unit = {},
+) {
     val scope = rememberCoroutineScope()
 
     var container by remember { mutableStateOf<ContainerRow?>(null) }
@@ -147,6 +158,29 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
         try { reload(); error = null }
         catch (e: Exception) { error = e.message ?: "Laden fehlgeschlagen" }
         finally { loading = false }
+    }
+
+    // Rueckweg aus dem Einsortier-Modus (Spec §6.6), in ZWEI Schritten -- absichtlich.
+    // Erst neu laden (der Modus hat Standorte geschrieben, die diese Ansicht nicht kennt) und das
+    // Ziel merken; aufgeschlagen wird erst im zweiten Effekt. Beides in einem Zug ginge daneben:
+    // `pageCount` ist ein in DIESER Zusammensetzung berechneter Wert, und der Effekt laeuft nach
+    // `reload()` mit dem ALTEN weiter -- eine neu entstandene letzte Seite waere damit
+    // weggeklemmt worden. Der zweite Effekt haengt an `pageCount` und laeuft deshalb mit dem
+    // frischen Wert.
+    var seitenZiel by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(seiteNachEinsortieren) {
+        val ziel = seiteNachEinsortieren ?: return@LaunchedEffect
+        try { reload(); error = null }
+        catch (e: Exception) { error = e.message ?: "Laden fehlgeschlagen" }
+        seitenZiel = ziel
+        // Raeumt den Rueckkanal weg: ohne das schlaegt jede Neuzusammensetzung dieselbe Seite
+        // wieder auf und risse ein Blaettern des Nutzers zurueck.
+        onSeiteAufgeschlagen()
+    }
+    LaunchedEffect(seitenZiel, pageCount) {
+        val ziel = seitenZiel ?: return@LaunchedEffect
+        pagerState.scrollToPage((ziel - 1).coerceIn(0, pageCount - 1))
+        seitenZiel = null
     }
 
     BackHandler(detailId != null) { detailId = null }
