@@ -431,6 +431,55 @@ class SortSessionTest {
         assertTrue(SortSession.lossDescriptions(emptyList()).isEmpty())
     }
 
+    // --- Verwaiste Reservierungen (Fixrunde 1, Minor 6) ---
+
+    /** Steht fuer einen Staging-Eintrag. Bewusst ohne Inhalt: verglichen wird nur die Identitaet. */
+    private class Marke
+
+    @Test fun `eine Reservierung mit bekannter Marke ist nicht verwaist`() {
+        val m = Marke()
+        val (s, _) = SortSession.reserve(SortSession.start(emptyList(), "b1", 4), 4, m)
+        assertTrue(SortSession.orphanedReservations(s, listOf(m)).isEmpty())
+    }
+
+    @Test fun `eine Reservierung ohne bekannte Marke nennt Seite und Fach`() {
+        val m = Marke()
+        val (s, _) = SortSession.reserve(SortSession.start(emptyList(), "b1", 4), 4, m)
+        assertEquals(listOf("Seite 1 · Fach 1"), SortSession.orphanedReservations(s, emptyList()))
+    }
+
+    @Test fun `verwaist entscheidet die Identitaet, nicht der Inhalt`() {
+        // Zwei inhaltsgleiche Marken (beide leer!): nur die unbekannte darf gemeldet werden.
+        val bekannt = Marke()
+        val weg = Marke()
+        var s = SortSession.reserve(SortSession.start(emptyList(), "b1", 4), 4, bekannt).first
+        s = SortSession.reserve(s, 4, weg).first
+        assertEquals(listOf("Seite 1 · Fach 2"), SortSession.orphanedReservations(s, listOf(bekannt)))
+    }
+
+    @Test fun `eine Zuweisung ist nie verwaist`() {
+        val start: SortState = SortSession.start(listOf(copy("c1")), "b1", 4)
+        val (s, _) = SortSession.assign(start, "c1", "b1", 4)!!
+        assertTrue(SortSession.orphanedReservations(s, emptyList()).isEmpty())
+    }
+
+    @Test fun `eine zurueckgenommene Reservierung taucht nicht mehr auf`() {
+        val m = Marke()
+        val (s, _) = SortSession.reserve(SortSession.start(emptyList(), "b1", 4), 4, m)
+        val (zurueck, _) = SortSession.undo(s)!!
+        assertTrue(SortSession.orphanedReservations(zurueck, emptyList()).isEmpty())
+    }
+
+    @Test fun `eine Reservierung ohne Marke gilt als verwaist`() {
+        // null laesst sich keinem Eintrag zuordnen -- Schweigen waere hier die schlechtere Antwort.
+        val (s, _) = SortSession.reserve(SortSession.start(emptyList(), "b1", 4), 4, null)
+        assertEquals(listOf("Seite 1 · Fach 1"), SortSession.orphanedReservations(s, listOf(Marke())))
+    }
+
+    @Test fun `ohne Zustand gibt es nichts zu melden`() {
+        assertTrue(SortSession.orphanedReservations(null, emptyList()).isEmpty())
+    }
+
     // --- Zusammenspiel ---
 
     @Test fun `Zuweisung ohne Netz, dann Rueckgaengig, laesst nichts zu schreiben uebrig`() {

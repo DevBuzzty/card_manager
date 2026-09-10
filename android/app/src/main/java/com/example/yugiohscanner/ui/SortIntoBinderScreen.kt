@@ -102,6 +102,19 @@ private sealed interface Frage {
 }
 
 /**
+ * Was der Nutzer vor dem Verlassen erfahren MUSS -- zwei Listen, weil es zwei verschiedene Dinge
+ * sind und der erklaerende Satz unter der einen der anderen widerspraeche, stuenden sie zusammen:
+ * - [zuweisungen]: Faecher, deren Standort nicht geschrieben werden konnte. Die Karte IST in der
+ *   Sammlung, nur ohne Fach -- sie steht danach unter "Nicht einsortiert".
+ * - [faecher]: Reservierungen ohne Staging-Eintrag (Fixrunde 1, Minor 6). Dort liegt physisch eine
+ *   Karte, zu der es digital gar NICHTS gibt -- weggetippt oder nicht aufgeloest.
+ */
+private class Verluste(val zuweisungen: List<String>, val faecher: List<String>) {
+    val leer: Boolean get() = zuweisungen.isEmpty() && faecher.isEmpty()
+    val anzahl: Int get() = zuweisungen.size + faecher.size
+}
+
+/**
  * Spec B2 §6: der Einsortier-Modus. Der Nutzer sitzt mit dem aufgeschlagenen Ordner und einem
  * Stapel Karten am Tisch; der Kopf sagt gross, in welches Fach die naechste Karte gehoert, er
  * steckt sie hinein und haelt sie vor die Kamera -- die Karte wird erkannt, dem Fach zugewiesen,
@@ -161,6 +174,13 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     // Karten, die nicht in der Sammlung waren. Beide verriegeln den Modus, solange sie offen sind.
     var frage by remember { mutableStateOf<Frage?>(null) }
     var showStaging by remember { mutableStateOf(false) }
+    // Was das Pruefen-Blatt tatsaechlich uebernommen hat -- POSITIV festgehalten (Fixrunde 1,
+    // Important 1). Ein Eintrag verlaesst `capture.stagingCards` auf DREI Wegen: uebernommen, vom
+    // Nutzer weggetippt, oder seine Aufloesung ist gescheitert (`ScanCapture.stageScan` entfernt
+    // ihn dann selbst). Aus der blossen Abwesenheit auf "uebernommen" zu schliessen, meldete dem
+    // Nutzer in zwei von drei Faellen etwas Falsches -- und liesse sein Fach verschwinden, obwohl
+    // gar nichts in der Sammlung steht. Gemerkt werden die EINTRAEGE, verglichen wird mit `===`.
+    val uebernommen = remember { mutableStateListOf<ScanStagingEntry>() }
     // Zwei getrennte Zustaende, obwohl immer nur eines der Blaetter offen sein kann: ein geteilter
     // waere ein Zustand mit zwei Besitzern, und der Rest halb ausgeblendet.
     val frageSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -195,7 +215,7 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
 
     // Verlassen: Fortschritt beim Nachschreiben, danach ggf. die Verlust-Meldung.
     var flushing by remember { mutableStateOf(false) }
-    var losses by remember { mutableStateOf<List<String>?>(null) }
+    var losses by remember { mutableStateOf<Verluste?>(null) }
 
     LaunchedEffect(containerId) {
         try {
@@ -398,10 +418,16 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
             // Sammlung --, und das Fach darf NICHT zurueckspringen, sonst bekaeme die naechste
             // Karte ein belegtes Fach. Der Schritt faellt trotzdem vom Stapel, sonst bliebe jedes
             // weitere Rueckgaengig an ihm haengen.
+            //
+            // Gefragt wird die POSITIVE Merkliste `uebernommen`, nicht die Abwesenheit aus
+            // `capture.stagingCards` (Fixrunde 1, Important 1): fehlt der Eintrag, weil der Nutzer
+            // ihn weggetippt hat oder weil seine Aufloesung gescheitert ist, steht NICHTS in der
+            // Sammlung -- dann ist der normale Reservierungs-Undo darunter richtig, und das Fach
+            // kommt zurueck.
             val letzter = s.schritte.lastOrNull()
             if (letzter is Schritt.Reserviert) {
                 val eintrag = letzter.marke as? ScanStagingEntry
-                if (eintrag == null || capture.stagingCards.none { it === eintrag }) {
+                if (eintrag != null && uebernommen.any { it === eintrag }) {
                     state = SortSession.dropStep(s)
                     snackbar.showSnackbar(
                         "Die neue Karte wurde schon übernommen – sie bleibt in " +
@@ -434,7 +460,11 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
                     // oder Passcode: zwei Eintraege koennten denselben Passcode tragen.
                     val eintrag = ruecknahme.marke as? ScanStagingEntry
                     if (eintrag != null) capture.stagingCards.removeAll { it === eintrag }
-                    snackbar.showSnackbar("Neue Karte wieder entfernt")
+                    // "Fach wieder frei" gilt in beiden Faellen, die hier ankommen koennen: der
+                    // Eintrag stand noch im Pruefen-Blatt (und ist jetzt weg), oder er war schon
+                    // weggetippt bzw. nie aufgeloest -- dann gab es ohnehin nichts zu entfernen.
+                    // Das Fach springt so oder so zurueck, und genau das will der Nutzer wissen.
+                    snackbar.showSnackbar("Neue Karte wieder entfernt – Fach wieder frei")
                 }
             }
         }
@@ -452,26 +482,52 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     // finden kann; `flushQueue` ist auf leerer Schlange ohnehin ein Nichts-Tun.
     fun onFinish() {
         if (flushing || losses != null) return
-        if (capture.stagingCards.isNotEmpty()) {
+        val offen = capture.stagingCards.size
+        if (offen > 0) {
             // Die Karten aus `Pick.NotOwned` sind noch NICHT in der Sammlung, und diese Liste lebt
             // nur so lange wie dieser Modus -- wer jetzt hinausginge, verloere sie samt ihrer
             // Faecher, still. Also nicht hinaus, sondern das Pruefen-Blatt auf: dort kann der
             // Nutzer sie uebernehmen oder einzeln entfernen. Danach fuehrt "Fertig" normal hinaus.
             showStaging = true
+            // Und dazu ein Wort, warum (Fixrunde 1, Minor 5): bleibt ein Eintrag beim Uebernehmen
+            // liegen -- weil er noch aufloest --, schliesst das Blatt ohne Hinweis, und der
+            // naechste Druck auf "Fertig" oeffnet es kommentarlos wieder. Ohne diesen Satz sieht
+            // das aus wie ein Knopf, der nichts tut; den Ausgang (das X der Zeile) faende von
+            // allein niemand.
+            scope.launch {
+                snackbar.showSnackbar(
+                    if (offen == 1) "1 neue Karte muss erst übernommen oder entfernt werden"
+                    else "$offen neue Karten müssen erst übernommen oder entfernt werden",
+                )
+            }
             return
         }
         flushing = true
         scope.launch {
             writeLock.withLock { flushQueue() }
             flushing = false
-            val rest = SortSession.lossDescriptions(queue)
-            if (rest.isEmpty()) onDone(SortSession.lastPage(state)) else losses = rest
+            // Zwei verschiedene Verluste, zwei Listen (siehe `Verluste`). Die zweite kommt aus
+            // `SortSession.orphanedReservations`: Reservierungen, deren Staging-Eintrag weder
+            // uebernommen wurde noch noch im Blatt steht. `stagingCards` ist an dieser Stelle zwar
+            // immer leer (sonst waere oben schon zurueckgekehrt worden), steht aber trotzdem mit
+            // in den bekannten Marken -- die Rechnung soll nicht davon abhaengen, wer sie ruft.
+            val v = Verluste(
+                SortSession.lossDescriptions(queue),
+                SortSession.orphanedReservations(state, capture.stagingCards + uebernommen),
+            )
+            if (v.leer) onDone(SortSession.lastPage(state)) else losses = v
         }
     }
 
-    // Zurueck schliesst zuerst eine offene Frage (das Blatt setzt seinen eigenen Handler davor,
+    // Zurueck schliesst zuerst ein offenes Blatt (das Blatt setzt seinen eigenen Handler davor,
     // dieser hier greift also nur, wenn es das nicht getan hat) und verlaesst erst dann den Modus.
-    BackHandler(enabled = true) { if (frage != null) frage = null else onFinish() }
+    // Dieselbe Bedingung wie die Riegel in `onCard`/`onUndo`, und aus demselben Grund (Fixrunde 1,
+    // Minor 3): bei offenem Pruefen-Blatt liefe Zurueck sonst in `onFinish()` -- nach einem
+    // Teil-Uebernehmen mit stehengebliebenen Standort-Hinweisen ist `stagingCards` leer, der Modus
+    // ginge samt ungelesenem Hinweis hinaus, genau der Verlust, den `onCommitted` verhindern soll.
+    BackHandler(enabled = true) {
+        if (frage != null) frage = null else if (showStaging) showStaging = false else onFinish()
+    }
 
     Surface(Modifier.fillMaxSize(), color = Background) {
         Box(Modifier.fillMaxSize()) {
@@ -510,6 +566,9 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
                     state = state!!,
                     queueSize = queue.size,
                     stagingSize = capture.stagingCards.size,
+                    // Fixrunde 1, Minor 2: der Fuss darf nur dann "im Pruefen-Blatt" sagen, wenn
+                    // der Eintrag auch wirklich noch darin steht. Ueber Identitaet, wie ueberall.
+                    nochImStaging = { e -> capture.stagingCards.any { it === e } },
                     cardOf = ::cardOf,
                     onCard = ::onCard,
                     onUndo = ::onUndo,
@@ -648,7 +707,11 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
         ModalBottomSheet(onDismissRequest = { showStaging = false }, sheetState = stagingSheet) {
             ScanStagingSheet(
                 entries = capture.stagingCards,
-                onCommitted = { _, hinweise ->
+                onCommitted = { committed, hinweise ->
+                    // Positiv festhalten, was tatsaechlich uebernommen wurde -- daran und an
+                    // nichts anderem erkennt `onUndo`, dass ein reserviertes Fach besetzt bleiben
+                    // muss, und `onFinish`, welche Reservierung verwaist ist (Fixrunde 1).
+                    uebernommen.addAll(committed)
                     // `capture.forget(...)` bleibt ungerufen: dieser Modus fuellt `seen` nie
                     // (siehe `ScanCapture.stageLocally`) -- es gibt nichts zu vergessen, und ein
                     // zweites Exemplar derselben Karte muss hier weiterhin durchkommen.
@@ -664,7 +727,7 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     // Die Verlust-Meldung wird HIER gezeichnet, im Modus, den der Nutzer gerade verlaesst -- und
     // der bleibt so lange stehen, weil `onDone` erst der Knopf ausloest. Ein Hinweis, der in der
     // verlassenen Komposition gesetzt wird, verschwindet mit ihr, bevor er je auf dem Schirm war.
-    losses?.let { list ->
+    losses?.let { v ->
         AlertDialog(
             onDismissRequest = { },   // nur ueber den Knopf -- das darf nicht weggewischt werden
             confirmButton = {
@@ -674,18 +737,47 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
                     onDone(letzteSeite)
                 }) { Text("Verstanden") }
             },
-            title = { Text("${list.size} ${if (list.size == 1) "Zuweisung" else "Zuweisungen"} nicht gespeichert") },
+            // "Fach" traegt beide Faelle: einmal fehlt der Datenbank das Fach zur Karte, einmal
+            // fehlt dem Fach die Karte. Welches welches ist, sagen die Abschnitte darunter.
+            title = { Text("${v.anzahl} ${if (v.anzahl == 1) "Fach" else "Fächer"} nicht gespeichert") },
             text = {
                 Column {
-                    Text("Diese Fächer konnten nicht gespeichert werden und gehen verloren:", color = OnSurface)
-                    Spacer(Modifier.height(8.dp))
-                    list.forEach { Text("• $it", color = ErrorColor, fontFamily = MonoFontFamily) }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Die Karten bleiben in der Sammlung, stehen aber wieder unter " +
-                            "„Nicht einsortiert“ – im Ordner liegen sie schon.",
-                        color = Muted, style = MaterialTheme.typography.bodySmall,
-                    )
+                    if (v.zuweisungen.isNotEmpty()) {
+                        Text("Diese Fächer konnten nicht gespeichert werden und gehen verloren:",
+                            color = OnSurface)
+                        Spacer(Modifier.height(8.dp))
+                        v.zuweisungen.forEach {
+                            Text("• $it", color = ErrorColor, fontFamily = MonoFontFamily)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Die Karten bleiben in der Sammlung, stehen aber wieder unter " +
+                                "„Nicht einsortiert“ – im Ordner liegen sie schon.",
+                            color = Muted, style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    // Der andere Verlust (Fixrunde 1, Minor 6): das Fach ist vorgerueckt, die Karte
+                    // liegt darin, aber ihr Staging-Eintrag ist weg -- weggetippt oder nie
+                    // aufgeloest. Freigeben laesst sich das Fach nicht, die Karte steckt physisch
+                    // darin; nur der Nutzer kann das zusammenbringen, also muss er es erfahren.
+                    if (v.faecher.isNotEmpty()) {
+                        if (v.zuweisungen.isNotEmpty()) Spacer(Modifier.height(16.dp))
+                        Text(
+                            "In diesen Fächern liegt eine Karte, die nicht in die Sammlung " +
+                                "gekommen ist:",
+                            color = OnSurface,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        v.faecher.forEach {
+                            Text("• $it", color = ErrorColor, fontFamily = MonoFontFamily)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Sie wurde im Prüfen-Blatt entfernt oder konnte nicht aufgelöst " +
+                                "werden. Nimm sie wieder heraus oder erfasse sie von Hand.",
+                            color = Muted, style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             },
         )
@@ -800,8 +892,12 @@ private fun KandidatZeile(copy: CopyRow, ort: String, onClick: () -> Unit) {
 
 /**
  * Spec §6.2: die Kamera-Shell. Kopf gross „<Binder> · Seite p · Fach s", Fuss die zuletzt
- * eingelegte Karte mit Bild, Name und Fach sowie Rückgängig. Kein Staging-Zähler, kein
- * Prüfen-Knopf, kein Desktop-Spiegel.
+ * eingelegte Karte mit Bild, Name und Fach sowie Rückgängig. Kein Desktop-Spiegel, und im
+ * Normalfall auch kein Staging-Zähler und kein Prüfen-Knopf.
+ *
+ * Die eine Ausnahme kommt aus Task 7: Karten, die NICHT in der Sammlung sind, gehen ins
+ * Handy-Staging, und das lebt nur so lange wie dieser Modus. Sobald dort etwas liegt, blendet der
+ * Kopf Zähler und Prüfen-Knopf ein -- die Begründung steht im Rumpf, bei `stagingSize > 0`.
  */
 @Composable
 private fun SortRunning(
@@ -809,6 +905,7 @@ private fun SortRunning(
     state: SortState,
     queueSize: Int,
     stagingSize: Int,
+    nochImStaging: (ScanStagingEntry) -> Boolean,
     cardOf: (CopyRow) -> CardRow?,
     onCard: (String, List<String>, List<String>, List<String>) -> Unit,
     onUndo: () -> Unit,
@@ -892,9 +989,15 @@ private fun SortRunning(
                         card?.name ?: neu?.base?.name ?: zugewiesen?.placement?.cardId ?: neu?.passcode.orEmpty(),
                         color = Color.White, maxLines = 1, style = MaterialTheme.typography.bodyMedium,
                     )
+                    // Der Zusatz haengt am Blatt, nicht bloss an der Schrittart (Fixrunde 1,
+                    // Minor 2): hat der Nutzer den Eintrag inzwischen uebernommen oder weggetippt,
+                    // oder ist seine Aufloesung gescheitert, wartet dort nichts mehr und der Satz
+                    // waere schlicht falsch. Dann steht hier nur noch das Fach -- nach dem
+                    // Uebernehmen ist das ohnehin die ganze Wahrheit, und die beiden anderen Faelle
+                    // nennt die Verlust-Meldung beim Verlassen beim Namen.
                     Text(
                         "Seite ${letzter.page} · Fach ${letzter.slot}" +
-                            if (zugewiesen == null) " · neu, im Prüfen-Blatt" else "",
+                            if (neu != null && nochImStaging(neu)) " · neu, im Prüfen-Blatt" else "",
                         color = Color.White.copy(alpha = 0.7f),
                         fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall,
                     )

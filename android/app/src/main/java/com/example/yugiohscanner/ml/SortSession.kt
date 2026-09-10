@@ -277,4 +277,29 @@ object SortSession {
         if (it.zurueck) "Rückgängig (Seite ${it.placement.page} · Fach ${it.placement.slot})"
         else "Seite ${it.placement.page} · Fach ${it.placement.slot}"
     }
+
+    /**
+     * Die Faecher, in denen physisch eine Karte liegt, zu der es digital NICHTS gibt -- eine Zeile
+     * je Fall. Das sind die Reservierungen ([Schritt.Reserviert]) aus [reserve], deren
+     * Staging-Eintrag weder uebernommen wurde noch noch im Pruefen-Blatt steht: der Nutzer hat die
+     * Zeile dort weggetippt, oder ihre Aufloesung ist gescheitert und `ScanCapture` hat den Eintrag
+     * selbst entfernt. Das Fach ist in beiden Faellen laengst vorgerueckt, und ohne diese Liste
+     * wuerde es nie wieder erwaehnt -- genau der stille Verlust, gegen den es die Verlust-Meldung
+     * gibt. Freigeben laesst sich das Fach nicht: physisch steckt die Karte darin, und ob der
+     * Nutzer sie wieder herausnimmt, weiss nur er.
+     *
+     * Zurueckgenommene Reservierungen stehen nicht mehr in `schritte` und kommen hier deshalb gar
+     * nicht erst vor. Verglichen wird ueber IDENTITAET (`===`), wie ueberall in dieser Datei: zwei
+     * Staging-Eintraege koennen denselben Passcode und dasselbe Fach tragen.
+     *
+     * [bekannteMarken] sind die Marken, zu denen es noch etwas gibt -- die Eintraege des
+     * Pruefen-Blattes plus die tatsaechlich uebernommenen. Eine Reservierung ohne Marke (`null`)
+     * gilt als verwaist: sie laesst sich keinem Eintrag mehr zuordnen, und Schweigen waere hier die
+     * schlechtere Antwort.
+     */
+    fun orphanedReservations(state: SortState?, bekannteMarken: List<Any?>): List<String> =
+        state?.schritte.orEmpty()
+            .filterIsInstance<Schritt.Reserviert>()
+            .filter { schritt -> bekannteMarken.none { it != null && it === schritt.marke } }
+            .map { "Seite ${it.page} · Fach ${it.slot}" }
 }

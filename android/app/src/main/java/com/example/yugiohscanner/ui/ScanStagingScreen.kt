@@ -120,14 +120,17 @@ object ScanStagingLogic {
 @Composable
 fun ScanStagingSheet(
     entries: SnapshotStateList<ScanStagingEntry>,
-    // Passcodes of the entries that were actually committed — the camera keeps running behind the
-    // sheet, so the caller may only forget exactly these.
+    // The entries that were actually committed — the camera keeps running behind the sheet, so the
+    // caller may only forget exactly these. Die EINTRAEGE, nicht ihre Passcodes (Task 7, Fixrunde
+    // 1): der Einsortier-Modus muss "uebernommen" von "weggetippt" und "nicht aufgeloest"
+    // unterscheiden koennen, und das geht nur ueber Identitaet -- zwei Eintraege koennen denselben
+    // Passcode tragen. Wer nur die Passcodes braucht, bildet sie selbst ab.
     // Zweite Liste (Spec B2 Task 5, Fixrunde 1): die Standort-Hinweise dieses Durchgangs. Der
     // Aufrufer MUSS das Blatt offen lassen, solange sie nicht leer ist -- `error` unten lebt in
     // dieser Komposition, ein sofortiges Schliessen wuerde den Hinweis ungezeichnet wegwerfen.
     // Ein Hinweis, der von selbst verschwindet (Schnipsel), waere hier zu wenig: physischer und
     // digitaler Zustand laufen auseinander, das muss der Nutzer wegtippen, nicht verpassen koennen.
-    onCommitted: (List<String>, List<String>) -> Unit,
+    onCommitted: (List<ScanStagingEntry>, List<String>) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var committing by remember { mutableStateOf(false) }
@@ -247,7 +250,7 @@ fun ScanStagingSheet(
                         // Der Aufrufer schliesst das Blatt nur bei leerer Hinweisliste -- sonst
                         // bliebe `error` (ein remember-Zustand DIESER Komposition) im selben
                         // Snapshot wie showSheet = false und wuerde nie gezeichnet.
-                        onCommitted(committed.map { it.passcode }, locationWarnings.toList())
+                        onCommitted(committed.toList(), locationWarnings.toList())
                     } catch (ex: Exception) {
                         // Anhaengen statt ersetzen: scheitert ein spaeterer Eintrag am Netz, darf
                         // das die schon gesammelten Standort-Hinweise nicht verschlucken.

@@ -36,8 +36,10 @@ package com.example.yugiohscanner.ml
 object SlotMath {
 
     // internal statt private, damit BinderGrid (Spec B2 §7.2) dieselbe Zurechtrueckung benutzt,
-    // statt sie ein zweites Mal hinzuschreiben. Reine Sichtbarkeit, kein Verhalten -- die
-    // JS-Fassung braucht dafuer nichts, dort steht der Clamp weiterhin in beiden Funktionen.
+    // statt sie ein zweites Mal hinzuschreiben. Reine Sichtbarkeit, kein Verhalten. `slotMath.js`
+    // exportiert `clampPockets` inzwischen aus genau demselben Grund -- `binderGrid.js` benutzt
+    // es --, die beiden Fassungen sind sich also auch hierin gleich; `next` und `firstFree` rufen
+    // den Clamp auf beiden Seiten unveraendert weiter.
     internal fun clampPockets(pockets: Int): Int = if (pockets > 0) pockets else 4
     private fun clampPage(page: Int): Int = if (page > 0) page else 1
     private fun clampSlot(slot: Int): Int = if (slot > 0) slot else 1

@@ -8,9 +8,14 @@ import com.example.yugiohscanner.cloud.CopyRow
  * Exemplare. Alles hier ist ohne Compose lauffaehig und wird in `BinderGridTest` geprueft; die
  * Ansicht (`ui/BinderPageScreen.kt`) trifft keine dieser Entscheidungen selbst.
  *
- * Kein Zwilling: eine JavaScript-Fassung dieser Regeln gibt es im Baum noch nicht (der Desktop
- * zeigt bislang kein Raster). Kommt eine dazu, gehoert sie hier vermerkt und muss dieselben
- * Faelle abdecken -- so wie `SlotMath` es mit `desktop/src/utils/slotMath.js` vormacht.
+ * Die JavaScript-Fassung derselben Regeln steht in `desktop/src/utils/binderGrid.js` (geprueft in
+ * `desktop/src/utils/binderGrid.test.js`). Dass es sie zweimal gibt, ist Absicht -- beide Geraete
+ * zeigen denselben Ordner mit denselben Faechern. Wer hier etwas aendert, aendert dort mit; beide
+ * Testsuiten pruefen dieselben Faelle mit denselben Eingaben, bis auf die Abweichungen, die der
+ * Renderer braucht und die im Kopf von `binderGrid.js` stehen (Number/Math.trunc auf page/slot,
+ * fehlende Listen und Textfelder wie leer behandelt). Es hier NICHT nachbauen: Kotlins Signaturen
+ * koennen diese Faelle gar nicht entgegennehmen -- genau wie `SlotMath` und
+ * `desktop/src/utils/slotMath.js` es vormachen.
  *
  * Die Zurechtrueckung von `pockets` kommt aus `SlotMath.clampPockets` und wird hier NICHT
  * nachgebaut: ein Ordner ohne (oder mit unsinniger) Fachzahl zaehlt in der ganzen App als
