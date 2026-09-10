@@ -86,9 +86,27 @@ class PickCandidateTest {
     }
 
     @Test fun `leere setCodes Liste grenzt nichts ein`() {
-        val copies = listOf(copy("c1"), copy("c2"))
+        // Zwei VERSCHIEDENE Printings: nur so sagt der Fall etwas aus. Mit gleichem Set-Code
+        // waere er zeichengleich mit `mehrere Kandidaten ergeben Many` und liefe ueber
+        // denselben Zweig, ohne eine eigene Aussage zu treffen.
+        val copies = listOf(copy("c1"), copy("c2", setCode = "XYZ-DE099"))
         val result = PickCandidate.pick(copies, "12345678", emptyList(), "unlimited", "NM")
         assertEquals(Pick.Many(listOf("c1", "c2")), result)
+    }
+
+    @Test fun `fremde Passcodes zaehlen nicht als Kandidaten`() {
+        val copies = listOf(copy("c1", cardId = "99999999"), copy("c2"))
+        val result = PickCandidate.pick(copies, "12345678", emptyList(), "unlimited", "NM")
+        assertEquals(Pick.One("c2"), result)
+    }
+
+    @Test fun `ein geloeschtes freies Exemplar macht aus AllPlaced kein One`() {
+        // Beide Filterstufen greifen hier gegenlaeufig: das lebende Exemplar ist einsortiert,
+        // das freie ist geloescht. Wer die Reihenfolge der Stufen vertauscht, bekommt hier
+        // One(c2) statt AllPlaced -- die Einzeltests der beiden Stufen bleiben dabei gruen.
+        val copies = listOf(copy("c1", containerId = "b1"), copy("c2", deleted = true))
+        val result = PickCandidate.pick(copies, "12345678", emptyList(), "unlimited", "NM")
+        assertEquals(Pick.AllPlaced, result)
     }
 
     @Test fun `Many stellt Standard-Exemplare voran`() {
