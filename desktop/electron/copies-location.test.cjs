@@ -331,6 +331,18 @@ test('listAllCopies traegt die Werte DES EXEMPLARS, nicht der Karte', () => {
   assert.equal(row.created_at, '2020-01-01 00:00:00', 'created_at muss das des Exemplars sein, nicht der Karte');
 });
 
+test('listAllCopies traegt Edition und Zustand mit (Spec B2 Task 8)', () => {
+  // Die Binder-Ansicht rechnet daraus den Wert einer Ordnerseite (Preis x Zustandsfaktor) und
+  // reicht dieselbe Zeile an CopySheet weiter, das beide Felder im Kopf zeigt. Fehlten sie,
+  // waere der Faktor stumm 1 und der Sheet-Kopf leer.
+  const db = freshDb();
+  addCopy(db, 'k1');
+  db.prepare(`UPDATE card_copies SET edition = 'first', condition = 'LP' WHERE copy_id = 'k1'`).run();
+  const [row] = copies.listAllCopies(db);
+  assert.equal(row.edition, 'first');
+  assert.equal(row.condition, 'LP');
+});
+
 // --- Fix-Durchlauf Abschlussreview: saveContainer raeumt Seite/Fach beim Wechsel weg von binder (Befund 2) ---
 
 test('saveContainer raeumt Seite und Fach aller Exemplare, wenn die Art von binder auf box wechselt', () => {

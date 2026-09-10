@@ -31,7 +31,10 @@
 //   werfen. Kotlins Set<Pair<Int,Int>> ist nicht-nullbar und kennt diesen Fall nicht.
 
 const toInt = (n) => Math.trunc(Number(n));
-const clampPockets = (pockets) => (toInt(pockets) > 0 ? toInt(pockets) : 4);
+// Exportiert, damit binderGrid.js (Spec B2 §7.2) dieselbe Zurechtrueckung benutzt, statt sie ein
+// drittes Mal hinzuschreiben -- genau der Grund, aus dem SlotMath.kt sie `internal` gemacht hat.
+// Reine Sichtbarkeit, kein Verhalten; next() und firstFree() rufen sie unveraendert weiter.
+export const clampPockets = (pockets) => (toInt(pockets) > 0 ? toInt(pockets) : 4);
 const clampPage = (page) => (toInt(page) > 0 ? toInt(page) : 1);
 const clampSlot = (slot) => (toInt(slot) > 0 ? toInt(slot) : 1);
 

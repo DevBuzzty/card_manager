@@ -202,9 +202,15 @@ function listUnsortedCopies(db) {
 // und deleted, ein Join haette (wie schon einmal in listUnsortedCopies, siehe Kommentar dort) die
 // Exemplarwerte durch die Kartenwerte ueberschrieben. Die Printing-Identitaet (card_id, set_code,
 // language, rarity) reicht dem Aufrufer, um die Zeilen im Renderer nach Printing zu gruppieren.
+// edition und condition stehen seit Spec B2 Task 8 mit dabei: die Binder-Ansicht rechnet den Wert
+// EINER Ordnerseite aus (Preis x Zustandsfaktor, dieselbe Formel wie valuation.cjs#totalValue) und
+// reicht dieselbe Zeile an CopySheet weiter, das beide Felder im Kopf zeigt. Ohne sie haette der
+// Renderer je Fach einen zweiten Aufruf (list-copies) gebraucht -- oder den Zustandsfaktor stumm
+// auf 1 geschaetzt. Zusaetzliche Spalten DERSELBEN Tabelle, kein JOIN: die Kollisionsgefahr aus
+// dem Absatz darueber besteht hier nicht.
 function listAllCopies(db) {
   return db.prepare(`
-    SELECT copy_id, card_id, set_code, language, rarity,
+    SELECT copy_id, card_id, set_code, language, rarity, edition, condition,
            container_id, page, slot, tags, note, created_at
       FROM card_copies
      WHERE deleted = 0

@@ -4,7 +4,7 @@ import { Plus, Trash2, Pencil, ChevronUp, ChevronDown, X, PackageOpen, AlertCirc
 import clsx from 'clsx';
 import CustomSelect from './CustomSelect';
 import { fmtEUR } from '../utils/format';
-import { cardRoute } from '../utils/routes';
+import { binderRoute, cardRoute } from '../utils/routes';
 
 const KIND_OPTIONS = [
   { value: 'binder', label: 'Ordner' },
@@ -246,7 +246,12 @@ export default function Binders() {
               <div
                 key={c.container_id}
                 onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, container: c }); }}
-                className="bg-obsidian-700 border border-line rounded-xl p-4 flex flex-col gap-2 hover:border-space-violet/40 transition-colors"
+                // Spec B2 §7.2: die Karte ist der Einstieg in den aufgeschlagenen Behälter. Die
+                // beiden Pfeilknöpfe darin halten das Klickereignis auf (siehe unten), sonst
+                // öffnete jedes Umsortieren zusätzlich die Ansicht.
+                onClick={() => navigate(binderRoute(c.container_id))}
+                title={`„${c.name}“ öffnen`}
+                className="bg-obsidian-700 border border-line rounded-xl p-4 flex flex-col gap-2 hover:border-space-violet/40 transition-colors cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
@@ -254,11 +259,11 @@ export default function Binders() {
                     <span className="font-display font-medium text-ink truncate">{c.name}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button type="button" onClick={() => move(i, -1)} disabled={i === 0}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); move(i, -1); }} disabled={i === 0}
                             title="Nach oben" className="p-1 text-ink-faint hover:text-ink disabled:opacity-30 disabled:cursor-default">
                       <ChevronUp className="w-4 h-4" />
                     </button>
-                    <button type="button" onClick={() => move(i, 1)} disabled={i === containers.length - 1}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); move(i, 1); }} disabled={i === containers.length - 1}
                             title="Nach unten" className="p-1 text-ink-faint hover:text-ink disabled:opacity-30 disabled:cursor-default">
                       <ChevronDown className="w-4 h-4" />
                     </button>

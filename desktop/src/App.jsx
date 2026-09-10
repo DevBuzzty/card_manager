@@ -6,6 +6,7 @@ import StagingArea from './components/StagingArea';
 import SammlungLayout from './components/SammlungLayout';
 import CollectionList from './components/CollectionList';
 import Binders from './components/Binders';
+import BinderView from './components/BinderView';
 import Wishlist from './components/Wishlist';
 import SetCompletion from './components/SetCompletion';
 import Settings from './components/Settings';
@@ -111,6 +112,9 @@ function App() {
                       <Route index element={<Navigate to="/sammlung/karten" replace />} />
                       <Route path="karten" element={<CollectionList isUpdating={!!updateProgress} setUpdateProgress={setUpdateProgress} />} />
                       <Route path="binder" element={<Binders />} />
+                      {/* Ein aufgeschlagener Behälter (Spec B2 §7.2) liegt unter der Liste, damit
+                          das Segment „Binder" in SammlungLayout markiert bleibt. */}
+                      <Route path="binder/:containerId" element={<BinderView />} />
                       <Route path="wunschliste" element={<Wishlist />} />
                       <Route path="sets" element={<SetCompletion />} />
                       <Route path="decks" element={<DeckBuilder />} />
