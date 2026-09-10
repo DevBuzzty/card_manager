@@ -8,13 +8,9 @@ import { ROUTES, cardRoute } from '../utils/routes';
 import { formatCopyLocation } from '../utils/copyLocation';
 import { EDITION_LABELS, conditionFactor } from '../utils/valuation';
 import { candidateGroups, candidatesEmpty, columns, loose, pageCount, slots } from '../utils/binderGrid';
+import { copyKey, printingKey } from '../utils/printingKey';
 
 const KIND_LABELS = { binder: 'Ordner', box: 'Box', deckbox: 'Deckbox' };
-
-// Gleicher Schluessel wie in CollectionList.jsx: die vierspaltige Identitaet einer Druckvariante.
-// card_copies nennt die erste Spalte card_id, cards nennt sie id -- deshalb zwei Ableiter.
-const keyOfCopy = (cp) => `${cp.card_id}|${cp.set_code}|${cp.language || 'DE'}|${cp.rarity}`;
-const keyOfCard = (c) => `${c.id}|${c.set_code}|${c.language || 'DE'}|${c.rarity}`;
 
 /**
  * Spec B2 §7.2, Desktop-Haelfte: EIN Behaelter, aufgeschlagen. Ordner zeigen zwei Fachraster
@@ -37,7 +33,7 @@ const keyOfCard = (c) => `${c.id}|${c.set_code}|${c.language || 'DE'}|${c.rarity
  * Der Kotlin-Gegenpart dieser ANSICHT ist ui/BinderPageScreen.kt. Gemeinsam ist beiden nur, was in
  * binderGrid.js/BinderGrid.kt steht -- die Bedienung ist absichtlich verschieden.
  */
-export default function BinderView() {
+export default function BinderView({ panelOpen = false }) {
   const { containerId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -112,15 +108,15 @@ export default function BinderView() {
 
   const cardsByKey = useMemo(() => {
     const m = new Map();
-    for (const c of cards) m.set(keyOfCard(c), c);
+    for (const c of cards) m.set(printingKey(c), c);
     return m;
   }, [cards]);
   // listUnsortedCopies bringt card_name schon mit; fuer alles andere kommt der Name aus der
   // Sammlung, weil er an der Druckvariante haengt und nicht am Exemplar.
-  const nameOf = (cp) => cardsByKey.get(keyOfCopy(cp))?.name ?? cp.card_name ?? null;
-  const imageOf = (cp) => cardsByKey.get(keyOfCopy(cp))?.image_url ?? cp.card_image_url ?? null;
+  const nameOf = (cp) => cardsByKey.get(copyKey(cp))?.name ?? cp.card_name ?? null;
+  const imageOf = (cp) => cardsByKey.get(copyKey(cp))?.image_url ?? cp.card_image_url ?? null;
   const valueOf = (list) => list.reduce(
-    (sum, cp) => sum + (Number(cardsByKey.get(keyOfCopy(cp))?.price) || 0) * conditionFactor(cp.condition),
+    (sum, cp) => sum + (Number(cardsByKey.get(copyKey(cp))?.price) || 0) * conditionFactor(cp.condition),
     0,
   );
 
@@ -138,7 +134,13 @@ export default function BinderView() {
   );
   const openValue = valueOf([...leftSlots.flat(), ...(rightSlots ? rightSlots.flat() : [])]);
 
-  const overlayOpen = !!(menu || fill || sheetCopy);
+  // panelOpen kommt von App.jsx: steht die Kartendetail-Ansicht offen, blaettert der Ordner
+  // NICHT mehr mit. Der Wert MUSS von dort kommen -- ein Vergleich mit useLocation() ginge hier
+  // ins Leere, weil <Routes location={background}> seinen Nachfahren bereits die
+  // HINTERGRUND-Location liefert, also genau die des Ordners. App.jsx steht ausserhalb dieses
+  // Routes und sieht als einzige die echte Adresse (gleiche Bauart wie das paletteOpen, das es an
+  // CardDetailPanel reicht).
+  const overlayOpen = !!(menu || fill || sheetCopy || panelOpen);
 
   // ← und → blaettern. Alt+Pfeil gehoert dem Verlauf (App.jsx), ein offenes Fenster und jedes
   // Eingabefeld bekommen die Taste zuerst.
@@ -186,8 +188,9 @@ export default function BinderView() {
   // Ein Schreibweg fuer beide Aktionen dieser Seite (aus dem Fach nehmen, in ein Fach legen):
   // Sperre, Schreiben, Neuladen. Liefert false, wenn die Sperre den Vorgang verworfen hat -- der
   // Aufrufer schliesst sein Fenster dann nicht. Bei einem abgelehnten Schreibvorgang wird NICHT
-  // neu geladen: load() setzt error im Erfolgsfall auf null und wischte die Meldung sofort weg
-  // (derselbe Grund wie in Binders.jsx#move).
+  // neu geladen: load() setzt error im Erfolgsfall auf null und wischte die Meldung sofort weg.
+  // Binders.jsx#move loest dieselbe Klemme andersherum -- es laedt zuerst neu und setzt seine
+  // eigene Meldung erst danach, und nur wenn load() dabei geglueckt ist.
   const write = (what, call) => {
     if (savingRef.current) return false;
     savingRef.current = true;

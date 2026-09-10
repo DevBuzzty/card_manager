@@ -10,6 +10,10 @@ import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { cardRoute } from '../utils/routes';
 import { parseTags } from '../utils/tags';
 import { formatCopyLocation } from '../utils/copyLocation';
+// Spec B1 §7.4: card_copies kommt ueber listCopies() je Printing herein -- derselbe vierteilige
+// Schluessel wie ueberall sonst im Projekt (id/set_code/language/rarity). Er wohnt in
+// ../utils/printingKey.js, damit es ihn nur EINMAL gibt (BinderView.jsx liest denselben).
+import { printingKey } from '../utils/printingKey';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -47,10 +51,6 @@ const scrollbarWidth = () => {
     }
     return sbWidth;
 };
-
-// Spec B1 §7.4: card_copies kommt ueber listCopies() je Printing herein -- derselbe vierteilige
-// Schluessel wie ueberall sonst im Projekt (id/set_code/language/rarity).
-const printingKey = (p) => `${p.id}|${p.set_code}|${p.language || 'DE'}|${p.rarity}`;
 
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const navigate = useNavigate();

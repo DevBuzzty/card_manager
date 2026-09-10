@@ -114,7 +114,7 @@ function App() {
                       <Route path="binder" element={<Binders />} />
                       {/* Ein aufgeschlagener Behälter (Spec B2 §7.2) liegt unter der Liste, damit
                           das Segment „Binder" in SammlungLayout markiert bleibt. */}
-                      <Route path="binder/:containerId" element={<BinderView />} />
+                      <Route path="binder/:containerId" element={<BinderView panelOpen={panelOpen} />} />
                       <Route path="wunschliste" element={<Wishlist />} />
                       <Route path="sets" element={<SetCompletion />} />
                       <Route path="decks" element={<DeckBuilder />} />
