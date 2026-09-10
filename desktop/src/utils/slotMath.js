@@ -6,7 +6,8 @@
 // android/app/src/main/java/com/example/yugiohscanner/ml/SlotMath.kt.
 // Dass es sie zweimal gibt, ist Absicht: das Handy braucht sie fuer den Einsortier-Modus, der
 // Desktop fuer den Vorschlag im Exemplar-Sheet. Wer hier etwas aendert, aendert dort mit -- beide
-// Testsuiten pruefen dieselben Faelle mit denselben Eingaben.
+// Testsuiten pruefen dieselben Faelle mit denselben Eingaben, bis auf die beiden unten
+// genannten Abweichungen, die es in Kotlin nicht geben kann.
 //
 // Wirft nie: diese Funktionen werden aus Ansichten heraus gerufen, ein Absturz beim Blaettern
 // waere schlimmer als eine schiefe Zahl. Zurechtrueckungen (in beiden Fassungen identisch):

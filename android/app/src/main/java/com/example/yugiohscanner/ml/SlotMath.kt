@@ -8,7 +8,8 @@ package com.example.yugiohscanner.ml
  * Die JavaScript-Fassung derselben Regel steht in `desktop/src/utils/slotMath.js`. Dass es sie
  * zweimal gibt, ist Absicht: das Handy braucht sie fuer den Einsortier-Modus, der Desktop fuer
  * den Vorschlag im Exemplar-Sheet. Wer hier etwas aendert, aendert dort mit -- beide Testsuiten
- * pruefen dieselben Faelle mit denselben Eingaben.
+ * pruefen dieselben Faelle mit denselben Eingaben, bis auf die beiden unten genannten
+ * Abweichungen, die es hier nicht geben kann.
  *
  * Wirft nie: diese Funktionen werden aus Ansichten heraus gerufen, ein Absturz beim Blaettern
  * waere schlimmer als eine schiefe Zahl. Zurechtrueckungen (in beiden Fassungen identisch):
@@ -21,6 +22,16 @@ package com.example.yugiohscanner.ml
  * - `firstFree`: ein belegtes Fach jenseits der aktuellen Seitengroesse (Rest einer frueheren,
  *   groesseren Seitengroesse) zaehlt weder als belegt noch als vorhandene Seite -- es wird
  *   vollstaendig ignoriert, so als gaebe es die Zeile nicht.
+ *
+ * Zwei Stellen sind NICHT identisch, weil der Renderer -- anders als Kotlin -- nichts
+ * typisiert. Beide betreffen nur die JavaScript-Fassung; hier braucht es dafuer nichts, und
+ * wer diese Datei anfasst, muss sie hier NICHT nachbauen:
+ * - `slotMath.js` zieht Clamps und die page/slot-Werte in `firstFree` zusaetzlich durch
+ *   Number(...) + Math.trunc(...). Dort liefern `CustomSelect` und `<input>` Zeichenketten
+ *   und gelegentlich Bruchzahlen; die Signaturen hier (`Int`) koennen beides nicht
+ *   entgegennehmen.
+ * - `slotMath.js` behandelt ein nicht-Array `occupied` (undefined, null) wie ein leeres
+ *   Array. `Set<Pair<Int, Int>>` ist nicht-nullbar und kennt diesen Fall nicht.
  */
 object SlotMath {
 
