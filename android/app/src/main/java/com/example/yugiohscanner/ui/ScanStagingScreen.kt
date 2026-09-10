@@ -65,6 +65,17 @@ class ScanStagingEntry(val id: Long, val passcode: String) {
     // DISPLAYS it (dot colour + reason text), it never recomputes green/yellow/red itself. `null`
     // while the entry is still resolving (same window as `loading`).
     var confidence by mutableStateOf<ScanConfidence.Result?>(null)
+
+    // Spec B2 Task 5 (Einsortier-Modus, Nachtrag §2): das Fach, in das der Nutzer die Karte
+    // physisch bereits gesteckt hat, als sie erkannt wurde -- die Karte ist noch nicht in der
+    // Sammlung, geht also ins Staging statt direkt hinein, aber das Fach rueckt beim Scannen
+    // trotzdem sofort vor. Task 6/7 setzen diese drei beim Anlegen des Eintrags; "Alle uebernehmen"
+    // unten reicht sie unveraendert an setCopyLocation() weiter. Alle drei null = keine Reservierung
+    // (der normale Fall ausserhalb des Einsortier-Modus). Nicht persistiert, wie der Rest dieser
+    // Klasse -- lebt nur in ScanCapture.stagingCards.
+    var reservedContainerId by mutableStateOf<String?>(null)
+    var reservedPage by mutableStateOf<Int?>(null)
+    var reservedSlot by mutableStateOf<Int?>(null)
 }
 
 class ExtraPrinting {
@@ -96,6 +107,14 @@ object ScanStagingLogic {
         ScanConfidence.Light.RED -> ErrorColor
         null -> Muted
     }
+
+    /**
+     * Spec B2 Task 5: welches der gerade fuer eine Karte angelegten Exemplare eine Einsortier-
+     * Modus-Reservierung bekommt -- nur das ERSTE (Entscheidung 3 im Bericht: bei quantity > 1
+     * passt nur eine Karte ins reservierte Fach, die uebrigen entstehen ohne Standort). `null`
+     * wenn keines angelegt wurde (sollte nicht vorkommen, da addScanned mindestens eines erzeugt).
+     */
+    fun firstCopyForReservation(copyIds: List<String>): String? = copyIds.firstOrNull()
 }
 
 @Composable
@@ -166,10 +185,15 @@ fun ScanStagingSheet(
                         // anything the camera adds while this runs) stay in the sheet. Iterates the
                         // FULL `entries`, not `visible` -- see the filter's own comment above.
                         val committed = mutableListOf<ScanStagingEntry>()
+                        // Sichtbare Hinweise fuer Reservierungen, die beim Uebernehmen nicht gesetzt
+                        // werden konnten (Entscheidung 1 im Bericht) -- gesammelt statt sofort in
+                        // `error` geschrieben, damit ein einzelner Hinweis nicht vom `error = null`
+                        // einer spaeter erfolgreichen Karte im selben Durchgang ueberschrieben wird.
+                        val locationWarnings = mutableListOf<String>()
                         for (e in entries.toList()) {
                             val b = e.base ?: continue // still resolving — skip
                             val s = e.selectedSet
-                            CollectionRepository.addScanned(
+                            val copyIds = CollectionRepository.addScanned(
                                 b,
                                 setCode = s?.setCode ?: "Unknown",
                                 rarity = s?.rarity ?: "",
@@ -177,7 +201,33 @@ fun ScanStagingSheet(
                                 edition = e.edition, condition = e.condition,
                                 count = e.quantity,
                             )
+                            // Einsortier-Modus-Reservierung (Spec B2 Task 5): ueber DENSELBEN Weg wie
+                            // jede andere Standortzuweisung -- setCopyLocation, das Seite/Fach bei
+                            // Nicht-Bindern selbst verwirft. Kein zweiter Schreibweg, keine zweite
+                            // Pruefung hier (siehe B1 Task 6, wo genau das zu Datenverlust fuehrte).
+                            // Entscheidung 3: nur das erste angelegte Exemplar bekommt sie.
+                            val reservedCopyId = ScanStagingLogic.firstCopyForReservation(copyIds)
+                            if (e.reservedContainerId != null && reservedCopyId != null) {
+                                try {
+                                    CollectionRepository.setCopyLocation(
+                                        reservedCopyId, e.reservedContainerId, e.reservedPage, e.reservedSlot,
+                                    )
+                                } catch (ex: Exception) {
+                                    // Entscheidung 1: das Uebernehmen laeuft ueber ALLE Eintraege in
+                                    // einem Durchgang -- ein Wurf hier risse den ganzen Stapel mit.
+                                    // Die Karte ist wichtiger als ihr Platz: sie bleibt angelegt, nur
+                                    // ohne Standort (taucht in "Nicht einsortiert" auf), und der
+                                    // Nutzer bekommt einen sichtbaren Hinweis statt eines stillen
+                                    // Fehlschlags oder einer verschluckten Ausnahme.
+                                    locationWarnings.add(
+                                        "${b.name ?: b.id}: Standort nicht gesetzt (${ex.message ?: "unbekannter Fehler"})",
+                                    )
+                                }
+                            }
                             // Commit each extra printing the user added (skip ones left unpicked).
+                            // Entscheidung 2: extraPrintings bekommen NIE die Reservierung -- reserviert
+                            // ist ein einzelnes physisches Fach, die zusaetzlichen Printings sind andere
+                            // Karten, die der Nutzer bei der Gelegenheit miterfasst.
                             for (ep in e.extraPrintings) {
                                 val es = ep.selectedSet ?: continue
                                 CollectionRepository.addScanned(
@@ -187,7 +237,7 @@ fun ScanStagingSheet(
                             committed.add(e)
                         }
                         entries.removeAll(committed)
-                        error = null
+                        error = if (locationWarnings.isEmpty()) null else locationWarnings.joinToString("\n")
                         onCommitted(committed.map { it.passcode })
                     } catch (ex: Exception) {
                         error = ex.message ?: "Übernehmen fehlgeschlagen"

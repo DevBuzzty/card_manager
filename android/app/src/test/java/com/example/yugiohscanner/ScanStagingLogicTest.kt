@@ -58,4 +58,20 @@ class ScanStagingLogicTest {
     @Test fun `dot colour -- still resolving (no confidence yet) is Muted, not a fourth colour`() {
         assertEquals(Muted, ScanStagingLogic.dotColor(null))
     }
+
+    // --- firstCopyForReservation ---------------------------------------------------------------
+    // Spec B2 Task 5: which of the just-created copies gets an Einsortier-Modus reservation.
+    // Always the first -- see the report's decision 3 (quantity > 1: only one copy fits the slot).
+
+    @Test fun `reservation -- single copy created gets it`() {
+        assertEquals("copy-1", ScanStagingLogic.firstCopyForReservation(listOf("copy-1")))
+    }
+
+    @Test fun `reservation -- quantity greater than 1, only the first of the created copies gets it`() {
+        assertEquals("copy-1", ScanStagingLogic.firstCopyForReservation(listOf("copy-1", "copy-2", "copy-3")))
+    }
+
+    @Test fun `reservation -- no copies created, nothing to reserve`() {
+        assertEquals(null, ScanStagingLogic.firstCopyForReservation(emptyList()))
+    }
 }
