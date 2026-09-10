@@ -151,4 +151,40 @@ class BinderGridTest {
     @Test fun `Suche ohne Treffer liefert nichts`() {
         assertEquals(emptyList<CopyRow>(), BinderGrid.filterCandidates(listOf(copy("a")), "Exodia", ::nameOf))
     }
+
+    // --- candidateGroups ---
+    //
+    // "Aus Fach nehmen" raeumt nur Seite und Fach, nicht den Behaelter. Damit das keine Sackgasse
+    // ist, muss das Auswahlangebot eines leeren Fachs die Exemplare DIESES Ordners ohne Fach
+    // mitanbieten -- als eigene, voranstehende Gruppe neben den Exemplaren ohne Behaelter.
+
+    @Test fun `Auswahlangebot bietet zuerst den eigenen Ordner, dann die nicht einsortierten`() {
+        val loose = BinderGrid.loose(listOf(copy("drin", page = 1, slot = 1), copy("ausgefacht")), 9)
+        val unsorted = listOf(copy("frei"))
+        val groups = BinderGrid.candidateGroups(loose, unsorted, "", ::nameOf)
+        assertEquals(listOf("ausgefacht"), groups.inContainer.map { it.copyId })
+        assertEquals(listOf("frei"), groups.unsorted.map { it.copyId })
+        assertFalse(groups.isEmpty())
+    }
+
+    @Test fun `ein aus dem Fach genommenes Exemplar bleibt einlegbar`() {
+        // Genau der Zustand nach "Aus Fach nehmen": Behaelter noch da, Seite und Fach leer. Vorher
+        // war er eine Sackgasse -- weder im Raster noch im Auswahlangebot.
+        val ausgefacht = copy("c1", page = null, slot = null)
+        val groups = BinderGrid.candidateGroups(BinderGrid.loose(listOf(ausgefacht), 9), emptyList(), "", ::nameOf)
+        assertEquals(listOf("c1"), groups.inContainer.map { it.copyId })
+    }
+
+    @Test fun `die Suche wirkt auf beide Gruppen`() {
+        val loose = listOf(copy("a"), copy("b"))                       // "Blauaeugiger..." und "Dunkler Magier"
+        val unsorted = listOf(copy("x", setCode = "SDK-DE042"), copy("y", note = "Blau geknickt"))
+        val groups = BinderGrid.candidateGroups(loose, unsorted, "blau", ::nameOf)
+        assertEquals(listOf("a"), groups.inContainer.map { it.copyId })
+        assertEquals(listOf("y"), groups.unsorted.map { it.copyId })
+    }
+
+    @Test fun `ohne Kandidaten sind beide Gruppen leer`() {
+        assertTrue(BinderGrid.candidateGroups(emptyList(), emptyList(), "", ::nameOf).isEmpty())
+        assertTrue(BinderGrid.candidateGroups(listOf(copy("a")), listOf(copy("b")), "Exodia", ::nameOf).isEmpty())
+    }
 }

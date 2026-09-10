@@ -74,4 +74,32 @@ object BinderGrid {
                 c.note?.contains(q, ignoreCase = true) == true
         }
     }
+
+    /**
+     * Das Auswahlangebot fuer ein leeres Fach, in zwei Gruppen. `inContainer` sind die Exemplare
+     * DIESES Behaelters ohne darstellbares Fach (`loose`), `unsorted` die Exemplare ganz ohne
+     * Behaelter (`CollectionRepository.listUnsortedCopies`). Beide durch dieselbe Textsuche.
+     *
+     * Warum zwei Gruppen: "Aus Fach nehmen" raeumt nur Seite und Fach, nicht den Behaelter -- der
+     * Name der Aktion sagt "Fach". Das Exemplar liegt danach im Ordner, aber in keinem Fach, und
+     * genau dieser Zwischenzustand muss wieder einlegbar sein. Beide Gruppen sind schnittfrei:
+     * `loose` hat immer einen Behaelter, `unsorted` nie.
+     *
+     * Die Reihenfolge (`inContainer` zuerst) ist Teil der Rechnung, nicht Sache der Ansicht: wer
+     * eine Seite dieses Ordners fuellt, meint eher eine Karte, die schon in diesem Ordner liegt.
+     */
+    fun candidateGroups(
+        loose: List<CopyRow>,
+        unsorted: List<CopyRow>,
+        query: String,
+        nameOf: (CopyRow) -> String?,
+    ): SlotCandidates = SlotCandidates(
+        inContainer = filterCandidates(loose, query, nameOf),
+        unsorted = filterCandidates(unsorted, query, nameOf),
+    )
+
+    /** Die beiden Gruppen des Auswahlangebots; `inContainer` steht in der Ansicht oben. */
+    data class SlotCandidates(val inContainer: List<CopyRow>, val unsorted: List<CopyRow>) {
+        fun isEmpty(): Boolean = inContainer.isEmpty() && unsorted.isEmpty()
+    }
 }

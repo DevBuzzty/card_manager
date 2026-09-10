@@ -104,6 +104,9 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
     val myCopies = remember(copies, containerId) { copies.filter { it.containerId == containerId } }
     val pockets = container?.pocketsPerPage ?: 0   // 0 -> SlotMath.clampPockets zieht auf 4
     val isBinder = container?.kind == "binder"
+    // Exemplare dieses Behaelters ohne darstellbares Fach: sie stehen unter dem Raster UND ganz
+    // oben im Auswahlangebot fuer ein leeres Fach -- deshalb hier oben, nicht im Rasterzweig.
+    val loose = remember(myCopies, pockets) { BinderGrid.loose(myCopies, pockets) }
 
     suspend fun reload() {
         val cs = ContainersRepository.list()
@@ -238,7 +241,6 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
                     )
                 }
 
-                val loose = remember(myCopies, pockets) { BinderGrid.loose(myCopies, pockets) }
                 if (loose.isNotEmpty()) {
                     Spacer(Modifier.height(12.dp))
                     // Exemplare, die diesem Ordner zugeordnet sind, aber in keinem darstellbaren
@@ -293,11 +295,15 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
             onDismiss = { if (!busy) actionSlot = null },
             onMove = { copy -> actionSlot = null; sheetCopy = copy },
             onTakeOut = { copy ->
-                // "Aus Fach nehmen" macht das Exemplar wieder zu einem nicht einsortierten: nur
-                // Seite und Fach zu raeumen wuerde es in einen Zustand schieben, aus dem es weder
-                // im Raster noch in der Auswahl fuer ein leeres Fach wieder auftaucht.
+                // "Aus Fach nehmen" raeumt genau das, was der Name sagt: Seite und Fach. Der
+                // Behaelter bleibt -- wer die Karte aus einem Fach nimmt, verliert sie nicht aus
+                // dem Ordner (in B1 war genau das ein echter Datenverlust: eine Aktion tat mehr am
+                // Standort, als ihr Name ankuendigte). Das Exemplar erscheint danach unter
+                // "Ohne Fach" und steht im Auswahlangebot jedes leeren Fachs dieses Ordners ganz
+                // oben (BinderGrid.candidateGroups). Geschrieben wird ueber denselben und einzigen
+                // Standort-Weg; der Behaelter geht unveraendert wieder mit.
                 val started = write("Aus Fach nehmen") {
-                    CollectionRepository.setCopyLocation(copy.copyId, null, null, null)
+                    CollectionRepository.setCopyLocation(copy.copyId, copy.containerId, null, null)
                 }
                 if (started) actionSlot = null
             },
@@ -306,7 +312,7 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
 
     fillTarget?.let { (page, slot) ->
         FillSlotSheet(
-            page = page, slot = slot, candidates = unsorted, busy = busy,
+            page = page, slot = slot, loose = loose, unsorted = unsorted, busy = busy,
             nameOf = { cardOf(it)?.name },
             onDismiss = { if (!busy) fillTarget = null },
             onPick = { copy ->
@@ -499,19 +505,24 @@ private fun SlotActionSheet(
     }
 }
 
+// Zwei Gruppen: die Exemplare DIESES Ordners ohne Fach zuerst (sie sind die naheliegenderen
+// Kandidaten fuer diese Seite und der Rueckweg fuer alles, was "Aus Fach nehmen" abgelegt hat),
+// darunter die Exemplare ohne Behaelter. Welche Zeile in welche Gruppe gehoert, rechnet
+// BinderGrid.candidateGroups aus.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FillSlotSheet(
     page: Int,
     slot: Int,
-    candidates: List<CopyRow>,
+    loose: List<CopyRow>,
+    unsorted: List<CopyRow>,
     busy: Boolean,
     nameOf: (CopyRow) -> String?,
     onDismiss: () -> Unit,
     onPick: (CopyRow) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    val shown = remember(candidates, query) { BinderGrid.filterCandidates(candidates, query, nameOf) }
+    val shown = remember(loose, unsorted, query) { BinderGrid.candidateGroups(loose, unsorted, query, nameOf) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -521,13 +532,13 @@ private fun FillSlotSheet(
             Text("In Seite $page · Fach $slot legen", style = MaterialTheme.typography.titleMedium, color = OnSurface, fontWeight = FontWeight.Bold)
             OutlinedTextField(
                 value = query, onValueChange = { query = it }, singleLine = true,
-                placeholder = { Text("Nicht einsortierte Exemplare durchsuchen") },
+                placeholder = { Text("Exemplare durchsuchen") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 modifier = Modifier.fillMaxWidth(),
             )
             if (shown.isEmpty()) {
                 Text(
-                    if (candidates.isEmpty()) "Es ist nichts mehr übrig, das nicht einsortiert wäre."
+                    if (loose.isEmpty() && unsorted.isEmpty()) "Es ist nichts übrig, das hier hinein könnte."
                     else "Kein Exemplar passt zur Suche.",
                     color = Muted, style = MaterialTheme.typography.bodySmall,
                 )
@@ -536,24 +547,46 @@ private fun FillSlotSheet(
                     Modifier.fillMaxWidth().heightIn(max = 320.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    items(shown, key = { it.copyId }) { copy ->
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .clickable(enabled = !busy) { onPick(copy) }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(nameOf(copy) ?: copy.cardId, color = if (busy) Muted else OnSurface, maxLines = 1, style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    "${copy.setCode} · ${copy.rarity} · ${copy.condition}",
-                                    color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall,
-                                )
-                            }
+                    if (shown.inContainer.isNotEmpty()) {
+                        item(key = "kopf-ordner") { CandidateHeader("In diesem Ordner, ohne Fach") }
+                        items(shown.inContainer, key = { it.copyId }) { copy ->
+                            CandidateRow(copy, nameOf(copy), busy) { onPick(copy) }
+                        }
+                    }
+                    if (shown.unsorted.isNotEmpty()) {
+                        item(key = "kopf-unsortiert") { CandidateHeader("Nicht einsortiert") }
+                        items(shown.unsorted, key = { it.copyId }) { copy ->
+                            CandidateRow(copy, nameOf(copy), busy) { onPick(copy) }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CandidateHeader(text: String) {
+    Text(
+        text, color = Muted, style = MaterialTheme.typography.labelMedium,
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+    )
+}
+
+@Composable
+private fun CandidateRow(copy: CopyRow, name: String?, busy: Boolean, onPick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            .clickable(enabled = !busy) { onPick() }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(name ?: copy.cardId, color = if (busy) Muted else OnSurface, maxLines = 1, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "${copy.setCode} · ${copy.rarity} · ${copy.condition}",
+                color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }
