@@ -645,12 +645,15 @@ fun ScanScreen(onClose: () -> Unit) {
                     entries = capture.stagingCards,
                     // Only forget what was actually committed — entries left in the sheet (still
                     // resolving) must not be staged a second time.
-                    onCommitted = { committed, locationWarnings ->
+                    onCommitted = { committed, ohneStandort, locationWarnings ->
                         // Vergessen wird IMMER: die Eintraege sind angelegt, nur ihr Fach fehlt
-                        // womoeglich -- sie duerfen nicht ein zweites Mal im Staging landen.
+                        // womoeglich -- sie duerfen nicht ein zweites Mal im Staging landen. Genau
+                        // dafuer stehen die beiden ersten Listen hier ZUSAMMEN: `ohneStandort` ist
+                        // ebenso angelegt wie `committed`, nur ohne Fach (das unterscheidet allein
+                        // der Einsortier-Modus, dieser Schirm reserviert keine Faecher).
                         // `forget` arbeitet ueber Passcodes; die Eintraege selbst braucht hier
                         // niemand (nur der Einsortier-Modus tut das, siehe onCommitted dort).
-                        capture.forget(committed.map { it.passcode })
+                        capture.forget((committed + ohneStandort).map { it.passcode })
                         // Das Blatt bleibt offen, solange Standort-Hinweise anstehen (Spec B2
                         // Task 5, Fixrunde 1). Sonst schliesst es im selben Snapshot, in dem der
                         // Hinweis gesetzt wird, und der Nutzer saehe nie, dass eine Karte, die er

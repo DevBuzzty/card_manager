@@ -62,6 +62,40 @@ class BinderGridTest {
         assertEquals(listOf("ohneFach", "zuHohesFach"), BinderGrid.loose(copies, 9).map { it.copyId })
     }
 
+    // --- maxPlacedPage ---
+    //
+    // Abschluss-Fixwelle, Minor 3: die Zahl, die die BEHAELTERLISTE zeigt ("7 Seiten"). Sie muss
+    // dieselbe Regel treffen wie das aufgeschlagene Raster, sonst verspricht die Liste Seiten, die
+    // es aufgeschlagen nicht gibt. Unterschied zu `pageCount` ist allein die leere Antwort: hier
+    // null (die Liste faellt dann auf ceil(Anzahl/Faecher) zurueck), dort 1.
+
+    @Test fun `ohne einsortiertes Exemplar gibt es keine hoechste Seite`() {
+        assertEquals(null, BinderGrid.maxPlacedPage(emptyList(), 9))
+        assertEquals(null, BinderGrid.maxPlacedPage(listOf(copy("c1")), 9))
+    }
+
+    @Test fun `hoechste Seite ist die hoechste belegte`() {
+        val copies = listOf(copy("c1", page = 1, slot = 1), copy("c2", page = 7, slot = 3))
+        assertEquals(7, BinderGrid.maxPlacedPage(copies, 9))
+    }
+
+    @Test fun `Fach jenseits der Ordnergroesse zaehlt fuer die hoechste Seite nicht`() {
+        // Der Ordner wurde von 12 auf 9 Faecher umgestellt; S7/F11 kann kein Raster zeigen.
+        // Ein blosses MAX ueber `page` saehe hier 7 -- die Liste sagte "7 Seiten", aufgeschlagen
+        // stuende "Seite 1 von 3".
+        val copies = listOf(copy("c1", page = 3, slot = 9), copy("c2", page = 7, slot = 11))
+        assertEquals(3, BinderGrid.maxPlacedPage(copies, 9))
+    }
+
+    @Test fun `hoechste Seite und Seitenzahl treffen dieselbe Regel`() {
+        val copies = listOf(
+            copy("c1", page = 2, slot = 4),
+            copy("ohneFach"),
+            copy("zuHohesFach", page = 8, slot = 12),
+        )
+        assertEquals(BinderGrid.pageCount(copies, 9), BinderGrid.maxPlacedPage(copies, 9))
+    }
+
     // --- pageCount ---
 
     @Test fun `leerer Ordner hat trotzdem eine Seite`() {

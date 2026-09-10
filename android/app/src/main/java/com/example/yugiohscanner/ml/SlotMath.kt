@@ -65,10 +65,17 @@ object SlotMath {
     }
 
     /**
-     * Spec 5.3: die hoechste BELEGTE Seite eines Behaelters, null wenn keine Seite belegt ist --
-     * gleiche Regel wie listContainers' max_page am Desktop (copies.cjs, dort per SQL MAX()).
-     * Kein Zwilling: der Desktop bildet dieselbe Regel als Datenbankaggregat nach, nicht als
-     * eigene JS-Funktion.
+     * Spec 5.3: die hoechste BELEGTE Seite eines Behaelters, null wenn keine Seite belegt ist.
+     *
+     * Nimmt die Seiten, wie sie kommen, und prueft KEINE Faecher -- wer nur Exemplare in
+     * darstellbaren Faechern zaehlen will, filtert vorher (`BinderGrid.maxPlacedPage` tut genau
+     * das und ruft dann hier herein).
+     *
+     * Kein GLEICHNAMIGER Zwilling am Desktop -- die Regel selbst steht dort trotzdem an ZWEI
+     * Stellen: als SQL-Aggregat (`copies.cjs`, listContainers' max_page) und, seit der
+     * Binder-Ansicht, als eigene JS-Schleife in `desktop/src/utils/binderGrid.js#pageCount`. Wer
+     * hier etwas aendert, muss beide nachziehen; die Suche nach dem Funktionsnamen findet keine
+     * von beiden.
      */
     fun maxOccupiedPage(pages: Collection<Int?>): Int? = pages.filterNotNull().maxOrNull()
 }

@@ -120,17 +120,26 @@ object ScanStagingLogic {
 @Composable
 fun ScanStagingSheet(
     entries: SnapshotStateList<ScanStagingEntry>,
-    // The entries that were actually committed — the camera keeps running behind the sheet, so the
-    // caller may only forget exactly these. Die EINTRAEGE, nicht ihre Passcodes (Task 7, Fixrunde
-    // 1): der Einsortier-Modus muss "uebernommen" von "weggetippt" und "nicht aufgeloest"
-    // unterscheiden koennen, und das geht nur ueber Identitaet -- zwei Eintraege koennen denselben
-    // Passcode tragen. Wer nur die Passcodes braucht, bildet sie selbst ab.
-    // Zweite Liste (Spec B2 Task 5, Fixrunde 1): die Standort-Hinweise dieses Durchgangs. Der
-    // Aufrufer MUSS das Blatt offen lassen, solange sie nicht leer ist -- `error` unten lebt in
-    // dieser Komposition, ein sofortiges Schliessen wuerde den Hinweis ungezeichnet wegwerfen.
-    // Ein Hinweis, der von selbst verschwindet (Schnipsel), waere hier zu wenig: physischer und
-    // digitaler Zustand laufen auseinander, das muss der Nutzer wegtippen, nicht verpassen koennen.
-    onCommitted: (List<ScanStagingEntry>, List<String>) -> Unit,
+    // Drei Listen, in dieser Reihenfolge:
+    //
+    // 1. Die VOLLSTAENDIG uebernommenen Eintraege -- angelegt UND, falls ein Fach reserviert war,
+    //    mit gesetztem Standort. Die Kamera laeuft hinter dem Blatt weiter, der Aufrufer darf
+    //    also nur genau diese vergessen. Die EINTRAEGE, nicht ihre Passcodes (Task 7, Fixrunde
+    //    1): der Einsortier-Modus muss "uebernommen" von "weggetippt" und "nicht aufgeloest"
+    //    unterscheiden koennen, und das geht nur ueber Identitaet -- zwei Eintraege koennen
+    //    denselben Passcode tragen. Wer nur die Passcodes braucht, bildet sie selbst ab.
+    // 2. Die Eintraege, deren Karte angelegt wurde, deren reserviertes Fach aber NICHT geschrieben
+    //    werden konnte (Abschluss-Fixwelle, Minor 4). Sie sind in der Sammlung -- der Aufrufer
+    //    muss sie genauso vergessen wie (1) --, liegen dort aber ohne Standort unter "Nicht
+    //    einsortiert". Wer sie zu (1) zaehlt, meldet dem Nutzer spaeter ein Fach, das nie
+    //    geschrieben wurde; wer sie ganz weglaesst, laesst sie im Blatt stehen und legt sie beim
+    //    naechsten Durchgang ein zweites Mal an.
+    // 3. Die Standort-Hinweise dieses Durchgangs (Spec B2 Task 5, Fixrunde 1). Der Aufrufer MUSS
+    //    das Blatt offen lassen, solange sie nicht leer ist -- `error` unten lebt in dieser
+    //    Komposition, ein sofortiges Schliessen wuerde den Hinweis ungezeichnet wegwerfen. Ein
+    //    Hinweis, der von selbst verschwindet (Schnipsel), waere hier zu wenig: physischer und
+    //    digitaler Zustand laufen auseinander, das muss der Nutzer wegtippen, nicht verpassen.
+    onCommitted: (List<ScanStagingEntry>, List<ScanStagingEntry>, List<String>) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var committing by remember { mutableStateOf(false) }
@@ -191,7 +200,13 @@ fun ScanStagingSheet(
                     // Only the entries actually written are removed; ones still resolving (and
                     // anything the camera adds while this runs) stay in the sheet. Iterates the
                     // FULL `entries`, not `visible` -- see the filter's own comment above.
+                    // Zwei Listen statt einer (Abschluss-Fixwelle, Minor 4): `committed` sind die
+                    // VOLLSTAENDIG uebernommenen Eintraege, `ohneStandort` die, deren Karte zwar
+                    // angelegt wurde, deren reserviertes Fach aber nicht geschrieben werden konnte.
+                    // Beide stehen danach in der Sammlung und verlassen deshalb das Blatt; nur
+                    // `committed` darf der Aufrufer als "hat sein Fach" behandeln.
                     val committed = mutableListOf<ScanStagingEntry>()
+                    val ohneStandort = mutableListOf<ScanStagingEntry>()
                     // Sichtbare Hinweise fuer Reservierungen, die beim Uebernehmen nicht gesetzt
                     // werden konnten (Entscheidung 1 im Bericht) -- gesammelt statt sofort in
                     // `error` geschrieben, damit ein einzelner Hinweis nicht vom `error = null`
@@ -216,6 +231,7 @@ fun ScanStagingSheet(
                             // Pruefung hier (siehe B1 Task 6, wo genau das zu Datenverlust fuehrte).
                             // Entscheidung 3: nur das erste angelegte Exemplar bekommt sie.
                             val reservedCopyId = ScanStagingLogic.firstCopyForReservation(copyIds)
+                            var standortFehlte = false
                             if (e.reservedContainerId != null && reservedCopyId != null) {
                                 try {
                                     CollectionRepository.setCopyLocation(
@@ -228,6 +244,12 @@ fun ScanStagingSheet(
                                     // ohne Standort (taucht in "Nicht einsortiert" auf), und der
                                     // Nutzer bekommt einen sichtbaren Hinweis statt eines stillen
                                     // Fehlschlags oder einer verschluckten Ausnahme.
+                                    //
+                                    // Abschluss-Fixwelle, Minor 4: der Eintrag wandert deshalb in
+                                    // `ohneStandort` statt in `committed` -- er IST uebernommen,
+                                    // aber ohne Fach, und der Aufrufer darf ihm spaeter keines
+                                    // nachsagen.
+                                    standortFehlte = true
                                     locationWarnings.add(
                                         "${b.name ?: b.id}: Standort nicht gesetzt (${ex.message ?: "unbekannter Fehler"})",
                                     )
@@ -243,20 +265,29 @@ fun ScanStagingSheet(
                                     b, es.setCode, es.rarity, es.language, ep.edition, ep.condition, ep.quantity,
                                 )
                             }
-                            committed.add(e)
+                            if (standortFehlte) ohneStandort.add(e) else committed.add(e)
                         }
+                    } catch (ex: Exception) {
+                        // Anhaengen statt ersetzen: scheitert ein spaeterer Eintrag am Netz, darf
+                        // das die schon gesammelten Standort-Hinweise nicht verschlucken. Die
+                        // Meldung wird unten mit ihnen zusammen gezeichnet.
+                        locationWarnings.add(ex.message ?: "Übernehmen fehlgeschlagen")
+                    } finally {
+                        // Abschluss-Fixwelle, Important 1: was ANGELEGT ist, verlaesst die Liste und
+                        // erreicht den Aufrufer IMMER -- auch wenn ein spaeterer Eintrag scheitert.
+                        // Standen diese drei Zeilen im try, blieben die schon angelegten Karten nach
+                        // einem Abriss mitten im Durchgang im Blatt stehen; der naechste Druck auf
+                        // "Alle uebernehmen" legte sie ein ZWEITES Mal an, und die Reservierung
+                        // landete auf dem neuen Exemplar -- doppelte Exemplare, zwei Karten in einem
+                        // Fach, ohne jeden Hinweis. Im Einsortier-Modus ist das der Regelweg: dort
+                        // kommt der Nutzer ohne geleertes Blatt gar nicht mehr hinaus.
                         entries.removeAll(committed)
+                        entries.removeAll(ohneStandort)
                         error = if (locationWarnings.isEmpty()) null else locationWarnings.joinToString("\n")
                         // Der Aufrufer schliesst das Blatt nur bei leerer Hinweisliste -- sonst
                         // bliebe `error` (ein remember-Zustand DIESER Komposition) im selben
                         // Snapshot wie showSheet = false und wuerde nie gezeichnet.
-                        onCommitted(committed.toList(), locationWarnings.toList())
-                    } catch (ex: Exception) {
-                        // Anhaengen statt ersetzen: scheitert ein spaeterer Eintrag am Netz, darf
-                        // das die schon gesammelten Standort-Hinweise nicht verschlucken.
-                        error = (locationWarnings + (ex.message ?: "Übernehmen fehlgeschlagen"))
-                            .joinToString("\n")
-                    } finally {
+                        onCommitted(committed.toList(), ohneStandort.toList(), locationWarnings.toList())
                         committing = false
                     }
                 }

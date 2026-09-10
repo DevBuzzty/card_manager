@@ -181,6 +181,13 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     // Nutzer in zwei von drei Faellen etwas Falsches -- und liesse sein Fach verschwinden, obwohl
     // gar nichts in der Sammlung steht. Gemerkt werden die EINTRAEGE, verglichen wird mit `===`.
     val uebernommen = remember { mutableStateListOf<ScanStagingEntry>() }
+    // Die dritte Moeglichkeit, die es seit der Abschluss-Fixwelle (Minor 4) getrennt gibt:
+    // uebernommen, aber OHNE Fach -- `setCopyLocation` scheiterte. Die Karte steht in der Sammlung
+    // (unter "Nicht einsortiert"), das reservierte Fach wurde nie geschrieben. Wer diese Eintraege
+    // zu `uebernommen` zaehlt, meldet beim Rueckgaengig ein Fach, in dem digital nichts liegt, und
+    // gibt es nie wieder frei. Wer sie gar nicht merkt, laesst `orphanedReservations` behaupten,
+    // die Karte sei nicht in die Sammlung gekommen -- auch falsch. Also eine eigene Liste.
+    val ohneStandort = remember { mutableStateListOf<ScanStagingEntry>() }
     // Zwei getrennte Zustaende, obwohl immer nur eines der Blaetter offen sein kann: ein geteilter
     // waere ein Zustand mit zwei Besitzern, und der Rest halb ausgeblendet.
     val frageSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -244,6 +251,15 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     // Desktop-Fassung, damit ein Standort auf beiden Geraeten gleich aussieht. Hier wird er
     // NICHT nachgebaut; ohne bekannten Behaelter liefert er selbst "—".
     fun ortOf(c: CopyRow): String = CopyLocation.format(c, containers.find { it.containerId == c.containerId })
+
+    // Dieselbe Angabe, aber fuer eine Aufzaehlung, die "einsortiert" behauptet (Abschluss-
+    // Fixwelle, Minor 5): `CopyLocation.format` nennt Seite und Fach nur, wenn BEIDE stehen --
+    // fehlt eines, liegt das Exemplar zwar im Behaelter, aber in keinem Fach (etwa gerade "Aus
+    // Fach genommen", das bewusst nur Seite und Fach raeumt). Dann sagt die Zeile das ausdruecklich,
+    // statt den Behaelternamen wie einen Fachplatz aussehen zu lassen. Nur Text: welches Exemplar
+    // `PickCandidate` waehlt, bleibt unveraendert.
+    fun ortZeile(c: CopyRow): String =
+        if (c.page != null && c.slot != null) ortOf(c) else "${ortOf(c)}, ohne Fach"
 
     // Schreibt EINEN Warteschlangeneintrag. Erfolg -> raus aus der Schlange, sonst bleibt er drin.
     // Nur unter `writeLock` aufrufen.
@@ -423,7 +439,10 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
             // `capture.stagingCards` (Fixrunde 1, Important 1): fehlt der Eintrag, weil der Nutzer
             // ihn weggetippt hat oder weil seine Aufloesung gescheitert ist, steht NICHTS in der
             // Sammlung -- dann ist der normale Reservierungs-Undo darunter richtig, und das Fach
-            // kommt zurueck.
+            // kommt zurueck. Seit der Abschluss-Fixwelle (Minor 4) traegt `uebernommen` ausserdem
+            // NUR noch, was sein Fach auch bekommen hat: ein Eintrag, dessen `setCopyLocation`
+            // scheiterte, faellt bewusst in den Undo darunter, denn sein Fach ist tatsaechlich
+            // frei -- geschrieben wurde es nie.
             val letzter = s.schritte.lastOrNull()
             if (letzter is Schritt.Reserviert) {
                 val eintrag = letzter.marke as? ScanStagingEntry
@@ -459,12 +478,23 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
                     // Staging-Eintrag verschwindet wieder -- ueber Identitaet, nicht ueber Fach
                     // oder Passcode: zwei Eintraege koennten denselben Passcode tragen.
                     val eintrag = ruecknahme.marke as? ScanStagingEntry
+                    // Abschluss-Fixwelle, Minor 4: der dritte Fall, der hier ankommen kann -- der
+                    // Eintrag wurde uebernommen, aber sein Fach konnte nicht geschrieben werden.
+                    // Das Fach ist dann wirklich frei (es steht in keiner Zeile der Datenbank) und
+                    // springt richtig zurueck; die Karte aber bleibt, und "wieder entfernt" waere
+                    // fuer sie falsch.
+                    val warOhneStandort = eintrag != null && ohneStandort.any { it === eintrag }
                     if (eintrag != null) capture.stagingCards.removeAll { it === eintrag }
-                    // "Fach wieder frei" gilt in beiden Faellen, die hier ankommen koennen: der
+                    // "Fach wieder frei" gilt in allen Faellen, die hier ankommen koennen: der
                     // Eintrag stand noch im Pruefen-Blatt (und ist jetzt weg), oder er war schon
                     // weggetippt bzw. nie aufgeloest -- dann gab es ohnehin nichts zu entfernen.
                     // Das Fach springt so oder so zurueck, und genau das will der Nutzer wissen.
-                    snackbar.showSnackbar("Neue Karte wieder entfernt – Fach wieder frei")
+                    snackbar.showSnackbar(
+                        if (warOhneStandort)
+                            "Die neue Karte bleibt in der Sammlung, hat aber kein Fach bekommen – " +
+                                "Fach wieder frei"
+                        else "Neue Karte wieder entfernt – Fach wieder frei",
+                    )
                 }
             }
         }
@@ -511,9 +541,14 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
             // uebernommen wurde noch noch im Blatt steht. `stagingCards` ist an dieser Stelle zwar
             // immer leer (sonst waere oben schon zurueckgekehrt worden), steht aber trotzdem mit
             // in den bekannten Marken -- die Rechnung soll nicht davon abhaengen, wer sie ruft.
+            // `ohneStandort` steht mit in den bekannten Marken (Abschluss-Fixwelle, Minor 4): zu
+            // diesen Reservierungen GIBT es eine Karte in der Sammlung, sie sind also nicht
+            // verwaist. Dass ihr Fach fehlt, hat das Pruefen-Blatt bereits als Hinweis gezeigt,
+            // den der Nutzer wegtippen musste -- der zweite Abschnitt der Verlust-Meldung ("liegt
+            // eine Karte, die nicht in die Sammlung gekommen ist") waere fuer sie schlicht falsch.
             val v = Verluste(
                 SortSession.lossDescriptions(queue),
-                SortSession.orphanedReservations(state, capture.stagingCards + uebernommen),
+                SortSession.orphanedReservations(state, capture.stagingCards + uebernommen + ohneStandort),
             )
             if (v.leer) onDone(SortSession.lastPage(state)) else losses = v
         }
@@ -649,19 +684,28 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
         is Frage.Verschieben -> ModalBottomSheet(onDismissRequest = { frage = null }, sheetState = frageSheet) {
             val erstes = f.copies.firstOrNull()
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-                Text("Alle Exemplare sind einsortiert", color = OnSurface,
+                // Ueberschrift und Aufzaehlung sagen "liegt schon irgendwo", nicht "einsortiert"
+                // (Abschluss-Fixwelle, Minor 5): `PickCandidate` liefert diesen Fall, sobald KEIN
+                // Exemplar mehr ohne Behaelter ist -- ein Exemplar, das gerade aus seinem Fach
+                // genommen wurde, liegt weiterhin im Ordner und zaehlt mit, steckt aber in keinem
+                // Fach. Welche das sind, sagt `ortZeile` je Zeile.
+                Text("Alle Exemplare liegen schon irgendwo", color = OnSurface,
                     style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Alle Exemplare dieser Karte sind einsortiert: " +
-                        f.copies.joinToString(", ") { ortOf(it) } + ".",
+                    "Kein Exemplar dieser Karte ist frei:",
                     color = OnSurface, style = MaterialTheme.typography.bodyMedium,
                 )
+                Spacer(Modifier.height(4.dp))
+                f.copies.forEach { c ->
+                    Text("• ${ortZeile(c)}", color = OnSurface,
+                        style = MaterialTheme.typography.bodyMedium)
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
                     if (erstes == null) "Kein Exemplar mehr vorhanden."
                     else "Eines nach Seite ${aktuell.page} · Fach ${aktuell.slot} verschieben? " +
-                        "Bewegt wird ${ortOf(erstes)}.",
+                        "Bewegt wird ${ortZeile(erstes)}.",
                     color = Muted, style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(16.dp))
@@ -707,11 +751,14 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
         ModalBottomSheet(onDismissRequest = { showStaging = false }, sheetState = stagingSheet) {
             ScanStagingSheet(
                 entries = capture.stagingCards,
-                onCommitted = { committed, hinweise ->
+                onCommitted = { committed, fehlenderStandort, hinweise ->
                     // Positiv festhalten, was tatsaechlich uebernommen wurde -- daran und an
                     // nichts anderem erkennt `onUndo`, dass ein reserviertes Fach besetzt bleiben
                     // muss, und `onFinish`, welche Reservierung verwaist ist (Fixrunde 1).
+                    // In `uebernommen` steht seit der Abschluss-Fixwelle (Minor 4) nur noch, was
+                    // sein Fach auch WIRKLICH bekommen hat; alles andere daneben.
                     uebernommen.addAll(committed)
+                    ohneStandort.addAll(fehlenderStandort)
                     // `capture.forget(...)` bleibt ungerufen: dieser Modus fuellt `seen` nie
                     // (siehe `ScanCapture.stageLocally`) -- es gibt nichts zu vergessen, und ein
                     // zweites Exemplar derselben Karte muss hier weiterhin durchkommen.

@@ -32,7 +32,7 @@ import com.example.yugiohscanner.cloud.ContainersRepository
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
-import com.example.yugiohscanner.ml.SlotMath
+import com.example.yugiohscanner.ml.BinderGrid
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Background
@@ -135,10 +135,17 @@ fun BindersScreen(onOpen: (String) -> Unit) {
     fun countFor(id: String) = copiesByContainer[id]?.size ?: 0
     fun valueFor(id: String) = copiesByContainer[id]?.sumOf { c -> (cardsByKey[c.printingKey()]?.price ?: 0.0) * Valuation.factor(c.condition) } ?: 0.0
     // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nicht ceil(Anzahl/Faecher) --
-    // null, wenn kein Exemplar dieses Behaelters eine Seite traegt (BinderRow faellt dann auf
-    // ceil zurueck). Gleiche Regel wie listContainers' max_page am Desktop (copies.cjs). Die reine
-    // Rechnung steckt in SlotMath.maxOccupiedPage; hier bleibt nur das Nachschlagen nach id.
-    fun maxPageFor(id: String): Int? = SlotMath.maxOccupiedPage(copiesByContainer[id]?.map { it.page } ?: emptyList())
+    // null, wenn kein Exemplar dieses Behaelters in einem darstellbaren Fach liegt (BinderRow
+    // faellt dann auf ceil zurueck). Gleiche Regel wie listContainers' max_page am Desktop
+    // (copies.cjs). Die reine Rechnung steckt in BinderGrid.maxPlacedPage; hier bleibt nur das
+    // Nachschlagen nach id.
+    //
+    // Ueber BinderGrid und nicht direkt ueber SlotMath.maxOccupiedPage (Abschluss-Fixwelle,
+    // Minor 3): sonst zaehlte diese Liste ein Exemplar auf einem Fach jenseits der heutigen
+    // Ordnergroesse mit, das Raster aber nicht -- die Liste sagte "7 Seiten", aufgeschlagen
+    // stuende "Seite 1 von 3" und die Karte laege unter "Ohne Fach".
+    fun maxPageFor(c: ContainerRow): Int? =
+        BinderGrid.maxPlacedPage(copiesByContainer[c.containerId] ?: emptyList(), c.pocketsPerPage ?: 0)
 
     fun submitDialog() {
         val form = dialog ?: return
@@ -276,7 +283,7 @@ fun BindersScreen(onOpen: (String) -> Unit) {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(containers, key = { it.containerId }) { c ->
                         BinderRow(
-                            c, count = countFor(c.containerId), value = valueFor(c.containerId), maxPage = maxPageFor(c.containerId),
+                            c, count = countFor(c.containerId), value = valueFor(c.containerId), maxPage = maxPageFor(c),
                             onOpen = { onOpen(c.containerId) },
                             onEdit = {
                                 dialog = BinderForm(

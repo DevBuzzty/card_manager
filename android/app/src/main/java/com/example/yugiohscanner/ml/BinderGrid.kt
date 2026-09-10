@@ -39,11 +39,27 @@ object BinderGrid {
     }
 
     /**
+     * Spec 5.3: die hoechste Seite, auf der ein Exemplar in einem DARSTELLBAREN Fach liegt, oder
+     * null, wenn keines das tut. "Darstellbar" ist dasselbe `isPlaced` wie ueberall hier: Seite
+     * >= 1 UND Fach in 1..Fachzahl. Genau daran haengt der Unterschied zu einem blossen MAX ueber
+     * `page` -- ein Exemplar auf einem Fach jenseits der heutigen Ordnergroesse (der Ordner wurde
+     * von 12 auf 9 Faecher umgestellt, das Exemplar steht auf S7/F11) zaehlt hier NICHT mit: das
+     * Raster kann es nicht zeigen, `loose` fuehrt es unter "Ohne Fach". Wer es mitzaehlte,
+     * verspraeche Seiten, die aufgeschlagen gar nicht existieren (Abschluss-Fixwelle, Minor 3).
+     *
+     * Zwilling ist hier NICHT `binderGrid.js`, sondern die Behaelterliste des Desktops, die
+     * dieselbe Zahl per SQL rechnet (`copies.cjs`, listContainers' max_page). Beide muessen
+     * dieselbe Regel treffen: hoechste Seite unter den Exemplaren, deren Fach innerhalb
+     * 1..Fachzahl liegt.
+     */
+    fun maxPlacedPage(copies: List<CopyRow>, pockets: Int): Int? =
+        SlotMath.maxOccupiedPage(copies.filter { isPlaced(it, pockets) }.map { it.page })
+
+    /**
      * Spec 5.3: die hoechste BELEGTE Seite, nie `ceil(Anzahl / Faecher)`. Mindestens 1, damit ein
      * leerer Ordner eine (leere) erste Seite zum Blaettern hat.
      */
-    fun pageCount(copies: List<CopyRow>, pockets: Int): Int =
-        SlotMath.maxOccupiedPage(copies.filter { isPlaced(it, pockets) }.map { it.page }) ?: 1
+    fun pageCount(copies: List<CopyRow>, pockets: Int): Int = maxPlacedPage(copies, pockets) ?: 1
 
     /**
      * Die Faecher EINER Seite, von Fach 1 an: Ergebnis[i] sind die Exemplare in Fach i+1. Die
