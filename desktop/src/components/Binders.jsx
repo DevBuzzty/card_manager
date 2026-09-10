@@ -272,7 +272,9 @@ export default function Binders() {
                       rechnet max_page ueber dieselbe Fachpruefung wie binderGrid.js#isPlaced, und die 1 bei
                       NULL ist binderGrid.js#pageCounts Mindestwert -- ein leerer Ordner hat eine leere erste
                       Seite zum Blaettern. */}
-                  {c.kind === 'binder' && c.pockets_per_page ? ` · ${c.max_page ?? 1} Seiten` : ''}
+                  {c.kind === 'binder' && c.pockets_per_page
+                    ? ` · ${c.max_page ?? 1} ${(c.max_page ?? 1) === 1 ? 'Seite' : 'Seiten'}`
+                    : ''}
                 </span>
                 <span className="text-sm font-mono text-space-violet">{fmtEUR(c.value)}</span>
               </div>
