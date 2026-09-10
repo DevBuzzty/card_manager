@@ -15,10 +15,13 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -48,12 +51,16 @@ import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.ContainerRow
 import com.example.yugiohscanner.cloud.ContainersRepository
+import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.Pick
 import com.example.yugiohscanner.ml.PickCandidate
 import com.example.yugiohscanner.ml.Placement
 import com.example.yugiohscanner.ml.PendingWrite
+import com.example.yugiohscanner.ml.Ruecknahme
+import com.example.yugiohscanner.ml.Schritt
 import com.example.yugiohscanner.ml.SlotMath
 import com.example.yugiohscanner.ml.SortSession
 import com.example.yugiohscanner.ml.SortState
@@ -72,6 +79,29 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
+ * Spec §6.3, Task 7: die drei Faelle, in denen ein Scan NICHT von selbst in sein Fach faellt und
+ * der Modus stehenbleibt, bis der Nutzer geantwortet hat. Eine offene Frage verriegelt den Modus
+ * genauso wie das Beenden (siehe die Riegel in `onCard`/`onUndo`) -- die Kamera laeuft weiter,
+ * aber das Fach rueckt nicht unter der Frage weg.
+ *
+ * `Neu` fuehrt den gelesenen Passcode mit, weil sie ihn zum Anlegen des Staging-Eintrags braucht;
+ * die Belege ([evidence]/[frames]/[editionTexts]) sind die des Augenblicks, in dem die Karte
+ * erkannt wurde -- `SetCodeEvidence` vergisst sie, sobald die Karte aus dem Bild ist, waehrend das
+ * Blatt noch offen sein kann.
+ */
+private sealed interface Frage {
+    /** `PickCandidate.Many` -- in der GELIEFERTEN Reihenfolge, hier wird nichts nachsortiert. */
+    class Auswahl(val copies: List<CopyRow>) : Frage
+    /** `PickCandidate.AllPlaced` -- alle Exemplare liegen schon irgendwo; das erste wird bewegt. */
+    class Verschieben(val copies: List<CopyRow>) : Frage
+    /** `PickCandidate.NotOwned` -- ins Staging mit Reservierung, das Fach rueckt trotzdem vor. */
+    class Neu(
+        val passcode: String, val evidence: List<String>,
+        val frames: List<String>, val editionTexts: List<String>,
+    ) : Frage
+}
+
+/**
  * Spec B2 §6: der Einsortier-Modus. Der Nutzer sitzt mit dem aufgeschlagenen Ordner und einem
  * Stapel Karten am Tisch; der Kopf sagt gross, in welches Fach die naechste Karte gehoert, er
  * steckt sie hinein und haelt sie vor die Kamera -- die Karte wird erkannt, dem Fach zugewiesen,
@@ -84,9 +114,11 @@ import java.util.concurrent.TimeUnit
  * noch einmal getroffen, beide Male mit Datenverlust.
  *
  * Bindende Punkte des Nachtrags:
- * - **Immer lokal, kein Desktop-Spiegel** (§3): dieser Modus baut keinen Socket auf und benutzt
- *   `ScanCapture` nicht -- der wuerde bei verbundenem PC dorthin senden. Task 7 braucht fuer
- *   `Pick.NotOwned` das Handy-Staging und haengt sich dann an `ScanCapture` (siehe unten).
+ * - **Immer lokal, kein Desktop-Spiegel** (§3): dieser Modus baut keinen Socket auf. Fuer
+ *   `Pick.NotOwned` braucht er das Handy-Staging und haelt dafuer seit Task 7 eine eigene
+ *   `ScanCapture`; benutzt wird davon AUSSCHLIESSLICH `stageLocally` -- der lokale Weg, der
+ *   weder `connected()` fragt noch `seen` anfasst (Begruendung dort). `onCapture`, `sendScan`
+ *   und der Socket bleiben unberuehrt.
  * - **Dedup bleibt, wie sie ist:** `BoxTracker` meldet eine Karte einmal je Anwesenheit und
  *   vergisst sie, wenn sie aus dem Bild ist. Eine wiederkommende Karte ist ein neues Ereignis --
  *   genau richtig hier, wo zwei Exemplare derselben Karte nacheinander in zwei Faecher gehen.
@@ -109,6 +141,8 @@ import java.util.concurrent.TimeUnit
  * `null` heisst ausdruecklich "kein Ergebnis": die Binder-Ansicht bleibt dann stehen, wo sie war,
  * statt auf eine Seite zu blaettern, die der Nutzer nie bearbeitet hat.
  */
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     val context = LocalContext.current
@@ -116,9 +150,36 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     val snackbar = remember { SnackbarHostState() }
 
     var container by remember { mutableStateOf<ContainerRow?>(null) }
+    // ALLE Behaelter, nicht nur der eigene: `CopyLocation.format` braucht zu einem fremden
+    // Standort dessen Behaelterzeile, und genau die zeigen die Sheets aus Task 7 an.
+    var containers by remember { mutableStateOf<List<ContainerRow>>(emptyList()) }
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    // Task 7: die offene Frage (einer der drei Sonderfaelle) und das Pruefen-Blatt fuer die
+    // Karten, die nicht in der Sammlung waren. Beide verriegeln den Modus, solange sie offen sind.
+    var frage by remember { mutableStateOf<Frage?>(null) }
+    var showStaging by remember { mutableStateOf(false) }
+    // Zwei getrennte Zustaende, obwohl immer nur eines der Blaetter offen sein kann: ein geteilter
+    // waere ein Zustand mit zwei Besitzern, und der Rest halb ausgeblendet.
+    val frageSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val stagingSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Das Handy-Staging fuer `Pick.NotOwned`. Eigene Instanz, weil die Staging-Liste des Scanners
+    // in dessen Komposition lebt und diesen Modus gar nicht erreicht -- es ist trotzdem dieselbe
+    // Liste, derselbe Eintragstyp, derselbe Aufloeser und dasselbe Pruefen-Blatt (`ScanStagingSheet`
+    // unten), kein Nachbau. `socket`/`connected`/`mode` werden nie gelesen: dieser Modus ruft
+    // ausschliesslich `stageLocally`, das am Sendeweg vorbeigeht. Sie stehen trotzdem auf den
+    // Werten, die auch dann noch richtig waeren, wenn jemand spaeter `onCapture` von hier riefe.
+    // `flash` ist Pflichtfeld des Konstruktors; ein Aufblitzen zeichnet dieser Modus nicht.
+    val flash = remember { Animatable(0f) }
+    val capture = remember {
+        ScanCapture(
+            context, scope, snackbar, flash,
+            socket = { null }, connected = { false }, mode = { "einzeln" },
+        )
+    }
 
     // Der Sitzungszustand (Fach, Rueckgaengig-Stapel, Arbeitskopie der Exemplare) und die
     // Warteschlange. Beide leben nur im Speicher, sitzungsgebunden, ohne Persistenz (Spec §11).
@@ -138,10 +199,12 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
 
     LaunchedEffect(containerId) {
         try {
-            val gefunden = ContainersRepository.list().find { it.containerId == containerId }
+            val alle = ContainersRepository.list()
+            val gefunden = alle.find { it.containerId == containerId }
                 ?: throw RuntimeException("Behälter nicht gefunden.")
             val cd = CollectionRepository.loadCards()
             val cp = CollectionRepository.loadCopies()
+            containers = alle
             container = gefunden
             cards = cd
             state = SortSession.start(cp, containerId, gefunden.pocketsPerPage ?: 0)
@@ -156,6 +219,11 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     val pockets = container?.pocketsPerPage ?: 0   // 0 -> SlotMath.clampPockets zieht auf 4
     val cardsByKey = remember(cards) { cards.associateBy { it.printingKey() } }
     fun cardOf(c: CopyRow): CardRow? = cardsByKey[c.printingKey()]
+
+    // Der Standorttext eines Exemplars -- ueber `CopyLocation.format`, den Zwilling der
+    // Desktop-Fassung, damit ein Standort auf beiden Geraeten gleich aussieht. Hier wird er
+    // NICHT nachgebaut; ohne bekannten Behaelter liefert er selbst "—".
+    fun ortOf(c: CopyRow): String = CopyLocation.format(c, containers.find { it.containerId == c.containerId })
 
     // Schreibt EINEN Warteschlangeneintrag. Erfolg -> raus aus der Schlange, sonst bleibt er drin.
     // Nur unter `writeLock` aufrufen.
@@ -218,9 +286,29 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
         }
     }
 
+    // Der EINE Weg, auf dem ein Exemplar sein Fach bekommt -- fuer alle drei Wege, die dort
+    // hinfuehren, derselbe: der einfache Fall (genau ein Kandidat), die Auswahl aus mehreren und
+    // das Verschieben eines schon einsortierten Exemplars. Ueber den vorherigen Standort wird hier
+    // nichts angenommen; `SortSession.assign` traegt ihn selbst ein, auch wenn er nicht leer ist.
+    suspend fun zuweisen(s: SortState, copyId: String) {
+        val (next, placement) = SortSession.assign(s, copyId, containerId, pockets) ?: run {
+            snackbar.showSnackbar("Exemplar nicht mehr vorhanden")
+            return
+        }
+        // Das Fach rueckt SOFORT vor, noch vor dem Schreiben -- der Nutzer steckt die naechste
+        // Karte ein und darf nicht auf das Netz warten.
+        state = next
+        writeLock.withLock { writeOrRemember(placement, zurueck = false) }
+    }
+
     // Eine erkannte Karte. Laeuft auf dem Analyzer-Thread herein und wird sofort auf den
     // Hauptthread gehoben -- alles darunter liest und schreibt `state`.
-    fun onCard(passcode: String, setCodes: List<String>) {
+    //
+    // [setCodes] sind die abgestimmten Set-Code-Kandidaten, die `PickCandidate` erwartet.
+    // [frames] und [editionTexts] gehen NUR in den Staging-Fall (`Pick.NotOwned`) und sind genau
+    // das, womit der Scanner eine Karte aufloest -- ohne sie wuerde derselbe Scan hier schlechter
+    // aufgeloest als dort (siehe `SetCodeEvidence.rawTexts`).
+    fun onCard(passcode: String, setCodes: List<String>, frames: List<String>, editionTexts: List<String>) {
         scope.launch {
             val s = state ?: return@launch
             if (!running) return@launch
@@ -232,33 +320,59 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
                 snackbar.showSnackbar("Wird gerade beendet – Karte nicht zugewiesen")
                 return@launch
             }
-            val pick = PickCandidate.pick(
+            if (frage != null || showStaging) {
+                // Ein offenes Blatt haelt die Kamera NICHT an. Ohne diesen Riegel liefe die
+                // naechste Karte in genau das Fach, ueber dessen Karte der Nutzer gerade noch
+                // entscheidet -- und seine Antwort traefe danach ein Fach, das inzwischen
+                // weitergerueckt ist.
+                snackbar.showSnackbar("Erst die offene Frage beantworten – Karte nicht zugewiesen")
+                return@launch
+            }
+            when (val pick = PickCandidate.pick(
                 s.copies, passcode, setCodes,
                 Prefs.defaultEdition(context), Prefs.defaultCondition(context),
+            )) {
+                is Pick.One -> zuweisen(s, pick.copyId)
+                // Die drei Sonderfaelle ruecken das Fach NICHT vor: der Nutzer hat die Karte zwar
+                // schon eingesteckt, aber wohin sie digital gehoert, ist noch offen. Vorgerueckt
+                // wird erst in der jeweiligen Antwort unten.
+                is Pick.Many -> frage = Frage.Auswahl(SortSession.chosen(s.copies, pick.copyIds))
+                Pick.AllPlaced -> frage = Frage.Verschieben(SortSession.placedCandidates(s.copies, passcode))
+                // Belege des Augenblicks mitnehmen: `SetCodeEvidence` vergisst sie, sobald die
+                // Karte aus dem Bild ist, das Blatt kann dann noch offen sein. Kandidaten ZUERST,
+                // dann die Rohtexte je Frame -- dieselbe Reihenfolge wie im Scanner.
+                Pick.NotOwned -> frage = Frage.Neu(passcode, setCodes + frames, frames, editionTexts)
+            }
+        }
+    }
+
+    // Die Antworten auf die drei Fragen. Das Blatt wird jeweils IM Hauptthread-Block geschlossen,
+    // nicht davor: bis dahin bleibt der Riegel in `onCard` zu, und eine Karte, die der Nutzer
+    // schon wieder vorhaelt, kann das Fach nicht vor der Antwort wegnehmen.
+    fun antwortZuweisen(copyId: String) {
+        scope.launch {
+            frage = null
+            zuweisen(state ?: return@launch, copyId)
+        }
+    }
+
+    fun antwortNeu(f: Frage.Neu) {
+        scope.launch {
+            frage = null
+            val s = state ?: return@launch
+            // Reihenfolge: erst der Staging-Eintrag -- er traegt das Fach, in dem die Karte JETZT
+            // liegt --, dann das Vorruecken. `SortSession.reserve` liest dasselbe `s`, Fach im
+            // Eintrag und Fach im Schritt sind damit zwangslaeufig dasselbe.
+            //
+            // Geschrieben wird hier NICHTS, und das ist kein zweiter Schreibweg: die Karte ist noch
+            // gar nicht in der Sammlung, es gibt kein Exemplar mit einem Standort. Ihr Fach setzt
+            // spaeter das Uebernehmen im Pruefen-Blatt -- ueber `setCopyLocation`, denselben einen
+            // Standort-Schreibweg wie ueberall sonst (Task 5).
+            val eintrag = capture.stageLocally(
+                f.passcode, f.evidence, f.frames, f.editionTexts,
+                reservedContainer = containerId, reservedPage = s.page, reservedSlot = s.slot,
             )
-            if (pick !is Pick.One) {
-                // Task 7 baut die drei Sonderfaelle. Bis dahin darf hier NICHTS still passieren:
-                // der Nutzer hat die Karte bereits ins Fach gesteckt. Das Fach rueckt nicht vor,
-                // und er bekommt eine ehrliche Meldung statt einer falschen Zuweisung.
-                val name = s.copies.firstOrNull { it.cardId == passcode }?.let { cardOf(it)?.name } ?: passcode
-                snackbar.showSnackbar(
-                    when (pick) {
-                        is Pick.Many -> "$name: mehrere Exemplare zur Auswahl – kommt in Task 7"
-                        Pick.AllPlaced -> "$name: alle Exemplare sind schon einsortiert – kommt in Task 7"
-                        Pick.NotOwned -> "$name: nicht in der Sammlung – kommt in Task 7"
-                        is Pick.One -> ""   // oben ausgeschlossen
-                    }
-                )
-                return@launch
-            }
-            val (next, placement) = SortSession.assign(s, pick.copyId, containerId, pockets) ?: run {
-                snackbar.showSnackbar("Exemplar nicht mehr vorhanden")
-                return@launch
-            }
-            // Das Fach rueckt SOFORT vor, noch vor dem Schreiben -- der Nutzer steckt die naechste
-            // Karte ein und darf nicht auf das Netz warten.
-            state = next
-            writeLock.withLock { writeOrRemember(placement, zurueck = false) }
+            state = SortSession.reserve(s, pockets, eintrag).first
         }
     }
 
@@ -274,20 +388,54 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
                 snackbar.showSnackbar("Wird gerade beendet – Rücknahme nicht ausgeführt")
                 return@launch
             }
-            val (next, placement) = SortSession.undo(s) ?: run {
+            if (frage != null || showStaging) {
+                snackbar.showSnackbar("Erst die offene Frage beantworten – Rücknahme nicht ausgeführt")
+                return@launch
+            }
+            // Sonderfall vor dem eigentlichen Rueckgaengig: der letzte Schritt war eine
+            // Reservierung, deren Staging-Eintrag der Nutzer inzwischen uebernommen hat. Dann
+            // gibt es nichts mehr zu entfernen -- die Karte sitzt bereits mit Standort in der
+            // Sammlung --, und das Fach darf NICHT zurueckspringen, sonst bekaeme die naechste
+            // Karte ein belegtes Fach. Der Schritt faellt trotzdem vom Stapel, sonst bliebe jedes
+            // weitere Rueckgaengig an ihm haengen.
+            val letzter = s.schritte.lastOrNull()
+            if (letzter is Schritt.Reserviert) {
+                val eintrag = letzter.marke as? ScanStagingEntry
+                if (eintrag == null || capture.stagingCards.none { it === eintrag }) {
+                    state = SortSession.dropStep(s)
+                    snackbar.showSnackbar(
+                        "Die neue Karte wurde schon übernommen – sie bleibt in " +
+                            "Seite ${letzter.page} · Fach ${letzter.slot}",
+                    )
+                    return@launch
+                }
+            }
+            val (next, ruecknahme) = SortSession.undo(s) ?: run {
                 snackbar.showSnackbar("Nichts zurückzunehmen")
                 return@launch
             }
             // Fach und Standort springen SOFORT zurueck -- der Nutzer greift schon nach der Karte.
             state = next
-            writeLock.withLock {
-                // Erst hier, unter derselben Sperre wie das Schreiben: steht die urspruengliche
-                // Zuweisung noch ungeschrieben in der Warteschlange, heben sich beide auf und es
-                // muss gar nichts ans Netz. Frueher entschieden waere die Antwort ein Ratespiel --
-                // die Zuweisung koennte in genau diesem Moment noch unterwegs sein.
-                val (rest, mussSchreiben) = SortSession.cancelPending(queue, placement)
-                queue = rest
-                if (mussSchreiben) writeOrRemember(placement, zurueck = true)
+            when (ruecknahme) {
+                is Ruecknahme.Zuweisung -> writeLock.withLock {
+                    // Erst hier, unter derselben Sperre wie das Schreiben: steht die urspruengliche
+                    // Zuweisung noch ungeschrieben in der Warteschlange, heben sich beide auf und
+                    // es muss gar nichts ans Netz. Frueher entschieden waere die Antwort ein
+                    // Ratespiel -- die Zuweisung koennte in genau diesem Moment noch unterwegs
+                    // sein.
+                    val placement = ruecknahme.placement
+                    val (rest, mussSchreiben) = SortSession.cancelPending(queue, placement)
+                    queue = rest
+                    if (mussSchreiben) writeOrRemember(placement, zurueck = true)
+                }
+                is Ruecknahme.Reservierung -> {
+                    // Nichts zu schreiben und nichts einzureihen: es gibt kein Exemplar. Der
+                    // Staging-Eintrag verschwindet wieder -- ueber Identitaet, nicht ueber Fach
+                    // oder Passcode: zwei Eintraege koennten denselben Passcode tragen.
+                    val eintrag = ruecknahme.marke as? ScanStagingEntry
+                    if (eintrag != null) capture.stagingCards.removeAll { it === eintrag }
+                    snackbar.showSnackbar("Neue Karte wieder entfernt")
+                }
             }
         }
     }
@@ -304,6 +452,14 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     // finden kann; `flushQueue` ist auf leerer Schlange ohnehin ein Nichts-Tun.
     fun onFinish() {
         if (flushing || losses != null) return
+        if (capture.stagingCards.isNotEmpty()) {
+            // Die Karten aus `Pick.NotOwned` sind noch NICHT in der Sammlung, und diese Liste lebt
+            // nur so lange wie dieser Modus -- wer jetzt hinausginge, verloere sie samt ihrer
+            // Faecher, still. Also nicht hinaus, sondern das Pruefen-Blatt auf: dort kann der
+            // Nutzer sie uebernehmen oder einzeln entfernen. Danach fuehrt "Fertig" normal hinaus.
+            showStaging = true
+            return
+        }
         flushing = true
         scope.launch {
             writeLock.withLock { flushQueue() }
@@ -313,7 +469,9 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
         }
     }
 
-    BackHandler(enabled = true) { onFinish() }
+    // Zurueck schliesst zuerst eine offene Frage (das Blatt setzt seinen eigenen Handler davor,
+    // dieser hier greift also nur, wenn es das nicht getan hat) und verlaesst erst dann den Modus.
+    BackHandler(enabled = true) { if (frage != null) frage = null else onFinish() }
 
     Surface(Modifier.fillMaxSize(), color = Background) {
         Box(Modifier.fillMaxSize()) {
@@ -351,10 +509,12 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
                     binder = container!!.name,
                     state = state!!,
                     queueSize = queue.size,
+                    stagingSize = capture.stagingCards.size,
                     cardOf = ::cardOf,
                     onCard = ::onCard,
                     onUndo = ::onUndo,
                     onFinish = ::onFinish,
+                    onPruefen = { showStaging = true },
                 )
             }
 
@@ -386,6 +546,117 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
             SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 96.dp),
+            )
+        }
+    }
+
+    // Die drei Sheets aus §6.3. Sie stehen ausserhalb der `Surface` oben, weil ein
+    // ModalBottomSheet ohnehin sein eigenes Fenster aufzieht -- wie die Verlust-Meldung darunter.
+    val aktuell = state
+    if (aktuell != null) when (val f = frage) {
+        null -> Unit
+
+        // Mehrere Kandidaten. Die Reihenfolge kommt von `PickCandidate` (Standard-Exemplare
+        // zuerst) und wird hier NICHT nachsortiert -- `SortSession.chosen` hat sie beim Anlegen
+        // der Frage genau so uebernommen.
+        is Frage.Auswahl -> ModalBottomSheet(onDismissRequest = { frage = null }, sheetState = frageSheet) {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp).padding(bottom = 24.dp),
+            ) {
+                Text("Welches Exemplar?", color = OnSurface, style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${f.copies.size} Exemplare von " +
+                        "${f.copies.firstOrNull()?.let { cardOf(it)?.name } ?: "dieser Karte"} " +
+                        "sind noch nicht einsortiert. Welches liegt jetzt in " +
+                        "Seite ${aktuell.page} · Fach ${aktuell.slot}?",
+                    color = Muted, style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(12.dp))
+                f.copies.forEach { c ->
+                    KandidatZeile(copy = c, ort = ortOf(c)) { antwortZuweisen(c.copyId) }
+                    Spacer(Modifier.height(8.dp))
+                }
+                TextButton(onClick = { frage = null }) { Text("Abbrechen") }
+            }
+        }
+
+        // Alle Exemplare liegen schon irgendwo. Achtung beim Text: `PickCandidate` liefert diesen
+        // Fall NUR, wenn KEIN Exemplar dieses Passcodes frei ist -- liegt vom gelesenen Printing
+        // eines im Ordner und ein freies gehoert zu einem ANDEREN Printing, entscheidet es
+        // bewusst `One` auf das fremde Printing (Lesefehler-Toleranz vor Printing-Genauigkeit).
+        // Der Satz spricht deshalb von "dieser Karte", nicht von "diesem Druck".
+        is Frage.Verschieben -> ModalBottomSheet(onDismissRequest = { frage = null }, sheetState = frageSheet) {
+            val erstes = f.copies.firstOrNull()
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+                Text("Alle Exemplare sind einsortiert", color = OnSurface,
+                    style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Alle Exemplare dieser Karte sind einsortiert: " +
+                        f.copies.joinToString(", ") { ortOf(it) } + ".",
+                    color = OnSurface, style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    if (erstes == null) "Kein Exemplar mehr vorhanden."
+                    else "Eines nach Seite ${aktuell.page} · Fach ${aktuell.slot} verschieben? " +
+                        "Bewegt wird ${ortOf(erstes)}.",
+                    color = Muted, style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { frage = null }) { Text("Abbrechen") }
+                    Button(
+                        onClick = { erstes?.let { antwortZuweisen(it.copyId) } },
+                        enabled = erstes != null,
+                    ) { Text("Hierher verschieben") }
+                }
+            }
+        }
+
+        // Nicht in der Sammlung: ins Staging mit der Fach-Reservierung, das Fach rueckt trotzdem
+        // vor -- die Karte liegt physisch schon drin (Nachtrag §2).
+        is Frage.Neu -> ModalBottomSheet(onDismissRequest = { frage = null }, sheetState = frageSheet) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+                Text("Nicht in der Sammlung", color = OnSurface, style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Karte ${f.passcode} ist nicht in der Sammlung. Hinzufügen und einsortieren?",
+                    color = OnSurface, style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Sie kommt ins Prüfen-Blatt, mit Seite ${aktuell.page} · Fach ${aktuell.slot} " +
+                        "vorgemerkt. Das Fach bekommt sie beim Übernehmen.",
+                    color = Muted, style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { frage = null }) { Text("Abbrechen") }
+                    Button(onClick = { antwortNeu(f) }) { Text("Hinzufügen") }
+                }
+            }
+        }
+    }
+
+    // Das Pruefen-Blatt fuer die Karten aus `Pick.NotOwned` -- dasselbe `ScanStagingSheet` wie im
+    // Scanner, nicht ein zweites daneben. Es schreibt beim Uebernehmen auch die Reservierung, ueber
+    // `setCopyLocation` (Task 5).
+    if (showStaging) {
+        ModalBottomSheet(onDismissRequest = { showStaging = false }, sheetState = stagingSheet) {
+            ScanStagingSheet(
+                entries = capture.stagingCards,
+                onCommitted = { _, hinweise ->
+                    // `capture.forget(...)` bleibt ungerufen: dieser Modus fuellt `seen` nie
+                    // (siehe `ScanCapture.stageLocally`) -- es gibt nichts zu vergessen, und ein
+                    // zweites Exemplar derselben Karte muss hier weiterhin durchkommen.
+                    // Offen bleiben, solange Standort-Hinweise anstehen (Task 5, Fixrunde 1):
+                    // `error` lebt IN der Komposition des Blattes und wuerde sonst im selben
+                    // Snapshot abgeraeumt, in dem er gesetzt wird.
+                    if (hinweise.isEmpty()) showStaging = false
+                },
             )
         }
     }
@@ -506,6 +777,28 @@ private fun StartSheet(
 }
 
 /**
+ * Eine Zeile im Auswahl-Sheet (§6.3, mehrere Kandidaten). Zeigt, was zwei Exemplare derselben
+ * Karte unterscheidet: Druck und Seltenheit, Edition und Zustand -- und den Standort, geschrieben
+ * von [CopyLocation.format], dem Zwilling der Desktop-Fassung. Bei diesen Kandidaten ist das
+ * regelmaessig „—": `PickCandidate` bietet nur nicht einsortierte Exemplare an, und genau das
+ * sagt der Strich.
+ */
+@Composable
+private fun KandidatZeile(copy: CopyRow, ort: String, onClick: () -> Unit) {
+    SpaceCard(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Column(Modifier.padding(12.dp)) {
+            Text("${copy.setCode} · ${copy.rarity}", color = OnSurface, maxLines = 1,
+                style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "${Valuation.EDITION_LABELS[copy.edition] ?: copy.edition} · ${copy.condition} · $ort",
+                color = Muted, fontFamily = MonoFontFamily,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+/**
  * Spec §6.2: die Kamera-Shell. Kopf gross „<Binder> · Seite p · Fach s", Fuss die zuletzt
  * eingelegte Karte mit Bild, Name und Fach sowie Rückgängig. Kein Staging-Zähler, kein
  * Prüfen-Knopf, kein Desktop-Spiegel.
@@ -515,10 +808,12 @@ private fun SortRunning(
     binder: String,
     state: SortState,
     queueSize: Int,
+    stagingSize: Int,
     cardOf: (CopyRow) -> CardRow?,
-    onCard: (String, List<String>) -> Unit,
+    onCard: (String, List<String>, List<String>, List<String>) -> Unit,
     onUndo: () -> Unit,
     onFinish: () -> Unit,
+    onPruefen: () -> Unit,
 ) {
     Box(Modifier.fillMaxSize()) {
         SortCamera(onCard = onCard, modifier = Modifier.fillMaxSize())
@@ -547,33 +842,60 @@ private fun SortRunning(
                     color = ErrorColor, style = MaterialTheme.typography.labelSmall,
                 )
             }
+            // Nur wenn es sie gibt: der Modus hat weiterhin keinen Staging-Zaehler im Normalfall
+            // (§6.2). Karten, die NICHT in der Sammlung sind, gehen aber ins Handy-Staging, und
+            // das lebt nur so lange wie dieser Modus -- ohne diesen Zugang gaebe es keinen Weg,
+            // sie zu uebernehmen, und "Fertig" verloere sie.
+            if (stagingSize > 0) {
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "$stagingSize ${if (stagingSize == 1) "neue Karte" else "neue Karten"} – " +
+                            "vor dem Verlassen übernehmen",
+                        color = Color.White.copy(alpha = 0.85f), modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                    TextButton(onClick = onPruefen) { Text("Prüfen ($stagingSize)", color = Color.White) }
+                }
+            }
         }
 
-        val letzte = state.placed.lastOrNull()
+        val letzter = state.schritte.lastOrNull()
         Row(
             Modifier.fillMaxWidth().align(Alignment.BottomCenter)
                 .background(Color.Black.copy(alpha = 0.6f)).navigationBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (letzte == null) {
+            if (letzter == null) {
                 Text(
                     "Karte einlegen und vor die Kamera halten.", color = Color.White.copy(alpha = 0.8f),
                     modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
                 )
             } else {
-                val copy = state.copies.firstOrNull { it.copyId == letzte.copyId }
+                // Zwei Arten von Schritt, zwei Zeilen -- aber DERSELBE Rueckgaengig-Knopf: welcher
+                // der beiden zurueckgedreht wird, entscheidet `SortSession.undo`, nicht dieser Fuss.
+                val zugewiesen = letzter as? Schritt.Zugewiesen
+                val copy = zugewiesen?.let { p -> state.copies.firstOrNull { it.copyId == p.placement.copyId } }
                 val card = copy?.let(cardOf)
+                // Bei einer Reservierung gibt es kein Exemplar -- der Name steht im Staging-Eintrag,
+                // sobald er aufgeloest ist (`marke` ist genau dieser Eintrag, siehe Schritt.Reserviert).
+                val neu = (letzter as? Schritt.Reserviert)?.marke as? ScanStagingEntry
                 AsyncImage(
-                    model = card?.imageUrl, contentDescription = null, contentScale = ContentScale.Crop,
+                    model = card?.imageUrl ?: neu?.base?.imageUrl, contentDescription = null,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier.size(width = 34.dp, height = 48.dp).clip(RoundedCornerShape(4.dp)),
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(card?.name ?: letzte.cardId, color = Color.White, maxLines = 1,
-                        style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "Seite ${letzte.page} · Fach ${letzte.slot}", color = Color.White.copy(alpha = 0.7f),
+                        card?.name ?: neu?.base?.name ?: zugewiesen?.placement?.cardId ?: neu?.passcode.orEmpty(),
+                        color = Color.White, maxLines = 1, style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "Seite ${letzter.page} · Fach ${letzter.slot}" +
+                            if (zugewiesen == null) " · neu, im Prüfen-Blatt" else "",
+                        color = Color.White.copy(alpha = 0.7f),
                         fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall,
                     )
                 }
@@ -601,10 +923,16 @@ private fun SortRunning(
  * Oberflaechentests -- deshalb hier bewusst nicht mitgemacht.
  *
  * [onCard] bekommt Passcode und die ABGESTIMMTEN Set-Code-Kandidaten (nicht die Rohtexte): genau
- * das, was `PickCandidate.pick` als `setCodes` erwartet.
+ * das, was `PickCandidate.pick` als `setCodes` erwartet. Dazu -- seit Task 7 -- die Rohtexte je
+ * Frame und die Editions-Zonentexte: die braucht NUR der Staging-Fall (`Pick.NotOwned`), und zwar
+ * genau so, wie der Scanner sie an `ScanResolver` gibt. Ohne sie loeste derselbe Scan hier
+ * schlechter auf als dort (siehe `SetCodeEvidence.rawTexts`).
  */
 @Composable
-private fun SortCamera(onCard: (String, List<String>) -> Unit, modifier: Modifier = Modifier) {
+private fun SortCamera(
+    onCard: (String, List<String>, List<String>, List<String>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -639,7 +967,12 @@ private fun SortCamera(onCard: (String, List<String>) -> Unit, modifier: Modifie
             for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
             for (d in tracker.update(dets)) {
                 if (d.passcode <= 0) continue
-                onCardState.value(d.passcode.toString(), setEvidence.setCodeCandidates(d.passcode))
+                onCardState.value(
+                    d.passcode.toString(),
+                    setEvidence.setCodeCandidates(d.passcode),
+                    setEvidence.rawTexts(d.passcode),
+                    setEvidence.editionTexts(d.passcode),
+                )
             }
             // Die Belege einer Karte abraeumen, sobald sie endgueltig aus dem Bild ist -- sonst
             // waechst die Map ueber einen langen Stapel unbegrenzt. Anders als im Scanner gibt es

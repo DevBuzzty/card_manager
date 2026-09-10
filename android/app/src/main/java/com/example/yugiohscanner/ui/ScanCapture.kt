@@ -80,12 +80,23 @@ class ScanCapture(
     // SetCodeEvidence.editionTexts), for the traffic light's edition signal. Defaults to empty for
     // callers (manual entry) that never OCR a zone at all — ScanConfidence.fromEvidence then
     // reports `edition = unknown`, the honest answer for "never looked".
-    private fun stageScan(pc: String, evidence: List<String>, framesEvidence: List<String> = evidence, editionTexts: List<String> = emptyList()) {
+    // [reservedContainer]/[reservedPage]/[reservedSlot] sind Spec B2 Task 5's Fach-Reservierung:
+    // gesetzt nur vom Einsortier-Modus (siehe [stageLocally]), sonst null wie bisher. Sie werden
+    // NACH dem `apply` gesetzt, nicht darin -- innerhalb von `apply` verdeckt der Empfaenger die
+    // gleichnamigen Parameter, und `reservedPage = reservedPage` schriebe das Feld auf sich selbst.
+    private fun stageScan(
+        pc: String, evidence: List<String>, framesEvidence: List<String> = evidence,
+        editionTexts: List<String> = emptyList(),
+        reservedContainer: String? = null, reservedPage: Int? = null, reservedSlot: Int? = null,
+    ): ScanStagingEntry {
         scope.launch { flash.snapTo(0.8f); flash.animateTo(0f, animationSpec = tween(300)) }
         val entry = ScanStagingEntry(System.nanoTime(), pc).apply {
             edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
             condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
         }
+        entry.reservedContainerId = reservedContainer
+        entry.reservedPage = reservedPage
+        entry.reservedSlot = reservedSlot
         stagingCards.add(entry)
         scope.launch {
             try {
@@ -113,7 +124,32 @@ class ScanCapture(
                 snackbar.showSnackbar("Fehler beim Laden: ${e.message}")
             }
         }
+        return entry
     }
+
+    /**
+     * Spec B2 Task 7: der EINSORTIER-MODUS legt eine Karte ins Handy-Staging, die (noch) nicht in
+     * der Sammlung ist -- mit dem Fach, in dem sie physisch bereits liegt (die Reservierung aus
+     * Task 5). Ein schmaler, ausdruecklich benannter Einstieg neben [onCapture], und zwar aus zwei
+     * Gruenden, die beide bindend sind:
+     *
+     * 1. **Er geht am Sendeweg vorbei.** [onCapture] prueft `connected()` und schickt den Scan bei
+     *    verbundenem PC dorthin ([sendScan]). Der Einsortier-Modus stagt IMMER LOKAL und spiegelt
+     *    nichts (Nachtrag §3, siehe den Kopfkommentar von `SortIntoBinderScreen`) -- deshalb hier
+     *    direkt auf [stageScan], den lokalen Weg, ohne die Verbindungsfrage ueberhaupt zu stellen.
+     * 2. **Er fasst [seen] nicht an.** Im Einsortier-Modus dedupliziert allein `BoxTracker`, eine
+     *    Karte je Anwesenheit vor der Kamera. Zwei Exemplare derselben Karte gehen dort
+     *    nacheinander in zwei verschiedene Faecher -- [seen] wuerde das zweite verschlucken.
+     *
+     * Es ist dieselbe Staging-Liste, derselbe Eintragstyp und derselbe Aufloeser wie sonst auch;
+     * neu ist nur, dass der Eintrag ZURUECKGEGEBEN wird, damit der Aufrufer ihn wiedererkennt
+     * (Rueckgaengig entfernt ihn ueber Identitaet).
+     */
+    fun stageLocally(
+        pc: String, evidence: List<String>, framesEvidence: List<String>, editionTexts: List<String>,
+        reservedContainer: String?, reservedPage: Int?, reservedSlot: Int?,
+    ): ScanStagingEntry =
+        stageScan(pc, evidence, framesEvidence, editionTexts, reservedContainer, reservedPage, reservedSlot)
 
     // Spec D4 §4: ein WIEDERHOLTES Erkennen derselben Karte im Modus "stapel". Kein Netz, kein
     // Katalog -- `entry.knownSets` steht bereits, `SetCodeMatch.best` laeuft direkt dagegen.

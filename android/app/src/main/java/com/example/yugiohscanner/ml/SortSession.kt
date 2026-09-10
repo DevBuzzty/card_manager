@@ -50,6 +50,42 @@ class Placement(
 class PendingWrite(val placement: Placement, val zurueck: Boolean)
 
 /**
+ * Ein Schritt der Sitzung, so wie Rueckgaengig ihn wieder abtraegt. Es gibt ZWEI Arten, weil der
+ * Modus auf zwei Wegen ein Fach fuellen und vorruecken kann (Spec §6.3):
+ * - [Zugewiesen]: ein Exemplar der Sammlung hat einen Standort bekommen.
+ * - [Reserviert]: die Karte ist gar nicht in der Sammlung. Sie geht ins Handy-Staging und merkt
+ *   sich dort das Fach (Task 5); das Fach rueckt trotzdem vor, denn die Karte liegt physisch
+ *   schon drin. Es gibt hier kein Exemplar und keinen Standort, den man zurueckschreiben koennte.
+ *
+ * Beide stehen im SELBEN Stapel, und das ist der ganze Punkt: laege die Reservierung daneben,
+ * spraenge Rueckgaengig ueber sie hinweg und naehme die davorliegende Zuweisung zurueck -- also
+ * eine Karte, die der Nutzer gar nicht gemeint hat (derselbe Fehler wie der aufgehobene Index in
+ * Spec D4). Wie [Placement] sind beide bewusst KEINE `data class`: Gleichheit ist Identitaet.
+ *
+ * [Reserviert.marke] ist der Staging-Eintrag, den die Oberflaeche angelegt hat -- hier absichtlich
+ * als undurchsichtige Marke gehalten, damit diese Rechenschicht nicht von einem Compose-Typ
+ * abhaengt. Sie kommt bei der Ruecknahme unveraendert zurueck; verglichen wird dort mit `===`.
+ */
+sealed interface Schritt {
+    val page: Int
+    val slot: Int
+
+    class Zugewiesen(val placement: Placement) : Schritt {
+        override val page: Int get() = placement.page
+        override val slot: Int get() = placement.slot
+    }
+
+    class Reserviert(override val page: Int, override val slot: Int, val marke: Any?) : Schritt
+}
+
+/** Was [SortSession.undo] zurueckgibt: eine Zuweisung will geschrieben werden, eine Reservierung
+ *  nicht -- bei ihr raeumt die Oberflaeche nur ihren Staging-Eintrag ([marke]) wieder weg. */
+sealed interface Ruecknahme {
+    class Zuweisung(val placement: Placement) : Ruecknahme
+    class Reservierung(val marke: Any?) : Ruecknahme
+}
+
+/**
  * Der ganze Sitzungszustand ausser der Warteschlange. `copies` ist die Arbeitskopie der lebenden
  * Exemplare: sie wandert bei jeder Zuweisung mit, damit ein zweiter Scan derselben Karte nicht
  * dasselbe Exemplar noch einmal anbietet. Die Wahrheit bleibt der Server -- die Binder-Ansicht
@@ -58,7 +94,7 @@ class PendingWrite(val placement: Placement, val zurueck: Boolean)
 data class SortState(
     val page: Int,
     val slot: Int,
-    val placed: List<Placement>,
+    val schritte: List<Schritt>,
     val copies: List<CopyRow>,
 )
 
@@ -80,7 +116,7 @@ object SortSession {
             .map { it.page!! to it.slot!! }
             .toSet()
         val (page, slot) = SlotMath.firstFree(occupied, pockets)
-        return SortState(page = page, slot = slot, placed = emptyList(), copies = copies)
+        return SortState(page = page, slot = slot, schritte = emptyList(), copies = copies)
     }
 
     /**
@@ -102,7 +138,26 @@ object SortSession {
      * Abschriften ist genau der Fehler aus Spec B1.
      */
     fun lastPage(state: SortState?): Int =
-        state?.let { it.placed.lastOrNull()?.page ?: it.page } ?: 1
+        state?.let { it.schritte.lastOrNull()?.page ?: it.page } ?: 1
+
+    /**
+     * Die Kandidaten aus `PickCandidate.Many`, aufgeloest zu Zeilen -- IN DER GELIEFERTEN
+     * REIHENFOLGE (Standard-Exemplare zuerst, innerhalb der Gruppen stabil). `PickCandidate` hat
+     * sie schon geordnet; ein `copies.filter { it.copyId in ids }` wuerde sie stillschweigend in
+     * die Reihenfolge der Arbeitskopie zurueckdrehen und die Vorauswahl zunichtemachen. Ids ohne
+     * Zeile fallen weg (das Exemplar ist zwischenzeitlich verschwunden), statt zu werfen.
+     */
+    fun chosen(copies: List<CopyRow>, copyIds: List<String>): List<CopyRow> =
+        copyIds.mapNotNull { id -> copies.find { it.copyId == id } }
+
+    /**
+     * Die einsortierten Exemplare dieses Passcodes -- der Fall `PickCandidate.AllPlaced`: die
+     * Oberflaeche nennt ihre Standorte im Sheet, und das ERSTE ist das, welches "eines hierher
+     * verschieben" bewegt. Reihenfolge der Arbeitskopie; sie ist stabil, solange keine Zuweisung
+     * dazwischenkommt, und der Modus ist waehrend eines offenen Sheets ohnehin verriegelt.
+     */
+    fun placedCandidates(copies: List<CopyRow>, passcode: String): List<CopyRow> =
+        copies.filter { !it.deleted && it.cardId == passcode && it.containerId != null }
 
     /**
      * Weist das Exemplar dem aktuellen Fach zu und rueckt vor. Gibt den neuen Zustand und die
@@ -125,7 +180,7 @@ object SortSession {
         val next = state.copy(
             page = nextPage,
             slot = nextSlot,
-            placed = state.placed + placement,
+            schritte = state.schritte + Schritt.Zugewiesen(placement),
             copies = state.copies.map {
                 if (it.copyId == copyId) it.copy(containerId = containerId, page = placement.page, slot = placement.slot)
                 else it
@@ -135,29 +190,61 @@ object SortSession {
     }
 
     /**
-     * Nimmt die zuletzt erfolgte Zuweisung zurueck: das Exemplar bekommt seinen vorherigen
-     * Standort, das Fach springt auf das der zurueckgenommenen Karte. Es wird NICHT
-     * zurueckgerechnet (kein `prev(page, slot)`) -- die Zuweisung weiss selbst, wo sie hinging.
-     * null, wenn der Stapel leer ist. Die Tiefe ist die ganze Sitzung (Spec §6.5).
+     * Das Fach rueckt vor, OHNE dass ein Exemplar zugewiesen wird: die Karte ist nicht in der
+     * Sammlung und geht ins Handy-Staging, liegt physisch aber schon im Fach (Spec §6.3, Nachtrag
+     * §2). [marke] ist der Staging-Eintrag der Oberflaeche, den Rueckgaengig spaeter wieder
+     * wegraeumen soll. Der zurueckgegebene [Schritt.Reserviert] traegt das Fach, fuer das
+     * reserviert wurde -- die Oberflaeche muss es nicht selbst noch einmal ablesen.
      */
-    fun undo(state: SortState): Pair<SortState, Placement>? {
-        val placement = state.placed.lastOrNull() ?: return null
-        val next = state.copy(
-            page = placement.page,
-            slot = placement.slot,
-            // dropLast statt remove: `placed` ist ein Stapel, es geht immer das letzte Element --
-            // und Placement vergleicht ueber Identitaet, `remove` wuerde dasselbe treffen.
-            placed = state.placed.dropLast(1),
-            copies = state.copies.map {
-                if (it.copyId == placement.copyId) it.copy(
-                    containerId = placement.vorherContainerId,
-                    page = placement.vorherPage,
-                    slot = placement.vorherSlot,
-                ) else it
-            },
-        )
-        return next to placement
+    fun reserve(state: SortState, pockets: Int, marke: Any?): Pair<SortState, Schritt.Reserviert> {
+        val schritt = Schritt.Reserviert(state.page, state.slot, marke)
+        val (nextPage, nextSlot) = SlotMath.next(state.page, state.slot, pockets)
+        return state.copy(page = nextPage, slot = nextSlot, schritte = state.schritte + schritt) to schritt
     }
+
+    /**
+     * Nimmt den zuletzt erfolgten Schritt zurueck. Bei einer Zuweisung bekommt das Exemplar seinen
+     * vorherigen Standort; bei einer Reservierung gibt es nichts zurueckzuschreiben, die
+     * Oberflaeche entfernt nur ihren Staging-Eintrag. In beiden Faellen springt das Fach auf das
+     * des zurueckgenommenen Schrittes. Es wird NICHT zurueckgerechnet (kein `prev(page, slot)`) --
+     * der Schritt weiss selbst, wo er hinging. null, wenn der Stapel leer ist. Die Tiefe ist die
+     * ganze Sitzung (Spec §6.5).
+     */
+    fun undo(state: SortState): Pair<SortState, Ruecknahme>? {
+        val schritt = state.schritte.lastOrNull() ?: return null
+        val basis = state.copy(
+            page = schritt.page,
+            slot = schritt.slot,
+            // dropLast statt remove: `schritte` ist ein Stapel, es geht immer das letzte Element --
+            // und Schritt vergleicht ueber Identitaet, `remove` wuerde dasselbe treffen.
+            schritte = state.schritte.dropLast(1),
+        )
+        return when (schritt) {
+            is Schritt.Zugewiesen -> {
+                val p = schritt.placement
+                basis.copy(
+                    copies = state.copies.map {
+                        if (it.copyId == p.copyId) it.copy(
+                            containerId = p.vorherContainerId,
+                            page = p.vorherPage,
+                            slot = p.vorherSlot,
+                        ) else it
+                    },
+                ) to Ruecknahme.Zuweisung(p)
+            }
+            is Schritt.Reserviert -> basis to Ruecknahme.Reservierung(schritt.marke)
+        }
+    }
+
+    /**
+     * Nimmt den letzten Schritt vom Stapel, OHNE etwas zurueckzudrehen -- Fach und Arbeitskopie
+     * bleiben, wo sie sind. Genau ein Fall braucht das: eine Reservierung, deren Staging-Eintrag
+     * der Nutzer inzwischen uebernommen hat. Die Karte sitzt dann bereits mit Standort in der
+     * Sammlung; das Fach zurueckspringen zu lassen wuerde die naechste Karte auf ein belegtes Fach
+     * setzen, und der Schritt einfach liegenzulassen wuerde jedes weitere Rueckgaengig auf ihm
+     * haengenbleiben lassen.
+     */
+    fun dropStep(state: SortState): SortState = state.copy(schritte = state.schritte.dropLast(1))
 
     /** Eine gescheiterte Schreibung wandert ans Ende der Warteschlange. */
     fun enqueue(queue: List<PendingWrite>, placement: Placement, zurueck: Boolean): List<PendingWrite> =

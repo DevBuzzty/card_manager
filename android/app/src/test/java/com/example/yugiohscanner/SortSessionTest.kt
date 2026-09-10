@@ -3,6 +3,8 @@ package com.example.yugiohscanner
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.ml.PendingWrite
 import com.example.yugiohscanner.ml.Placement
+import com.example.yugiohscanner.ml.Ruecknahme
+import com.example.yugiohscanner.ml.Schritt
 import com.example.yugiohscanner.ml.SortSession
 import com.example.yugiohscanner.ml.SortState
 import org.junit.Assert.assertEquals
@@ -30,13 +32,19 @@ class SortSessionTest {
         containerId = containerId, page = page, slot = slot, tags = null, note = null,
     )
 
+    /** Das [Placement] eines Schrittes -- die Tests unten pruefen fast immer eine Zuweisung. */
+    private fun zugewiesen(schritt: Schritt) = (schritt as Schritt.Zugewiesen).placement
+
+    /** Dasselbe fuer eine Ruecknahme. */
+    private fun genommen(r: Ruecknahme) = (r as Ruecknahme.Zuweisung).placement
+
     // --- Startvorschlag ---
 
     @Test fun `leerer Ordner startet auf Seite 1 Fach 1`() {
         val s = SortSession.start(listOf(copy("c1")), "b1", 9)
         assertEquals(1, s.page)
         assertEquals(1, s.slot)
-        assertTrue(s.placed.isEmpty())
+        assertTrue(s.schritte.isEmpty())
     }
 
     @Test fun `Startvorschlag ist das erste freie Fach dieses Behaelters`() {
@@ -110,7 +118,7 @@ class SortSessionTest {
         assertNull(placement.vorherContainerId)
         assertEquals(1, next.page)
         assertEquals(2, next.slot)
-        assertEquals(listOf(placement), next.placed)
+        assertSame(placement, zugewiesen(next.schritte.single()))
     }
 
     @Test fun `die Arbeitskopie traegt den neuen Standort mit`() {
@@ -165,10 +173,10 @@ class SortSessionTest {
         val start = SortSession.start(listOf(copy("c1")), "b1", 9)
         val (nachZuweisung, placement) = SortSession.assign(start, "c1", "b1", 9)!!
         val (zurueck, zurueckgenommen) = SortSession.undo(nachZuweisung)!!
-        assertSame(placement, zurueckgenommen)
+        assertSame(placement, genommen(zurueckgenommen))
         assertEquals(1, zurueck.page)
         assertEquals(1, zurueck.slot)
-        assertTrue(zurueck.placed.isEmpty())
+        assertTrue(zurueck.schritte.isEmpty())
         val c = zurueck.copies.first { it.copyId == "c1" }
         assertNull(c.containerId)
         assertNull(c.page)
@@ -181,10 +189,10 @@ class SortSessionTest {
         assertEquals(2 to 2, state.page to state.slot)
         val (zurueck, p) = SortSession.undo(state)!!
         assertEquals(2 to 1, zurueck.page to zurueck.slot)   // die fuenfte Karte lag auf Seite 2, Fach 1
-        assertEquals("c5", p.copyId)
+        assertEquals("c5", genommen(p).copyId)
         val (nochmal, p4) = SortSession.undo(zurueck)!!
         assertEquals(1 to 4, nochmal.page to nochmal.slot)
-        assertEquals("c4", p4.copyId)
+        assertEquals("c4", genommen(p4).copyId)
     }
 
     @Test fun `Rueckgaengig trifft die zuletzt zugewiesene Karte auch bei gleichem Passcode`() {
@@ -195,11 +203,11 @@ class SortSessionTest {
         val (s1, erste) = SortSession.assign(state, "c1", "b1", 9)!!
         val (s2, zweite) = SortSession.assign(s1, "c2", "b1", 9)!!
         state = s2
-        val (zurueck, genommen) = SortSession.undo(state)!!
-        assertSame(zweite, genommen)
+        val (zurueck, zurueckgenommen) = SortSession.undo(state)!!
+        assertSame(zweite, genommen(zurueckgenommen))
         assertNull(zurueck.copies.first { it.copyId == "c2" }.containerId)
         assertEquals("b1", zurueck.copies.first { it.copyId == "c1" }.containerId)
-        assertEquals(listOf(erste), zurueck.placed)
+        assertSame(erste, zugewiesen(zurueck.schritte.single()))
     }
 
     @Test fun `die ganze Sitzung laesst sich zurueckdrehen`() {
@@ -209,6 +217,110 @@ class SortSessionTest {
         assertEquals(1 to 1, state.page to state.slot)
         assertTrue(state.copies.all { it.containerId == null })
         assertNull(SortSession.undo(state))
+    }
+
+    // --- Reservieren (Task 7: die Karte ist nicht in der Sammlung) ---
+
+    @Test fun `Reservieren rueckt vor, ohne die Arbeitskopie anzufassen`() {
+        val start = SortSession.start(listOf(copy("c1")), "b1", 4)
+        val marke = Any()
+        val (next, schritt) = SortSession.reserve(start, 4, marke)
+        assertEquals(1, schritt.page)
+        assertEquals(1, schritt.slot)
+        assertSame(marke, schritt.marke)
+        assertEquals(1 to 2, next.page to next.slot)
+        // Kein Exemplar bewegt sich: die Karte ist noch gar nicht in der Sammlung.
+        assertEquals(start.copies, next.copies)
+    }
+
+    @Test fun `Rueckgaengig einer Reservierung gibt die Marke zurueck und springt auf ihr Fach`() {
+        val start = SortSession.start(listOf(copy("c1")), "b1", 4)
+        val marke = Any()
+        val (nachReservierung, _) = SortSession.reserve(start, 4, marke)
+        val (zurueck, ruecknahme) = SortSession.undo(nachReservierung)!!
+        assertTrue(ruecknahme is Ruecknahme.Reservierung)
+        assertSame(marke, (ruecknahme as Ruecknahme.Reservierung).marke)
+        assertEquals(1 to 1, zurueck.page to zurueck.slot)
+        assertTrue(zurueck.schritte.isEmpty())
+    }
+
+    @Test fun `Rueckgaengig springt NICHT ueber eine Reservierung hinweg`() {
+        // Der Fehler, den der gemeinsame Stapel verhindert: laege die Reservierung daneben, naehme
+        // dieses Rueckgaengig die Zuweisung von c1 zurueck -- eine Karte, die der Nutzer nicht
+        // gemeint hat -- und liesse die Reservierung stehen.
+        val start = SortSession.start(listOf(copy("c1")), "b1", 4)
+        val (nachZuweisung, placement) = SortSession.assign(start, "c1", "b1", 4)!!
+        val marke = Any()
+        val (nachReservierung, _) = SortSession.reserve(nachZuweisung, 4, marke)
+        assertEquals(1 to 3, nachReservierung.page to nachReservierung.slot)
+
+        val (erstesZurueck, erste) = SortSession.undo(nachReservierung)!!
+        assertSame(marke, (erste as Ruecknahme.Reservierung).marke)
+        assertEquals(1 to 2, erstesZurueck.page to erstesZurueck.slot)
+        // c1 liegt noch, wo es lag.
+        assertEquals("b1", erstesZurueck.copies.first { it.copyId == "c1" }.containerId)
+
+        val (zweitesZurueck, zweite) = SortSession.undo(erstesZurueck)!!
+        assertSame(placement, genommen(zweite))
+        assertEquals(1 to 1, zweitesZurueck.page to zweitesZurueck.slot)
+        assertNull(zweitesZurueck.copies.first { it.copyId == "c1" }.containerId)
+    }
+
+    @Test fun `dropStep nimmt den Schritt vom Stapel und laesst sonst alles stehen`() {
+        val start = SortSession.start(listOf(copy("c1")), "b1", 4)
+        val (nachReservierung, _) = SortSession.reserve(start, 4, Any())
+        val danach = SortSession.dropStep(nachReservierung)
+        assertTrue(danach.schritte.isEmpty())
+        assertEquals(1 to 2, danach.page to danach.slot)      // das Fach bleibt vorgerueckt
+        assertEquals(nachReservierung.copies, danach.copies)
+        assertNull(SortSession.undo(danach))
+    }
+
+    @Test fun `die Seite einer Reservierung zaehlt fuer den Rueckkanal`() {
+        // Auch eine Karte, die erst ueber das Staging in die Sammlung kommt, liegt physisch schon
+        // im Ordner -- die Binder-Ansicht soll auf ihrer Seite aufschlagen.
+        var state = SortSession.start(emptyList(), "b1", 4)
+        repeat(4) { state = SortSession.reserve(state, 4, Any()).first }
+        assertEquals(2, state.page)
+        assertEquals(1, SortSession.lastPage(state))
+    }
+
+    // --- Kandidaten fuer die beiden anderen Sheets ---
+
+    @Test fun `chosen behaelt die von PickCandidate gelieferte Reihenfolge`() {
+        // Die Arbeitskopie steht andersherum: ein filter wuerde die Vorauswahl (Standard-Exemplare
+        // zuerst) stillschweigend zurueckdrehen.
+        val copies = listOf(copy("c1"), copy("c2"), copy("c3"))
+        assertEquals(
+            listOf("c3", "c1"),
+            SortSession.chosen(copies, listOf("c3", "c1")).map { it.copyId },
+        )
+    }
+
+    @Test fun `chosen laesst eine unbekannte Id weg, statt zu werfen`() {
+        val copies = listOf(copy("c1"))
+        assertEquals(listOf("c1"), SortSession.chosen(copies, listOf("weg", "c1")).map { it.copyId })
+    }
+
+    @Test fun `placedCandidates nennt nur einsortierte Exemplare dieser Karte`() {
+        val copies = listOf(
+            copy("frei"),
+            copy("hier", containerId = "b1", page = 1, slot = 1),
+            copy("woanders", containerId = "b2", page = 2, slot = 3),
+            copy("andereKarte", cardId = "87654321", containerId = "b1", page = 1, slot = 2),
+        )
+        assertEquals(
+            listOf("hier", "woanders"),
+            SortSession.placedCandidates(copies, "12345678").map { it.copyId },
+        )
+    }
+
+    @Test fun `placedCandidates uebergeht geloeschte Exemplare`() {
+        val copies = listOf(
+            copy("weg", containerId = "b1", page = 1, slot = 1).copy(deleted = true),
+            copy("da", containerId = "b1", page = 1, slot = 2),
+        )
+        assertEquals(listOf("da"), SortSession.placedCandidates(copies, "12345678").map { it.copyId })
     }
 
     // --- Seite fuer den Rueckkanal (§6.6) ---
@@ -325,8 +437,8 @@ class SortSessionTest {
         val start: SortState = SortSession.start(listOf(copy("c1")), "b1", 9)
         val (nachZuweisung, p) = SortSession.assign(start, "c1", "b1", 9)!!
         var queue = SortSession.enqueue(emptyList(), p, false)     // Netzfehler
-        val (zurueck, genommen) = SortSession.undo(nachZuweisung)!!
-        val (rest, mussSchreiben) = SortSession.cancelPending(queue, genommen)
+        val (zurueck, zurueckgenommen) = SortSession.undo(nachZuweisung)!!
+        val (rest, mussSchreiben) = SortSession.cancelPending(queue, genommen(zurueckgenommen))
         queue = rest
         assertTrue(queue.isEmpty())
         assertFalse(mussSchreiben)
