@@ -15,6 +15,17 @@ data class ContainerRow(
     val pocketsPerPage: Int?, val color: String?, val sortOrder: Int,
 )
 
+/**
+ * Die nutzersichtbaren Bezeichnungen der Behaelterarten -- EINE Quelle fuer alle Stellen am Handy,
+ * die sie zeigen (`BindersScreen` als Auswahl beim Anlegen, `CopySheet` und `BinderPageScreen` als
+ * Anzeige). Die Reihenfolge ist die Reihenfolge der Auswahl.
+ *
+ * Der Desktop fuehrt dieselbe Zuordnung getrennt (`Binders.jsx`/`CopySheet.jsx`, KIND_LABELS) --
+ * das ist die Sprachgrenze; INNERHALB einer Sprache steht sie nur hier.
+ */
+val CONTAINER_KIND_OPTIONS = listOf("binder" to "Ordner", "box" to "Box", "deckbox" to "Deckbox")
+val CONTAINER_KIND_LABELS = CONTAINER_KIND_OPTIONS.toMap()
+
 private val CONTAINER_KINDS = setOf("binder", "box", "deckbox")
 private val BINDER_POCKETS = setOf(4, 9, 12)
 

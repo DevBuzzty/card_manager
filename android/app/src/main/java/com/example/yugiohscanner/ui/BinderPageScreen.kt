@@ -2,6 +2,7 @@ package com.example.yugiohscanner.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -10,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,10 +28,12 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.yugiohscanner.cloud.CONTAINER_KIND_LABELS
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.ContainerRow
@@ -51,8 +53,6 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
 import kotlinx.coroutines.launch
-
-private val KIND_LABELS = mapOf("binder" to "Ordner", "box" to "Box", "deckbox" to "Deckbox")
 
 /**
  * Spec B2 §7.2: EIN Behaelter, aufgeschlagen. Ordner zeigen ein Fachraster pro Seite und blaettern
@@ -83,7 +83,6 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
     var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
     var unsorted by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
-    var pageCount by remember { mutableStateOf(1) }
     var loading by remember { mutableStateOf(true) }
     // Ein Ladefehler darf nicht wie ein leerer Ordner aussehen: eigener Zustand, im Erfolgsfall
     // ausdruecklich auf null zurueckgesetzt, und die Leermeldung erscheint nur bei `error == null`.
@@ -107,6 +106,21 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
     // Exemplare dieses Behaelters ohne darstellbares Fach: sie stehen unter dem Raster UND ganz
     // oben im Auswahlangebot fuer ein leeres Fach -- deshalb hier oben, nicht im Rasterzweig.
     val loose = remember(myCopies, pockets) { BinderGrid.loose(myCopies, pockets) }
+    // ABGELEITET, nicht zweiter Zustand: dieselbe Liste und dieselbe Fachzahl, aus denen auch das
+    // Raster gebaut wird. Ein eigenes, in reload() gesetztes Feld haette eine zweite Filterung und
+    // eine zweite Fachzahl gebraucht -- heute deckungsgleich, morgen still auseinandergelaufen.
+    val pageCount = remember(myCopies, pockets) { BinderGrid.pageCount(myCopies, pockets) }
+
+    // Pager- und Rasterzustand stehen VOR dem fruehen `return` des Kartendetails weiter unten.
+    // Sonst verlaesst die Gruppe, in der sie sitzen, beim Antippen einer Karte die Komposition,
+    // ihr Zustand wird verworfen -- und der Ordner stuende nach dem Zurueckgehen wieder auf
+    // Seite 1, mit an den Anfang zurueckgesprungenen Rastern.
+    // HorizontalPager wertet die Lambda bei jedem Zugriff neu aus (und rememberPagerState reicht
+    // sie bei jeder Neuzusammensetzung nach), deshalb erreicht eine neu entstandene letzte Seite
+    // den Pager sofort; ein hereingereichter Zahlenwert waere fuer immer der erste.
+    val pagerState = rememberPagerState(pageCount = { pageCount })
+    // Je Ordnerseite eine senkrechte Rasterposition, aus demselben Grund hier oben gehalten.
+    val gridScrolls = remember { mutableMapOf<Int, ScrollState>() }
 
     suspend fun reload() {
         val cs = ContainersRepository.list()
@@ -114,13 +128,19 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
             ?: throw RuntimeException("Behälter nicht gefunden.")
         val cd = CollectionRepository.loadCards()
         val cp = CollectionRepository.loadCopies()
+        // Eigener Aufruf, obwohl `cp` dieselben Zeilen enthaelt (`containerId == null`): die
+        // REIHENFOLGE ist eine andere und sie ist sichtbar. listUnsortedCopies() sortiert
+        // created_at.asc,copy_id.asc -- aeltestes Exemplar zuerst, wie der Einsortier-Modus am
+        // Desktop (copies.cjs#listUnsortedCopies) --, loadCopies() dagegen nur copy_id.asc, also
+        // nach UUID und damit willkuerlich. Nachbauen laesst sich das hier nicht: `created_at`
+        // steht nicht in COPY_COLS und fehlt CopyRow. Fiele der Aufruf weg, stuenden die
+        // Kandidaten im Fach-Fuellen-Sheet in zufaelliger Ordnung.
         val un = CollectionRepository.listUnsortedCopies()
         container = found
         containers = cs
         cards = cd
         copies = cp
         unsorted = un
-        pageCount = BinderGrid.pageCount(cp.filter { it.containerId == containerId }, found.pocketsPerPage ?: 0)
     }
 
     LaunchedEffect(containerId) {
@@ -136,7 +156,15 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
             initial = cards,
             initialCopies = copies,
             onClose = { detailId = null },
-            onChanged = { scope.launch { runCatching { reload() } } },
+            // Wer im Kartendetail den Standort aendert, muss es merken, wenn das Neuladen danach
+            // scheitert -- sonst zeigt das Raster die Karte stumm weiter im alten Fach. Gleiches
+            // try/catch wie bei CopySheet.onSaved weiter unten.
+            onChanged = {
+                scope.launch {
+                    try { reload(); error = null }
+                    catch (e: Exception) { error = e.message ?: "Laden fehlgeschlagen" }
+                }
+            },
         )
         return
     }
@@ -178,7 +206,7 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
                         fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleLarge,
                     )
                     Text(
-                        KIND_LABELS[container?.kind] ?: (container?.kind ?: ""),
+                        CONTAINER_KIND_LABELS[container?.kind] ?: (container?.kind ?: ""),
                         color = Muted, style = MaterialTheme.typography.labelSmall,
                     )
                 }
@@ -201,13 +229,6 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
                 // Nur erreichbar, wenn reload() geworfen hat -- das Banner oben sagt bereits, was war.
                 Spacer(Modifier.weight(1f))
             } else if (isBinder) {
-                val pagerState = rememberPagerState(
-                    // Die Seitenzahl waechst, sobald geladen oder etwas einsortiert wurde. Sie MUSS
-                    // hier drin aus dem Zustand gelesen werden: der Lambda-Wert wird bei jedem
-                    // Zugriff neu ausgewertet, ein von aussen hereingereichter Zahlenwert waere fuer
-                    // immer der aus der ersten Zusammensetzung (dann bliebe der Ordner einseitig).
-                    pageCount = { pageCount },
-                )
                 val page = pagerState.currentPage + 1
                 val slotsOfPage = remember(myCopies, page, pockets) { BinderGrid.slots(myCopies, page, pockets) }
 
@@ -233,6 +254,7 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
                     PocketGrid(
                         slots = BinderGrid.slots(myCopies, index + 1, pockets),
                         columns = BinderGrid.columns(pockets),
+                        scroll = remember(index) { gridScrolls.getOrPut(index) { ScrollState(0) } },
                         imageOf = { cardOf(it)?.imageUrl },
                         nameOf = { cardOf(it)?.name },
                         onOpen = { copy -> detailId = copy.cardId },
@@ -341,6 +363,7 @@ fun BinderPageScreen(containerId: String, onBack: () -> Unit, onEinsortieren: ((
 private fun PocketGrid(
     slots: List<List<CopyRow>>,
     columns: Int,
+    scroll: ScrollState,
     imageOf: (CopyRow) -> String?,
     nameOf: (CopyRow) -> String?,
     onOpen: (CopyRow) -> Unit,
@@ -348,7 +371,7 @@ private fun PocketGrid(
     onFill: (Int) -> Unit,
 ) {
     Column(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        Modifier.fillMaxWidth().verticalScroll(scroll),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         slots.chunked(columns).forEachIndexed { rowIndex, row ->
@@ -368,7 +391,14 @@ private fun PocketGrid(
     }
 }
 
-private val DASHES = PathEffect.dashPathEffect(floatArrayOf(14f, 12f), 0f)
+// Der Rahmen eines leeren Fachs in dp, nicht in Roh-Pixeln: als Pixel gelesen waeren aus 2f auf
+// einem 3x-Schirm 0,67 dp geworden -- eine Haarlinie. Der Eckenradius ist derselbe, mit dem das
+// BELEGTE Fach beschnitten wird (RoundedCornerShape(POCKET_CORNER) weiter unten), damit leere und
+// volle Faecher dieselbe Form haben.
+private val POCKET_CORNER = 6.dp
+private val POCKET_STROKE = 1.5.dp
+private val POCKET_DASH_ON = 6.dp
+private val POCKET_DASH_OFF = 4.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -383,13 +413,20 @@ private fun Pocket(
 ) {
     val first = inSlot.firstOrNull()
     if (first == null) {
+        // Das Strichmuster braucht Pixel und wird deshalb einmal je Schirmdichte umgerechnet;
+        // Strichstaerke und Eckenradius rechnet der DrawScope selbst um (er IST eine Density).
+        val density = LocalDensity.current
+        val dashes = remember(density) {
+            with(density) { PathEffect.dashPathEffect(floatArrayOf(POCKET_DASH_ON.toPx(), POCKET_DASH_OFF.toPx()), 0f) }
+        }
         Box(
             modifier.aspectRatio(0.68f).clickable { onFill() }
                 .drawBehind {
+                    val r = POCKET_CORNER.toPx()
                     drawRoundRect(
                         color = Muted.copy(alpha = 0.5f),
-                        style = Stroke(width = 2f, pathEffect = DASHES),
-                        cornerRadius = CornerRadius(14f, 14f),
+                        style = Stroke(width = POCKET_STROKE.toPx(), pathEffect = dashes),
+                        cornerRadius = CornerRadius(r, r),
                     )
                 },
             contentAlignment = Alignment.Center,
@@ -399,7 +436,7 @@ private fun Pocket(
         return
     }
     Box(
-        modifier.aspectRatio(0.68f).clip(RoundedCornerShape(6.dp))
+        modifier.aspectRatio(0.68f).clip(RoundedCornerShape(POCKET_CORNER))
             .combinedClickable(onClick = { onOpen(first) }, onLongClick = onActions),
     ) {
         AsyncImage(

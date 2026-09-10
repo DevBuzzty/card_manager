@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.yugiohscanner.cloud.CONTAINER_KIND_LABELS
+import com.example.yugiohscanner.cloud.CONTAINER_KIND_OPTIONS
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.ContainerRow
@@ -48,8 +50,6 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.math.ceil
 
-private val KIND_OPTIONS = listOf("binder" to "Ordner", "box" to "Box", "deckbox" to "Deckbox")
-private val KIND_LABELS = KIND_OPTIONS.toMap()
 private val POCKET_OPTIONS = listOf(4, 9, 12)
 // Same hexes as the desktop swatch (Binders.jsx COLOR_PRESETS) -- all already in the theme palette.
 private val COLOR_PRESETS = listOf(Primary, Gold, Good, ErrorColor, RarityRare, RaritySuper, TypeMonster, TypeSpell)
@@ -338,7 +338,7 @@ private fun BinderRow(
                     )
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(KIND_LABELS[c.kind] ?: c.kind, color = Muted, style = MaterialTheme.typography.labelSmall)
+                Text(CONTAINER_KIND_LABELS[c.kind] ?: c.kind, color = Muted, style = MaterialTheme.typography.labelSmall)
                 val pockets = c.pocketsPerPage
                 val occupancy = buildString {
                     append(count); append(if (count == 1) " Exemplar" else " Exemplare")
@@ -382,7 +382,7 @@ private fun BinderDialog(
                     Text("Art", style = MaterialTheme.typography.labelSmall, color = Muted)
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        KIND_OPTIONS.forEach { (id, label) ->
+                        CONTAINER_KIND_OPTIONS.forEach { (id, label) ->
                             FilterChip(selected = form.kind == id, onClick = { onChange(form.copy(kind = id)) }, label = { Text(label) })
                         }
                     }

@@ -85,6 +85,23 @@ class BinderGridTest {
         assertEquals(1, BinderGrid.pageCount(copies, 9))
     }
 
+    // Die Ansicht leitet die Seitenzahl aus DERSELBEN Liste und DERSELBEN Fachzahl ab, aus denen
+    // sie auch die Faecher baut (frueher war es ein mitgefuehrter zweiter Zustand aus einer
+    // zweiten Filterung). Diese Pruefung haelt beide Rechnungen aneinander: die letzte gezaehlte
+    // Seite zeigt wirklich etwas, und die Seite dahinter ist leer.
+    @Test fun `die letzte gezaehlte Seite ist belegt, die naechste nicht`() {
+        val copies = listOf(
+            copy("c1", page = 1, slot = 1),
+            copy("c2", page = 3, slot = 5),
+            copy("ohneFach"),
+            copy("zuHohesFach", page = 9, slot = 12),
+        )
+        val last = BinderGrid.pageCount(copies, 9)
+        assertEquals(3, last)
+        assertTrue(BinderGrid.slots(copies, last, 9).any { it.isNotEmpty() })
+        assertTrue(BinderGrid.slots(copies, last + 1, 9).all { it.isEmpty() })
+    }
+
     // --- slots ---
 
     @Test fun `slots liefert immer genau so viele Faecher wie die Seite gross ist`() {
