@@ -241,15 +241,30 @@ function listTags(db) {
 
 // Behaelter mit Belegung: Anzahl lebender Exemplare und ihr Wert (Preis x Zustandsfaktor,
 // derselbe Weg wie valuation.cjs#totalValue -- keine zweite Formel).
+//
 // max_page ist die hoechste belegte Seite eines Behaelters (Spec 5.3: "die hoechste belegte Seite
-// bestimmt die Anzeige") -- NULL, wenn kein lebendes Exemplar eine Seite traegt (kein Binder, oder
-// ein leerer). MAX() ignoriert NULLs von selbst, kein CASE noetig. Der Aufrufer (Binders.jsx,
-// BindersScreen.kt) faellt bei NULL auf ceil(copies_count / pockets_per_page) zurueck.
+// bestimmt die Anzeige") -- NULL, wenn kein lebendes Exemplar in einem darstellbaren Fach liegt
+// (kein Ordner, oder ein leerer). Der Aufrufer zeigt dann eine (leere) erste Seite; einen
+// ceil(copies_count / pockets_per_page)-Rueckfall gibt es NICHT mehr: er liess die Liste "2
+// Seiten" melden, wo der aufgeschlagene Ordner "Seite 1 von 1" zeigte.
+//
+// Das CASE ist die SQL-Fassung von src/utils/binderGrid.js#isPlaced (Zwilling: BinderGrid.kt) und
+// muss ihr Wort fuer Wort folgen -- sonst zaehlt die Liste Seiten, die das Raster nicht zeigen
+// kann. Zwei Teile:
+// - Seite >= 1 UND Fach >= 1 UND Fach <= Fachzahl: ein Fach jenseits der heutigen Ordnergroesse
+//   (Rest einer frueheren, groesseren) ist im Raster unsichtbar und zaehlt darum auch hier nicht.
+// - Die Zurechtrueckung der Fachzahl ist slotMath.js#clampPockets: alles, was nicht > 0 ist
+//   (auch NULL), gilt als 4er-Ordner. In SQLite faellt eine NULL-Bedingung in den ELSE-Zweig.
+// Kein zusaetzlicher Test auf ct.kind: Box und Deckbox haben keine Seiten, weil setCopyLocation
+// page/slot dort gar nicht erst schreibt (und saveContainer sie beim Umstellen raeumt) -- isPlaced
+// kennt die Behaelterart aus demselben Grund nicht.
 function listContainers(db) {
   const rows = db.prepare(`
     SELECT ct.*,
            COUNT(cp.copy_id) AS copies_count,
-           MAX(cp.page) AS max_page,
+           MAX(CASE WHEN cp.page >= 1 AND cp.slot >= 1
+                     AND cp.slot <= (CASE WHEN ct.pockets_per_page > 0 THEN ct.pockets_per_page ELSE 4 END)
+                    THEN cp.page END) AS max_page,
            COALESCE(SUM(COALESCE(c.price, 0) * ${factorCaseSql('cp.condition')}), 0) AS value
       FROM containers ct
       LEFT JOIN card_copies cp ON cp.container_id = ct.container_id AND cp.deleted = 0

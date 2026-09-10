@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Trash2, AlertCircle } from 'lucide-react';
 import { parseTags, addTag, removeTag } from '../utils/tags';
 import { EDITION_LABELS } from '../utils/valuation';
-
-const KIND_LABELS = { binder: 'Ordner', box: 'Box', deckbox: 'Deckbox' };
+import { KIND_LABELS } from '../utils/containerKinds';
 
 // Spec B1 §7.3: Das Exemplar-Sheet ist die EINZIGE Stelle, an der Standort, Tags und Notiz eines
 // Exemplars geschrieben werden -- kein zweiter Schreibweg irgendwo sonst. Gleiche Ueberlagerung,

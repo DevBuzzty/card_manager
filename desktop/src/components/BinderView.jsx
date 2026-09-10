@@ -9,8 +9,7 @@ import { formatCopyLocation } from '../utils/copyLocation';
 import { EDITION_LABELS, conditionFactor } from '../utils/valuation';
 import { candidateGroups, candidatesEmpty, columns, loose, pageCount, slots } from '../utils/binderGrid';
 import { copyKey, printingKey } from '../utils/printingKey';
-
-const KIND_LABELS = { binder: 'Ordner', box: 'Box', deckbox: 'Deckbox' };
+import { KIND_LABELS } from '../utils/containerKinds';
 
 /**
  * Spec B2 §7.2, Desktop-Haelfte: EIN Behaelter, aufgeschlagen. Ordner zeigen zwei Fachraster

@@ -5,13 +5,8 @@ import clsx from 'clsx';
 import CustomSelect from './CustomSelect';
 import { fmtEUR } from '../utils/format';
 import { binderRoute, cardRoute } from '../utils/routes';
+import { KIND_LABELS, KIND_OPTIONS } from '../utils/containerKinds';
 
-const KIND_OPTIONS = [
-  { value: 'binder', label: 'Ordner' },
-  { value: 'box', label: 'Box' },
-  { value: 'deckbox', label: 'Deckbox' },
-];
-const KIND_LABELS = { binder: 'Ordner', box: 'Box', deckbox: 'Deckbox' };
 const POCKET_OPTIONS = [4, 9, 12].map(p => ({ value: String(p), label: `${p} Fächer pro Seite` }));
 // Sourced from tailwind.config.js -- no new colors, just reused hexes as a swatch picker.
 const COLOR_PRESETS = ['#9D00FF', '#F5C542', '#39d98a', '#ff5d6c', '#6db4e8', '#e8c76d', '#E8944A', '#1DA891'];
@@ -272,11 +267,12 @@ export default function Binders() {
                 <span className="text-xs text-ink-muted">{KIND_LABELS[c.kind] || c.kind}</span>
                 <span className="text-sm text-ink-muted">
                   {c.copies_count} {c.copies_count === 1 ? 'Exemplar' : 'Exemplare'}
-                  {/* Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nicht ceil(Anzahl/Faecher) --
-                      ceil bleibt nur der Rueckfall, wenn kein Exemplar eine Seite traegt (max_page ist dann null). */}
-                  {c.kind === 'binder' && c.pockets_per_page
-                    ? ` · ${c.max_page ?? Math.ceil((c.copies_count || 0) / c.pockets_per_page)} Seiten`
-                    : ''}
+                  {/* Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nie ceil(Anzahl/Faecher).
+                      Dieselbe Zahl, die der aufgeschlagene Ordner als "von N" zeigt: copies.cjs#listContainers
+                      rechnet max_page ueber dieselbe Fachpruefung wie binderGrid.js#isPlaced, und die 1 bei
+                      NULL ist binderGrid.js#pageCounts Mindestwert -- ein leerer Ordner hat eine leere erste
+                      Seite zum Blaettern. */}
+                  {c.kind === 'binder' && c.pockets_per_page ? ` · ${c.max_page ?? 1} Seiten` : ''}
                 </span>
                 <span className="text-sm font-mono text-space-violet">{fmtEUR(c.value)}</span>
               </div>
