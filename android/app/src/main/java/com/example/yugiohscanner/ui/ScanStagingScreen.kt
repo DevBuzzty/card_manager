@@ -225,47 +225,77 @@ fun ScanStagingSheet(
                                 edition = e.edition, condition = e.condition,
                                 count = e.quantity,
                             )
-                            // Einsortier-Modus-Reservierung (Spec B2 Task 5): ueber DENSELBEN Weg wie
-                            // jede andere Standortzuweisung -- setCopyLocation, das Seite/Fach bei
-                            // Nicht-Bindern selbst verwirft. Kein zweiter Schreibweg, keine zweite
-                            // Pruefung hier (siehe B1 Task 6, wo genau das zu Datenverlust fuehrte).
-                            // Entscheidung 3: nur das erste angelegte Exemplar bekommt sie.
-                            val reservedCopyId = ScanStagingLogic.firstCopyForReservation(copyIds)
+                            // Ab HIER ist der Eintrag angelegt (Nachtrag zur Abschluss-Fixwelle, die
+                            // dieselbe Luecke eine Stufe hoeher schloss). Was danach noch schiefgeht,
+                            // darf ihn nicht im Blatt stehen lassen: der naechste Druck auf "Alle
+                            // uebernehmen" legte ihn sonst ein ZWEITES Mal an -- doppelte Exemplare,
+                            // falscher Bestand, falscher Wert --, und im Einsortier-Modus zwingt der
+                            // "Fertig"-Riegel den Nutzer zu genau diesem zweiten Versuch. Darum das
+                            // per-Eintrag-`finally`: es sortiert den Eintrag in JEDEM Fall in eine
+                            // der beiden Listen.
+                            //
+                            // Die beiden Listen behalten dabei ihre alte Bedeutung, es kommt keine
+                            // dritte dazu: `committed` heisst weiterhin "angelegt UND reserviertes
+                            // Fach geschrieben" (daran haengt Rueckgaengig, das dem Fach sonst
+                            // Falsches nachsagt), `ohneStandort` "angelegt, Fach nicht geschrieben".
+                            // Ein Fehlschlag an den zusaetzlichen Printings betrifft ANDERE Karten
+                            // (Entscheidung 2: sie bekommen nie die Reservierung) und aendert an
+                            // dieser Einordnung nichts -- er wird gemeldet, nicht verschluckt.
                             var standortFehlte = false
-                            if (e.reservedContainerId != null && reservedCopyId != null) {
-                                try {
-                                    CollectionRepository.setCopyLocation(
-                                        reservedCopyId, e.reservedContainerId, e.reservedPage, e.reservedSlot,
-                                    )
-                                } catch (ex: Exception) {
-                                    // Entscheidung 1: das Uebernehmen laeuft ueber ALLE Eintraege in
-                                    // einem Durchgang -- ein Wurf hier risse den ganzen Stapel mit.
-                                    // Die Karte ist wichtiger als ihr Platz: sie bleibt angelegt, nur
-                                    // ohne Standort (taucht in "Nicht einsortiert" auf), und der
-                                    // Nutzer bekommt einen sichtbaren Hinweis statt eines stillen
-                                    // Fehlschlags oder einer verschluckten Ausnahme.
-                                    //
-                                    // Abschluss-Fixwelle, Minor 4: der Eintrag wandert deshalb in
-                                    // `ohneStandort` statt in `committed` -- er IST uebernommen,
-                                    // aber ohne Fach, und der Aufrufer darf ihm spaeter keines
-                                    // nachsagen.
-                                    standortFehlte = true
-                                    locationWarnings.add(
-                                        "${b.name ?: b.id}: Standort nicht gesetzt (${ex.message ?: "unbekannter Fehler"})",
+                            try {
+                                // Einsortier-Modus-Reservierung (Spec B2 Task 5): ueber DENSELBEN Weg wie
+                                // jede andere Standortzuweisung -- setCopyLocation, das Seite/Fach bei
+                                // Nicht-Bindern selbst verwirft. Kein zweiter Schreibweg, keine zweite
+                                // Pruefung hier (siehe B1 Task 6, wo genau das zu Datenverlust fuehrte).
+                                // Entscheidung 3: nur das erste angelegte Exemplar bekommt sie.
+                                val reservedCopyId = ScanStagingLogic.firstCopyForReservation(copyIds)
+                                if (e.reservedContainerId != null && reservedCopyId != null) {
+                                    try {
+                                        CollectionRepository.setCopyLocation(
+                                            reservedCopyId, e.reservedContainerId, e.reservedPage, e.reservedSlot,
+                                        )
+                                    } catch (ex: Exception) {
+                                        // Entscheidung 1: das Uebernehmen laeuft ueber ALLE Eintraege in
+                                        // einem Durchgang -- ein Wurf hier risse den ganzen Stapel mit.
+                                        // Die Karte ist wichtiger als ihr Platz: sie bleibt angelegt, nur
+                                        // ohne Standort (taucht in "Nicht einsortiert" auf), und der
+                                        // Nutzer bekommt einen sichtbaren Hinweis statt eines stillen
+                                        // Fehlschlags oder einer verschluckten Ausnahme.
+                                        //
+                                        // Abschluss-Fixwelle, Minor 4: der Eintrag wandert deshalb in
+                                        // `ohneStandort` statt in `committed` -- er IST uebernommen,
+                                        // aber ohne Fach, und der Aufrufer darf ihm spaeter keines
+                                        // nachsagen. Dieser eigene catch bleibt: er unterscheidet den
+                                        // Fach-Fehlschlag vom Rest, den der aeussere catch traegt.
+                                        standortFehlte = true
+                                        locationWarnings.add(
+                                            "${b.name ?: b.id}: Standort nicht gesetzt (${ex.message ?: "unbekannter Fehler"})",
+                                        )
+                                    }
+                                }
+                                // Commit each extra printing the user added (skip ones left unpicked).
+                                // Entscheidung 2: extraPrintings bekommen NIE die Reservierung -- reserviert
+                                // ist ein einzelnes physisches Fach, die zusaetzlichen Printings sind andere
+                                // Karten, die der Nutzer bei der Gelegenheit miterfasst.
+                                for (ep in e.extraPrintings) {
+                                    val es = ep.selectedSet ?: continue
+                                    CollectionRepository.addScanned(
+                                        b, es.setCode, es.rarity, es.language, ep.edition, ep.condition, ep.quantity,
                                     )
                                 }
-                            }
-                            // Commit each extra printing the user added (skip ones left unpicked).
-                            // Entscheidung 2: extraPrintings bekommen NIE die Reservierung -- reserviert
-                            // ist ein einzelnes physisches Fach, die zusaetzlichen Printings sind andere
-                            // Karten, die der Nutzer bei der Gelegenheit miterfasst.
-                            for (ep in e.extraPrintings) {
-                                val es = ep.selectedSet ?: continue
-                                CollectionRepository.addScanned(
-                                    b, es.setCode, es.rarity, es.language, ep.edition, ep.condition, ep.quantity,
+                            } catch (ex: Exception) {
+                                // Der Standort hat seinen eigenen catch darueber, also bleiben hier die
+                                // zusaetzlichen Printings -- der einzige Schritt nach dem Anlegen, der
+                                // noch ans Netz geht. Gemeldet wird beides getrennt: der Nutzer soll
+                                // WISSEN, dass die Hauptkarte drin ist und ein Beidruck fehlt, statt es
+                                // an einem falschen Bestand zu merken.
+                                locationWarnings.add(
+                                    "${b.name ?: b.id}: übernommen, zusätzliche Printings unvollständig " +
+                                        "(${ex.message ?: "unbekannter Fehler"})",
                                 )
+                            } finally {
+                                if (standortFehlte) ohneStandort.add(e) else committed.add(e)
                             }
-                            if (standortFehlte) ohneStandort.add(e) else committed.add(e)
                         }
                     } catch (ex: Exception) {
                         // Anhaengen statt ersetzen: scheitert ein spaeterer Eintrag am Netz, darf

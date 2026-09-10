@@ -67,7 +67,8 @@ class BinderGridTest {
     // Abschluss-Fixwelle, Minor 3: die Zahl, die die BEHAELTERLISTE zeigt ("7 Seiten"). Sie muss
     // dieselbe Regel treffen wie das aufgeschlagene Raster, sonst verspricht die Liste Seiten, die
     // es aufgeschlagen nicht gibt. Unterschied zu `pageCount` ist allein die leere Antwort: hier
-    // null (die Liste faellt dann auf ceil(Anzahl/Faecher) zurueck), dort 1.
+    // null, dort 1 -- die Liste setzt dieselbe 1 selbst ein (BindersScreen: `maxPage ?: 1`). Einen
+    // ceil(Anzahl/Faecher)-Rueckfall gibt es nicht mehr, auf keinem der beiden Geraete.
 
     @Test fun `ohne einsortiertes Exemplar gibt es keine hoechste Seite`() {
         assertEquals(null, BinderGrid.maxPlacedPage(emptyList(), 9))

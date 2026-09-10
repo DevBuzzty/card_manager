@@ -48,7 +48,6 @@ import com.example.yugiohscanner.ui.theme.TypeMonster
 import com.example.yugiohscanner.ui.theme.TypeSpell
 import kotlinx.coroutines.launch
 import java.util.UUID
-import kotlin.math.ceil
 
 private val POCKET_OPTIONS = listOf(4, 9, 12)
 // Same hexes as the desktop swatch (Binders.jsx COLOR_PRESETS) -- all already in the theme palette.
@@ -136,7 +135,7 @@ fun BindersScreen(onOpen: (String) -> Unit) {
     fun valueFor(id: String) = copiesByContainer[id]?.sumOf { c -> (cardsByKey[c.printingKey()]?.price ?: 0.0) * Valuation.factor(c.condition) } ?: 0.0
     // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nicht ceil(Anzahl/Faecher) --
     // null, wenn kein Exemplar dieses Behaelters in einem darstellbaren Fach liegt (BinderRow
-    // faellt dann auf ceil zurueck). Gleiche Regel wie listContainers' max_page am Desktop
+    // zeigt dann die 1). Gleiche Regel wie listContainers' max_page am Desktop
     // (copies.cjs). Die reine Rechnung steckt in BinderGrid.maxPlacedPage; hier bleibt nur das
     // Nachschlagen nach id.
     //
@@ -350,9 +349,14 @@ private fun BinderRow(
                 val occupancy = buildString {
                     append(count); append(if (count == 1) " Exemplar" else " Exemplare")
                     if (c.kind == "binder" && pockets != null && pockets > 0) {
-                        // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige -- ceil bleibt
-                        // nur der Rueckfall, wenn kein Exemplar eine Seite traegt (maxPage null).
-                        append(" · "); append(maxPage ?: ceil(count.toDouble() / pockets).toInt()); append(" Seiten")
+                        // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nie
+                        // ceil(Anzahl/Faecher). Dieselbe Zahl, die der aufgeschlagene Ordner als
+                        // "von N" zeigt: maxPageFor rechnet ueber dieselbe Fachpruefung wie
+                        // BinderGrid.isPlaced, und die 1 bei null ist BinderGrid.pageCount
+                        // Mindestwert -- ein leerer Ordner hat eine leere erste Seite zum
+                        // Blaettern. Wortgleich am Desktop: Binders.jsx.
+                        val seiten = maxPage ?: 1
+                        append(" · "); append(seiten); append(if (seiten == 1) " Seite" else " Seiten")
                     }
                 }
                 Text(occupancy, color = Muted, style = MaterialTheme.typography.bodySmall)
