@@ -21,9 +21,20 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
+        <!-- Hochkant festgenagelt (Spec B2, Abschlussreview I-2). Eine Drehung zerstoert die
+             Activity, und Warteschlange, Rueckgaengig-Stapel und Staging des Einsortier-Modus
+             haengen an `remember`. Sie waeren weg, OHNE Nachschreiben und ohne Verlust-Dialog:
+             Karten steckten physisch in Faechern, digital existierte nichts davon, und der
+             Nutzer erfuehre es nie. `configChanges` waere der feinere Weg, verlangt aber
+             zusaetzlich, die Kameravorschau bei einer Drehung neu zu binden: beide
+             ImageAnalysis-Bindungen setzen keine targetRotation und uebernehmen die
+             Anzeigerotation zum Erzeugungszeitpunkt, der Scanner erkennt im Querformat sonst
+             nichts mehr. Diese App ist eine Kamera-Begleitung fuers Kartensortieren; hochkant
+             ist ihre Arbeitshaltung. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
