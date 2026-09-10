@@ -43,6 +43,12 @@ object Routes {
     const val SUCHE = "suche"
     const val SAMMLUNG = "sammlung/{segment}"
     fun sammlung(segment: String = "karten") = "sammlung/$segment"
+    // Spec B2 §7.2: EIN aufgeschlagener Behaelter. Bewusst unter "sammlung/", damit die untere
+    // Leiste die Sammlung weiter als gewaehlt zeigt (NavItem vergleicht das erste Segment) -- die
+    // Seite gehoert dorthin, sie wird aus dem Binder-Reiter heraus geoeffnet. Drei Segmente, der
+    // Reiter-Route "sammlung/{segment}" mit zweien kommt sie deshalb nicht in die Quere.
+    const val BEHAELTER = "sammlung/binder/{containerId}"
+    fun behaelter(containerId: String) = "sammlung/binder/$containerId"
 }
 
 // Top-level destinations: the bottom bar switches between them and each keeps its own back stack.
@@ -105,6 +111,19 @@ fun AppNav() {
                     segment = backStackEntry.arguments?.getString("segment") ?: "karten",
                     onSegment = { nav.navigate(Routes.sammlung(it)) { popUpTo(Routes.SAMMLUNG) { inclusive = true } } },
                     onOpenSuche = { nav.navigate(Routes.SUCHE) },
+                    onOpenBehaelter = { nav.navigate(Routes.behaelter(it)) },
+                ) else CloudLoginScreen(prefs) { cloudReady = true }
+            }
+            composable(
+                Routes.BEHAELTER,
+                arguments = listOf(navArgument("containerId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                if (cloudReady) BinderPageScreen(
+                    containerId = backStackEntry.arguments?.getString("containerId").orEmpty(),
+                    onBack = { nav.popBackStack() },
+                    // Task 6 haengt hier den Einsortier-Modus ein; bis dahin ist der Knopf im Kopf
+                    // der Seite sichtbar, aber ausgegraut.
+                    onEinsortieren = null,
                 ) else CloudLoginScreen(prefs) { cloudReady = true }
             }
             composable(Routes.SCAN) {

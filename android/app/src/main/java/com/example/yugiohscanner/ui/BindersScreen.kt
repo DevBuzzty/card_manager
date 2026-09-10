@@ -70,8 +70,10 @@ private data class BinderForm(
 
 // Spec B1 §7.1, Android side: counter for un-sorted copies, container list with occupancy and
 // value, create/rename/delete. Reordering by long-press is explicitly NOT part of B1.
+// Spec B2 §7.2: ein Tipp auf einen Behaelter schlaegt ihn auf (BinderPageScreen); der Langdruck
+// bleibt das Menue aus B1.
 @Composable
-fun BindersScreen() {
+fun BindersScreen(onOpen: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val containers = remember { mutableStateListOf<ContainerRow>() }
     val unsortedCopies = remember { mutableStateListOf<CopyRow>() }
@@ -275,6 +277,7 @@ fun BindersScreen() {
                     items(containers, key = { it.containerId }) { c ->
                         BinderRow(
                             c, count = countFor(c.containerId), value = valueFor(c.containerId), maxPage = maxPageFor(c.containerId),
+                            onOpen = { onOpen(c.containerId) },
                             onEdit = {
                                 dialog = BinderForm(
                                     containerId = c.containerId, name = c.name, kind = c.kind,
@@ -309,13 +312,21 @@ fun BindersScreen() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BinderRow(c: ContainerRow, count: Int, value: Double, maxPage: Int?, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun BinderRow(
+    c: ContainerRow,
+    count: Int,
+    value: Double,
+    maxPage: Int?,
+    onOpen: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
     var menuOpen by remember { mutableStateOf(false) }
     SpaceCard(Modifier.fillMaxWidth()) {
         Box {
             Column(
                 Modifier.fillMaxWidth()
-                    .combinedClickable(onClick = {}, onLongClick = { menuOpen = true })
+                    .combinedClickable(onClick = onOpen, onLongClick = { menuOpen = true })
                     .padding(12.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
