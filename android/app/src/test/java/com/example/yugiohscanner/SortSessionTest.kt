@@ -92,6 +92,14 @@ class SortSessionTest {
         assertEquals(1 to 4, SortSession.startAt(1, 9, 0))
     }
 
+    @Test fun `ein Vertipper bei der Seite wird auf die letzte Seite gezogen`() {
+        // "9999" statt "999": ohne Obergrenze saesse die naechste Karte auf Seite 9999 und die
+        // Binder-Ansicht baute einen Pager ueber 9999 Seiten.
+        assertEquals(999 to 1, SortSession.startAt(9999, 1, 9))
+        assertEquals(999 to 9, SortSession.startAt(SortSession.MAX_PAGE, 9, 9))
+        assertEquals(998 to 1, SortSession.startAt(998, 1, 9))
+    }
+
     // --- Zuweisen und Vorruecken ---
 
     @Test fun `Zuweisen rueckt vor und merkt sich den vorherigen Standort`() {
@@ -201,6 +209,27 @@ class SortSessionTest {
         assertEquals(1 to 1, state.page to state.slot)
         assertTrue(state.copies.all { it.containerId == null })
         assertNull(SortSession.undo(state))
+    }
+
+    // --- Seite fuer den Rueckkanal (§6.6) ---
+
+    @Test fun `ohne Sitzung ist die Seite fuer den Rueckkanal die erste`() {
+        assertEquals(1, SortSession.lastPage(null))
+    }
+
+    @Test fun `ohne eingelegte Karte gilt die Seite, auf der der Modus steht`() {
+        val s = SortSession.start(listOf(copy("c1", containerId = "b1", page = 1, slot = 1)), "b1", 4)
+        assertEquals(1, s.page)
+        assertEquals(1, SortSession.lastPage(s))
+    }
+
+    @Test fun `nach der letzten Karte gilt deren Seite, nicht die schon vorgerueckte`() {
+        // Die vierte Karte eines 4er-Ordners blaettert das Fach auf Seite 2 vor -- aufschlagen
+        // soll die Binder-Ansicht trotzdem auf Seite 1, wo die Karte liegt.
+        var state = SortSession.start((1..4).map { copy("c$it") }, "b1", 4)
+        repeat(4) { i -> state = SortSession.assign(state, "c${i + 1}", "b1", 4)!!.first }
+        assertEquals(2, state.page)
+        assertEquals(1, SortSession.lastPage(state))
     }
 
     // --- Warteschlange ---

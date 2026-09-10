@@ -64,6 +64,15 @@ data class SortState(
 
 object SortSession {
 
+    /**
+     * Obergrenze fuer eine von Hand eingetippte Seite. Kein Ordner dieser Welt hat 1000 Seiten;
+     * ein Vertipper ("9999" statt "999") wuerde die naechste Karte dorthin einsortieren und die
+     * Binder-Ansicht danach einen Pager ueber 9999 Seiten aufbauen, durch den der Nutzer sich
+     * zurueckblaettern darf. Die Grenze wohnt hier und nicht im Textfeld -- das Textfeld begrenzt
+     * nur die Zeichenzahl, die Regel ist eine Rechnung.
+     */
+    const val MAX_PAGE = 999
+
     /** Startvorschlag: das erste freie Fach dieses Behaelters (Spec §6.1). */
     fun start(copies: List<CopyRow>, containerId: String, pockets: Int): SortState {
         val occupied = copies
@@ -78,12 +87,22 @@ object SortSession {
      * Der vom Nutzer im Start-Sheet eingetippte Startpunkt, zurechtgerueckt. Eigene Regel, kein
      * Nachbau: `SlotMath.next`/`firstFree` bekommen nie eine Eingabe von Hand. Die Fachzahl selbst
      * kommt aus `SlotMath.clampPockets`, damit ein Ordner ohne (oder mit unsinniger) Fachzahl auch
-     * hier als 4er-Ordner zaehlt.
+     * hier als 4er-Ordner zaehlt. Die Seite wird nach unten auf 1 und nach oben auf [MAX_PAGE]
+     * gezogen, das Fach auf das letzte der Seite.
      */
     fun startAt(page: Int, slot: Int, pockets: Int): Pair<Int, Int> {
         val p = SlotMath.clampPockets(pockets)
-        return page.coerceAtLeast(1) to slot.coerceIn(1, p)
+        return page.coerceIn(1, MAX_PAGE) to slot.coerceIn(1, p)
     }
+
+    /**
+     * Die Seite, auf der die Binder-Ansicht nach dem Verlassen aufschlaegt (Spec §6.6): die der
+     * zuletzt eingelegten Karte, sonst das Fach, auf dem der Modus gerade steht. Steht hier und
+     * nicht in der Oberflaeche, weil sie dort an zwei Stellen gebraucht wird -- eine Regel, zwei
+     * Abschriften ist genau der Fehler aus Spec B1.
+     */
+    fun lastPage(state: SortState?): Int =
+        state?.let { it.placed.lastOrNull()?.page ?: it.page } ?: 1
 
     /**
      * Weist das Exemplar dem aktuellen Fach zu und rueckt vor. Gibt den neuen Zustand und die

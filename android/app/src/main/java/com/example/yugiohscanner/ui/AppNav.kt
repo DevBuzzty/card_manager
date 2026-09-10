@@ -152,9 +152,13 @@ fun AppNav() {
                     containerId = backStackEntry.arguments?.getString("containerId").orEmpty(),
                     onDone = { page ->
                         // Erst den Rueckkanal setzen, dann zurueckgehen: der Eintrag, an dem der
-                        // Wert haengt, ist der der Binder-Ansicht und lebt weiter.
-                        nav.previousBackStackEntry
-                            ?.savedStateHandle?.set(Routes.SEITE_NACH_EINSORTIEREN, page)
+                        // Wert haengt, ist der der Binder-Ansicht und lebt weiter. Bei `null` --
+                        // Abbruch oder Ladefehler, es wurde nichts einsortiert -- bleibt der Kanal
+                        // unberuehrt, damit die Binder-Ansicht stehenbleibt, wo sie war.
+                        if (page != null) {
+                            nav.previousBackStackEntry
+                                ?.savedStateHandle?.set(Routes.SEITE_NACH_EINSORTIEREN, page)
+                        }
                         nav.popBackStack()
                     },
                 ) else CloudLoginScreen(prefs) { cloudReady = true }

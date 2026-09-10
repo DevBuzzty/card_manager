@@ -64,6 +64,7 @@ import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -103,10 +104,13 @@ import java.util.concurrent.TimeUnit
  * wiederherstellbar. Ein Modus, der sich nicht verlassen laesst, ist es nicht. Der Nutzer MUSS es
  * aber erfahren, weil seine physische Ablage der Datenbank dann voraus ist.
  *
- * [onDone] bekommt die zuletzt bearbeitete Seite -- die Binder-Ansicht schlaegt dort auf (§6.6).
+ * [onDone] bekommt die zuletzt bearbeitete Seite -- die Binder-Ansicht schlaegt dort auf (§6.6) --
+ * oder `null`, wenn nichts einsortiert wurde (Abbruch im Start-Sheet, Ladefehler, kein Ordner).
+ * `null` heisst ausdruecklich "kein Ergebnis": die Binder-Ansicht bleibt dann stehen, wo sie war,
+ * statt auf eine Seite zu blaettern, die der Nutzer nie bearbeitet hat.
  */
 @Composable
-fun SortIntoBinderScreen(containerId: String, onDone: (Int) -> Unit) {
+fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -165,7 +169,17 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int) -> Unit) {
             }
             queue = SortSession.settled(queue, pending)
             true
+        } catch (e: CancellationException) {
+            // Ein Abbruch ist KEIN Netzfehler und darf nicht als "wird nachgeholt" durchgehen --
+            // er beendet diese Coroutine, weiterreichen.
+            throw e
         } catch (e: Exception) {
+            // Die Meldung an den Nutzer nennt nur noch die Wirkung (die Ursache steht nicht fest).
+            // Damit sie wenigstens IRGENDWO steht, geht sie hier ins Log: ein dauerhaft kaputter
+            // Eintrag ("Behälter nicht gefunden") ist sonst im Nachhinein nicht von einem
+            // Netzhaenger zu unterscheiden -- und genau er laesst nach der Abbruchregel von
+            // flushQueue alle folgenden Eintraege verfallen.
+            Log.w("SortMode", "Standort schreiben fehlgeschlagen: ${p.copyId}", e)
             false
         }
     }
@@ -209,7 +223,15 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int) -> Unit) {
     fun onCard(passcode: String, setCodes: List<String>) {
         scope.launch {
             val s = state ?: return@launch
-            if (!running || flushing || losses != null) return@launch
+            if (!running) return@launch
+            if (flushing || losses != null) {
+                // Waehrend des Nachschreibens laeuft die Kamera weiter (das Overlay blitzt im
+                // Normalfall gar nicht erst auf). Wer jetzt noch eine Karte vorhaelt, sieht sie
+                // erkannt -- ohne diesen Schnipsel bekaeme er weder Zuweisung noch Hinweis, also
+                // genau den stillen Fehlschlag, den §6 ausschliesst.
+                snackbar.showSnackbar("Wird gerade beendet – Karte nicht zugewiesen")
+                return@launch
+            }
             val pick = PickCandidate.pick(
                 s.copies, passcode, setCodes,
                 Prefs.defaultEdition(context), Prefs.defaultCondition(context),
@@ -247,7 +269,11 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int) -> Unit) {
             // Verlassen darf nichts mehr dazukommen: onFinish liest die Warteschlange EINMAL,
             // nachdem die Sperre wieder frei ist, und eine danach eintreffende Ruecknahme stuende
             // in keiner Verlust-Meldung -- sie waere still verschwunden.
-            if (!running || flushing || losses != null) return@launch
+            if (!running) return@launch
+            if (flushing || losses != null) {
+                snackbar.showSnackbar("Wird gerade beendet – Rücknahme nicht ausgeführt")
+                return@launch
+            }
             val (next, placement) = SortSession.undo(s) ?: run {
                 snackbar.showSnackbar("Nichts zurückzunehmen")
                 return@launch
@@ -268,19 +294,22 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int) -> Unit) {
 
     // Fertig / Zurueck: EIN Durchgang durch die Warteschlange, dann entweder direkt hinaus oder --
     // wenn etwas offen blieb -- die Verlust-Meldung, die der Nutzer wegtippen MUSS.
+    //
+    // Es gibt hier bewusst KEINE Abkuerzung fuer die leere Warteschlange. Eine Zuweisung, die noch
+    // unterwegs ist, steht NOCH NICHT in `queue` -- sie steht nirgends. Wer bei leerer Schlange
+    // sofort hinausginge, verliesse die Komposition, `rememberCoroutineScope` braeche ihren Job ab,
+    // und die haengende Zuweisung staerbe zwischen ihren beiden Netzwegen: die Karte liegt im
+    // Ordner, hat keinen Standort, und es erscheint keine Verlust-Meldung. Das Warten am
+    // `writeLock` ist die einzige Stelle, an der eine laufende Zuweisung noch in die Verlust-Liste
+    // finden kann; `flushQueue` ist auf leerer Schlange ohnehin ein Nichts-Tun.
     fun onFinish() {
         if (flushing || losses != null) return
-        val letzteSeite = state?.let { s -> s.placed.lastOrNull()?.page ?: s.page } ?: 1
-        if (queue.isEmpty()) {
-            onDone(letzteSeite)
-            return
-        }
         flushing = true
         scope.launch {
             writeLock.withLock { flushQueue() }
             flushing = false
             val rest = SortSession.lossDescriptions(queue)
-            if (rest.isEmpty()) onDone(letzteSeite) else losses = rest
+            if (rest.isEmpty()) onDone(SortSession.lastPage(state)) else losses = rest
         }
     }
 
@@ -292,20 +321,27 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int) -> Unit) {
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = Primary)
                 }
-                state == null || container == null -> LoadFailed(error) { onDone(1) }
+                state == null || container == null -> LoadFailed(error) { onDone(null) }
                 container?.kind != "binder" ->
                     // Nur Ordner haben Faecher. Dieselbe Unterscheidung, die die Binder-Ansicht
                     // schon trifft (dort steht der Einstieg im Ordner-Zweig) -- hier als Riegel,
                     // damit ein Fach, das der Nutzer physisch fuellt, nicht ins Leere zeigt.
                     // Ob page/slot geschrieben werden, entscheidet weiterhin allein
                     // CollectionRepository.setCopyLocation.
-                    LoadFailed("Nur Ordner haben Fächer zum Einsortieren.") { onDone(1) }
+                    LoadFailed("Nur Ordner haben Fächer zum Einsortieren.") { onDone(null) }
+                // Hinter der Verlust-Meldung braucht es keine Kamera mehr: der Analysefaden wuerde
+                // sonst je Frame Detektor, Embedder und OCR durchlaufen, waehrend nichts davon noch
+                // irgendwohin fuehren kann. Der ruhige Hintergrund schliesst das Fenster und spart
+                // Akku; der Dialog selbst wird weiter unten gezeichnet.
+                losses != null -> Box(Modifier.fillMaxSize())
                 !running -> StartSheet(
                     binder = container!!.name,
                     page = state!!.page,
                     slot = state!!.slot,
                     pockets = pockets,
-                    onCancel = { onDone(state!!.page) },
+                    // Abbruch ist KEIN Ergebnis: die Binder-Ansicht soll dort stehenbleiben, wo der
+                    // Nutzer sie verlassen hat, statt auf den blossen Startvorschlag zu blaettern.
+                    onCancel = { onDone(null) },
                     onStart = { p, s ->
                         state = state!!.copy(page = p, slot = s)
                         running = true
@@ -322,7 +358,12 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int) -> Unit) {
                 )
             }
 
-            if (flushing) {
+            // Das Overlay haengt bewusst nicht an `flushing` allein: im Normalfall (nichts offen,
+            // nichts unterwegs) ist das Nachschreiben in einem Wimpernschlag durch und ein Overlay
+            // wuerde nur aufblitzen. GEWARTET wird trotzdem immer -- gezeigt wird es nur, wenn es
+            // etwas zu warten gibt. `writeLock.isLocked` wird beim Wechsel von `flushing`
+            // abgelesen; genau dann steht fest, ob eine Zuweisung noch unterwegs ist.
+            if (flushing && (queue.isNotEmpty() || writeLock.isLocked)) {
                 Box(
                     Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f))
                         // Ein blosser Hintergrund haelt in Compose KEINE Beruehrung auf -- die
@@ -333,7 +374,11 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int) -> Unit) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator(color = Primary)
                         Spacer(Modifier.height(12.dp))
-                        Text("Offene Zuweisungen werden gespeichert… (${queue.size})", color = OnSurface)
+                        Text(
+                            if (queue.isEmpty()) "Zuweisung wird noch gespeichert…"
+                            else "Offene Zuweisungen werden gespeichert… (${queue.size})",
+                            color = OnSurface,
+                        )
                     }
                 }
             }
@@ -353,7 +398,7 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int) -> Unit) {
             onDismissRequest = { },   // nur ueber den Knopf -- das darf nicht weggewischt werden
             confirmButton = {
                 TextButton(onClick = {
-                    val letzteSeite = state?.let { s -> s.placed.lastOrNull()?.page ?: s.page } ?: 1
+                    val letzteSeite = SortSession.lastPage(state)
                     losses = null
                     onDone(letzteSeite)
                 }) { Text("Verstanden") }
@@ -445,7 +490,9 @@ private fun StartSheet(
                     onClick = {
                         // Zurechtrueckung in SortSession.startAt, nicht hier -- eine leere Eingabe
                         // ist 0 und wird dort auf 1 gezogen, ein Fach jenseits der Seite auf das
-                        // letzte. Die Fachzahl selbst kommt aus SlotMath.clampPockets.
+                        // letzte, ein Vertipper jenseits von MAX_PAGE auf die letzte Seite. Die
+                        // Fachzahl selbst kommt aus SlotMath.clampPockets. `take(4)` unten begrenzt
+                        // nur die Zeichenzahl, es ist keine zweite Abschrift der Regel.
                         val (p, s) = SortSession.startAt(
                             pageText.toIntOrNull() ?: 0, slotText.toIntOrNull() ?: 0, pockets,
                         )
