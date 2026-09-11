@@ -22,7 +22,12 @@ private val SEGMENTS = listOf(
 // Five segments no longer fit un-scrolled (Spec §11 risk) -- ScrollableTabRow instead of a
 // plain Row, so nothing gets cut off on narrow screens.
 @Composable
-fun SammlungScreen(segment: String, onSegment: (String) -> Unit, onOpenSuche: () -> Unit) {
+fun SammlungScreen(
+    segment: String,
+    onSegment: (String) -> Unit,
+    onOpenSuche: () -> Unit,
+    onOpenBehaelter: (String) -> Unit,
+) {
     Column(Modifier.fillMaxSize()) {
         Text("Sammlung", style = MaterialTheme.typography.headlineSmall, color = OnSurface,
             modifier = Modifier.padding(start = 16.dp, top = 12.dp))
@@ -39,7 +44,7 @@ fun SammlungScreen(segment: String, onSegment: (String) -> Unit, onOpenSuche: ()
         }
         Box(Modifier.weight(1f)) {
             when (segment) {
-                "binder" -> BindersScreen()
+                "binder" -> BindersScreen(onOpenBehaelter)
                 "wunschliste" -> WishlistScreen()
                 "sets" -> SetCompletionScreen()
                 "decks" -> DecksScreen()

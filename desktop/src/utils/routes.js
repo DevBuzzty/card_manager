@@ -15,6 +15,14 @@ export const ROUTES = {
 
 const seg = (v, fallback) => encodeURIComponent(String(v ?? '').trim() || fallback);
 
+// Ein aufgeschlagener Behälter (Spec B2 §7.2). Unterhalb von ROUTES.binder, damit das Segment
+// „Binder" in SammlungLayout markiert bleibt (NavLink färbt auch Unterrouten ein). Die
+// container_id ist eine UUID, wird aber wie jedes andere Segment kodiert — sie kommt aus der
+// Datenbank und muss dort nicht für immer eine UUID bleiben.
+export function binderRoute(containerId) {
+  return `${ROUTES.binder}/${seg(containerId, 'Unknown')}`;
+}
+
 // A printing's 4-column key as a route. Every segment is encoded: a rarity can contain a slash
 // ("Ghost/Gold Rare") and would otherwise split into two path segments.
 export function cardRoute({ id, set_code, language, rarity } = {}) {

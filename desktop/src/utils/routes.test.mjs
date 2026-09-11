@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { ROUTES, cardRoute, printingFromParams } from './routes.js';
+import { ROUTES, binderRoute, cardRoute, printingFromParams } from './routes.js';
 
 assert.equal(ROUTES.start, '/start');
 assert.equal(ROUTES.karten, '/sammlung/karten');
@@ -17,4 +17,12 @@ assert.deepStrictEqual(printingFromParams(params), p);
 
 // Defaults for a card that has no printing yet.
 assert.equal(cardRoute({ id: '1' }), '/karte/1/Unknown/DE/Unknown');
+
+// Ein aufgeschlagener Behälter liegt UNTERHALB von /sammlung/binder — sonst verlöre das Segment
+// „Binder" in SammlungLayout seine Markierung.
+assert.equal(binderRoute('abc-123'), '/sammlung/binder/abc-123');
+assert.ok(binderRoute('abc-123').startsWith(ROUTES.binder + '/'));
+// Ein Segment mit Schrägstrich würde die Route sonst aufspalten.
+assert.ok(!binderRoute('a/b').includes('a/b'), 'der Schrägstrich im Segment muss kodiert sein');
+assert.equal(binderRoute(''), '/sammlung/binder/Unknown');
 console.log('routes test: PASS');

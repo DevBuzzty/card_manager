@@ -144,18 +144,22 @@ object CollectionRepository {
             throw NotMigratedException("Sammlung noch nicht migriert – bitte die Desktop-App einmal starten (Sync).")
     }
 
-    suspend fun addCopies(printing: CardRow, edition: String, condition: String, count: Int = 1) = withContext(Dispatchers.IO) {
+    // Returns the copy_ids just created (in insertion order) -- Spec B2 Task 5 needs the FIRST one
+    // to hand the Einsortier-Modus's reserved location to (ScanStagingScreen's "Alle uebernehmen").
+    suspend fun addCopies(printing: CardRow, edition: String, condition: String, count: Int = 1): List<String> = withContext(Dispatchers.IO) {
         ensureMigrated(printing)
         insertCopies(printing, edition, condition, count)
     }
 
     // POSTs the copy rows with no migration guard. Only safe right after the printing row
     // itself was just created (addPrinting) — there is nothing to double-count against yet.
-    private suspend fun insertCopies(printing: CardRow, edition: String, condition: String, count: Int = 1) = withContext(Dispatchers.IO) {
+    // Returns the generated copy_ids in insertion order (see addCopies above).
+    private suspend fun insertCopies(printing: CardRow, edition: String, condition: String, count: Int = 1): List<String> = withContext(Dispatchers.IO) {
+        val ids = List(maxOf(1, count)) { UUID.randomUUID().toString() }
         val arr = JSONArray()
-        repeat(maxOf(1, count)) {
+        for (copyId in ids) {
             arr.put(JSONObject()
-                .put("copy_id", UUID.randomUUID().toString())
+                .put("copy_id", copyId)
                 .put("card_id", printing.id).put("set_code", printing.setCode)
                 .put("language", printing.language).put("rarity", printing.rarity ?: "Unknown")
                 .put("edition", edition).put("condition", condition).put("deleted", false))
@@ -165,6 +169,7 @@ object CollectionRepository {
                 .addHeader("Content-Type", "application/json").addHeader("Prefer", "return=minimal")
                 .post(arr.toString().toRequestBody(SupabaseCloud.jsonMedia)).build()
         }.use { resp -> if (!resp.isSuccessful) throw RuntimeException("Exemplar anlegen fehlgeschlagen (${resp.code}): ${resp.body?.string()}") }
+        ids
     }
 
     suspend fun removeCopies(printing: CardRow, edition: String, condition: String, count: Int = 1): Int = withContext(Dispatchers.IO) {
@@ -312,7 +317,7 @@ object CollectionRepository {
     // Uses insertCopies (not addCopies) because the fresh row has quantity = 1 and no copies yet,
     // which would otherwise trip the NotMigratedException guard in ensureMigrated.
     suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double, language: String = "DE",
-                            edition: String, condition: String, count: Int = 1) = withContext(Dispatchers.IO) {
+                            edition: String, condition: String, count: Int = 1): List<String> = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("id", base.id).put("set_code", setCode).put("language", language)
             .put("name", base.name).put("type", base.type).put("desc", base.desc)
@@ -335,16 +340,15 @@ object CollectionRepository {
 
     // Autonomous scan flow: add `count` copies under the (validated) printing; the printing row is
     // created when missing. Un-deleting a tombstoned printing happens through the cloud trigger.
+    // Returns the created copy_ids (see insertCopies) -- Spec B2 Task 5's caller uses the first one
+    // to apply an Einsortier-Modus reservation via setCopyLocation.
     suspend fun addScanned(base: CardRow, setCode: String, rarity: String, language: String,
-                           edition: String, condition: String, count: Int = 1): String = withContext(Dispatchers.IO) {
+                           edition: String, condition: String, count: Int = 1): List<String> = withContext(Dispatchers.IO) {
         val existing = getRow(base.id, setCode, language, rarity)
-        val label = base.name ?: base.id
         if (existing != null) {
             addCopies(existing, edition, condition, count)
-            "$label → +$count× ($setCode)"
         } else {
             addPrinting(base, setCode, rarity, 0.0, language, edition, condition, count)
-            "$label hinzugefügt ($setCode)"
         }
     }
 

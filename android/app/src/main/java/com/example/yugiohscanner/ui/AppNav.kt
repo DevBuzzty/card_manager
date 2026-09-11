@@ -43,6 +43,21 @@ object Routes {
     const val SUCHE = "suche"
     const val SAMMLUNG = "sammlung/{segment}"
     fun sammlung(segment: String = "karten") = "sammlung/$segment"
+    // Spec B2 §7.2: EIN aufgeschlagener Behaelter. Bewusst unter "sammlung/", damit die untere
+    // Leiste die Sammlung weiter als gewaehlt zeigt (NavItem vergleicht das erste Segment) -- die
+    // Seite gehoert dorthin, sie wird aus dem Binder-Reiter heraus geoeffnet. Drei Segmente, der
+    // Reiter-Route "sammlung/{segment}" mit zweien kommt sie deshalb nicht in die Quere.
+    const val BEHAELTER = "sammlung/binder/{containerId}"
+    fun behaelter(containerId: String) = "sammlung/binder/$containerId"
+    // Spec B2 §6: der Einsortier-Modus, eine Ebene unter dem aufgeschlagenen Ordner. Eigene Route
+    // statt eines Zustands IN der Binder-Ansicht, damit die Kamera mit dem Zurueckgehen sicher
+    // abgebaut wird und der Ordner darunter nicht die ganze Zeit mitlebt.
+    const val EINSORTIEREN = "sammlung/binder/{containerId}/einsortieren"
+    fun einsortieren(containerId: String) = "sammlung/binder/$containerId/einsortieren"
+    // Der Rueckkanal des Einsortier-Modus: die zuletzt bearbeitete Seite, die die Binder-Ansicht
+    // beim Zurueckkommen aufschlaegt (§6.6). Ueber den SavedStateHandle des VORHERIGEN Eintrags --
+    // ein Rueckgabewert ueber den Navigationsstapel, wie ihn navigation-compose vorsieht.
+    const val SEITE_NACH_EINSORTIEREN = "einsortiert_seite"
 }
 
 // Top-level destinations: the bottom bar switches between them and each keeps its own back stack.
@@ -77,8 +92,9 @@ fun AppNav() {
 
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
-    // The camera owns the whole screen; every other destination keeps the bar.
-    val showBar = route != Routes.SCAN
+    // The camera owns the whole screen; every other destination keeps the bar. Der Einsortier-Modus
+    // (Spec B2 §6) ist ebenfalls eine Kamera und bekommt denselben ganzen Schirm.
+    val showBar = route != Routes.SCAN && route != Routes.EINSORTIEREN
 
     Scaffold(bottomBar = { if (showBar) AppBottomBar(nav) }) { padding ->
         NavHost(
@@ -105,6 +121,46 @@ fun AppNav() {
                     segment = backStackEntry.arguments?.getString("segment") ?: "karten",
                     onSegment = { nav.navigate(Routes.sammlung(it)) { popUpTo(Routes.SAMMLUNG) { inclusive = true } } },
                     onOpenSuche = { nav.navigate(Routes.SUCHE) },
+                    onOpenBehaelter = { nav.navigate(Routes.behaelter(it)) },
+                ) else CloudLoginScreen(prefs) { cloudReady = true }
+            }
+            composable(
+                Routes.BEHAELTER,
+                arguments = listOf(navArgument("containerId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val id = backStackEntry.arguments?.getString("containerId").orEmpty()
+                // Die Seite, auf der der Einsortier-Modus aufgehoert hat -- null, solange keiner
+                // gelaufen ist. Als Fluss gelesen, damit die Ansicht auch dann davon erfaehrt,
+                // wenn sie beim Zurueckkommen gar nicht neu zusammengesetzt wird.
+                val seite by backStackEntry.savedStateHandle
+                    .getStateFlow<Int?>(Routes.SEITE_NACH_EINSORTIEREN, null).collectAsState()
+                if (cloudReady) BinderPageScreen(
+                    containerId = id,
+                    onBack = { nav.popBackStack() },
+                    onEinsortieren = { nav.navigate(Routes.einsortieren(id)) },
+                    seiteNachEinsortieren = seite,
+                    onSeiteAufgeschlagen = {
+                        backStackEntry.savedStateHandle[Routes.SEITE_NACH_EINSORTIEREN] = null
+                    },
+                ) else CloudLoginScreen(prefs) { cloudReady = true }
+            }
+            composable(
+                Routes.EINSORTIEREN,
+                arguments = listOf(navArgument("containerId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                if (cloudReady) SortIntoBinderScreen(
+                    containerId = backStackEntry.arguments?.getString("containerId").orEmpty(),
+                    onDone = { page ->
+                        // Erst den Rueckkanal setzen, dann zurueckgehen: der Eintrag, an dem der
+                        // Wert haengt, ist der der Binder-Ansicht und lebt weiter. Bei `null` --
+                        // Abbruch oder Ladefehler, es wurde nichts einsortiert -- bleibt der Kanal
+                        // unberuehrt, damit die Binder-Ansicht stehenbleibt, wo sie war.
+                        if (page != null) {
+                            nav.previousBackStackEntry
+                                ?.savedStateHandle?.set(Routes.SEITE_NACH_EINSORTIEREN, page)
+                        }
+                        nav.popBackStack()
+                    },
                 ) else CloudLoginScreen(prefs) { cloudReady = true }
             }
             composable(Routes.SCAN) {

@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.yugiohscanner.cloud.CONTAINER_KIND_LABELS
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.ContainerRow
 import com.example.yugiohscanner.cloud.ContainersRepository
@@ -30,8 +31,6 @@ import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import kotlinx.coroutines.launch
-
-private val KIND_LABELS = mapOf("binder" to "Ordner", "box" to "Box", "deckbox" to "Deckbox")
 
 /**
  * Spec B1 §10.2: das Gegenstueck zu `desktop/src/components/CopySheet.jsx` -- die EINZIGE Stelle
@@ -295,7 +294,7 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
 @Composable
 private fun ContainerPicker(containers: List<ContainerRow>, current: ContainerRow?, onSelect: (ContainerRow?) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    val label = current?.let { "${it.name} (${KIND_LABELS[it.kind] ?: it.kind})" } ?: "Kein Behälter"
+    val label = current?.let { "${it.name} (${CONTAINER_KIND_LABELS[it.kind] ?: it.kind})" } ?: "Kein Behälter"
 
     Box {
         Row(
@@ -309,7 +308,7 @@ private fun ContainerPicker(containers: List<ContainerRow>, current: ContainerRo
             DropdownMenuItem(text = { Text("Kein Behälter") }, onClick = { onSelect(null); expanded = false })
             containers.forEach { c ->
                 DropdownMenuItem(
-                    text = { Text("${c.name} (${KIND_LABELS[c.kind] ?: c.kind})") },
+                    text = { Text("${c.name} (${CONTAINER_KIND_LABELS[c.kind] ?: c.kind})") },
                     onClick = { onSelect(c); expanded = false },
                 )
             }

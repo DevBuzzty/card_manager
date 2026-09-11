@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.yugiohscanner.cloud.CONTAINER_KIND_LABELS
+import com.example.yugiohscanner.cloud.CONTAINER_KIND_OPTIONS
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.ContainerRow
@@ -30,6 +32,7 @@ import com.example.yugiohscanner.cloud.ContainersRepository
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.BinderGrid
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Background
@@ -45,10 +48,7 @@ import com.example.yugiohscanner.ui.theme.TypeMonster
 import com.example.yugiohscanner.ui.theme.TypeSpell
 import kotlinx.coroutines.launch
 import java.util.UUID
-import kotlin.math.ceil
 
-private val KIND_OPTIONS = listOf("binder" to "Ordner", "box" to "Box", "deckbox" to "Deckbox")
-private val KIND_LABELS = KIND_OPTIONS.toMap()
 private val POCKET_OPTIONS = listOf(4, 9, 12)
 // Same hexes as the desktop swatch (Binders.jsx COLOR_PRESETS) -- all already in the theme palette.
 private val COLOR_PRESETS = listOf(Primary, Gold, Good, ErrorColor, RarityRare, RaritySuper, TypeMonster, TypeSpell)
@@ -69,8 +69,10 @@ private data class BinderForm(
 
 // Spec B1 §7.1, Android side: counter for un-sorted copies, container list with occupancy and
 // value, create/rename/delete. Reordering by long-press is explicitly NOT part of B1.
+// Spec B2 §7.2: ein Tipp auf einen Behaelter schlaegt ihn auf (BinderPageScreen); der Langdruck
+// bleibt das Menue aus B1.
 @Composable
-fun BindersScreen() {
+fun BindersScreen(onOpen: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val containers = remember { mutableStateListOf<ContainerRow>() }
     val unsortedCopies = remember { mutableStateListOf<CopyRow>() }
@@ -132,9 +134,17 @@ fun BindersScreen() {
     fun countFor(id: String) = copiesByContainer[id]?.size ?: 0
     fun valueFor(id: String) = copiesByContainer[id]?.sumOf { c -> (cardsByKey[c.printingKey()]?.price ?: 0.0) * Valuation.factor(c.condition) } ?: 0.0
     // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nicht ceil(Anzahl/Faecher) --
-    // null, wenn kein Exemplar dieses Behaelters eine Seite traegt (BinderRow faellt dann auf
-    // ceil zurueck). Gleiche Regel wie listContainers' max_page am Desktop (copies.cjs).
-    fun maxPageFor(id: String): Int? = copiesByContainer[id]?.mapNotNull { it.page }?.maxOrNull()
+    // null, wenn kein Exemplar dieses Behaelters in einem darstellbaren Fach liegt (BinderRow
+    // zeigt dann die 1). Gleiche Regel wie listContainers' max_page am Desktop
+    // (copies.cjs). Die reine Rechnung steckt in BinderGrid.maxPlacedPage; hier bleibt nur das
+    // Nachschlagen nach id.
+    //
+    // Ueber BinderGrid und nicht direkt ueber SlotMath.maxOccupiedPage (Abschluss-Fixwelle,
+    // Minor 3): sonst zaehlte diese Liste ein Exemplar auf einem Fach jenseits der heutigen
+    // Ordnergroesse mit, das Raster aber nicht -- die Liste sagte "7 Seiten", aufgeschlagen
+    // stuende "Seite 1 von 3" und die Karte laege unter "Ohne Fach".
+    fun maxPageFor(c: ContainerRow): Int? =
+        BinderGrid.maxPlacedPage(copiesByContainer[c.containerId] ?: emptyList(), c.pocketsPerPage ?: 0)
 
     fun submitDialog() {
         val form = dialog ?: return
@@ -272,7 +282,8 @@ fun BindersScreen() {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(containers, key = { it.containerId }) { c ->
                         BinderRow(
-                            c, count = countFor(c.containerId), value = valueFor(c.containerId), maxPage = maxPageFor(c.containerId),
+                            c, count = countFor(c.containerId), value = valueFor(c.containerId), maxPage = maxPageFor(c),
+                            onOpen = { onOpen(c.containerId) },
                             onEdit = {
                                 dialog = BinderForm(
                                     containerId = c.containerId, name = c.name, kind = c.kind,
@@ -307,13 +318,21 @@ fun BindersScreen() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BinderRow(c: ContainerRow, count: Int, value: Double, maxPage: Int?, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun BinderRow(
+    c: ContainerRow,
+    count: Int,
+    value: Double,
+    maxPage: Int?,
+    onOpen: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
     var menuOpen by remember { mutableStateOf(false) }
     SpaceCard(Modifier.fillMaxWidth()) {
         Box {
             Column(
                 Modifier.fillMaxWidth()
-                    .combinedClickable(onClick = {}, onLongClick = { menuOpen = true })
+                    .combinedClickable(onClick = onOpen, onLongClick = { menuOpen = true })
                     .padding(12.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -325,14 +344,19 @@ private fun BinderRow(c: ContainerRow, count: Int, value: Double, maxPage: Int?,
                     )
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(KIND_LABELS[c.kind] ?: c.kind, color = Muted, style = MaterialTheme.typography.labelSmall)
+                Text(CONTAINER_KIND_LABELS[c.kind] ?: c.kind, color = Muted, style = MaterialTheme.typography.labelSmall)
                 val pockets = c.pocketsPerPage
                 val occupancy = buildString {
                     append(count); append(if (count == 1) " Exemplar" else " Exemplare")
                     if (c.kind == "binder" && pockets != null && pockets > 0) {
-                        // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige -- ceil bleibt
-                        // nur der Rueckfall, wenn kein Exemplar eine Seite traegt (maxPage null).
-                        append(" · "); append(maxPage ?: ceil(count.toDouble() / pockets).toInt()); append(" Seiten")
+                        // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nie
+                        // ceil(Anzahl/Faecher). Dieselbe Zahl, die der aufgeschlagene Ordner als
+                        // "von N" zeigt: maxPageFor rechnet ueber dieselbe Fachpruefung wie
+                        // BinderGrid.isPlaced, und die 1 bei null ist BinderGrid.pageCount
+                        // Mindestwert -- ein leerer Ordner hat eine leere erste Seite zum
+                        // Blaettern. Wortgleich am Desktop: Binders.jsx.
+                        val seiten = maxPage ?: 1
+                        append(" · "); append(seiten); append(if (seiten == 1) " Seite" else " Seiten")
                     }
                 }
                 Text(occupancy, color = Muted, style = MaterialTheme.typography.bodySmall)
@@ -369,7 +393,7 @@ private fun BinderDialog(
                     Text("Art", style = MaterialTheme.typography.labelSmall, color = Muted)
                     Spacer(Modifier.height(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        KIND_OPTIONS.forEach { (id, label) ->
+                        CONTAINER_KIND_OPTIONS.forEach { (id, label) ->
                             FilterChip(selected = form.kind == id, onClick = { onChange(form.copy(kind = id)) }, label = { Text(label) })
                         }
                     }

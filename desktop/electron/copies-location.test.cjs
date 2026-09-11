@@ -331,6 +331,18 @@ test('listAllCopies traegt die Werte DES EXEMPLARS, nicht der Karte', () => {
   assert.equal(row.created_at, '2020-01-01 00:00:00', 'created_at muss das des Exemplars sein, nicht der Karte');
 });
 
+test('listAllCopies traegt Edition und Zustand mit (Spec B2 Task 8)', () => {
+  // Die Binder-Ansicht rechnet daraus den Wert einer Ordnerseite (Preis x Zustandsfaktor) und
+  // reicht dieselbe Zeile an CopySheet weiter, das beide Felder im Kopf zeigt. Fehlten sie,
+  // waere der Faktor stumm 1 und der Sheet-Kopf leer.
+  const db = freshDb();
+  addCopy(db, 'k1');
+  db.prepare(`UPDATE card_copies SET edition = 'first', condition = 'LP' WHERE copy_id = 'k1'`).run();
+  const [row] = copies.listAllCopies(db);
+  assert.equal(row.edition, 'first');
+  assert.equal(row.condition, 'LP');
+});
+
 // --- Fix-Durchlauf Abschlussreview: saveContainer raeumt Seite/Fach beim Wechsel weg von binder (Befund 2) ---
 
 test('saveContainer raeumt Seite und Fach aller Exemplare, wenn die Art von binder auf box wechselt', () => {
@@ -372,4 +384,68 @@ test('listContainers liefert keine belegte Seite, wenn kein Exemplar eine Seite 
   addContainer(db, 'c1', 'Leerer Ordner', 'binder', 9);
   const [row] = copies.listContainers(db);
   assert.equal(row.max_page, null);
+});
+
+// --- Abschluss-Fixwelle Minor 3: max_page rechnet ueber dieselbe Fachpruefung wie
+// binderGrid.js#isPlaced, damit Liste und aufgeschlagener Ordner dieselbe Seitenzahl zeigen ---
+
+test('listContainers zaehlt ein Exemplar ohne Fach nicht als Seite', () => {
+  // Szenario 1 des Abschlussreviews: 12 Exemplare im 9er-Ordner, keines in einem Fach (alle ueber
+  // "Aus Fach nehmen" abgelegt). Frueher meldete die Liste ueber den ceil-Rueckfall "2 Seiten",
+  // waehrend der Ordner "Seite 1 von 1" zeigte und alle zwoelf unter "Ohne Fach" standen.
+  const db = freshDb();
+  addContainer(db, 'c1', 'Ordner', 'binder', 9);
+  for (let i = 0; i < 12; i++) addCopy(db, `k${i}`, { container_id: 'c1' });
+  const [row] = copies.listContainers(db);
+  assert.equal(row.copies_count, 12);
+  assert.equal(row.max_page, null);
+});
+
+test('listContainers zaehlt ein Fach jenseits der Ordnergroesse nicht mit', () => {
+  // Szenario 2: Ordner von 12 auf 9 Faecher umgestellt, ein Exemplar steht noch auf S7/F11.
+  // Das Raster kann Fach 11 nicht zeigen (binderGrid.js#isPlaced), also zaehlt es auch hier nicht:
+  // die hoechste sichtbare Seite ist die 3.
+  const db = freshDb();
+  addContainer(db, 'c1', 'Ordner', 'binder', 9);
+  addCopy(db, 'weit', { container_id: 'c1', page: 7, slot: 11 });
+  addCopy(db, 'nah', { container_id: 'c1', page: 3, slot: 2 });
+  const [row] = copies.listContainers(db);
+  assert.equal(row.max_page, 3);
+});
+
+test('listContainers meldet gar keine Seite, wenn nur Faecher jenseits der Ordnergroesse belegt sind', () => {
+  const db = freshDb();
+  addContainer(db, 'c1', 'Ordner', 'binder', 9);
+  addCopy(db, 'weit', { container_id: 'c1', page: 7, slot: 11 });
+  const [row] = copies.listContainers(db);
+  assert.equal(row.max_page, null, 'die einzige Karte liegt im Ordner unter "Ohne Fach"');
+});
+
+test('listContainers behandelt einen Ordner ohne Fachzahl wie einen 4er-Ordner', () => {
+  // slotMath.js#clampPockets: alles, was nicht > 0 ist (auch NULL), gilt als 4er-Ordner. Eine
+  // solche Zeile kann aus der Cloud stammen -- saveContainer selbst laesst sie nicht zu.
+  const db = freshDb();
+  addContainer(db, 'c1', 'Ordner ohne Fachzahl', 'binder', null);
+  addCopy(db, 'drin', { container_id: 'c1', page: 2, slot: 4 });
+  addCopy(db, 'draussen', { container_id: 'c1', page: 5, slot: 5 });
+  const [row] = copies.listContainers(db);
+  assert.equal(row.max_page, 2);
+});
+
+test('listContainers laesst Seite 0 und Fach 0 nicht als belegt gelten', () => {
+  const db = freshDb();
+  addContainer(db, 'c1', 'Ordner', 'binder', 9);
+  addCopy(db, 'k0', { container_id: 'c1', page: 0, slot: 1 });
+  addCopy(db, 'k1', { container_id: 'c1', page: 1, slot: 0 });
+  const [row] = copies.listContainers(db);
+  assert.equal(row.max_page, null);
+});
+
+test('listContainers zaehlt nur lebende Exemplare als Seite', () => {
+  const db = freshDb();
+  addContainer(db, 'c1', 'Ordner', 'binder', 9);
+  addCopy(db, 'lebt', { container_id: 'c1', page: 2, slot: 1 });
+  addCopy(db, 'weg', { container_id: 'c1', page: 9, slot: 1, deleted: 1 });
+  const [row] = copies.listContainers(db);
+  assert.equal(row.max_page, 2);
 });

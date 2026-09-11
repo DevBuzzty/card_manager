@@ -4,14 +4,9 @@ import { Plus, Trash2, Pencil, ChevronUp, ChevronDown, X, PackageOpen, AlertCirc
 import clsx from 'clsx';
 import CustomSelect from './CustomSelect';
 import { fmtEUR } from '../utils/format';
-import { cardRoute } from '../utils/routes';
+import { binderRoute, cardRoute } from '../utils/routes';
+import { KIND_LABELS, KIND_OPTIONS } from '../utils/containerKinds';
 
-const KIND_OPTIONS = [
-  { value: 'binder', label: 'Ordner' },
-  { value: 'box', label: 'Box' },
-  { value: 'deckbox', label: 'Deckbox' },
-];
-const KIND_LABELS = { binder: 'Ordner', box: 'Box', deckbox: 'Deckbox' };
 const POCKET_OPTIONS = [4, 9, 12].map(p => ({ value: String(p), label: `${p} Fächer pro Seite` }));
 // Sourced from tailwind.config.js -- no new colors, just reused hexes as a swatch picker.
 const COLOR_PRESETS = ['#9D00FF', '#F5C542', '#39d98a', '#ff5d6c', '#6db4e8', '#e8c76d', '#E8944A', '#1DA891'];
@@ -246,7 +241,12 @@ export default function Binders() {
               <div
                 key={c.container_id}
                 onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, container: c }); }}
-                className="bg-obsidian-700 border border-line rounded-xl p-4 flex flex-col gap-2 hover:border-space-violet/40 transition-colors"
+                // Spec B2 §7.2: die Karte ist der Einstieg in den aufgeschlagenen Behälter. Die
+                // beiden Pfeilknöpfe darin halten das Klickereignis auf (siehe unten), sonst
+                // öffnete jedes Umsortieren zusätzlich die Ansicht.
+                onClick={() => navigate(binderRoute(c.container_id))}
+                title={`„${c.name}“ öffnen`}
+                className="bg-obsidian-700 border border-line rounded-xl p-4 flex flex-col gap-2 hover:border-space-violet/40 transition-colors cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
@@ -254,11 +254,11 @@ export default function Binders() {
                     <span className="font-display font-medium text-ink truncate">{c.name}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button type="button" onClick={() => move(i, -1)} disabled={i === 0}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); move(i, -1); }} disabled={i === 0}
                             title="Nach oben" className="p-1 text-ink-faint hover:text-ink disabled:opacity-30 disabled:cursor-default">
                       <ChevronUp className="w-4 h-4" />
                     </button>
-                    <button type="button" onClick={() => move(i, 1)} disabled={i === containers.length - 1}
+                    <button type="button" onClick={(e) => { e.stopPropagation(); move(i, 1); }} disabled={i === containers.length - 1}
                             title="Nach unten" className="p-1 text-ink-faint hover:text-ink disabled:opacity-30 disabled:cursor-default">
                       <ChevronDown className="w-4 h-4" />
                     </button>
@@ -267,10 +267,13 @@ export default function Binders() {
                 <span className="text-xs text-ink-muted">{KIND_LABELS[c.kind] || c.kind}</span>
                 <span className="text-sm text-ink-muted">
                   {c.copies_count} {c.copies_count === 1 ? 'Exemplar' : 'Exemplare'}
-                  {/* Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nicht ceil(Anzahl/Faecher) --
-                      ceil bleibt nur der Rueckfall, wenn kein Exemplar eine Seite traegt (max_page ist dann null). */}
+                  {/* Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nie ceil(Anzahl/Faecher).
+                      Dieselbe Zahl, die der aufgeschlagene Ordner als "von N" zeigt: copies.cjs#listContainers
+                      rechnet max_page ueber dieselbe Fachpruefung wie binderGrid.js#isPlaced, und die 1 bei
+                      NULL ist binderGrid.js#pageCounts Mindestwert -- ein leerer Ordner hat eine leere erste
+                      Seite zum Blaettern. */}
                   {c.kind === 'binder' && c.pockets_per_page
-                    ? ` · ${c.max_page ?? Math.ceil((c.copies_count || 0) / c.pockets_per_page)} Seiten`
+                    ? ` · ${c.max_page ?? 1} ${(c.max_page ?? 1) === 1 ? 'Seite' : 'Seiten'}`
                     : ''}
                 </span>
                 <span className="text-sm font-mono text-space-violet">{fmtEUR(c.value)}</span>

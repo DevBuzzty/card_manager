@@ -15,6 +15,18 @@ data class ContainerRow(
     val pocketsPerPage: Int?, val color: String?, val sortOrder: Int,
 )
 
+/**
+ * Die nutzersichtbaren Bezeichnungen der Behaelterarten -- EINE Quelle fuer alle Stellen am Handy,
+ * die sie zeigen (`BindersScreen` als Auswahl beim Anlegen, `CopySheet` und `BinderPageScreen` als
+ * Anzeige). Die Reihenfolge ist die Reihenfolge der Auswahl.
+ *
+ * Der Desktop fuehrt dieselbe Zuordnung in seiner eigenen Sprache -- das ist die Sprachgrenze;
+ * INNERHALB einer Sprache steht sie nur hier. Wo drueben, steht hier absichtlich nicht: eine
+ * Dateiliste veraltet, sobald eine Ansicht dazukommt, und genau das ist ihr schon passiert.
+ */
+val CONTAINER_KIND_OPTIONS = listOf("binder" to "Ordner", "box" to "Box", "deckbox" to "Deckbox")
+val CONTAINER_KIND_LABELS = CONTAINER_KIND_OPTIONS.toMap()
+
 private val CONTAINER_KINDS = setOf("binder", "box", "deckbox")
 private val BINDER_POCKETS = setOf(4, 9, 12)
 
@@ -55,9 +67,14 @@ object ContainersRepository {
         // Umstaenden noch Seite/Fach aus der Zeit, als er ein Ordner war -- setCopyLocation raeumt
         // nur EIN einzelnes Exemplar in dem Moment, in dem es geschrieben wird, nicht die anderen.
         // VOR dem Upsert, gleiche Reihenfolge-Logik wie delete() (erst raeumen, dann schreiben):
-        // bricht der zweite Aufruf ab, bleiben hoechstens ueberzaehlige Faecher an einer Box
-        // stehen, nie umgekehrt ein Ordner-Exemplar ohne sein Fach. Mirrors saveContainer() in
-        // desktop/electron/copies.cjs.
+        // schlaegt der Upsert NACH erfolgreich geraeumten Faechern fehl, bleibt der Behaelter in
+        // der Datenbank noch ein Ordner, aber seine Exemplare haben Seite und Fach schon
+        // verloren -- nie umgekehrt ein Exemplar mit Fach an einem bereits umgestellten Behaelter.
+        // Gespiegelt wird hier die REGEL aus saveContainer() in desktop/electron/copies.cjs (Wechsel
+        // weg von binder raeumt Seite/Fach aller Exemplare), nicht diese Reihenfolge: der Desktop
+        // schreibt zuerst UPDATE containers und erst danach UPDATE card_copies, aber beides in einer
+        // einzigen db.transaction() -- er braucht die Vorher-nachher-Absicherung hier nicht, weil es
+        // dort keinen sichtbaren Teilzustand zwischen den beiden Schreibvorgaengen geben kann.
         if (pockets == null) {
             val clearUrl = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
                 .addQueryParameter("container_id", "eq.${row.containerId}")
