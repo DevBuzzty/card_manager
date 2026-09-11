@@ -33,6 +33,8 @@ import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.BinderGrid
+import com.example.yugiohscanner.ml.ReloadScope
+import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Background
@@ -46,6 +48,8 @@ import com.example.yugiohscanner.ui.theme.RarityRare
 import com.example.yugiohscanner.ui.theme.RaritySuper
 import com.example.yugiohscanner.ui.theme.TypeMonster
 import com.example.yugiohscanner.ui.theme.TypeSpell
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -75,7 +79,6 @@ private data class BinderForm(
 fun BindersScreen(onOpen: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val containers = remember { mutableStateListOf<ContainerRow>() }
-    val unsortedCopies = remember { mutableStateListOf<CopyRow>() }
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
     var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -98,15 +101,58 @@ fun BindersScreen(onOpen: (String) -> Unit) {
 
     var pendingDelete by remember { mutableStateOf<ContainerRow?>(null) }
 
-    suspend fun reload() {
-        val c = ContainersRepository.list()
-        val u = CollectionRepository.listUnsortedCopies()
-        val cd = CollectionRepository.loadCards()
-        val cp = CollectionRepository.loadCopies()
-        containers.clear(); containers.addAll(c)
-        unsortedCopies.clear(); unsortedCopies.addAll(u)
-        cards = cd
-        copies = cp
+    // MESSUNG (Zweig perf/messung, NICHT mergen): wo gehen die Sekunden hin?
+    //
+    // Die drei Aufrufe haengen nicht voneinander ab und laufen deshalb NEBENLAEUFIG -- gewartet
+    // wird auf den laengsten, nicht auf die Summe. Der vierte Aufruf (listUnsortedCopies) ist ganz
+    // weg: `UnsortedCopies.from(cp)` leitet dieselbe Liste in derselben Reihenfolge aus `cp` ab.
+    //
+    // `coroutineScope` haelt die Fehlerbehandlung genau so, wie sie vorher war: schlaegt EINER der
+    // Aufrufe fehl, brechen die anderen ab und der Block wirft an den Aufrufer weiter, der `error`
+    // setzt. Gesetzt wird erst, wenn ALLE da sind -- kein halb gefuellter Bildschirm, der wie
+    // "leer" aussieht (in Spec B1 zweimal ein Befund).
+    suspend fun reload(umfang: ReloadScope.Scope = ReloadScope.Scope.EVERYTHING) {
+        val t0 = System.currentTimeMillis()
+        if (umfang == ReloadScope.Scope.CONTAINERS_ONLY) {
+            val c = ContainersRepository.list()
+            android.util.Log.w("PERF", "reload nur-behaelter gesamt=${System.currentTimeMillis() - t0}ms (${c.size})")
+            containers.clear(); containers.addAll(c)
+            return
+        }
+        var msContainer = 0L
+        var msCards = 0L
+        var msCopies = 0L
+        coroutineScope {
+            val dContainers = async {
+                val t = System.currentTimeMillis()
+                ContainersRepository.list().also { msContainer = System.currentTimeMillis() - t }
+            }
+            val dCards = async {
+                val t = System.currentTimeMillis()
+                CollectionRepository.loadCards().also { msCards = System.currentTimeMillis() - t }
+            }
+            val dCopies = async {
+                val t = System.currentTimeMillis()
+                CollectionRepository.loadCopies().also { msCopies = System.currentTimeMillis() - t }
+            }
+            val c = dContainers.await()
+            val cd = dCards.await()
+            val cp = dCopies.await()
+            // Dieselbe Rechnung, die die Ansicht gleich per remember(copies) macht -- hier nur, um
+            // messbar zu machen, was der weggefallene Netzaufruf jetzt kostet.
+            val tAbleiten = System.currentTimeMillis()
+            val u = UnsortedCopies.from(cp)
+            val msUnsorted = System.currentTimeMillis() - tAbleiten
+            android.util.Log.w(
+                "PERF",
+                "reload gesamt=${System.currentTimeMillis() - t0}ms | container=${msContainer}ms(${c.size}) " +
+                    "karten=${msCards}ms(${cd.size}) exemplare=${msCopies}ms(${cp.size}) " +
+                    "unsortiert=${msUnsorted}ms(${u.size}, abgeleitet)",
+            )
+            containers.clear(); containers.addAll(c)
+            cards = cd
+            copies = cp
+        }
     }
     LaunchedEffect(Unit) {
         try { reload(); error = null }
@@ -130,6 +176,9 @@ fun BindersScreen(onOpen: (String) -> Unit) {
     }
 
     val cardsByKey = remember(cards) { cards.associateBy { it.printingKey() } }
+    // ABGELEITET, nicht zweiter Zustand: dieselben Zeilen, aus denen auch die Behaelter gefuellt
+    // werden. Die Reihenfolge (aeltestes Exemplar zuerst) steckt in UnsortedCopies, nicht hier.
+    val unsortedCopies = remember(copies) { UnsortedCopies.from(copies) }
     val copiesByContainer = remember(copies) { copies.filter { it.containerId != null }.groupBy { it.containerId!! } }
     fun countFor(id: String) = copiesByContainer[id]?.size ?: 0
     fun valueFor(id: String) = copiesByContainer[id]?.sumOf { c -> (cardsByKey[c.printingKey()]?.price ?: 0.0) * Valuation.factor(c.condition) } ?: 0.0
@@ -156,7 +205,14 @@ fun BindersScreen(onOpen: (String) -> Unit) {
         // Die Einschraenkung der EINGABEN (Faecher-Auswahl nur bei binder, nur 4/9/12) bleibt in
         // der Oberflaeche weiter unten (BinderDialog).
         val pockets = if (form.kind == "binder") form.pocketsPerPage else null
+        // Wie viel danach neu zu laden ist, entscheidet NICHT diese Oberflaeche: ReloadScope kennt
+        // die Regel und begruendet sie Fall fuer Fall (Art geaendert -> alles, sonst nur die
+        // Behaelter). Die bisherige Art muss VOR dem Speichern abgelesen werden -- danach steht in
+        // `containers` die neue.
+        val vorherigeArt = form.containerId?.let { id -> containers.find { it.containerId == id }?.kind }
+        val umfang = ReloadScope.afterSave(vorherigeArt, form.kind)
 
+        val tSpeichern = System.currentTimeMillis()
         savingRef[0] = true
         saving = true
         dialogError = null
@@ -169,8 +225,10 @@ fun BindersScreen(onOpen: (String) -> Unit) {
                         color = form.color, sortOrder = form.sortOrder,
                     )
                 )
+                val tSave = System.currentTimeMillis()
                 dialog = null
-                reload()
+                reload(umfang)
+                android.util.Log.w("PERF", "anlegen bis sichtbar=${System.currentTimeMillis() - tSpeichern}ms (davon schreiben=${tSave - tSpeichern}ms, nachladen=$umfang)")
                 error = null
             } catch (e: Exception) {
                 dialogError = e.message ?: "Speichern fehlgeschlagen."
@@ -195,7 +253,7 @@ fun BindersScreen(onOpen: (String) -> Unit) {
                 deleteError = e.message ?: "Löschen fehlgeschlagen"
             }
             try {
-                reload()
+                reload(ReloadScope.afterDelete())
                 error = deleteError
             } catch (e: Exception) {
                 error = deleteError ?: (e.message ?: "Laden fehlgeschlagen")

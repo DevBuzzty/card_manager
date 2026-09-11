@@ -49,6 +49,7 @@ import com.example.yugiohscanner.cloud.SetsRepository
 import com.example.yugiohscanner.cloud.Snapshot
 import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
@@ -63,6 +64,8 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.TypeSpell
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -93,8 +96,8 @@ fun StartScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     // Spec B1 §10.5: Zähler „Nicht einsortiert" (Gegenstück zu Start.jsx). Eigener Fehlerzustand
-    // -- listUnsortedCopies() wirft bei einem Ladefehler, ein leerer Fangzweig würde sonst "0
-    // nicht einsortiert" zeigen, wo in Wahrheit einfach nichts geladen werden konnte.
+    // -- konnten die Exemplare nicht geladen werden, würde die Zahl sonst "0 nicht einsortiert"
+    // behaupten, wo in Wahrheit einfach nichts geladen werden konnte.
     var unsortedCount by remember { mutableStateOf(0) }
     var unsortedError by remember { mutableStateOf(false) }
     val catalogState by CatalogSync.state.collectAsState()
@@ -113,10 +116,22 @@ fun StartScreen(
 
     LaunchedEffect(Unit) {
         scope.launch {
+            // Ob die EXEMPLARE angekommen sind -- der Zaehler "Nicht einsortiert" weiter unten
+            // wird daraus abgeleitet und muss einen Ladefehler von einer leeren Sammlung
+            // unterscheiden koennen.
+            var copiesGeladen = false
             try {
-                val c = CollectionRepository.loadCards()
+                // Zwei voneinander unabhaengige Aufrufe -- nebenlaeufig, gewartet wird auf den
+                // laengeren statt auf die Summe. `coroutineScope` laesst sie als GANZES
+                // scheitern; der bestehende Fangzweig setzt `error` wie bisher.
+                val (c, cp) = coroutineScope {
+                    val dCards = async { CollectionRepository.loadCards() }
+                    val dCopies = async { CollectionRepository.loadCopies() }
+                    dCards.await() to dCopies.await()
+                }
                 cards = c
-                copies = CollectionRepository.loadCopies()
+                copies = cp
+                copiesGeladen = true
                 try {
                     val sets = SetsRepository.loadSets()
                     val ownedByPrefix = HashMap<String, MutableSet<String>>()
@@ -151,10 +166,18 @@ fun StartScreen(
                 topDeals = alerts.take(2)
             } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
 
-            try {
-                unsortedCount = CollectionRepository.listUnsortedCopies().size
+            // ABGELEITET statt nachgeladen: `copies` enthaelt dieselben Zeilen, und gezaehlt wird
+            // hier ohnehin nur. Der eigene Fehlerzustand bleibt und bedeutet jetzt: die Exemplare
+            // konnten nicht geladen werden. Das ist derselbe Schutz wie vorher -- "0 nicht
+            // einsortiert" darf nie dastehen, wo in Wahrheit nichts geladen werden konnte. Er
+            // haengt am LADEN, nicht an einer leeren Liste: eine wirklich leere Sammlung laedt
+            // erfolgreich und zeigt zu Recht die 0.
+            if (copiesGeladen) {
+                unsortedCount = UnsortedCopies.from(copies).size
                 unsortedError = false
-            } catch (e: Exception) { unsortedError = true }
+            } else {
+                unsortedError = true
+            }
 
             loading = false
         }

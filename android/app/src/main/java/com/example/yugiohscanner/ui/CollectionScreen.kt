@@ -44,6 +44,8 @@ import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.SurfaceColor
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 // One passcode grouped across all its owned printings.
@@ -108,9 +110,18 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     // Ladefehler des Behaelter-/Tag-Vokabulars darf nicht wie "keine Behaelter vorhanden" aussehen.
     var vocabError by remember { mutableStateOf<String?>(null) }
 
+    // Die beiden Aufrufe haengen nicht voneinander ab -- nebenlaeufig, gewartet wird auf den
+    // laengeren statt auf die Summe. `coroutineScope` laesst den Block als GANZES scheitern, wenn
+    // einer fehlschlaegt: der Aufrufer setzt `errorMsg`, und es wird nichts halb gesetzt.
     suspend fun reload() {
-        cards = CollectionRepository.loadCards()
-        copies = CollectionRepository.loadCopies()
+        coroutineScope {
+            val dCards = async { CollectionRepository.loadCards() }
+            val dCopies = async { CollectionRepository.loadCopies() }
+            val cd = dCards.await()
+            val cp = dCopies.await()
+            cards = cd
+            copies = cp
+        }
         loading = false
     }
     LaunchedEffect(Unit) {

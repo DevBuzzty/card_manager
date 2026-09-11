@@ -72,6 +72,8 @@ import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -226,11 +228,18 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
 
     LaunchedEffect(containerId) {
         try {
-            val alle = ContainersRepository.list()
+            // Drei Aufrufe, die nicht voneinander abhaengen -- nebenlaeufig, gewartet wird auf den
+            // laengsten statt auf die Summe. `coroutineScope` laesst den Block als GANZES scheitern,
+            // wenn einer fehlschlaegt: der bestehende Fangzweig setzt `error`, und es gibt weiter
+            // keinen halb gefuellten Einsortier-Modus.
+            val (alle, cd, cp) = coroutineScope {
+                val dContainers = async { ContainersRepository.list() }
+                val dCards = async { CollectionRepository.loadCards() }
+                val dCopies = async { CollectionRepository.loadCopies() }
+                Triple(dContainers.await(), dCards.await(), dCopies.await())
+            }
             val gefunden = alle.find { it.containerId == containerId }
                 ?: throw RuntimeException("Behälter nicht gefunden.")
-            val cd = CollectionRepository.loadCards()
-            val cp = CollectionRepository.loadCopies()
             containers = alle
             container = gefunden
             cards = cd

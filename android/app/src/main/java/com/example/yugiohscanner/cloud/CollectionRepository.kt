@@ -23,8 +23,12 @@ object CollectionRepository {
     private const val PAGE = 1000
 
     // Spec B1: die fuenf Standort-/Tag-Felder gehoeren zu jedem card_copies-Read dazu.
+    // created_at steht seit dem Ladewege-Fix mit dabei -- es ist die Reihenfolge der unsortierten
+    // Liste (UnsortedCopies.from), die sich sonst nur mit einem ZWEITEN Netzaufruf ueber dieselben
+    // Zeilen herstellen liess. NUR gelesen: der Server stempelt die Spalte, kein Schreibweg hier
+    // schickt sie mit (siehe CopyRow.createdAt).
     private const val COPY_COLS =
-        "copy_id,card_id,set_code,language,rarity,edition,condition,deleted,container_id,page,slot,tags,note"
+        "copy_id,card_id,set_code,language,rarity,edition,condition,deleted,container_id,page,slot,tags,note,created_at"
 
     // PostgREST caps every response at a server-side max (1000 rows by default), so a single
     // GET silently truncates a large collection — the newest rows fall off the end and never
@@ -205,6 +209,7 @@ object CollectionRepository {
             slot = if (o.isNull("slot")) null else o.optInt("slot"),
             tags = if (o.isNull("tags")) null else o.optString("tags"),
             note = if (o.isNull("note")) null else o.optString("note"),
+            createdAt = if (o.isNull("created_at")) null else o.optString("created_at"),
         )
     }
 
@@ -256,6 +261,13 @@ object CollectionRepository {
     }
 
     // Lebende Exemplare ohne Behaelter (fuer den Einsortier-Modus, Task 9/10).
+    //
+    // ZURZEIT OHNE AUFRUFER. Wer loadCopies() ohnehin schon macht -- und das taten alle drei
+    // bisherigen Aufrufer --, nimmt UnsortedCopies.from(copies): dieselbe Liste in derselben
+    // Reihenfolge aus bereits geladenen Zeilen, ohne einen zweiten Durchlauf durch dieselben
+    // tausende Zeilen ueber das Netz. Stehen bleibt die Abfrage fuer den Fall, den es heute nicht
+    // gibt: ein Aufrufer, der NUR die unsortierten Exemplare braucht und die Sammlung sonst nicht
+    // laedt -- fuer den waere das Ableiten der teurere Weg.
     suspend fun listUnsortedCopies(): List<CopyRow> = withContext(Dispatchers.IO) {
         val out = ArrayList<CopyRow>()
         var offset = 0

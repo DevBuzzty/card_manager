@@ -43,6 +43,7 @@ import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.BinderGrid
+import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Background
@@ -52,6 +53,8 @@ import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -93,7 +96,6 @@ fun BinderPageScreen(
     var containers by remember { mutableStateOf<List<ContainerRow>>(emptyList()) }
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
     var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
-    var unsorted by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     // Ein Ladefehler darf nicht wie ein leerer Ordner aussehen: eigener Zustand, im Erfolgsfall
     // ausdruecklich auf null zurueckgesetzt, und die Leermeldung erscheint nur bei `error == null`.
@@ -133,25 +135,29 @@ fun BinderPageScreen(
     // Je Ordnerseite eine senkrechte Rasterposition, aus demselben Grund hier oben gehalten.
     val gridScrolls = remember { mutableMapOf<Int, ScrollState>() }
 
+    // Die drei Aufrufe haengen nicht voneinander ab und laufen deshalb NEBENLAEUFIG -- gewartet
+    // wird auf den laengsten, nicht auf die Summe. `coroutineScope` haelt die Fehlerbehandlung
+    // unveraendert: schlaegt EINER fehl, bricht der Block ab und wirft an den Aufrufer, der
+    // `error` setzt; gesetzt wird erst, wenn alle da sind -- nie ein halb gefuellter Ordner.
+    //
+    // Der vierte Aufruf (listUnsortedCopies) ist weg. Er stand hier NUR wegen der Reihenfolge,
+    // die im Fach-Fuellen-Sheet sichtbar ist; seit `created_at` mitgeladen wird, stellt
+    // `UnsortedCopies.from` genau dieselbe Reihenfolge aus `cp` her (dort begruendet).
     suspend fun reload() {
-        val cs = ContainersRepository.list()
-        val found = cs.find { it.containerId == containerId }
-            ?: throw RuntimeException("Behälter nicht gefunden.")
-        val cd = CollectionRepository.loadCards()
-        val cp = CollectionRepository.loadCopies()
-        // Eigener Aufruf, obwohl `cp` dieselben Zeilen enthaelt (`containerId == null`): die
-        // REIHENFOLGE ist eine andere und sie ist sichtbar. listUnsortedCopies() sortiert
-        // created_at.asc,copy_id.asc -- aeltestes Exemplar zuerst, wie der Einsortier-Modus am
-        // Desktop (copies.cjs#listUnsortedCopies) --, loadCopies() dagegen nur copy_id.asc, also
-        // nach UUID und damit willkuerlich. Nachbauen laesst sich das hier nicht: `created_at`
-        // steht nicht in COPY_COLS und fehlt CopyRow. Fiele der Aufruf weg, stuenden die
-        // Kandidaten im Fach-Fuellen-Sheet in zufaelliger Ordnung.
-        val un = CollectionRepository.listUnsortedCopies()
-        container = found
-        containers = cs
-        cards = cd
-        copies = cp
-        unsorted = un
+        coroutineScope {
+            val dContainers = async { ContainersRepository.list() }
+            val dCards = async { CollectionRepository.loadCards() }
+            val dCopies = async { CollectionRepository.loadCopies() }
+            val cs = dContainers.await()
+            val cd = dCards.await()
+            val cp = dCopies.await()
+            val found = cs.find { it.containerId == containerId }
+                ?: throw RuntimeException("Behälter nicht gefunden.")
+            container = found
+            containers = cs
+            cards = cd
+            copies = cp
+        }
     }
 
     LaunchedEffect(containerId) {
@@ -204,6 +210,9 @@ fun BinderPageScreen(
     }
 
     val cardsByKey = remember(cards) { cards.associateBy { it.printingKey() } }
+    // ABGELEITET, wie `loose` und `pageCount` daneben: dieselben Zeilen, aus denen auch das Raster
+    // gebaut wird. Die Reihenfolge (aeltestes Exemplar zuerst) steckt in UnsortedCopies.
+    val unsorted = remember(copies) { UnsortedCopies.from(copies) }
     fun cardOf(c: CopyRow): CardRow? = cardsByKey[c.printingKey()]
     fun valueOf(list: List<CopyRow>): Double =
         list.sumOf { c -> (cardOf(c)?.price ?: 0.0) * Valuation.factor(c.condition) }
