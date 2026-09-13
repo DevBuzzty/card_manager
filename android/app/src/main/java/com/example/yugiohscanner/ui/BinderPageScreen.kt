@@ -144,6 +144,7 @@ fun BinderPageScreen(
     LaunchedEffect(seiteNachEinsortieren) {
         val ziel = seiteNachEinsortieren ?: return@LaunchedEffect
         CollectionStore.awaitSync()
+        error = null
         seitenZiel = ziel
         // Raeumt den Rueckkanal weg: ohne das schlaegt jede Neuzusammensetzung dieselbe Seite
         // wieder auf und risse ein Blaettern des Nutzers zurueck.
