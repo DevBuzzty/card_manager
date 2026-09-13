@@ -86,7 +86,12 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
     }
 
     val base = printings.firstOrNull()
-    if (base == null) { onClose(); return }
+    if (base == null) {
+        // Nur schliessen, wenn der Speicher bereit ist und die Karte wirklich keine Drucke mehr hat
+        // (z. B. der letzte wurde geloescht). Ohne Ready zeigt AppNav den Ladebildschirm.
+        if (ready != null) onClose()
+        return
+    }
 
     val displayName = catalogCard?.nameDe ?: base.name ?: base.id
     val displayDesc = catalogCard?.descDe ?: base.desc

@@ -109,6 +109,7 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
 
     fun save() {
         if (savingRef[0]) return
+        if (loadError != null) return
         // Ein eingetippter, aber nicht per Enter/Fertig bestaetigter Tag geht sonst verloren:
         // tagInput lebt nur im Eingabefeld, bisher schickte save() ausschliesslich den tags-
         // Zustand. VOR dem ersten suspend-Aufruf uebernehmen (synchron, wie savingRef oben) und
@@ -265,7 +266,7 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
                 Row {
                     TextButton(onClick = onDismiss, enabled = !saving && !removing) { Text("Abbrechen") }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { save() }, enabled = !saving && !removing) {
+                    Button(onClick = { save() }, enabled = !saving && !removing && loadError == null) {
                         Text(if (saving) "Wird gespeichert…" else "Speichern")
                     }
                 }
