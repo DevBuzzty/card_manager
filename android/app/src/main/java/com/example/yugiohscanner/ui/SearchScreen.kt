@@ -21,7 +21,8 @@ import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CardSearchRepository
 import com.example.yugiohscanner.cloud.CatalogRepository
-import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.TypeChip
 import kotlinx.coroutines.Dispatchers
@@ -91,7 +92,7 @@ fun SearchScreen(onClose: () -> Unit, onAdded: () -> Unit) {
                     } else {
                         CardSearchRepository.search(query)
                     }
-                    owned = runCatching { CollectionRepository.loadCards() }.getOrDefault(emptyList())
+                    owned = (CollectionStore.state.value as? StoreState.Ready)?.cards ?: emptyList()
                     error = if (results.isEmpty()) "Nichts gefunden." else null
                 } catch (e: Exception) { error = e.message ?: "Suche fehlgeschlagen" }
                 loading = false

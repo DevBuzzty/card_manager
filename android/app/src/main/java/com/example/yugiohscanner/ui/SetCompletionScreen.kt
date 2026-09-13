@@ -24,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,8 +33,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.SetInfo
 import com.example.yugiohscanner.cloud.SetsRepository
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Line
@@ -43,47 +46,43 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 
 // Per-set completion: how many distinct printings the user owns out of the set total.
 private data class SetProgress(val name: String, val prefix: String, val owned: Int, val total: Int)
 
 @Composable
 fun SetCompletionScreen(onClose: (() -> Unit)? = null) {
-    var rows by remember { mutableStateOf<List<SetProgress>>(emptyList()) }
+    // Spec §5: Karten aus dem Speicher; die Set-Liste laedt weiter pro Aufruf (Phase 2 speichert sie).
+    val store by CollectionStore.state.collectAsState()
+    val cards = (store as? StoreState.Ready)?.cards ?: emptyList()
+    var sets by remember { mutableStateOf<Map<String, SetInfo>?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         try {
-            // Zwei voneinander unabhaengige Aufrufe -- nebenlaeufig, gewartet wird auf den
-            // laengeren statt auf die Summe. Scheitert einer, scheitert der ganze Block und der
-            // bestehende Fangzweig setzt `error`; eine halbe Liste gibt es weiterhin nicht.
-            val (cards, sets) = coroutineScope {
-                val dCards = async { CollectionRepository.loadCards() }
-                val dSets = async { SetsRepository.loadSets() }
-                dCards.await() to dSets.await()
-            }
-
-            // Distinct set codes owned, grouped by set prefix (skip the "Unknown" bucket).
-            val ownedByPrefix = HashMap<String, MutableSet<String>>()
-            for (c in cards) {
-                if (c.setCode.equals("Unknown", ignoreCase = true)) continue
-                val prefix = c.setCode.substringBefore("-").uppercase()
-                if (prefix.isBlank()) continue
-                ownedByPrefix.getOrPut(prefix) { HashSet() }.add(c.setCode)
-            }
-
-            rows = ownedByPrefix.mapNotNull { (prefix, codes) ->
-                val info = sets[prefix] ?: return@mapNotNull null
-                SetProgress(info.name, prefix, codes.size.coerceAtMost(info.total), info.total)
-            }.sortedByDescending { it.owned.toFloat() / it.total }
+            sets = SetsRepository.loadSets()
         } catch (e: Exception) {
             error = e.message
         } finally {
             loading = false
         }
+    }
+
+    val rows = remember(cards, sets) {
+        val s = sets ?: return@remember emptyList<SetProgress>()
+        // Distinct set codes owned, grouped by set prefix (skip the "Unknown" bucket).
+        val ownedByPrefix = HashMap<String, MutableSet<String>>()
+        for (c in cards) {
+            if (c.setCode.equals("Unknown", ignoreCase = true)) continue
+            val prefix = c.setCode.substringBefore("-").uppercase()
+            if (prefix.isBlank()) continue
+            ownedByPrefix.getOrPut(prefix) { HashSet() }.add(c.setCode)
+        }
+        ownedByPrefix.mapNotNull { (prefix, codes) ->
+            val info = s[prefix] ?: return@mapNotNull null
+            SetProgress(info.name, prefix, codes.size.coerceAtMost(info.total), info.total)
+        }.sortedByDescending { it.owned.toFloat() / it.total }
     }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {

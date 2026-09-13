@@ -37,17 +37,16 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CatalogState
 import com.example.yugiohscanner.cloud.CatalogSync
-import com.example.yugiohscanner.cloud.CollectionRepository
-import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.DealAlert
 import com.example.yugiohscanner.cloud.DealsRepository
 import com.example.yugiohscanner.cloud.SetsRepository
 import com.example.yugiohscanner.cloud.Snapshot
 import com.example.yugiohscanner.cloud.SnapshotsRepository
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ui.components.SectionHeader
@@ -64,8 +63,6 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.TypeSpell
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -86,20 +83,19 @@ fun StartScreen(
     onOpenBinder: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
-    var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
+    // Spec §5: Karten und Exemplare aus dem Speicher; der Ladebildschirm garantiert Ready.
+    val store by CollectionStore.state.collectAsState()
+    val ready = store as? StoreState.Ready
+    val cards = ready?.cards ?: emptyList()
+    val copies = ready?.copies ?: emptyList()
     var snapshots by remember { mutableStateOf<List<Snapshot>>(emptyList()) }
     var dealAlertCount by remember { mutableStateOf(0) }
     var topDeals by remember { mutableStateOf<List<DealAlert>>(emptyList()) }
     var setProgress by remember { mutableStateOf<List<SetProgressRow>>(emptyList()) }
     var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
-    var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Spec B1 §10.5: Zähler „Nicht einsortiert" (Gegenstück zu Start.jsx). Eigener Fehlerzustand
-    // -- konnten die Exemplare nicht geladen werden, würde die Zahl sonst "0 nicht einsortiert"
-    // behaupten, wo in Wahrheit einfach nichts geladen werden konnte.
-    var unsortedCount by remember { mutableStateOf(0) }
-    var unsortedError by remember { mutableStateOf(false) }
+    // Spec B1 §10.5: Zaehler "Nicht einsortiert", abgeleitet aus den Exemplaren im Speicher.
+    val unsortedCount = remember(ready?.copies) { UnsortedCopies.from(copies).size }
     val catalogState by CatalogSync.state.collectAsState()
     // Catalog readiness is a SQLite read, so it is hoisted into state instead of being called
     // from composition: this screen recomposes on every Downloading percent tick, and reading
@@ -116,44 +112,30 @@ fun StartScreen(
 
     LaunchedEffect(Unit) {
         scope.launch {
-            // Ob die EXEMPLARE angekommen sind -- der Zaehler "Nicht einsortiert" weiter unten
-            // wird daraus abgeleitet und muss einen Ladefehler von einer leeren Sammlung
-            // unterscheiden koennen.
-            var copiesGeladen = false
+            // Ohne Ready wird nichts gerechnet und KEIN Tageswert gespeichert -- sonst stuende ein
+            // 0-€-Tag im Verlauf (Spec §7.3). Der Ladebildschirm macht das zum Nicht-Fall.
+            val r = CollectionStore.state.value as? StoreState.Ready ?: return@launch
             try {
-                // Zwei voneinander unabhaengige Aufrufe -- nebenlaeufig, gewartet wird auf den
-                // laengeren statt auf die Summe. `coroutineScope` laesst sie als GANZES
-                // scheitern; der bestehende Fangzweig setzt `error` wie bisher.
-                val (c, cp) = coroutineScope {
-                    val dCards = async { CollectionRepository.loadCards() }
-                    val dCopies = async { CollectionRepository.loadCopies() }
-                    dCards.await() to dCopies.await()
+                val sets = SetsRepository.loadSets()
+                val ownedByPrefix = HashMap<String, MutableSet<String>>()
+                for (card in r.cards) {
+                    if (card.setCode.equals("Unknown", ignoreCase = true)) continue
+                    val prefix = card.setCode.substringBefore("-").uppercase()
+                    if (prefix.isBlank()) continue
+                    ownedByPrefix.getOrPut(prefix) { HashSet() }.add(card.setCode)
                 }
-                cards = c
-                copies = cp
-                copiesGeladen = true
-                try {
-                    val sets = SetsRepository.loadSets()
-                    val ownedByPrefix = HashMap<String, MutableSet<String>>()
-                    for (card in c) {
-                        if (card.setCode.equals("Unknown", ignoreCase = true)) continue
-                        val prefix = card.setCode.substringBefore("-").uppercase()
-                        if (prefix.isBlank()) continue
-                        ownedByPrefix.getOrPut(prefix) { HashSet() }.add(card.setCode)
-                    }
-                    setProgress = ownedByPrefix.mapNotNull { (prefix, codes) ->
-                        val info = sets[prefix] ?: return@mapNotNull null
-                        val owned = codes.size.coerceAtMost(info.total)
-                        SetProgressRow(info.name, owned, info.total)
-                    }
-                        .filter { it.owned < it.total }            // not yet complete
-                        .sortedByDescending { it.owned.toFloat() / it.total }
-                        .take(3)
-                } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
+                setProgress = ownedByPrefix.mapNotNull { (prefix, codes) ->
+                    val info = sets[prefix] ?: return@mapNotNull null
+                    val owned = codes.size.coerceAtMost(info.total)
+                    SetProgressRow(info.name, owned, info.total)
+                }
+                    .filter { it.owned < it.total }            // not yet complete
+                    .sortedByDescending { it.owned.toFloat() / it.total }
+                    .take(3)
             } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
 
             try {
-                val dash = computeDashboard(cards, copies)
+                val dash = computeDashboard(r.cards, r.copies)
                 // Record today's value + read the history for the chart. Non-fatal if the
                 // portfolio_snapshots table isn't set up yet.
                 SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
@@ -165,32 +147,10 @@ fun StartScreen(
                 dealAlertCount = alerts.size
                 topDeals = alerts.take(2)
             } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
-
-            // ABGELEITET statt nachgeladen: `copies` enthaelt dieselben Zeilen, und gezaehlt wird
-            // hier ohnehin nur. Der eigene Fehlerzustand bleibt und bedeutet jetzt: die Exemplare
-            // konnten nicht geladen werden. Das ist derselbe Schutz wie vorher -- "0 nicht
-            // einsortiert" darf nie dastehen, wo in Wahrheit nichts geladen werden konnte. Er
-            // haengt am LADEN, nicht an einer leeren Liste: eine wirklich leere Sammlung laedt
-            // erfolgreich und zeigt zu Recht die 0.
-            if (copiesGeladen) {
-                unsortedCount = UnsortedCopies.from(copies).size
-                unsortedError = false
-            } else {
-                unsortedError = true
-            }
-
-            loading = false
         }
     }
 
     Surface(Modifier.fillMaxSize(), color = Background) {
-        if (loading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Primary)
-            }
-            return@Surface
-        }
-
         val d = computeDashboard(cards, copies)
         val byKey = copies.groupBy { it.printingKey() }
 
@@ -217,6 +177,8 @@ fun StartScreen(
                     Icon(Icons.Default.AccountCircle, "Einstellungen", tint = Primary)
                 }
             }
+
+            SyncHint()
 
             // First-run/offline banner: only while the catalog has never been imported yet AND a
             // sync is actively in progress. Disappears the moment CatalogSync reaches Ready (or
@@ -304,12 +266,12 @@ fun StartScreen(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (unsortedError) "—" else "$unsortedCount",
+                            "$unsortedCount",
                             style = MaterialTheme.typography.titleLarge, fontFamily = MonoFontFamily,
                             fontWeight = FontWeight.Bold, color = TypeSpell,
                         )
                         Text(
-                            "Nicht einsortiert" + if (unsortedError) " (Ladefehler)" else "",
+                            "Nicht einsortiert",
                             style = MaterialTheme.typography.labelSmall, color = Muted,
                         )
                     }

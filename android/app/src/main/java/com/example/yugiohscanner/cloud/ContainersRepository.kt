@@ -39,15 +39,6 @@ private val BINDER_POCKETS = setOf(4, 9, 12)
 // its schema.
 object ContainersRepository {
 
-    suspend fun list(): List<ContainerRow> = withContext(Dispatchers.IO) {
-        val url = "${SupabaseCloud.base()}/rest/v1/containers".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "container_id,name,kind,pockets_per_page,color,sort_order")
-            .addQueryParameter("deleted", "eq.false")
-            .addQueryParameter("order", "sort_order.asc")
-            .build()
-        getArray(url).let { arr -> (0 until arr.length()).map { parseContainer(arr.getJSONObject(it)) } }
-    }
-
     // Voll- und Delta-Abfrage des Speichers (Spec §4), gleiche Bauart wie CollectionRepository.fetchCopies.
     suspend fun fetchContainers(changedSince: String?): List<ContainerRow> =
         KeysetPager.all(StoreQueries.PAGE) { after ->

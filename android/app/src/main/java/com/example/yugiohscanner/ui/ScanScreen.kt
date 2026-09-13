@@ -61,6 +61,7 @@ import com.example.yugiohscanner.cloud.CardSearchRepository
 import com.example.yugiohscanner.cloud.CatalogCard
 import com.example.yugiohscanner.cloud.CatalogPrinting
 import com.example.yugiohscanner.cloud.CatalogRepository
+import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.PrintingRepository
 import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
@@ -654,6 +655,8 @@ fun ScanScreen(onClose: () -> Unit) {
                         // `forget` arbeitet ueber Passcodes; die Eintraege selbst braucht hier
                         // niemand (nur der Einsortier-Modus tut das, siehe onCommitted dort).
                         capture.forget((committed + ohneStandort).map { it.passcode })
+                        // Angelegte Exemplare in den Speicher holen (Spec §7.4).
+                        CollectionStore.requestSync()
                         // Das Blatt bleibt offen, solange Standort-Hinweise anstehen (Spec B2
                         // Task 5, Fixrunde 1). Sonst schliesst es im selben Snapshot, in dem der
                         // Hinweis gesetzt wird, und der Nutzer saehe nie, dass eine Karte, die er

@@ -219,7 +219,7 @@ fun AppNav() {
                 }
             }
             composable(Routes.SUCHE) {
-                if (cloudReady) SearchScreen(onClose = { nav.popBackStack() }, onAdded = {})
+                if (cloudReady) SearchScreen(onClose = { nav.popBackStack() }, onAdded = { CollectionStore.requestSync() })
                 else CloudLoginScreen(prefs) { CollectionStore.clear(); cloudReady = true }
             }
         }
