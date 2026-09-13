@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Style
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
