@@ -45,8 +45,9 @@ der Datenbank (kein SQL); den PC-Sync-Takt (20 s) verkürzen.
 
 ### 3.1 `CollectionStore` (neu, `cloud/CollectionStore.kt`)
 
-Ein `object`, das so lange lebt wie der App-Prozess. Es hält einen
-`StateFlow<StoreState>`:
+Ein `object`, das so lange lebt wie der App-Prozess. Es hält zwei getrennte Flüsse — die Daten
+und den Abgleichstatus. Getrennt, damit ein erfolgreicher Abgleich ohne Änderung (alle 10 s) den
+Datenfluss nicht berührt und keine Seite neu zeichnet; nur der Hinweis aus §6 hört auf den Status.
 
 ```kotlin
 sealed interface StoreState {
@@ -54,14 +55,15 @@ sealed interface StoreState {
     data object Loading : StoreState                     // erstes Laden läuft
     data class Failed(val message: String) : StoreState  // erstes Laden gescheitert
     data class Ready(
-        val cards: List<CardRow>,          // Reihenfolge wie heute loadCards()
-        val copies: List<CopyRow>,         // Reihenfolge wie heute loadCopies()
-        val containers: List<ContainerRow>,// Reihenfolge wie heute ContainersRepository.list()
-        val lastSyncOk: Instant?,          // Zeitpunkt des letzten erfolgreichen Abgleichs
-        val syncFailing: Boolean,          // letzter Abgleich gescheitert
+        val cards: List<CardRow>,           // sortiert nach Schlüssel (§4.2)
+        val copies: List<CopyRow>,          // sortiert nach copy_id
+        val containers: List<ContainerRow>, // sortiert nach sort_order, dann container_id
     ) : StoreState
 }
+data class SyncStatus(val lastSuccess: Instant? = null, val failing: Boolean = false)
 ```
+
+`state: StateFlow<StoreState>`, `sync: StateFlow<SyncStatus>`.
 
 Öffentliche Operationen:
 - `loadInitial()` — vollständiges Laden (§4.1); `Loading` → `Ready` oder `Failed`.
@@ -125,10 +127,18 @@ wie `Secret Rare`, Kommas und Klammern dürfen den Ausdruck nicht zerbrechen. Al
 Schlüsselspalten sind Teil des Primärschlüssels (`supabase/schema.sql:25`) und damit auf dem
 Server nie `null`; `Keyset` braucht keinen `null`-Fall.
 
-**Spalten.** `cards` holt nur noch die Spalten, die `CardRow` liest, plus `updated_at` (heute
-`select=*` inklusive Kartentexten, die der Parser verwirft). `COPY_COLS` und die Behälterspalten
-bekommen `updated_at`. `CardRow`, `CopyRow`, `ContainerRow` erhalten ein Feld
-`updatedAt: String?` (letztes Feld, Standard `null`).
+**Spalten.** `cards` bleibt bei `select=*` (liefert `updated_at` und `deleted` bereits mit). Eine
+Spaltenliste hätte die Spalte `desc` enthalten müssen, deren Verhalten im `select` von PostgREST
+ohne Test gegen den Server nicht belegt ist — und gegen den Server testen Umsetzer nicht.
+`COPY_COLS` und die Behälterspalten bekommen `updated_at` (Behälter auch `deleted`). `CardRow`, `CopyRow`, `ContainerRow` erhalten ein Feld
+`updatedAt: String?` (letztes Feld, Standard `null`); `CardRow` und `ContainerRow` zusätzlich
+`deleted: Boolean = false`, damit das Delta Löschungen erkennt.
+
+**Reihenfolge im Speicher.** Sortiert wird lokal nach Codepunkten der Schlüssel, nicht nach der
+Server-Sortierung (Datenbank-Kollation). Keine Seite zeigt `cards` oder `copies` in
+Lieferreihenfolge — Sammlung, Sets und Binder sortieren selbst, die unsortierte Liste über
+`UnsortedCopies`. Das Blättern selbst nutzt weiter die Server-Sortierung; Filter und Sortierung
+laufen dort mit derselben Kollation und passen zueinander.
 
 Der **Stichtag** je Tabelle ist nach dem Laden der größte gelieferte `updated_at`
 (Zeichenkette vom Server, nicht die Uhr des Handys).
@@ -158,8 +168,11 @@ und auf 0 gefallene Zeilen müssen ankommen, damit sie lokal verschwinden.
 - Neuer Stichtag = max(alter Stichtag, größter gelieferter `updated_at`). Die Tabelle wird erst
   übernommen, wenn **alle** ihre Delta-Seiten da sind; der Stichtag rückt erst dann vor.
 - Die drei Tabellen werden nebenläufig abgeglichen und **gemeinsam** in einem Schritt in
-  `Ready` übernommen. Scheitert eine: nichts übernommen, `syncFailing = true`, Stichtage
+  `Ready` übernommen. Scheitert eine: nichts übernommen, `SyncStatus.failing = true`, Stichtage
   unverändert.
+- **Tabelle ohne Stichtag** (beim ersten Laden leer): das Delta fragt ab
+  `1970-01-01T00:00:00Z`, also inklusive gelöschter Zeilen — sonst verschwände eine später
+  angelegte und wieder gelöschte Zeile nie.
 - **Nur ein Abgleich gleichzeitig.** Kommt während eines laufenden Abgleichs eine Anforderung,
   wird genau **ein** weiterer Lauf vorgemerkt und direkt danach ausgeführt (beliebig viele
   Anforderungen verschmelzen zu diesem einen). `awaitSync()` wartet auf einen Lauf, der **nach**
@@ -232,7 +245,7 @@ falls es danach keinen Aufrufer mehr hat.
 
 Wunschliste, Decks, Deals und Deal-Treffer haben **kein** `updated_at` und sind klein. Deshalb
 kein Delta, sondern:
-- **Speicher je Liste** im selben Muster (`Ready` + `syncFailing`), geladen beim ersten Öffnen der
+- **Speicher je Liste** im selben Muster (Wert + Lade- und Fehlerstatus), geladen beim ersten Öffnen der
   Seite, danach sofort angezeigt und **im Hintergrund voll neu geladen** bei jedem Öffnen, beim
   Nach-unten-Ziehen und nach eigenen Schreibvorgängen. Kein 10-s-Takt.
 - Die Deal-Treffer-Zahl auf Start liest aus demselben Speicher.
@@ -262,7 +275,7 @@ kein Delta, sondern:
 **Speicher mit Fake-`StoreSource` (`kotlinx-coroutines-test`):**
 - `Ready` erst, wenn alle drei Tabellen vollständig geladen sind; Fehler einer Tabelle → `Failed`,
   nichts übernommen.
-- Abgleich-Fehler → Daten und Stichtage unverändert, `syncFailing = true`; nächster Erfolg setzt
+- Abgleich-Fehler → Daten und Stichtage unverändert, `SyncStatus.failing = true`; nächster Erfolg setzt
   zurück.
 - Anforderungen während eines Laufs → genau ein weiterer Lauf.
 - `awaitSync()` kehrt erst nach einem Lauf zurück, der nach dem Aufruf begann.
