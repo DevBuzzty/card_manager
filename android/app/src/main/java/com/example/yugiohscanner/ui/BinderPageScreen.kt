@@ -45,6 +45,7 @@ import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.BinderGrid
 import com.example.yugiohscanner.ml.UnsortedCopies
+import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Background
@@ -193,6 +194,7 @@ fun BinderPageScreen(
     }
 
     Surface(Modifier.fillMaxSize(), color = Background) {
+        RefreshableBox(onRefresh = { CollectionStore.awaitSync() }) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück", tint = OnSurface) }
@@ -301,6 +303,7 @@ fun BinderPageScreen(
                     )
                 }
             }
+        }
         }
     }
 

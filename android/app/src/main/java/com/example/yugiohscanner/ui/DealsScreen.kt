@@ -31,6 +31,7 @@ import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.DealAlert
 import com.example.yugiohscanner.cloud.DealsRepository
 import com.example.yugiohscanner.cloud.SideStores
+import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
@@ -105,6 +106,13 @@ fun DealsScreen() {
     }
 
     Surface(Modifier.fillMaxSize(), color = Background) {
+        RefreshableBox(
+            onRefresh = {
+                try { DealsRepository.triggerScrape() } catch (e: Exception) { writeError = e.message }
+                SideStores.dealWatches.refreshAndWait()
+                SideStores.dealAlerts.refreshAndWait()
+            },
+        ) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Deals", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
@@ -198,6 +206,7 @@ fun DealsScreen() {
                     }) }
                 }
             }
+        }
         }
     }
 }

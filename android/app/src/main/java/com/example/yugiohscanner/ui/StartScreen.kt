@@ -46,6 +46,7 @@ import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.UnsortedCopies
+import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
@@ -144,6 +145,7 @@ fun StartScreen(
     }
 
     Surface(Modifier.fillMaxSize(), color = Background) {
+        RefreshableBox(onRefresh = { CollectionStore.awaitSync(); SideStores.dealAlerts.refreshAndWait() }) {
         val d = computeDashboard(cards, copies)
         val byKey = copies.groupBy { it.printingKey() }
 
@@ -358,6 +360,7 @@ fun StartScreen(
             StatSection("Nach Typ", d.byType)
             StatSection("Nach Set", d.bySet)
             StatSection("Nach Attribut", d.byAttribute)
+        }
         }
     }
 }

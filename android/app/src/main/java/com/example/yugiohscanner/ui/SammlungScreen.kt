@@ -5,6 +5,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.SideStores
+import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
@@ -43,7 +46,17 @@ fun SammlungScreen(
                 Tab(selected = i == selected, onClick = { onSegment(id) }, text = { Text(label) })
             }
         }
-        Box(Modifier.weight(1f)) {
+        RefreshableBox(
+            onRefresh = {
+                when (segment) {
+                    "wunschliste" -> SideStores.wishlist.refreshAndWait()
+                    "decks" -> SideStores.decks.refreshAndWait()
+                    "sets" -> { CollectionStore.awaitSync(); SideStores.sets.refreshAndWait() }
+                    else -> CollectionStore.awaitSync()
+                }
+            },
+            modifier = Modifier.weight(1f),
+        ) {
             when (segment) {
                 "binder" -> BindersScreen(onOpenBehaelter)
                 "wunschliste" -> WishlistScreen()
