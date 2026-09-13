@@ -31,6 +31,7 @@ fun SammlungScreen(
     Column(Modifier.fillMaxSize()) {
         Text("Sammlung", style = MaterialTheme.typography.headlineSmall, color = OnSurface,
             modifier = Modifier.padding(start = 16.dp, top = 12.dp))
+        SyncHint(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         val selected = SEGMENTS.indexOfFirst { it.first == segment }.coerceAtLeast(0)
         ScrollableTabRow(
             selectedTabIndex = selected,
