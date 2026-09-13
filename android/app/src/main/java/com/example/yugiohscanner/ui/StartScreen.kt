@@ -135,7 +135,7 @@ fun StartScreen(
             // 0-€-Tag im Verlauf (Spec §7.3). Der Ladebildschirm macht das zum Nicht-Fall.
             val r = CollectionStore.state.value as? StoreState.Ready ?: return@launch
             try {
-                val dash = computeDashboard(r.cards, r.copies)
+                val dash = DashboardMemo.get(r.cards, r.copies)
                 // Record today's value + read the history for the chart. Non-fatal if the
                 // portfolio_snapshots table isn't set up yet.
                 SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
@@ -146,8 +146,14 @@ fun StartScreen(
 
     Surface(Modifier.fillMaxSize(), color = Background) {
         RefreshableBox(onRefresh = { CollectionStore.awaitSync(); SideStores.dealAlerts.refreshAndWait() }) {
-        val d = computeDashboard(cards, copies)
-        val byKey = copies.groupBy { it.printingKey() }
+        // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
+        // passen) oder null; solange null, zeigt EmptyDashboard einen neutralen Platzhalter
+        // (0 €, "Keine Daten") statt den Hauptthread mit der Berechnung zu blockieren.
+        val dashboardResult by produceState<Dashboard?>(DashboardMemo.peek(cards, copies), cards, copies) {
+            value = withContext(Dispatchers.Default) { DashboardMemo.get(cards, copies) }
+        }
+        val d = dashboardResult ?: EmptyDashboard
+        val byKey = remember(copies) { copies.groupBy { it.printingKey() } }
 
         // Window the history by the selected timeframe, spacing points by their real date.
         val nowOrd = System.currentTimeMillis() / 86_400_000L

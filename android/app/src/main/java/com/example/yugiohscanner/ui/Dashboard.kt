@@ -95,6 +95,37 @@ fun computeDashboard(cards: List<CardRow>, copies: List<CopyRow>): Dashboard {
     return Dashboard(totalValue, totalCards, cards.size, top, byRarity, byType, bySet, byAttribute)
 }
 
+// Neutraler Platzhalter, solange `DashboardMemo` im Hintergrund noch rechnet (Befund A, Punkt 3):
+// zeigt 0 €/keine Daten statt eines Ladebildschirms, ohne die Seite umzubauen.
+val EmptyDashboard = Dashboard(0.0, 0, 0, emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
+
+// Merkt sich `computeDashboard` ueber Navigationen hinweg (Befund A): Karten/Exemplare aendern
+// sich bei einem Abgleich ohne Unterschied NICHT in ihrer Identitaet (CollectionStore liefert
+// dieselben Listeninstanzen), also genuegt ein Vergleich per `===` statt teurer Inhaltsvergleiche.
+// Von mehreren Threads aus aufrufbar (Anzeige + Tageswert-Speicherung), daher `synchronized`.
+object DashboardMemo {
+    private val lock = Any()
+    private var lastCards: List<CardRow>? = null
+    private var lastCopies: List<CopyRow>? = null
+    private var lastResult: Dashboard? = null
+
+    /** Rechnet nur neu, wenn sich `cards` oder `copies` als Referenz geaendert haben. */
+    fun get(cards: List<CardRow>, copies: List<CopyRow>): Dashboard = synchronized(lock) {
+        val cached = lastResult
+        if (cached != null && lastCards === cards && lastCopies === copies) return@synchronized cached
+        computeDashboard(cards, copies).also {
+            lastCards = cards
+            lastCopies = copies
+            lastResult = it
+        }
+    }
+
+    /** Wie [get], aber ohne zu rechnen: liefert den Treffer nur, falls die Referenzen bereits passen. */
+    fun peek(cards: List<CardRow>, copies: List<CopyRow>): Dashboard? = synchronized(lock) {
+        if (lastResult != null && lastCards === cards && lastCopies === copies) lastResult else null
+    }
+}
+
 // A labelled horizontal bar: label + "count · value €" on top, a proportional bar below.
 @Composable
 fun StatBar(label: String, count: Int, value: Double, fraction: Float) {
