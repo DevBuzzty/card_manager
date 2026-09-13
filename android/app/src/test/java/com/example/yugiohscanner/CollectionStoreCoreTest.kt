@@ -125,19 +125,50 @@ class CollectionStoreCoreTest {
         assertFalse(store.sync.value.failing)
     }
 
-    @Test fun `clear waehrend eines Abgleichs verwirft dessen Ergebnis`() = runTest {
+    @Test fun `clear waehrend eines Abgleichs verwirft dessen Ergebnis, auch wenn danach neu geladen wird`() = runTest {
         val src = FakeSource()
         src.copies = { listOf(copy("a")) }
-        val store = CollectionStoreCore(src, backgroundScope)
+        // Foreground statt backgroundScope: nur so treibt advanceUntilIdle() den Lauf wirklich an
+        // (siehe CoalescerTest) -- sonst waere dieser Test vacuous, weil requestSync() nie startet.
+        val store = CollectionStoreCore(src, this)
         store.loadInitial()
         val gate = CompletableDeferred<Unit>()
-        src.copies = { gate.await(); listOf(copy("b")) }
-        store.requestSync()
+        // Ein spaeter gelieferter Zeitpunkt: wuerde das verworfene Ergebnis den Stichtag doch
+        // fortschreiben, waere das am naechsten Abgleich sichtbar (siehe unten).
+        src.copies = { gate.await(); listOf(copy("b", updatedAt = "2026-09-13T12:10:00+00:00")) }
+        var syncDone = false
+        launch { store.awaitSync(); syncDone = true }
         advanceUntilIdle()
+        assertFalse("der Lauf haengt am Gatter, bevor irgendetwas ihn abbricht", syncDone)
+
+        // clear() waehrend der Lauf noch unterwegs ist, dann sofort neu laden: der Speicher ist
+        // wieder Ready, bevor der alte Lauf zurueckkehrt -- genau der Fall, den NUR die Generation
+        // abfaengt (die beiden anderen fruehen Ausstiege in runDelta greifen hier nicht, weil der
+        // Zustand zu dem Zeitpunkt erneut Ready ist).
         store.clear()
+        src.copies = { listOf(copy("c")) }
+        store.loadInitial()
+        assertEquals(listOf("c"), ready(store).copies.map { it.copyId })
+
         gate.complete(Unit)
         advanceUntilIdle()
-        assertEquals(StoreState.Empty, store.state.value)
+
+        assertTrue("der alte Lauf muss zurueckgekehrt sein, sonst haengt requestAndWait", syncDone)
+        assertEquals(
+            "das Ergebnis des alten Laufs (\"b\") darf die neue Ready-Ladung nicht ueberschreiben",
+            listOf("c"),
+            ready(store).copies.map { it.copyId },
+        )
+
+        // Ohne die Generation-Pruefung haette der alte Lauf den Stichtag auf "b"s (spaeteren)
+        // Zeitpunkt vorgezogen; der naechste Abgleich fraegt dann ab dem FALSCHEN Stichtag.
+        src.copies = { emptyList() }
+        src.calls.clear()
+        store.awaitSync()
+        assertTrue(
+            "Stichtag kommt von der neuen Ladung (\"c\"), nicht vom verworfenen alten Lauf (\"b\")",
+            src.calls.contains("copies:2026-09-13T11:59:00Z"),
+        )
     }
 
     @Test fun `clear waehrend des ersten Ladens verwirft es`() = runTest {
