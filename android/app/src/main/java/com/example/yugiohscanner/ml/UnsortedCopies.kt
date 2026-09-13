@@ -36,7 +36,11 @@ object UnsortedCopies {
             .thenBy { it.createdAt ?: "" }
             .thenBy { it.copyId }
 
-    /** Lebende Exemplare ohne Behaelter, aeltestes zuerst. Eingabe: alle geladenen Exemplare. */
+    /**
+     * Lebende Exemplare ohne Behaelter, aeltestes zuerst. Eingabe: alle geladenen Exemplare.
+     * `deleted` wird HIER geprueft und nicht dem Aufrufer ueberlassen: `loadCopies()` filtert zwar
+     * serverseitig, aber die abgeloeste Abfrage tat es auch -- "lebend" ist Teil der Aussage.
+     */
     fun from(copies: List<CopyRow>): List<CopyRow> =
-        copies.filter { it.containerId == null }.sortedWith(ORDER)
+        copies.filter { it.containerId == null && !it.deleted }.sortedWith(ORDER)
 }

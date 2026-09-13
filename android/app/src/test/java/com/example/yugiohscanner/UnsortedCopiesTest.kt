@@ -17,9 +17,9 @@ import org.junit.Test
  */
 class UnsortedCopiesTest {
 
-    private fun copy(copyId: String, containerId: String? = null, createdAt: String? = null) = CopyRow(
+    private fun copy(copyId: String, containerId: String? = null, createdAt: String? = null, deleted: Boolean = false) = CopyRow(
         copyId = copyId, cardId = "12345678", setCode = "LOB-DE001", language = "DE",
-        rarity = "Common", edition = "unlimited", condition = "NM", deleted = false,
+        rarity = "Common", edition = "unlimited", condition = "NM", deleted = deleted,
         containerId = containerId, page = null, slot = null, tags = null, note = null,
         createdAt = createdAt,
     )
@@ -33,6 +33,16 @@ class UnsortedCopiesTest {
             )
         )
         assertEquals(listOf("a"), out.map { it.copyId })
+    }
+
+    @Test fun `geloeschte Exemplare zaehlen nicht als unsortiert`() {
+        val out = UnsortedCopies.from(
+            listOf(
+                copy("lebt", createdAt = "2026-01-01T10:00:00+00:00"),
+                copy("weg", createdAt = "2026-01-01T09:00:00+00:00", deleted = true),
+            )
+        )
+        assertEquals(listOf("lebt"), out.map { it.copyId })
     }
 
     @Test fun `aeltestes Exemplar zuerst`() {

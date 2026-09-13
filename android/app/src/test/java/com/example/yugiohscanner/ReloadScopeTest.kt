@@ -13,29 +13,35 @@ import org.junit.Test
 class ReloadScopeTest {
 
     @Test fun `ein neuer Behaelter aendert keine Exemplare`() {
-        assertEquals(ReloadScope.Scope.CONTAINERS_ONLY, ReloadScope.afterSave(null, "binder"))
-        assertEquals(ReloadScope.Scope.CONTAINERS_ONLY, ReloadScope.afterSave(null, "box"))
+        assertEquals(ReloadScope.Scope.CONTAINERS_ONLY, ReloadScope.afterSave(true, null, "binder"))
+        assertEquals(ReloadScope.Scope.CONTAINERS_ONLY, ReloadScope.afterSave(true, null, "box"))
     }
 
-    @Test fun `Umbenennen laesst die Art unveraendert`() {
-        assertEquals(ReloadScope.Scope.CONTAINERS_ONLY, ReloadScope.afterSave("binder", "binder"))
-    }
-
-    @Test fun `Fachzahl aendern ist kein Artwechsel`() {
-        // 4 -> 9 Faecher: save() raeumt nichts, und welche Exemplare in einem darstellbaren Fach
-        // liegen, rechnet BinderGrid aus den bereits geladenen Zeilen.
-        assertEquals(ReloadScope.Scope.CONTAINERS_ONLY, ReloadScope.afterSave("binder", "binder"))
+    @Test fun `Ordner bleibt Ordner - umbenannt oder andere Fachzahl`() {
+        // save() raeumt nichts, und welche Exemplare in einem darstellbaren Fach liegen, rechnet
+        // BinderGrid aus den bereits geladenen Zeilen.
+        assertEquals(ReloadScope.Scope.CONTAINERS_ONLY, ReloadScope.afterSave(false, "binder", "binder"))
     }
 
     @Test fun `Art aendern raeumt Seite und Fach, also alles neu laden`() {
-        assertEquals(ReloadScope.Scope.EVERYTHING, ReloadScope.afterSave("binder", "box"))
-        assertEquals(ReloadScope.Scope.EVERYTHING, ReloadScope.afterSave("binder", "deckbox"))
+        assertEquals(ReloadScope.Scope.EVERYTHING, ReloadScope.afterSave(false, "binder", "box"))
+        assertEquals(ReloadScope.Scope.EVERYTHING, ReloadScope.afterSave(false, "binder", "deckbox"))
     }
 
     @Test fun `auch der Rueckweg zur Ordnerart laedt alles neu`() {
-        // Heute raeumt nur der Weg WEG von "binder" tatsaechlich. Die Regel bleibt trotzdem
-        // symmetrisch -- die sichere Seite, siehe ReloadScope.
-        assertEquals(ReloadScope.Scope.EVERYTHING, ReloadScope.afterSave("box", "binder"))
+        // Heute raeumt nur eine Art ohne Faecher tatsaechlich. Die sichere Seite, siehe ReloadScope.
+        assertEquals(ReloadScope.Scope.EVERYTHING, ReloadScope.afterSave(false, "box", "binder"))
+    }
+
+    @Test fun `Box bleibt Box - save raeumt trotzdem, also alles neu laden`() {
+        // save() raeumt nach der NEUEN Art. So wird ein halb gescheiterter Wechsel Ordner -> Box
+        // beim zweiten Versuch fertig -- und genau dann aendern sich Exemplare.
+        assertEquals(ReloadScope.Scope.EVERYTHING, ReloadScope.afterSave(false, "box", "box"))
+    }
+
+    @Test fun `unbekannte bisherige Art ist nicht dasselbe wie neu`() {
+        // Bestehender Behaelter, der nicht in der geladenen Liste stand.
+        assertEquals(ReloadScope.Scope.EVERYTHING, ReloadScope.afterSave(false, null, "binder"))
     }
 
     @Test fun `Loeschen raeumt die Standorte, also alles neu laden`() {

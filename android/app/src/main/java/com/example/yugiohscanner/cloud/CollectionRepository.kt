@@ -260,38 +260,6 @@ object CollectionRepository {
         patchCopy(copyId, JSONObject().put("deleted", true))
     }
 
-    // Lebende Exemplare ohne Behaelter (fuer den Einsortier-Modus, Task 9/10).
-    //
-    // ZURZEIT OHNE AUFRUFER. Wer loadCopies() ohnehin schon macht -- und das taten alle drei
-    // bisherigen Aufrufer --, nimmt UnsortedCopies.from(copies): dieselbe Liste in derselben
-    // Reihenfolge aus bereits geladenen Zeilen, ohne einen zweiten Durchlauf durch dieselben
-    // tausende Zeilen ueber das Netz. Stehen bleibt die Abfrage fuer den Fall, den es heute nicht
-    // gibt: ein Aufrufer, der NUR die unsortierten Exemplare braucht und die Sammlung sonst nicht
-    // laedt -- fuer den waere das Ableiten der teurere Weg.
-    suspend fun listUnsortedCopies(): List<CopyRow> = withContext(Dispatchers.IO) {
-        val out = ArrayList<CopyRow>()
-        var offset = 0
-        while (true) {
-            val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
-                .addQueryParameter("select", COPY_COLS)
-                .addQueryParameter("deleted", "eq.false")
-                .addQueryParameter("container_id", "is.null")
-                .addQueryParameter("order", "created_at.asc,copy_id.asc")
-                .addQueryParameter("limit", PAGE.toString())
-                .addQueryParameter("offset", offset.toString())
-                .build()
-            val page = executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
-                val text = resp.body?.string() ?: "[]"
-                if (!resp.isSuccessful) throw RuntimeException("Unsortierte Exemplare laden fehlgeschlagen (${resp.code}): $text")
-                parseCopies(JSONArray(text))
-            }
-            out.addAll(page)
-            if (page.size < PAGE) break
-            offset += PAGE
-        }
-        out
-    }
-
     // Vorschlagsliste ueber alle lebenden Exemplare: jede Zeile geht durch Tags.parse, die
     // Zusammenfuehrung ueber alle Zeilen durch Tags.add -- kein eigenes Zerlegen/Entdoppeln hier.
     suspend fun listTags(): List<String> = withContext(Dispatchers.IO) {
