@@ -5,6 +5,7 @@ import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.StoreQueries
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Die Abfrageparameter des Speichers -- am Server wird nicht getestet, also hier Zeichen fuer Zeichen. */
@@ -58,6 +59,16 @@ class StoreQueriesTest {
         assertEquals("quantity" to "gt.0", p[2])
         assertEquals("order" to "id.asc,set_code.asc,language.asc,rarity.asc", p[3])
         assertEquals("or", p.last().first)
+    }
+
+    @Test fun `Karte mit leerer Seltenheit blaettert nach leerer Zeichenkette, nicht nach Unknown`() {
+        val after = CardRow(id = "1", setCode = "LOB-DE001", language = "DE", name = null, imageUrl = null,
+            rarity = null, quantity = 1, price = null, updatedAt = "2026-09-13T12:00:00+00:00")
+        for (p in listOf(StoreQueries.cards(null, after), StoreQueries.cards("2026-09-13T11:59:00Z", after))) {
+            val or = p.last().second
+            assertTrue(or, or.contains("rarity.gt.\"\""))
+            assertFalse(or, or.contains("Unknown"))
+        }
     }
 
     @Test fun `Karten Delta ohne Mengen- und Loeschfilter`() {

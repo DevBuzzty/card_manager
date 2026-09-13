@@ -62,7 +62,10 @@ object StoreQueries {
         return p
     }
 
-    private fun cardKey(c: CardRow) = listOf(c.id, c.setCode, c.language, c.rarity ?: "Unknown")
+    // Blaetter-Schluessel = Primaerschluessel, der am Server nie null ist: `parse` macht aus der
+    // leeren Seltenheit `""` ein `null`, also steht `null` hier fuer `""`. "Unknown" statt dessen
+    // uebersprang still alle Drucke mit Seltenheit zwischen "" und "Unknown" (Abschlussreview F2).
+    private fun cardKey(c: CardRow) = listOf(c.id, c.setCode, c.language, c.rarity ?: "")
 
     private fun stamp(s: String?): String =
         SyncCursor.normalize(s ?: throw IllegalStateException("Delta-Zeile ohne updated_at"))
