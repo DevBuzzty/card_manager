@@ -43,6 +43,8 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
 import com.example.yugiohscanner.ui.theme.ErrorColor
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 // Per-set completion: how many distinct printings the user owns out of the set total.
 private data class SetProgress(val name: String, val prefix: String, val owned: Int, val total: Int)
@@ -55,8 +57,14 @@ fun SetCompletionScreen(onClose: (() -> Unit)? = null) {
 
     LaunchedEffect(Unit) {
         try {
-            val cards = CollectionRepository.loadCards()
-            val sets = SetsRepository.loadSets()
+            // Zwei voneinander unabhaengige Aufrufe -- nebenlaeufig, gewartet wird auf den
+            // laengeren statt auf die Summe. Scheitert einer, scheitert der ganze Block und der
+            // bestehende Fangzweig setzt `error`; eine halbe Liste gibt es weiterhin nicht.
+            val (cards, sets) = coroutineScope {
+                val dCards = async { CollectionRepository.loadCards() }
+                val dSets = async { SetsRepository.loadSets() }
+                dCards.await() to dSets.await()
+            }
 
             // Distinct set codes owned, grouped by set prefix (skip the "Unknown" bucket).
             val ownedByPrefix = HashMap<String, MutableSet<String>>()

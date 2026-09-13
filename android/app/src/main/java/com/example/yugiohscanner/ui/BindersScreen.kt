@@ -33,6 +33,8 @@ import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.BinderGrid
+import com.example.yugiohscanner.ml.ReloadScope
+import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Background
@@ -46,6 +48,8 @@ import com.example.yugiohscanner.ui.theme.RarityRare
 import com.example.yugiohscanner.ui.theme.RaritySuper
 import com.example.yugiohscanner.ui.theme.TypeMonster
 import com.example.yugiohscanner.ui.theme.TypeSpell
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -75,7 +79,6 @@ private data class BinderForm(
 fun BindersScreen(onOpen: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val containers = remember { mutableStateListOf<ContainerRow>() }
-    val unsortedCopies = remember { mutableStateListOf<CopyRow>() }
     var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
     var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -98,15 +101,31 @@ fun BindersScreen(onOpen: (String) -> Unit) {
 
     var pendingDelete by remember { mutableStateOf<ContainerRow?>(null) }
 
-    suspend fun reload() {
-        val c = ContainersRepository.list()
-        val u = CollectionRepository.listUnsortedCopies()
-        val cd = CollectionRepository.loadCards()
-        val cp = CollectionRepository.loadCopies()
-        containers.clear(); containers.addAll(c)
-        unsortedCopies.clear(); unsortedCopies.addAll(u)
-        cards = cd
-        copies = cp
+    // Die drei Aufrufe haengen nicht voneinander ab und laufen deshalb NEBENLAEUFIG -- gewartet
+    // wird auf den laengsten, nicht auf die Summe. Der vierte Aufruf (listUnsortedCopies) ist ganz
+    // weg: `UnsortedCopies.from(cp)` leitet dieselbe Liste in derselben Reihenfolge aus `cp` ab.
+    //
+    // `coroutineScope` haelt die Fehlerbehandlung genau so, wie sie vorher war: schlaegt EINER der
+    // Aufrufe fehl, brechen die anderen ab und der Block wirft an den Aufrufer weiter, der `error`
+    // setzt. Gesetzt wird erst, wenn ALLE da sind -- kein halb gefuellter Bildschirm, der wie
+    // "leer" aussieht (in Spec B1 zweimal ein Befund).
+    suspend fun reload(umfang: ReloadScope.Scope = ReloadScope.Scope.EVERYTHING) {
+        if (umfang == ReloadScope.Scope.CONTAINERS_ONLY) {
+            val c = ContainersRepository.list()
+            containers.clear(); containers.addAll(c)
+            return
+        }
+        coroutineScope {
+            val dContainers = async { ContainersRepository.list() }
+            val dCards = async { CollectionRepository.loadCards() }
+            val dCopies = async { CollectionRepository.loadCopies() }
+            val c = dContainers.await()
+            val cd = dCards.await()
+            val cp = dCopies.await()
+            containers.clear(); containers.addAll(c)
+            cards = cd
+            copies = cp
+        }
     }
     LaunchedEffect(Unit) {
         try { reload(); error = null }
@@ -130,6 +149,9 @@ fun BindersScreen(onOpen: (String) -> Unit) {
     }
 
     val cardsByKey = remember(cards) { cards.associateBy { it.printingKey() } }
+    // ABGELEITET, nicht zweiter Zustand: dieselben Zeilen, aus denen auch die Behaelter gefuellt
+    // werden. Die Reihenfolge (aeltestes Exemplar zuerst) steckt in UnsortedCopies, nicht hier.
+    val unsortedCopies = remember(copies) { UnsortedCopies.from(copies) }
     val copiesByContainer = remember(copies) { copies.filter { it.containerId != null }.groupBy { it.containerId!! } }
     fun countFor(id: String) = copiesByContainer[id]?.size ?: 0
     fun valueFor(id: String) = copiesByContainer[id]?.sumOf { c -> (cardsByKey[c.printingKey()]?.price ?: 0.0) * Valuation.factor(c.condition) } ?: 0.0
@@ -156,11 +178,20 @@ fun BindersScreen(onOpen: (String) -> Unit) {
         // Die Einschraenkung der EINGABEN (Faecher-Auswahl nur bei binder, nur 4/9/12) bleibt in
         // der Oberflaeche weiter unten (BinderDialog).
         val pockets = if (form.kind == "binder") form.pocketsPerPage else null
+        // Wie viel danach neu zu laden ist, entscheidet NICHT diese Oberflaeche: ReloadScope kennt
+        // die Regel und begruendet sie Fall fuer Fall. Die bisherige Art muss VOR dem Speichern
+        // abgelesen werden -- danach steht in `containers` die neue.
+        val vorherigeArt = form.containerId?.let { id -> containers.find { it.containerId == id }?.kind }
+        val umfang = ReloadScope.afterSave(form.containerId == null, vorherigeArt, form.kind)
 
         savingRef[0] = true
         saving = true
         dialogError = null
         scope.launch {
+            // Der Dialog schliesst, sobald gespeichert ist -- scheitert danach nur das Nachladen,
+            // gehoert die Meldung auf den Bildschirm, nicht in den geschlossenen Dialog. Sonst sieht
+            // es aus, als sei nichts passiert, und ein zweiter Versuch legt einen zweiten Behaelter an.
+            var gespeichert = false
             try {
                 ContainersRepository.save(
                     ContainerRow(
@@ -169,11 +200,16 @@ fun BindersScreen(onOpen: (String) -> Unit) {
                         color = form.color, sortOrder = form.sortOrder,
                     )
                 )
+                gespeichert = true
                 dialog = null
-                reload()
+                reload(umfang)
                 error = null
             } catch (e: Exception) {
-                dialogError = e.message ?: "Speichern fehlgeschlagen."
+                if (gespeichert) {
+                    error = "Gespeichert, aber die Liste konnte nicht neu geladen werden: ${e.message ?: "unbekannter Fehler"}"
+                } else {
+                    dialogError = e.message ?: "Speichern fehlgeschlagen."
+                }
             } finally {
                 saving = false
                 savingRef[0] = false
@@ -195,7 +231,7 @@ fun BindersScreen(onOpen: (String) -> Unit) {
                 deleteError = e.message ?: "Löschen fehlgeschlagen"
             }
             try {
-                reload()
+                reload(ReloadScope.afterDelete())
                 error = deleteError
             } catch (e: Exception) {
                 error = deleteError ?: (e.message ?: "Laden fehlgeschlagen")

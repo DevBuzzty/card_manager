@@ -99,7 +99,7 @@ object BinderGrid {
     /**
      * Das Auswahlangebot fuer ein leeres Fach, in zwei Gruppen. `inContainer` sind die Exemplare
      * DIESES Behaelters ohne darstellbares Fach (`loose`), `unsorted` die Exemplare ganz ohne
-     * Behaelter (`CollectionRepository.listUnsortedCopies`). Beide durch dieselbe Textsuche.
+     * Behaelter (`UnsortedCopies.from`). Beide durch dieselbe Textsuche.
      *
      * Warum zwei Gruppen: "Aus Fach nehmen" raeumt nur Seite und Fach, nicht den Behaelter -- der
      * Name der Aktion sagt "Fach". Das Exemplar liegt danach im Ordner, aber in keinem Fach, und
