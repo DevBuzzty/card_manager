@@ -135,7 +135,9 @@ fun StartScreen(
             // 0-€-Tag im Verlauf (Spec §7.3). Der Ladebildschirm macht das zum Nicht-Fall.
             val r = CollectionStore.state.value as? StoreState.Ready ?: return@launch
             try {
-                val dash = DashboardMemo.get(r.cards, r.copies)
+                // Review-Fund 1: nicht auf dem Haupt-Dispatcher rechnen -- ein kalter Merker
+                // braucht hier genauso die vollen ~210-406 ms wie in der Anzeige unten.
+                val dash = withContext(Dispatchers.Default) { DashboardMemo.get(r.cards, r.copies) }
                 // Record today's value + read the history for the chart. Non-fatal if the
                 // portfolio_snapshots table isn't set up yet.
                 SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
@@ -147,12 +149,13 @@ fun StartScreen(
     Surface(Modifier.fillMaxSize(), color = Background) {
         RefreshableBox(onRefresh = { CollectionStore.awaitSync(); SideStores.dealAlerts.refreshAndWait() }) {
         // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
-        // passen) oder null; solange null, zeigt EmptyDashboard einen neutralen Platzhalter
-        // (0 €, "Keine Daten") statt den Hauptthread mit der Berechnung zu blockieren.
-        val dashboardResult by produceState<Dashboard?>(DashboardMemo.peek(cards, copies), cards, copies) {
+        // passen) oder null; solange null, bleibt `d` null und die betroffenen Stellen unten
+        // zeigen einen echten Ladehinweis statt Nullwerten -- kein Hauptthread-Block durch die
+        // Berechnung. Review-Fund 2: 0 €/"Keine Daten" sah wie eine leere Sammlung aus, darum
+        // kein EmptyDashboard-Platzhalter mehr; die Stellen unten pruefen `d`/`dash` selbst.
+        val d by produceState<Dashboard?>(DashboardMemo.peek(cards, copies), cards, copies) {
             value = withContext(Dispatchers.Default) { DashboardMemo.get(cards, copies) }
         }
-        val d = dashboardResult ?: EmptyDashboard
         val byKey = remember(copies) { copies.groupBy { it.printingKey() } }
 
         // Window the history by the selected timeframe, spacing points by their real date.
@@ -160,9 +163,6 @@ fun StartScreen(
         val cutoff = if (timeframe == Int.MAX_VALUE) 0L else nowOrd - timeframe
         val windowSnaps = snapshots.filter { dayOrdinal(it.day) >= cutoff }
         val points = windowSnaps.map { dayOrdinal(it.day) to it.totalValue }
-        val startVal = windowSnaps.firstOrNull()?.totalValue ?: d.totalValue
-        val change = d.totalValue - startVal
-        val changePct = if (startVal > 0) change / startVal * 100 else 0.0
 
         Column(
             Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
@@ -216,17 +216,29 @@ fun StartScreen(
                 Column(Modifier.padding(16.dp)) {
                     SectionHeader("Gesamtwert")
                     Spacer(Modifier.height(4.dp))
-                    Text("%.2f €".format(d.totalValue), style = MaterialTheme.typography.displaySmall,
-                        fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
-                    Text("${d.totalCards} Karten · ${d.entries} Einträge",
-                        style = MaterialTheme.typography.bodySmall, color = Muted)
-                    if (windowSnaps.size >= 2) {
-                        val up = change >= 0
-                        Text(
-                            "${if (up) "+" else ""}%.2f € (%.1f%%)".format(change, changePct),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = MonoFontFamily, color = if (up) Good else ErrorColor,
-                        )
+                    val dash = d
+                    if (dash != null) {
+                        Text("%.2f €".format(dash.totalValue), style = MaterialTheme.typography.displaySmall,
+                            fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
+                        Text("${dash.totalCards} Karten · ${dash.entries} Einträge",
+                            style = MaterialTheme.typography.bodySmall, color = Muted)
+                        if (windowSnaps.size >= 2) {
+                            val startVal = windowSnaps.firstOrNull()?.totalValue ?: dash.totalValue
+                            val change = dash.totalValue - startVal
+                            val changePct = if (startVal > 0) change / startVal * 100 else 0.0
+                            val up = change >= 0
+                            Text(
+                                "${if (up) "+" else ""}%.2f € (%.1f%%)".format(change, changePct),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontFamily = MonoFontFamily, color = if (up) Good else ErrorColor,
+                            )
+                        }
+                    } else {
+                        // Review-Fund 2: kein Nullwert-Platzhalter, der wie eine leere Sammlung
+                        // aussieht -- echter Ladehinweis im selben Textslot wie der Wert, damit
+                        // die Karte in etwa ihre Hoehe behaelt.
+                        Text("Wert wird berechnet …", style = MaterialTheme.typography.displaySmall,
+                            fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Muted)
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -338,34 +350,39 @@ fun StartScreen(
                 }
             }
 
-            // Teuerste Karten.
-            SpaceCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    SectionHeader("Teuerste Karten")
-                    Spacer(Modifier.height(8.dp))
-                    if (d.top.isEmpty()) {
-                        Text("Keine Daten", style = MaterialTheme.typography.bodySmall, color = Muted)
-                    } else {
-                        d.top.forEach { c ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    c.name ?: c.id, Modifier.weight(1f), maxLines = 1,
-                                    style = MaterialTheme.typography.bodySmall, color = OnSurface,
-                                )
-                                ValueText(printingValue(c, byKey), style = MaterialTheme.typography.bodySmall)
+            // Review-Fund 2: Auswertungen haengen am Merker-Ergebnis -- solange das noch nicht
+            // da ist, werden sie ganz ausgelassen statt mit einem Nullwert-/"Keine Daten"-Stand
+            // zu erscheinen, der wie eine leere Sammlung aussieht.
+            d?.let { dash ->
+                // Teuerste Karten.
+                SpaceCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        SectionHeader("Teuerste Karten")
+                        Spacer(Modifier.height(8.dp))
+                        if (dash.top.isEmpty()) {
+                            Text("Keine Daten", style = MaterialTheme.typography.bodySmall, color = Muted)
+                        } else {
+                            dash.top.forEach { c ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        c.name ?: c.id, Modifier.weight(1f), maxLines = 1,
+                                        style = MaterialTheme.typography.bodySmall, color = OnSurface,
+                                    )
+                                    ValueText(printingValue(c, byKey), style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            StatSection("Nach Rarität", d.byRarity)
-            StatSection("Nach Typ", d.byType)
-            StatSection("Nach Set", d.bySet)
-            StatSection("Nach Attribut", d.byAttribute)
+                StatSection("Nach Rarität", dash.byRarity)
+                StatSection("Nach Typ", dash.byType)
+                StatSection("Nach Set", dash.bySet)
+                StatSection("Nach Attribut", dash.byAttribute)
+            }
         }
         }
     }

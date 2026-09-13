@@ -95,10 +95,6 @@ fun computeDashboard(cards: List<CardRow>, copies: List<CopyRow>): Dashboard {
     return Dashboard(totalValue, totalCards, cards.size, top, byRarity, byType, bySet, byAttribute)
 }
 
-// Neutraler Platzhalter, solange `DashboardMemo` im Hintergrund noch rechnet (Befund A, Punkt 3):
-// zeigt 0 €/keine Daten statt eines Ladebildschirms, ohne die Seite umzubauen.
-val EmptyDashboard = Dashboard(0.0, 0, 0, emptyList(), emptyList(), emptyList(), emptyList(), emptyList())
-
 // Merkt sich `computeDashboard` ueber Navigationen hinweg (Befund A): Karten/Exemplare aendern
 // sich bei einem Abgleich ohne Unterschied NICHT in ihrer Identitaet (CollectionStore liefert
 // dieselben Listeninstanzen), also genuegt ein Vergleich per `===` statt teurer Inhaltsvergleiche.
