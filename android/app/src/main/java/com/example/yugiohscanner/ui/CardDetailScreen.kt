@@ -24,14 +24,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.Prefs
-import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CatalogCard
 import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.ContainerRow
-import com.example.yugiohscanner.cloud.ContainersRepository
 import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.WishlistRepository
 import com.example.yugiohscanner.cloud.printingKey
@@ -50,9 +50,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List<CopyRow>, onClose: () -> Unit, onChanged: () -> Unit) {
-    var printings by remember { mutableStateOf(initial.filter { it.id == cardId }) }
-    var copies by remember { mutableStateOf(initialCopies.filter { it.cardId == cardId }) }
+fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
+    // Spec §5: Drucke, Exemplare und Behaelter aus dem Speicher, nach Karte gefiltert. `remember`
+    // haengt an der Listen-Identitaet -- ein Abgleich ohne Aenderung liefert dieselbe Liste.
+    val store by CollectionStore.state.collectAsState()
+    val ready = store as? StoreState.Ready
+    val printings = remember(ready?.cards, cardId) { ready?.cards?.filter { it.id == cardId } ?: emptyList() }
+    val copies = remember(ready?.copies, cardId) { ready?.copies?.filter { it.cardId == cardId } ?: emptyList() }
+    val containers = ready?.containers ?: emptyList()
     var error by remember { mutableStateOf<String?>(null) }
     // Wishlist state: the POST is a plain insert, so a second tap would write a duplicate row.
     var inWishlist by remember { mutableStateOf(false) }
@@ -63,15 +68,7 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
     // unchanged. Off the UI thread — this is a SQLite read.
     var catalogCard by remember(cardId) { mutableStateOf<CatalogCard?>(null) }
 
-    // Spec B1 §10.3: Behaelterliste fuer den Standort-Chip. Faellt bei einem Ladefehler defensiv
-    // auf eine leere Liste zurueck (Chip zeigt dann "—") -- anders als im Exemplar-Sheet selbst
-    // (CopySheet.kt), wo ein stiller Fehler echten Datenverlust ausloesen koennte, ist das hier
-    // nur eine Anzeige ohne Schreibpfad.
-    var containers by remember { mutableStateOf<List<ContainerRow>>(emptyList()) }
     var sheetCopy by remember { mutableStateOf<CopyRow?>(null) }
-    LaunchedEffect(Unit) {
-        containers = runCatching { ContainersRepository.list() }.getOrDefault(emptyList())
-    }
 
     LaunchedEffect(cardId) {
         runCatching { WishlistRepository.loadWishlist() }
@@ -82,14 +79,13 @@ fun CardDetailScreen(cardId: String, initial: List<CardRow>, initialCopies: List
         catalogCard = withContext(Dispatchers.IO) { runCatching { CatalogRepository.card(cardId) }.getOrNull() }
     }
 
-    // Reload this card's printings and copies from the cloud after a mutation, and tell the parent to refresh.
+    // Nach jedem Schreibvorgang: abgleichen statt selbst nachladen (Spec §5). awaitSync wirft nie --
+    // ein gescheiterter Abgleich zeigt sich im Hinweis, nicht als Absturz (Spec §7.2).
     suspend fun refresh() {
-        printings = CollectionRepository.loadCardsFor(cardId)
-        copies = CollectionRepository.loadCopiesFor(cardId)
-        onChanged()
+        CollectionStore.awaitSync()
     }
 
-    val base = printings.firstOrNull() ?: initial.firstOrNull { it.id == cardId }
+    val base = printings.firstOrNull()
     if (base == null) { onClose(); return }
 
     val displayName = catalogCard?.nameDe ?: base.name ?: base.id

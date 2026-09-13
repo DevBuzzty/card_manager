@@ -140,13 +140,7 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     // Full-screen sub-view takes over the whole tab — system back closes it instead of the tab.
     BackHandler(detailId != null) { detailId = null }
     detailId?.let { id ->
-        CardDetailScreen(
-            cardId = id,
-            initial = cards,
-            initialCopies = copies,
-            onClose = { detailId = null },
-            onChanged = { scope.launch { runCatching { reload() } } },
-        )
+        CardDetailScreen(cardId = id, onClose = { detailId = null })
         return
     }
 

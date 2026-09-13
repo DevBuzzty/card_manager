@@ -138,13 +138,7 @@ fun BindersScreen(onOpen: (String) -> Unit) {
     // Full-screen sub-view takes over the whole tab, wie in CollectionScreen.kt.
     BackHandler(detailId != null) { detailId = null }
     detailId?.let { id ->
-        CardDetailScreen(
-            cardId = id,
-            initial = cards,
-            initialCopies = copies,
-            onClose = { detailId = null },
-            onChanged = { scope.launch { runCatching { reload() } } },
-        )
+        CardDetailScreen(cardId = id, onClose = { detailId = null })
         return
     }
 

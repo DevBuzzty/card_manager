@@ -191,21 +191,7 @@ fun BinderPageScreen(
 
     BackHandler(detailId != null) { detailId = null }
     detailId?.let { id ->
-        CardDetailScreen(
-            cardId = id,
-            initial = cards,
-            initialCopies = copies,
-            onClose = { detailId = null },
-            // Wer im Kartendetail den Standort aendert, muss es merken, wenn das Neuladen danach
-            // scheitert -- sonst zeigt das Raster die Karte stumm weiter im alten Fach. Gleiches
-            // try/catch wie bei CopySheet.onSaved weiter unten.
-            onChanged = {
-                scope.launch {
-                    try { reload(); error = null }
-                    catch (e: Exception) { error = e.message ?: "Laden fehlgeschlagen" }
-                }
-            },
-        )
+        CardDetailScreen(cardId = id, onClose = { detailId = null })
         return
     }
 
