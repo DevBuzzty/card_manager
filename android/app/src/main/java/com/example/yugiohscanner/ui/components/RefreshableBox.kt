@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 /**
@@ -28,7 +29,10 @@ fun RefreshableBox(onRefresh: suspend () -> Unit, modifier: Modifier = Modifier,
             try { currentOnRefresh() } finally { state.endRefresh() }
         }
     }
-    Box(modifier.nestedScroll(state.nestedScrollConnection)) {
+    // Befund B: der Kreisel ruht knapp oberhalb dieser Box (translationY = verticalOffset -
+    // size.height) und wuerde ohne Clipping in den Bereich darueber zeichnen (z. B. die
+    // Reiterleiste) -- so wie es die Material-Beispiele fuer diese Version tun.
+    Box(modifier.nestedScroll(state.nestedScrollConnection).clipToBounds()) {
         content()
         PullToRefreshContainer(state = state, modifier = Modifier.align(Alignment.TopCenter))
     }
