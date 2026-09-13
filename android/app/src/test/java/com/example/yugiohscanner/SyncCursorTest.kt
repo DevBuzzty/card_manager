@@ -41,11 +41,34 @@ class SyncCursorTest {
     }
 
     @Test fun `Untergrenze zieht 60 Sekunden ab und schreibt mit Z`() {
-        assertEquals("2026-09-13T11:59:30.123456Z", SyncCursor.lowerBound("2026-09-13T12:00:30.123456+00:00"))
+        assertEquals("2026-09-13T11:59:30.123456Z", SyncCursor.lowerBound("2026-09-13T12:00:30.123456+00:00", null))
     }
 
-    @Test fun `ohne Stichtag ab 1970`() {
-        assertEquals("1970-01-01T00:00:00Z", SyncCursor.lowerBound(null))
+    @Test fun `ohne Stichtag und ohne Serverzeit ab 1970`() {
+        assertEquals("1970-01-01T00:00:00Z", SyncCursor.lowerBound(null, null))
+    }
+
+    @Test fun `nur Serverzeit gesetzt`() {
+        assertEquals("2026-09-13T12:04:00Z", SyncCursor.lowerBound(null, "2026-09-13T12:05:00Z"))
+    }
+
+    @Test fun `spaetere Serverzeit hebt die Untergrenze ueber den Stichtag`() {
+        assertEquals("2026-09-13T12:29:00Z", SyncCursor.lowerBound("2026-09-13T12:00:00+00:00", "2026-09-13T12:30:00Z"))
+    }
+
+    @Test fun `spaeterer Stichtag gewinnt gegen fruehere Serverzeit`() {
+        assertEquals("2026-09-13T12:09:00Z", SyncCursor.lowerBound("2026-09-13T12:10:00+00:00", "2026-09-13T12:05:00Z"))
+    }
+
+    @Test fun `HTTP-Date wird zu Instant-Form`() {
+        assertEquals("2026-09-13T17:05:02Z", SyncCursor.parseHttpDate("Sun, 13 Sep 2026 17:05:02 GMT"))
+    }
+
+    @Test fun `fehlender oder kaputter HTTP-Date ergibt null`() {
+        assertNull(SyncCursor.parseHttpDate(null))
+        assertNull(SyncCursor.parseHttpDate(""))
+        assertNull(SyncCursor.parseHttpDate("gestern"))
+        assertNull(SyncCursor.parseHttpDate("2026-09-13T17:05:02Z"))
     }
 
     @Test fun `normalisierte Form enthaelt kein Plus`() {

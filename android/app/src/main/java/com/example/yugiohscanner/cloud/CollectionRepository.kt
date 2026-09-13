@@ -1,6 +1,7 @@
 package com.example.yugiohscanner.cloud
 
 import com.example.yugiohscanner.ml.KeysetPager
+import com.example.yugiohscanner.ml.SyncCursor
 import com.example.yugiohscanner.ml.Tags
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,28 +32,36 @@ object CollectionRepository {
         .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
 
     // Voll- und Delta-Abfragen des Speichers (Spec §4). Blaettern nach Schluessel, siehe Keyset.
-    suspend fun fetchCards(changedSince: String?): List<CardRow> =
-        KeysetPager.all(StoreQueries.PAGE) { after ->
-            getPage("cards", StoreQueries.cards(changedSince, after), "Karten laden") { parse(it) }
-        }
+    // Die Serverzeit kommt aus dem `Date`-Header der ERSTEN Seite (Spec §4.3, SyncCursor.lowerBound).
+    suspend fun fetchCards(changedSince: String?): Fetched<CardRow> =
+        fetchAll { after -> getPage("cards", StoreQueries.cards(changedSince, after), "Karten laden") { parse(it) } }
 
-    suspend fun fetchCopies(changedSince: String?): List<CopyRow> =
-        KeysetPager.all(StoreQueries.PAGE) { after ->
-            getPage("card_copies", StoreQueries.copies(changedSince, after), "Exemplare laden") { parseCopies(it) }
-        }
+    suspend fun fetchCopies(changedSince: String?): Fetched<CopyRow> =
+        fetchAll { after -> getPage("card_copies", StoreQueries.copies(changedSince, after), "Exemplare laden") { parseCopies(it) } }
 
+    private suspend fun <T> fetchAll(page: suspend (after: T?) -> Pair<List<T>, String?>): Fetched<T> {
+        var serverTime: String? = null
+        val rows = KeysetPager.all<T>(StoreQueries.PAGE) { after ->
+            val (rows, date) = page(after)
+            if (after == null) serverTime = SyncCursor.parseHttpDate(date)
+            rows
+        }
+        return Fetched(rows, serverTime)
+    }
+
+    /** Eine Seite plus roher `Date`-Header der Antwort. */
     private suspend fun <T> getPage(
         table: String,
         params: List<Pair<String, String>>,
         what: String,
         parseRows: (JSONArray) -> List<T>,
-    ): List<T> = withContext(Dispatchers.IO) {
+    ): Pair<List<T>, String?> = withContext(Dispatchers.IO) {
         val b = "${SupabaseCloud.base()}/rest/v1/$table".toHttpUrl().newBuilder()
         for ((k, v) in params) b.addQueryParameter(k, v)
         executeWithReauth { auth(Request.Builder().url(b.build())).get().build() }.use { resp ->
             val text = resp.body?.string() ?: "[]"
             if (!resp.isSuccessful) throw RuntimeException("$what fehlgeschlagen (${resp.code}): $text")
-            parseRows(JSONArray(text))
+            parseRows(JSONArray(text)) to resp.header("Date")
         }
     }
 

@@ -36,10 +36,13 @@ data class SyncStatus(val lastSuccess: Instant? = null, val failing: Boolean = f
  * verschwinden sie lokal.
  */
 interface StoreSource {
-    suspend fun loadCards(changedSince: String?): List<CardRow>
-    suspend fun loadCopies(changedSince: String?): List<CopyRow>
-    suspend fun loadContainers(changedSince: String?): List<ContainerRow>
+    suspend fun loadCards(changedSince: String?): Fetched<CardRow>
+    suspend fun loadCopies(changedSince: String?): Fetched<CopyRow>
+    suspend fun loadContainers(changedSince: String?): Fetched<ContainerRow>
 }
+
+/** Zeilen einer Abfrage plus Serverzeit (HTTP-`Date` der ersten Seite, `Instant`-Form) oder `null`. */
+data class Fetched<T>(val rows: List<T>, val serverTime: String?)
 
 /**
  * Der Speicher selbst, ohne Bindung an das Netz -- testbar mit einer nachgebauten Quelle. Das
@@ -60,7 +63,20 @@ class CollectionStoreCore(
     private val _sync = MutableStateFlow(SyncStatus())
     val sync: StateFlow<SyncStatus> = _sync.asStateFlow()
 
-    private data class Cursors(val cards: String? = null, val copies: String? = null, val containers: String? = null)
+    /** Je Tabelle: Stichtag (spaetester gelieferter `updated_at`) und Serverzeit des letzten Erfolgs (Spec §4.3). */
+    private data class TableCursor(val stamp: String? = null, val serverStart: String? = null) {
+        fun lowerBound() = SyncCursor.lowerBound(stamp, serverStart)
+
+        /** Nach Erfolg. Fehlt der Header, bleibt der alte `serverStart` -- er ist frueher, also sicher. */
+        fun advance(f: Fetched<out Any>, stamps: List<String?>) =
+            TableCursor(SyncCursor.advance(stamp, stamps), f.serverTime ?: serverStart)
+    }
+
+    private data class Cursors(
+        val cards: TableCursor = TableCursor(),
+        val copies: TableCursor = TableCursor(),
+        val containers: TableCursor = TableCursor(),
+    )
 
     private val lock = Any()
     private var generation = 0L
@@ -90,14 +106,14 @@ class CollectionStoreCore(
             synchronized(lock) {
                 if (gen != generation) return
                 cursors = Cursors(
-                    cards = SyncCursor.advance(null, cards.map { it.updatedAt }),
-                    copies = SyncCursor.advance(null, copies.map { it.updatedAt }),
-                    containers = SyncCursor.advance(null, containers.map { it.updatedAt }),
+                    cards = TableCursor().advance(cards, cards.rows.map { it.updatedAt }),
+                    copies = TableCursor().advance(copies, copies.rows.map { it.updatedAt }),
+                    containers = TableCursor().advance(containers, containers.rows.map { it.updatedAt }),
                 )
                 _state.value = StoreState.Ready(
-                    cards = DeltaMerge.cards(emptyList(), cards),
-                    copies = DeltaMerge.copies(emptyList(), copies),
-                    containers = DeltaMerge.containers(emptyList(), containers),
+                    cards = DeltaMerge.cards(emptyList(), cards.rows),
+                    copies = DeltaMerge.copies(emptyList(), copies.rows),
+                    containers = DeltaMerge.containers(emptyList(), containers.rows),
                 )
                 _sync.value = SyncStatus(lastSuccess = clock(), failing = false)
             }
@@ -134,9 +150,9 @@ class CollectionStoreCore(
         }
         try {
             val (cards, copies, containers) = coroutineScope {
-                val c = async { source.loadCards(SyncCursor.lowerBound(cur.cards)) }
-                val cp = async { source.loadCopies(SyncCursor.lowerBound(cur.copies)) }
-                val ct = async { source.loadContainers(SyncCursor.lowerBound(cur.containers)) }
+                val c = async { source.loadCards(cur.cards.lowerBound()) }
+                val cp = async { source.loadCopies(cur.copies.lowerBound()) }
+                val ct = async { source.loadContainers(cur.containers.lowerBound()) }
                 Triple(c.await(), cp.await(), ct.await())
             }
             synchronized(lock) {
@@ -144,14 +160,14 @@ class CollectionStoreCore(
                 val now = _state.value as? StoreState.Ready ?: return
                 // Gleiche Listen -> gleiches Ready -> StateFlow gibt nichts aus.
                 _state.value = StoreState.Ready(
-                    cards = DeltaMerge.cards(now.cards, cards),
-                    copies = DeltaMerge.copies(now.copies, copies),
-                    containers = DeltaMerge.containers(now.containers, containers),
+                    cards = DeltaMerge.cards(now.cards, cards.rows),
+                    copies = DeltaMerge.copies(now.copies, copies.rows),
+                    containers = DeltaMerge.containers(now.containers, containers.rows),
                 )
                 cursors = Cursors(
-                    cards = SyncCursor.advance(cur.cards, cards.map { it.updatedAt }),
-                    copies = SyncCursor.advance(cur.copies, copies.map { it.updatedAt }),
-                    containers = SyncCursor.advance(cur.containers, containers.map { it.updatedAt }),
+                    cards = cur.cards.advance(cards, cards.rows.map { it.updatedAt }),
+                    copies = cur.copies.advance(copies, copies.rows.map { it.updatedAt }),
+                    containers = cur.containers.advance(containers, containers.rows.map { it.updatedAt }),
                 )
                 _sync.value = SyncStatus(lastSuccess = clock(), failing = false)
             }

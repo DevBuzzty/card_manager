@@ -1,6 +1,7 @@
 package com.example.yugiohscanner.cloud
 
 import com.example.yugiohscanner.ml.KeysetPager
+import com.example.yugiohscanner.ml.SyncCursor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -40,12 +41,18 @@ private val BINDER_POCKETS = setOf(4, 9, 12)
 object ContainersRepository {
 
     // Voll- und Delta-Abfrage des Speichers (Spec §4), gleiche Bauart wie CollectionRepository.fetchCopies.
-    suspend fun fetchContainers(changedSince: String?): List<ContainerRow> =
-        KeysetPager.all(StoreQueries.PAGE) { after ->
+    // Die Serverzeit kommt aus dem `Date`-Header der ERSTEN Seite (Spec §4.3, SyncCursor.lowerBound).
+    suspend fun fetchContainers(changedSince: String?): Fetched<ContainerRow> {
+        var serverTime: String? = null
+        val rows = KeysetPager.all<ContainerRow>(StoreQueries.PAGE) { after ->
             val b = "${SupabaseCloud.base()}/rest/v1/containers".toHttpUrl().newBuilder()
             for ((k, v) in StoreQueries.containers(changedSince, after)) b.addQueryParameter(k, v)
-            getArray(b.build()).let { arr -> (0 until arr.length()).map { parseContainer(arr.getJSONObject(it)) } }
+            val (arr, date) = getArray(b.build())
+            if (after == null) serverTime = SyncCursor.parseHttpDate(date)
+            (0 until arr.length()).map { parseContainer(arr.getJSONObject(it)) }
         }
+        return Fetched(rows, serverTime)
+    }
 
     // Upsert ueber die Primaerschluessel-Spalte container_id: legt neu an oder aktualisiert,
     // je nachdem ob die Zeile schon existiert. Der Aufrufer erzeugt die container_id (UUID) beim
@@ -135,11 +142,12 @@ object ContainersRepository {
             .addHeader("apikey", SupabaseCloud.key())
             .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
 
-    private suspend fun getArray(url: HttpUrl): JSONArray = withContext(Dispatchers.IO) {
+    /** Antwort als Array plus roher `Date`-Header. */
+    private suspend fun getArray(url: HttpUrl): Pair<JSONArray, String?> = withContext(Dispatchers.IO) {
         executeWithReauth { base(url).get().build() }.use { r ->
             val text = r.body?.string() ?: "[]"
             if (!r.isSuccessful) throw RuntimeException("Laden fehlgeschlagen (${r.code}): $text")
-            JSONArray(text)
+            JSONArray(text) to r.header("Date")
         }
     }
 

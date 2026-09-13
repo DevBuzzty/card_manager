@@ -159,7 +159,7 @@ und auf 0 gefallene Zeilen müssen ankommen, damit sie lokal verschwinden.
 
 ### 4.3 Delta-Abgleich
 
-- Abfrage je Tabelle: `updated_at >= (Stichtag − 60 s)`, sortiert nach `(updated_at, Schlüssel)`,
+- Abfrage je Tabelle: `updated_at >= (max(Stichtag, serverStart) − 60 s)`, sortiert nach `(updated_at, Schlüssel)`,
   Folgeseiten per `Keyset` nach `(updated_at, Schlüssel)`. Ein Preis-Update stempelt Hunderte
   Karten mit demselben Zeitpunkt; nur nach `updated_at` zu blättern hinge dort fest oder verlöre
   Zeilen.
@@ -167,6 +167,16 @@ und auf 0 gefallene Zeilen müssen ankommen, damit sie lokal verschwinden.
   aber erst danach sichtbar wurde. Genau an dieser Grenze lag ein früherer Fehler im PC-Sync.
 - Neuer Stichtag = max(alter Stichtag, größter gelieferter `updated_at`). Die Tabelle wird erst
   übernommen, wenn **alle** ihre Delta-Seiten da sind; der Stichtag rückt erst dann vor.
+- **Serverzeit `serverStart`:** je Tabelle die Serverzeit aus dem HTTP-`Date`-Header der **ersten**
+  Seitenantwort des letzten erfolgreichen Ladens bzw. Abgleichs (nie die Handy-Uhr). Ohne sie rückte
+  die Untergrenze nur mit neueren Zeilen vor: nach einem Stapel-Schreibvorgang (Desktop-Upsert,
+  Preis-Update) käme die Minute vor dem Stichtag bei **jedem** 10-s-Abgleich erneut — samt
+  Kartentexten. Untergrenze = `max(Stichtag, serverStart) − 60 s`; ist nur eines gesetzt, das eine;
+  beide `null`: ab `1970-01-01T00:00:00Z`. Die Überlappungsgarantie bleibt: eine Transaktion unter
+  60 s, die vor `serverStart − 60 s` stempelte, war bei jener Abfrage schon sichtbar; eine, die
+  danach stempelte, fängt die neue Untergrenze. Fehlt der Header oder ist er unlesbar, bleibt der
+  alte `serverStart`. Gescheiterter Abgleich: Stichtag und `serverStart` unverändert; `clear()`
+  setzt beide zurück.
 - Die drei Tabellen werden nebenläufig abgeglichen und **gemeinsam** in einem Schritt in
   `Ready` übernommen. Scheitert eine: nichts übernommen, `SyncStatus.failing = true`, Stichtage
   unverändert.
@@ -299,5 +309,8 @@ kein Delta, sondern:
   (`desktop/electron/sync.cjs:407-408`), dazu bis zu 10 s Handy-Takt. Schneller nur mit kürzerem
   PC-Takt — eigene Änderung, nicht Teil dieser Spec.
 - App-Start dauert weiter ~2 s (Ladebildschirm), weil der Speicher den Prozess nicht überlebt.
-- Der 10-s-Takt kostet im Vordergrund drei kleine Abfragen; nach großen Preis-Updates liefert die
-  60-s-Überlappung dieselben Zeilen einige Male erneut (unschädlich, §4.2).
+- Der 10-s-Takt kostet im Vordergrund drei kleine Abfragen. Nach großen Preis-Updates liefert die
+  60-s-Überlappung dieselben Zeilen höchstens für etwa eine Minute erneut (unschädlich, §4.2): die
+  Untergrenze folgt der Serverzeit `serverStart` (§4.3), nicht nur neueren Zeilen.
+- Die Serverzeit stammt vom `Date`-Header des API-Gateways, der Stempel `updated_at` von PostgreSQL.
+  Laufen beide Uhren um mehr als einige Sekunden auseinander, schrumpft die 60-s-Reserve entsprechend.

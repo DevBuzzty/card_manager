@@ -4,6 +4,7 @@ import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionStoreCore
 import com.example.yugiohscanner.cloud.ContainerRow
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.Fetched
 import com.example.yugiohscanner.cloud.StoreSource
 import com.example.yugiohscanner.cloud.StoreState
 import kotlinx.coroutines.CompletableDeferred
@@ -35,15 +36,22 @@ class CollectionStoreCoreTest {
     private fun container(id: String) = ContainerRow(containerId = id, name = id, kind = "box",
         pocketsPerPage = null, color = null, sortOrder = 0, updatedAt = t0)
 
-    /** Nachgebaute Netzquelle: Antworten je Aufruf austauschbar, jeder Aufruf mitgeschrieben. */
+    /**
+     * Nachgebaute Netzquelle: Antworten je Aufruf austauschbar, jeder Aufruf mitgeschrieben.
+     * `serverTime` ist die Serverzeit, die jede Antwort mitliefert (HTTP-`Date`), `null` = kein Header.
+     */
     private class FakeSource : StoreSource {
         var cards: suspend (String?) -> List<CardRow> = { emptyList() }
         var copies: suspend (String?) -> List<CopyRow> = { emptyList() }
         var containers: suspend (String?) -> List<ContainerRow> = { emptyList() }
+        var serverTime: String? = null
         val calls = mutableListOf<String>()
-        override suspend fun loadCards(changedSince: String?) = cards(changedSince).also { calls += "cards:$changedSince" }
-        override suspend fun loadCopies(changedSince: String?) = copies(changedSince).also { calls += "copies:$changedSince" }
-        override suspend fun loadContainers(changedSince: String?) = containers(changedSince).also { calls += "containers:$changedSince" }
+        override suspend fun loadCards(changedSince: String?) =
+            Fetched(cards(changedSince), serverTime).also { calls += "cards:$changedSince" }
+        override suspend fun loadCopies(changedSince: String?) =
+            Fetched(copies(changedSince), serverTime).also { calls += "copies:$changedSince" }
+        override suspend fun loadContainers(changedSince: String?) =
+            Fetched(containers(changedSince), serverTime).also { calls += "containers:$changedSince" }
     }
 
     private fun ready(store: CollectionStoreCore) = store.state.value as StoreState.Ready
@@ -95,6 +103,39 @@ class CollectionStoreCoreTest {
         src.calls.clear()
         store.awaitSync()
         assertTrue("Stichtag rueckt auf den spaetesten gelieferten Zeitpunkt", src.calls.contains("copies:2026-09-13T12:04:00Z"))
+    }
+
+    @Test fun `Serverzeit hebt die Untergrenze, auch ohne neuere Zeilen`() = runTest {
+        val src = FakeSource()
+        src.copies = { listOf(copy("a")) }                 // Stichtag 12:00:00
+        src.serverTime = "2026-09-13T12:30:00Z"
+        // Foreground-Bereich: nur so haengt der Lauf nicht allein an backgroundScope (siehe CoalescerTest).
+        val store = CollectionStoreCore(src, this)
+        store.loadInitial()
+
+        // Erster Abgleich: schon das vollstaendige Laden hat serverStart gesetzt.
+        src.calls.clear()
+        src.copies = { emptyList() }                       // keine neueren Zeilen
+        src.serverTime = "2026-09-13T12:40:00Z"
+        store.awaitSync()
+        assertTrue("Laden setzt serverStart: ${src.calls}", src.calls.contains("copies:2026-09-13T12:29:00Z"))
+        assertTrue("auch fuer die leere Tabelle: ${src.calls}", src.calls.contains("cards:2026-09-13T12:29:00Z"))
+
+        // Zweiter Abgleich: das Delta ohne Zeilen hat serverStart auf 12:40 vorgezogen -- ohne die
+        // Regel fragte er weiter ab Stichtag − 60 s (11:59) und laede denselben Stapel endlos neu.
+        src.calls.clear()
+        src.serverTime = null                              // Header fehlt: alter serverStart bleibt
+        store.awaitSync()
+        assertTrue("Delta setzt serverStart: ${src.calls}", src.calls.contains("copies:2026-09-13T12:39:00Z"))
+
+        // Gescheiterter Abgleich aendert serverStart nicht.
+        src.copies = { throw RuntimeException("offline") }
+        src.serverTime = "2026-09-13T13:00:00Z"
+        store.awaitSync()
+        src.copies = { emptyList() }
+        src.calls.clear()
+        store.awaitSync()
+        assertTrue("Fehler laesst serverStart stehen: ${src.calls}", src.calls.contains("copies:2026-09-13T12:39:00Z"))
     }
 
     @Test fun `Abgleich ohne Aenderung laesst den Datenzustand unberuehrt`() = runTest {
