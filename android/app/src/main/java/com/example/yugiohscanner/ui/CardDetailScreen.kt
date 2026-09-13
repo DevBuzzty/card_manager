@@ -88,12 +88,12 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
     }
 
     val base = printings.firstOrNull()
-    if (base == null) {
-        // Nur schliessen, wenn der Speicher bereit ist und die Karte wirklich keine Drucke mehr hat
-        // (z. B. der letzte wurde geloescht). Ohne Ready zeigt AppNav den Ladebildschirm.
-        if (ready != null) onClose()
-        return
-    }
+    // Nur schliessen, wenn der Speicher bereit ist und die Karte wirklich keine Drucke mehr hat
+    // (z. B. der letzte wurde geloescht). Ohne Ready zeigt AppNav den Ladebildschirm. Als Effekt,
+    // nicht waehrend der Komposition -- die darf keine Navigation ausloesen.
+    val gone = ready != null && base == null
+    LaunchedEffect(gone) { if (gone) onClose() }
+    if (base == null) return
 
     val displayName = catalogCard?.nameDe ?: base.name ?: base.id
     val displayDesc = catalogCard?.descDe ?: base.desc

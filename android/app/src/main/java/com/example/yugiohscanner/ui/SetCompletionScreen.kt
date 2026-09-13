@@ -90,6 +90,12 @@ fun SetCompletionScreen(onClose: (() -> Unit)? = null) {
                 }
                 Spacer(Modifier.height(12.dp))
             }
+            // Scheitert ein erneutes Laden, bleibt die noch gueltige Set-Liste stehen; der Fehler
+            // steht dann als schmale Zeile darueber. Der Fehlerbildschirm nur ohne Liste.
+            if (sets != null && error != null) {
+                Text(error, color = ErrorColor, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.height(6.dp))
+            }
             // Spec §8: jeder Platzhalter-Zweig braucht einen scrollbaren Nachfahren, sonst greift
             // Nach-unten-ziehen (RefreshableBox, verschachteltes Scrollen) hier nie.
             when {
@@ -100,7 +106,7 @@ fun SetCompletionScreen(onClose: (() -> Unit)? = null) {
                         }
                     }
                 }
-                error != null -> LazyColumn(Modifier.fillMaxSize()) {
+                sets == null && error != null -> LazyColumn(Modifier.fillMaxSize()) {
                     item {
                         Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
                             Text(error!!, color = ErrorColor)
