@@ -13,6 +13,8 @@ import org.json.JSONObject
 data class ContainerRow(
     val containerId: String, val name: String, val kind: String,
     val pocketsPerPage: Int?, val color: String?, val sortOrder: Int,
+    // Nur gelesen, fuer den Delta-Abgleich (Spec §4.2/§4.3); save() sendet beides nicht.
+    val deleted: Boolean = false, val updatedAt: String? = null,
 )
 
 /**

@@ -18,4 +18,8 @@ data class CardRow(
     val level: Int? = null,
     val race: String? = null,
     val attribute: String? = null,
+    // Nur fuer den Delta-Abgleich des Speichers (Spec §4.2): eine geloeschte Zeile muss ankommen,
+    // damit sie lokal verschwindet. Beide Felder werden NUR gelesen; kein Schreibweg sendet sie.
+    val deleted: Boolean = false,
+    val updatedAt: String? = null,
 )

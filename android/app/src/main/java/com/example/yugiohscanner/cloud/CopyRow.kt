@@ -27,6 +27,8 @@ data class CopyRow(
     // abgeleitet werden kann, in der sie bisher vom Server kam (UnsortedCopies.from). Der Desktop
     // macht es genauso: copies.cjs#listAllCopies waehlt created_at mit aus.
     val createdAt: String? = null,
+    // NUR-LESE-FELD wie createdAt: der Server stempelt es; Stichtag des Delta-Abgleichs (Spec §4.3).
+    val updatedAt: String? = null,
 ) {
     fun printingKey() = "$cardId|$setCode|$language|$rarity"
 }
