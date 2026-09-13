@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.WishlistItem
 import com.example.yugiohscanner.cloud.WishlistRepository
 import com.example.yugiohscanner.ui.components.SpaceCard
@@ -31,18 +32,17 @@ import kotlinx.coroutines.launch
 @Composable
 fun WishlistScreen(onClose: (() -> Unit)? = null) {
     val scope = rememberCoroutineScope()
-    val items = remember { mutableStateListOf<WishlistItem>() }
+    val cache by SideStores.wishlist.state.collectAsState()
+    val items = cache.value ?: emptyList()
     var name by remember { mutableStateOf("") }
     var maxPrice by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var writeError by remember { mutableStateOf<String?>(null) }
+    val loading = busy || (cache.value == null && cache.error == null)
+    val error = writeError ?: cache.error
 
-    suspend fun reload() {
-        items.clear(); items.addAll(WishlistRepository.loadWishlist())
-    }
-    LaunchedEffect(Unit) {
-        try { reload() } catch (e: Exception) { error = e.message } finally { loading = false }
-    }
+    // Spec §8: sofort der letzte Stand, im Hintergrund voll neu laden.
+    LaunchedEffect(Unit) { SideStores.wishlist.refresh() }
 
     val add = {
         val n = name.trim()
@@ -50,13 +50,13 @@ fun WishlistScreen(onClose: (() -> Unit)? = null) {
             val p = maxPrice.toDoubleOrNull()
             name = ""; maxPrice = ""
             scope.launch {
-                loading = true
+                busy = true
                 try {
                     WishlistRepository.addToWishlist(cardId = n.lowercase(), name = n, imageUrl = null, maxPrice = p)
-                    reload()
-                    error = null
-                } catch (e: Exception) { error = e.message }
-                loading = false
+                    SideStores.wishlist.refreshAndWait()
+                    writeError = null
+                } catch (e: Exception) { writeError = e.message }
+                busy = false
             }
         }
     }
@@ -115,8 +115,8 @@ fun WishlistScreen(onClose: (() -> Unit)? = null) {
                     items(items, key = { it.id }) { item ->
                         WishlistRow(item, onDelete = {
                             scope.launch {
-                                try { WishlistRepository.removeFromWishlist(item.id); reload() }
-                                catch (e: Exception) { error = e.message }
+                                try { WishlistRepository.removeFromWishlist(item.id); SideStores.wishlist.refreshAndWait() }
+                                catch (e: Exception) { writeError = e.message }
                             }
                         })
                     }

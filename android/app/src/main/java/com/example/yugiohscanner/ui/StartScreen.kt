@@ -40,9 +40,7 @@ import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CatalogState
 import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionStore
-import com.example.yugiohscanner.cloud.DealAlert
-import com.example.yugiohscanner.cloud.DealsRepository
-import com.example.yugiohscanner.cloud.SetsRepository
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.Snapshot
 import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
@@ -88,9 +86,27 @@ fun StartScreen(
     val cards = ready?.cards ?: emptyList()
     val copies = ready?.copies ?: emptyList()
     var snapshots by remember { mutableStateOf<List<Snapshot>>(emptyList()) }
-    var dealAlertCount by remember { mutableStateOf(0) }
-    var topDeals by remember { mutableStateOf<List<DealAlert>>(emptyList()) }
-    var setProgress by remember { mutableStateOf<List<SetProgressRow>>(emptyList()) }
+    val setsCache by SideStores.sets.state.collectAsState()
+    val alertsCache by SideStores.dealAlerts.state.collectAsState()
+    val dealAlertCount = alertsCache.value?.size ?: 0
+    val topDeals = alertsCache.value?.take(2) ?: emptyList()
+    val setProgress = remember(ready?.cards, setsCache.value) {
+        val sets = setsCache.value ?: return@remember emptyList<SetProgressRow>()
+        val ownedByPrefix = HashMap<String, MutableSet<String>>()
+        for (card in cards) {
+            if (card.setCode.equals("Unknown", ignoreCase = true)) continue
+            val prefix = card.setCode.substringBefore("-").uppercase()
+            if (prefix.isBlank()) continue
+            ownedByPrefix.getOrPut(prefix) { HashSet() }.add(card.setCode)
+        }
+        ownedByPrefix.mapNotNull { (prefix, codes) ->
+            val info = sets[prefix] ?: return@mapNotNull null
+            SetProgressRow(info.name, codes.size.coerceAtMost(info.total), info.total)
+        }
+            .filter { it.owned < it.total }
+            .sortedByDescending { it.owned.toFloat() / it.total }
+            .take(3)
+    }
     var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
     var error by remember { mutableStateOf<String?>(null) }
     // Spec B1 §10.5: Zaehler "Nicht einsortiert", abgeleitet aus den Exemplaren im Speicher.
@@ -111,40 +127,18 @@ fun StartScreen(
 
     LaunchedEffect(Unit) {
         scope.launch {
+            SideStores.sets.ensureLoaded()
+            SideStores.dealAlerts.refresh()
+
             // Ohne Ready wird nichts gerechnet und KEIN Tageswert gespeichert -- sonst stuende ein
             // 0-€-Tag im Verlauf (Spec §7.3). Der Ladebildschirm macht das zum Nicht-Fall.
             val r = CollectionStore.state.value as? StoreState.Ready ?: return@launch
-            try {
-                val sets = SetsRepository.loadSets()
-                val ownedByPrefix = HashMap<String, MutableSet<String>>()
-                for (card in r.cards) {
-                    if (card.setCode.equals("Unknown", ignoreCase = true)) continue
-                    val prefix = card.setCode.substringBefore("-").uppercase()
-                    if (prefix.isBlank()) continue
-                    ownedByPrefix.getOrPut(prefix) { HashSet() }.add(card.setCode)
-                }
-                setProgress = ownedByPrefix.mapNotNull { (prefix, codes) ->
-                    val info = sets[prefix] ?: return@mapNotNull null
-                    val owned = codes.size.coerceAtMost(info.total)
-                    SetProgressRow(info.name, owned, info.total)
-                }
-                    .filter { it.owned < it.total }            // not yet complete
-                    .sortedByDescending { it.owned.toFloat() / it.total }
-                    .take(3)
-            } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
-
             try {
                 val dash = computeDashboard(r.cards, r.copies)
                 // Record today's value + read the history for the chart. Non-fatal if the
                 // portfolio_snapshots table isn't set up yet.
                 SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
                 snapshots = SnapshotsRepository.loadSnapshots()
-            } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
-
-            try {
-                val alerts = DealsRepository.loadAlerts()
-                dealAlertCount = alerts.size
-                topDeals = alerts.take(2)
             } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
         }
     }
@@ -205,7 +199,7 @@ fun StartScreen(
                 }
             }
 
-            error?.let {
+            (error ?: setsCache.error ?: alertsCache.error)?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 

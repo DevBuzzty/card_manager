@@ -29,8 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.DealAlert
-import com.example.yugiohscanner.cloud.DealWatch
 import com.example.yugiohscanner.cloud.DealsRepository
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
@@ -53,27 +53,32 @@ private fun euro(v: Double): String =
 fun DealsScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val alerts = remember { mutableStateListOf<DealAlert>() }
-    val watches = remember { mutableStateListOf<DealWatch>() }
+    val alertsCache by SideStores.dealAlerts.state.collectAsState()
+    val watchesCache by SideStores.dealWatches.state.collectAsState()
+    val alerts = alertsCache.value ?: emptyList()
+    val watches = watchesCache.value ?: emptyList()
     var query by remember { mutableStateOf("") }
     var maxPrice by remember { mutableStateOf("") }
     var condition by remember { mutableStateOf("any") }
     var loading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var writeError by remember { mutableStateOf<String?>(null) }
+    val error = writeError ?: alertsCache.error ?: watchesCache.error
 
     suspend fun reloadFromCloud() {
-        watches.clear(); watches.addAll(DealsRepository.loadWatches())
-        alerts.clear(); alerts.addAll(DealsRepository.loadAlerts())
+        SideStores.dealWatches.refreshAndWait()
+        SideStores.dealAlerts.refreshAndWait()
     }
 
+    // Wie bisher: Neu laden stoesst erst den Cloud-Scrape an. Die Listen sind dabei sofort mit dem
+    // letzten Stand sichtbar (Spec §8); `loading` zeigt nur den laufenden Scrape an.
     fun refresh(scrapeFirst: Boolean = true) {
         scope.launch {
             loading = true
             try {
                 if (scrapeFirst) DealsRepository.triggerScrape()
                 reloadFromCloud()
-                error = null
-            } catch (e: Exception) { error = e.message }
+                writeError = null
+            } catch (e: Exception) { writeError = e.message }
             loading = false
         }
     }
@@ -92,8 +97,8 @@ fun DealsScreen() {
                     DealsRepository.addWatch(q, p, cond)
                     DealsRepository.triggerScrape()
                     reloadFromCloud()
-                    error = null
-                } catch (e: Exception) { error = e.message }
+                    writeError = null
+                } catch (e: Exception) { writeError = e.message }
                 loading = false
             }
         }
@@ -159,7 +164,7 @@ fun DealsScreen() {
                                     modifier = Modifier.size(18.dp).clickable {
                                         scope.launch {
                                             try { DealsRepository.deleteWatch(w.id); reloadFromCloud() }
-                                            catch (e: Exception) { error = e.message }
+                                            catch (e: Exception) { writeError = e.message }
                                         }
                                     })
                             }
@@ -180,8 +185,15 @@ fun DealsScreen() {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(alerts, key = { it.id }) { d -> DealRow(d, context, onDismiss = {
                         scope.launch {
-                            try { DealsRepository.dismissAlert(d.id); alerts.remove(d) }
-                            catch (e: Exception) { error = e.message }
+                            try {
+                                DealsRepository.dismissAlert(d.id)
+                                SideStores.dealAlerts.update { list -> list.filterNot { it.id == d.id } }
+                                // Ein vor dem Ausblenden gestarteter Hintergrund-Nachladelauf koennte
+                                // erst danach fertig werden und die lokale Entfernung ueberschreiben;
+                                // ein Lauf, der erst danach startet, liefert den Serverstand ohne den
+                                // Treffer. refresh() gleicht beide Faelle an.
+                                SideStores.dealAlerts.refresh()
+                            } catch (e: Exception) { writeError = e.message }
                         }
                     }) }
                 }

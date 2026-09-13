@@ -26,16 +26,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CollectionStore
-import com.example.yugiohscanner.cloud.SetInfo
-import com.example.yugiohscanner.cloud.SetsRepository
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Gold
@@ -55,19 +52,11 @@ fun SetCompletionScreen(onClose: (() -> Unit)? = null) {
     // Spec §5: Karten aus dem Speicher; die Set-Liste laedt weiter pro Aufruf (Phase 2 speichert sie).
     val store by CollectionStore.state.collectAsState()
     val cards = (store as? StoreState.Ready)?.cards ?: emptyList()
-    var sets by remember { mutableStateOf<Map<String, SetInfo>?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(Unit) {
-        try {
-            sets = SetsRepository.loadSets()
-        } catch (e: Exception) {
-            error = e.message
-        } finally {
-            loading = false
-        }
-    }
+    val setsCache by SideStores.sets.state.collectAsState()
+    val sets = setsCache.value
+    val loading = sets == null && setsCache.error == null
+    val error = setsCache.error
+    LaunchedEffect(Unit) { SideStores.sets.ensureLoaded() }
 
     val rows = remember(cards, sets) {
         val s = sets ?: return@remember emptyList<SetProgress>()

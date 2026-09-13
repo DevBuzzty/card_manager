@@ -33,6 +33,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.SupabaseCloud
 import com.example.yugiohscanner.ml.ModelStore
@@ -122,6 +123,7 @@ fun AppNav() {
                 prefs.edit().putString("supabase_password", "").apply()
                 SupabaseCloud.signOut()
                 CollectionStore.clear()
+                SideStores.clearAll()
                 cloudReady = false
             },
         )
@@ -152,7 +154,7 @@ fun AppNav() {
                     // Spec B1 Task 10: der Zähler "Nicht einsortiert" springt gezielt in den
                     // Binder-Reiter der Sammlung, nicht in den Standard-Reiter "Karten".
                     onOpenBinder = { nav.navigateTop(Routes.sammlung("binder")) },
-                ) else CloudLoginScreen(prefs) { CollectionStore.clear(); cloudReady = true }
+                ) else CloudLoginScreen(prefs) { CollectionStore.clear(); SideStores.clearAll(); cloudReady = true }
             }
             composable(
                 Routes.SAMMLUNG,
@@ -163,7 +165,7 @@ fun AppNav() {
                     onSegment = { nav.navigate(Routes.sammlung(it)) { popUpTo(Routes.SAMMLUNG) { inclusive = true } } },
                     onOpenSuche = { nav.navigate(Routes.SUCHE) },
                     onOpenBehaelter = { nav.navigate(Routes.behaelter(it)) },
-                ) else CloudLoginScreen(prefs) { CollectionStore.clear(); cloudReady = true }
+                ) else CloudLoginScreen(prefs) { CollectionStore.clear(); SideStores.clearAll(); cloudReady = true }
             }
             composable(
                 Routes.BEHAELTER,
@@ -183,7 +185,7 @@ fun AppNav() {
                     onSeiteAufgeschlagen = {
                         backStackEntry.savedStateHandle[Routes.SEITE_NACH_EINSORTIEREN] = null
                     },
-                ) else CloudLoginScreen(prefs) { CollectionStore.clear(); cloudReady = true }
+                ) else CloudLoginScreen(prefs) { CollectionStore.clear(); SideStores.clearAll(); cloudReady = true }
             }
             composable(
                 Routes.EINSORTIEREN,
@@ -204,23 +206,23 @@ fun AppNav() {
                         CollectionStore.requestSync()
                         nav.popBackStack()
                     },
-                ) else CloudLoginScreen(prefs) { CollectionStore.clear(); cloudReady = true }
+                ) else CloudLoginScreen(prefs) { CollectionStore.clear(); SideStores.clearAll(); cloudReady = true }
             }
             composable(Routes.SCAN) {
                 if (cloudReady) ScanScreen(onClose = { nav.popBackStack() })
-                else CloudLoginScreen(prefs) { CollectionStore.clear(); cloudReady = true }
+                else CloudLoginScreen(prefs) { CollectionStore.clear(); SideStores.clearAll(); cloudReady = true }
             }
             composable(Routes.DEALS) {
-                if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { CollectionStore.clear(); cloudReady = true }
+                if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { CollectionStore.clear(); SideStores.clearAll(); cloudReady = true }
             }
             composable(Routes.EINSTELLUNGEN) {
                 SettingsScreen(prefs, onBack = { nav.popBackStack() }) {
-                    SupabaseCloud.signOut(); CollectionStore.clear(); cloudReady = false; nav.popBackStack()
+                    SupabaseCloud.signOut(); CollectionStore.clear(); SideStores.clearAll(); cloudReady = false; nav.popBackStack()
                 }
             }
             composable(Routes.SUCHE) {
                 if (cloudReady) SearchScreen(onClose = { nav.popBackStack() }, onAdded = { CollectionStore.requestSync() })
-                else CloudLoginScreen(prefs) { CollectionStore.clear(); cloudReady = true }
+                else CloudLoginScreen(prefs) { CollectionStore.clear(); SideStores.clearAll(); cloudReady = true }
             }
         }
     }

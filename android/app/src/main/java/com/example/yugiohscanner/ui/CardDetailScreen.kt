@@ -31,6 +31,7 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.ContainerRow
 import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.WishlistRepository
@@ -59,8 +60,12 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
     val copies = remember(ready?.copies, cardId) { ready?.copies?.filter { it.cardId == cardId } ?: emptyList() }
     val containers = ready?.containers ?: emptyList()
     var error by remember { mutableStateOf<String?>(null) }
-    // Wishlist state: the POST is a plain insert, so a second tap would write a duplicate row.
-    var inWishlist by remember { mutableStateOf(false) }
+    // Spec §8: aus dem Wunschlisten-Speicher. `addedHere` sperrt den Knopf sofort nach dem Tippen,
+    // bevor der Speicher nachgeladen hat -- der POST ist ein reines Insert, ein zweiter Tipp legte
+    // eine Dublette an.
+    val wish by SideStores.wishlist.state.collectAsState()
+    var addedHere by remember { mutableStateOf(false) }
+    val inWishlist = addedHere || wish.value?.any { it.cardId == cardId } == true
     var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     // Catalog first (Task 9): Name, Kartentext and Stats prefer the offline catalog when it has
@@ -70,10 +75,7 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
 
     var sheetCopy by remember { mutableStateOf<CopyRow?>(null) }
 
-    LaunchedEffect(cardId) {
-        runCatching { WishlistRepository.loadWishlist() }
-            .onSuccess { list -> inWishlist = list.any { it.cardId == cardId } }
-    }
+    LaunchedEffect(Unit) { SideStores.wishlist.ensureLoaded() }
 
     LaunchedEffect(cardId) {
         catalogCard = withContext(Dispatchers.IO) { runCatching { CatalogRepository.card(cardId) }.getOrNull() }
@@ -111,7 +113,7 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                 scope.launch {
                     try {
                         WishlistRepository.addToWishlist(base.id, base.name ?: base.id, base.imageUrl, null)
-                        error = null; inWishlist = true; notice = "Zur Wunschliste hinzugefügt"
+                        error = null; addedHere = true; notice = "Zur Wunschliste hinzugefügt"; SideStores.wishlist.refresh()
                     } catch (e: Exception) { error = e.message }
                 }
             }) {
