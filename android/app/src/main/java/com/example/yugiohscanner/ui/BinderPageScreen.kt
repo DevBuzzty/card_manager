@@ -36,10 +36,11 @@ import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CONTAINER_KIND_LABELS
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.ContainerRow
-import com.example.yugiohscanner.cloud.ContainersRepository
 import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.BinderGrid
@@ -51,10 +52,7 @@ import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
-import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -92,11 +90,14 @@ fun BinderPageScreen(
 ) {
     val scope = rememberCoroutineScope()
 
-    var container by remember { mutableStateOf<ContainerRow?>(null) }
-    var containers by remember { mutableStateOf<List<ContainerRow>>(emptyList()) }
-    var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
-    var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+    // Spec §5: aus dem Speicher. Ist der Behaelter dort nicht (z. B. am PC geloescht), zeigt die
+    // Seite das statt eines leeren Ordners.
+    val store by CollectionStore.state.collectAsState()
+    val ready = store as? StoreState.Ready
+    val containers = ready?.containers ?: emptyList()
+    val cards = ready?.cards ?: emptyList()
+    val copies = ready?.copies ?: emptyList()
+    val container = containers.find { it.containerId == containerId }
     // Ein Ladefehler darf nicht wie ein leerer Ordner aussehen: eigener Zustand, im Erfolgsfall
     // ausdruecklich auf null zurueckgesetzt, und die Leermeldung erscheint nur bei `error == null`.
     // Das Banner steht ganz oben im Aufbau, damit es nicht hinter einem eingeklappten Teil
@@ -135,49 +136,14 @@ fun BinderPageScreen(
     // Je Ordnerseite eine senkrechte Rasterposition, aus demselben Grund hier oben gehalten.
     val gridScrolls = remember { mutableMapOf<Int, ScrollState>() }
 
-    // Die drei Aufrufe haengen nicht voneinander ab und laufen deshalb NEBENLAEUFIG -- gewartet
-    // wird auf den laengsten, nicht auf die Summe. `coroutineScope` haelt die Fehlerbehandlung
-    // unveraendert: schlaegt EINER fehl, bricht der Block ab und wirft an den Aufrufer, der
-    // `error` setzt; gesetzt wird erst, wenn alle da sind -- nie ein halb gefuellter Ordner.
-    //
-    // Der vierte Aufruf (listUnsortedCopies) ist weg. Er stand hier NUR wegen der Reihenfolge,
-    // die im Fach-Fuellen-Sheet sichtbar ist; seit `created_at` mitgeladen wird, stellt
-    // `UnsortedCopies.from` genau dieselbe Reihenfolge aus `cp` her (dort begruendet).
-    suspend fun reload() {
-        coroutineScope {
-            val dContainers = async { ContainersRepository.list() }
-            val dCards = async { CollectionRepository.loadCards() }
-            val dCopies = async { CollectionRepository.loadCopies() }
-            val cs = dContainers.await()
-            val cd = dCards.await()
-            val cp = dCopies.await()
-            val found = cs.find { it.containerId == containerId }
-                ?: throw RuntimeException("Behälter nicht gefunden.")
-            container = found
-            containers = cs
-            cards = cd
-            copies = cp
-        }
-    }
-
-    LaunchedEffect(containerId) {
-        try { reload(); error = null }
-        catch (e: Exception) { error = e.message ?: "Laden fehlgeschlagen" }
-        finally { loading = false }
-    }
-
     // Rueckweg aus dem Einsortier-Modus (Spec §6.6), in ZWEI Schritten -- absichtlich.
-    // Erst neu laden (der Modus hat Standorte geschrieben, die diese Ansicht nicht kennt) und das
-    // Ziel merken; aufgeschlagen wird erst im zweiten Effekt. Beides in einem Zug ginge daneben:
-    // `pageCount` ist ein in DIESER Zusammensetzung berechneter Wert, und der Effekt laeuft nach
-    // `reload()` mit dem ALTEN weiter -- eine neu entstandene letzte Seite waere damit
-    // weggeklemmt worden. Der zweite Effekt haengt an `pageCount` und laeuft deshalb mit dem
-    // frischen Wert.
+    // Erst abgleichen (der Modus hat Standorte geschrieben, die der Speicher noch nicht kennt) und das
+    // Ziel merken; aufgeschlagen wird erst im zweiten Effekt, der an `pageCount` haengt und deshalb
+    // mit dem frischen Wert laeuft -- eine neu entstandene letzte Seite wuerde sonst weggeklemmt.
     var seitenZiel by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(seiteNachEinsortieren) {
         val ziel = seiteNachEinsortieren ?: return@LaunchedEffect
-        try { reload(); error = null }
-        catch (e: Exception) { error = e.message ?: "Laden fehlgeschlagen" }
+        CollectionStore.awaitSync()
         seitenZiel = ziel
         // Raeumt den Rueckkanal weg: ohne das schlaegt jede Neuzusammensetzung dieselbe Seite
         // wieder auf und risse ein Blaettern des Nutzers zurueck.
@@ -204,7 +170,7 @@ fun BinderPageScreen(
         list.sumOf { c -> (cardOf(c)?.price ?: 0.0) * Valuation.factor(c.condition) }
 
     // Ein Schreibweg fuer beide Aktionen dieser Seite (aus dem Fach nehmen, in ein Fach legen):
-    // Sperre, Schreiben, Neuladen, Fehler zuruecksetzen. Liefert false, wenn die Sperre den
+    // Sperre, Schreiben, Abgleichen, Fehler zuruecksetzen. Liefert false, wenn die Sperre den
     // Vorgang verworfen hat -- der Aufrufer schliesst sein Sheet dann nicht.
     fun write(what: String, block: suspend () -> Unit): Boolean {
         if (savingRef[0]) return false
@@ -213,7 +179,7 @@ fun BinderPageScreen(
         scope.launch {
             try {
                 block()
-                reload()
+                CollectionStore.awaitSync()
                 error = null
             } catch (e: Exception) {
                 error = e.message ?: "$what fehlgeschlagen"
@@ -241,6 +207,8 @@ fun BinderPageScreen(
                 }
             }
 
+            SyncHint(Modifier.padding(top = 4.dp))
+
             error?.let {
                 Spacer(Modifier.height(8.dp))
                 SpaceCard(Modifier.fillMaxWidth()) {
@@ -250,13 +218,10 @@ fun BinderPageScreen(
 
             Spacer(Modifier.height(12.dp))
 
-            if (loading) {
+            if (container == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
+                    Text("Behälter nicht gefunden.", color = Muted)
                 }
-            } else if (container == null) {
-                // Nur erreichbar, wenn reload() geworfen hat -- das Banner oben sagt bereits, was war.
-                Spacer(Modifier.weight(1f))
             } else if (isBinder) {
                 val page = pagerState.currentPage + 1
                 val slotsOfPage = remember(myCopies, page, pockets) { BinderGrid.slots(myCopies, page, pockets) }
@@ -382,7 +347,7 @@ fun BinderPageScreen(
         CopySheet(
             copy = copy,
             onDismiss = { sheetCopy = null },
-            onSaved = { scope.launch { try { reload(); error = null } catch (e: Exception) { error = e.message ?: "Laden fehlgeschlagen" } } },
+            onSaved = { scope.launch { CollectionStore.awaitSync() } },
         )
     }
 }

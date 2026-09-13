@@ -200,6 +200,8 @@ fun AppNav() {
                             nav.previousBackStackEntry
                                 ?.savedStateHandle?.set(Routes.SEITE_NACH_EINSORTIEREN, page)
                         }
+                        // Der Modus hat Standorte geschrieben; Scan-Uebernahmen darin ebenfalls (Spec §7.4).
+                        CollectionStore.requestSync()
                         nav.popBackStack()
                     },
                 ) else CloudLoginScreen(prefs) { CollectionStore.clear(); cloudReady = true }

@@ -49,10 +49,11 @@ import coil.compose.AsyncImage
 import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.ContainerRow
-import com.example.yugiohscanner.cloud.ContainersRepository
 import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.Pick
@@ -72,8 +73,6 @@ import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -228,22 +227,17 @@ fun SortIntoBinderScreen(containerId: String, onDone: (Int?) -> Unit) {
 
     LaunchedEffect(containerId) {
         try {
-            // Drei Aufrufe, die nicht voneinander abhaengen -- nebenlaeufig, gewartet wird auf den
-            // laengsten statt auf die Summe. `coroutineScope` laesst den Block als GANZES scheitern,
-            // wenn einer fehlschlaegt: der bestehende Fangzweig setzt `error`, und es gibt weiter
-            // keinen halb gefuellten Einsortier-Modus.
-            val (alle, cd, cp) = coroutineScope {
-                val dContainers = async { ContainersRepository.list() }
-                val dCards = async { CollectionRepository.loadCards() }
-                val dCopies = async { CollectionRepository.loadCopies() }
-                Triple(dContainers.await(), dCards.await(), dCopies.await())
-            }
-            val gefunden = alle.find { it.containerId == containerId }
+            // Arbeitskopie EINMAL beim Betreten (Spec §5). Danach hoert der Modus nicht mehr auf den
+            // Speicher -- ein Abgleich ueberschriebe sonst seine sofortigen lokalen Zuweisungen.
+            // Beim Verlassen gleicht AppNav ab (onDone).
+            val ready = CollectionStore.state.value as? StoreState.Ready
+                ?: throw RuntimeException("Sammlung ist nicht geladen.")
+            val gefunden = ready.containers.find { it.containerId == containerId }
                 ?: throw RuntimeException("Behälter nicht gefunden.")
-            containers = alle
+            containers = ready.containers
             container = gefunden
-            cards = cd
-            state = SortSession.start(cp, containerId, gefunden.pocketsPerPage ?: 0)
+            cards = ready.cards
+            state = SortSession.start(ready.copies, containerId, gefunden.pocketsPerPage ?: 0)
             error = null
         } catch (e: Exception) {
             error = e.message ?: "Laden fehlgeschlagen"
