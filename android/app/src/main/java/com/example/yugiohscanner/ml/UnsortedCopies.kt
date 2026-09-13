@@ -31,7 +31,7 @@ import com.example.yugiohscanner.cloud.CopyRow
  */
 object UnsortedCopies {
 
-    private val ORDER: Comparator<CopyRow> =
+    val ORDER: Comparator<CopyRow> =
         compareBy<CopyRow> { it.createdAt == null }   // false vor true -> fehlende Zeitstempel hinten
             .thenBy { it.createdAt ?: "" }
             .thenBy { it.copyId }

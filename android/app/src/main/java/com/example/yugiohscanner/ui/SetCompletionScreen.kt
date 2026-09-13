@@ -24,16 +24,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.yugiohscanner.cloud.CollectionRepository
-import com.example.yugiohscanner.cloud.SetsRepository
+import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.SideStores
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Line
@@ -43,47 +43,35 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 
 // Per-set completion: how many distinct printings the user owns out of the set total.
 private data class SetProgress(val name: String, val prefix: String, val owned: Int, val total: Int)
 
 @Composable
 fun SetCompletionScreen(onClose: (() -> Unit)? = null) {
-    var rows by remember { mutableStateOf<List<SetProgress>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+    // Spec §5: Karten aus dem Speicher; die Set-Liste laedt weiter pro Aufruf (Phase 2 speichert sie).
+    val store by CollectionStore.state.collectAsState()
+    val cards = (store as? StoreState.Ready)?.cards ?: emptyList()
+    val setsCache by SideStores.sets.state.collectAsState()
+    val sets = setsCache.value
+    val loading = sets == null && setsCache.error == null
+    val error = setsCache.error
+    LaunchedEffect(Unit) { SideStores.sets.ensureLoaded() }
 
-    LaunchedEffect(Unit) {
-        try {
-            // Zwei voneinander unabhaengige Aufrufe -- nebenlaeufig, gewartet wird auf den
-            // laengeren statt auf die Summe. Scheitert einer, scheitert der ganze Block und der
-            // bestehende Fangzweig setzt `error`; eine halbe Liste gibt es weiterhin nicht.
-            val (cards, sets) = coroutineScope {
-                val dCards = async { CollectionRepository.loadCards() }
-                val dSets = async { SetsRepository.loadSets() }
-                dCards.await() to dSets.await()
-            }
-
-            // Distinct set codes owned, grouped by set prefix (skip the "Unknown" bucket).
-            val ownedByPrefix = HashMap<String, MutableSet<String>>()
-            for (c in cards) {
-                if (c.setCode.equals("Unknown", ignoreCase = true)) continue
-                val prefix = c.setCode.substringBefore("-").uppercase()
-                if (prefix.isBlank()) continue
-                ownedByPrefix.getOrPut(prefix) { HashSet() }.add(c.setCode)
-            }
-
-            rows = ownedByPrefix.mapNotNull { (prefix, codes) ->
-                val info = sets[prefix] ?: return@mapNotNull null
-                SetProgress(info.name, prefix, codes.size.coerceAtMost(info.total), info.total)
-            }.sortedByDescending { it.owned.toFloat() / it.total }
-        } catch (e: Exception) {
-            error = e.message
-        } finally {
-            loading = false
+    val rows = remember(cards, sets) {
+        val s = sets ?: return@remember emptyList<SetProgress>()
+        // Distinct set codes owned, grouped by set prefix (skip the "Unknown" bucket).
+        val ownedByPrefix = HashMap<String, MutableSet<String>>()
+        for (c in cards) {
+            if (c.setCode.equals("Unknown", ignoreCase = true)) continue
+            val prefix = c.setCode.substringBefore("-").uppercase()
+            if (prefix.isBlank()) continue
+            ownedByPrefix.getOrPut(prefix) { HashSet() }.add(c.setCode)
         }
+        ownedByPrefix.mapNotNull { (prefix, codes) ->
+            val info = s[prefix] ?: return@mapNotNull null
+            SetProgress(info.name, prefix, codes.size.coerceAtMost(info.total), info.total)
+        }.sortedByDescending { it.owned.toFloat() / it.total }
     }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -102,15 +90,35 @@ fun SetCompletionScreen(onClose: (() -> Unit)? = null) {
                 }
                 Spacer(Modifier.height(12.dp))
             }
+            // Scheitert ein erneutes Laden, bleibt die noch gueltige Set-Liste stehen; der Fehler
+            // steht dann als schmale Zeile darueber. Der Fehlerbildschirm nur ohne Liste.
+            if (sets != null && error != null) {
+                Text(error, color = ErrorColor, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.height(6.dp))
+            }
+            // Spec §8: jeder Platzhalter-Zweig braucht einen scrollbaren Nachfahren, sonst greift
+            // Nach-unten-ziehen (RefreshableBox, verschachteltes Scrollen) hier nie.
             when {
-                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
+                loading -> LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Primary)
+                        }
+                    }
                 }
-                error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(error!!, color = ErrorColor)
+                sets == null && error != null -> LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(error!!, color = ErrorColor)
+                        }
+                    }
                 }
-                rows.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Noch keine Sets — scanne oder importiere Karten.", color = Muted)
+                rows.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Noch keine Sets — scanne oder importiere Karten.", color = Muted)
+                        }
+                    }
                 }
                 else -> LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(rows, key = { it.prefix }) { SetRow(it) }

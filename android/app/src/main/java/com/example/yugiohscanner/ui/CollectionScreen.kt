@@ -29,14 +29,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
-import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.ContainerRow
-import com.example.yugiohscanner.cloud.ContainersRepository
 import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.Tags
+import com.example.yugiohscanner.ml.TagVocabulary
 import com.example.yugiohscanner.ui.components.RarityChip
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
@@ -44,9 +45,6 @@ import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.SurfaceColor
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 
 // One passcode grouped across all its owned printings.
 private data class CardGroup(
@@ -82,14 +80,9 @@ private fun groupCards(cards: List<CardRow>, byKey: Map<String, List<CopyRow>>):
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CollectionScreen(onOpenSuche: () -> Unit) {
-    var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
-    var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf("total") } // total | single | name
-    var loading by remember { mutableStateOf(true) }
-    var errorMsg by remember { mutableStateOf<String?>(null) }
     var detailId by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
 
     var searchOpen by remember { mutableStateOf(false) }
     var filterOpen by remember { mutableStateOf(false) }
@@ -104,49 +97,20 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     // am EXEMPLAR, nicht am Printing (siehe groups unten, "GRUPPIERUNGSFALLE").
     val fContainers = remember { mutableStateListOf<String>() }
     val fTags = remember { mutableStateListOf<String>() }
-    var containers by remember { mutableStateOf<List<ContainerRow>>(emptyList()) }
-    var tagOptions by remember { mutableStateOf<List<String>>(emptyList()) }
-    // Eigener Fehlerzustand, unconditional angezeigt (nicht hinter filterOpen versteckt) -- ein
-    // Ladefehler des Behaelter-/Tag-Vokabulars darf nicht wie "keine Behaelter vorhanden" aussehen.
-    var vocabError by remember { mutableStateOf<String?>(null) }
-
-    // Die beiden Aufrufe haengen nicht voneinander ab -- nebenlaeufig, gewartet wird auf den
-    // laengeren statt auf die Summe. `coroutineScope` laesst den Block als GANZES scheitern, wenn
-    // einer fehlschlaegt: der Aufrufer setzt `errorMsg`, und es wird nichts halb gesetzt.
-    suspend fun reload() {
-        coroutineScope {
-            val dCards = async { CollectionRepository.loadCards() }
-            val dCopies = async { CollectionRepository.loadCopies() }
-            val cd = dCards.await()
-            val cp = dCopies.await()
-            cards = cd
-            copies = cp
-        }
-        loading = false
-    }
-    LaunchedEffect(Unit) {
-        try { reload() } catch (e: Exception) { errorMsg = e.message ?: "Laden fehlgeschlagen"; loading = false }
-    }
-    LaunchedEffect(Unit) {
-        try {
-            containers = ContainersRepository.list()
-            tagOptions = CollectionRepository.listTags()
-            vocabError = null
-        } catch (e: Exception) {
-            vocabError = e.message ?: "Behälter und Tags konnten nicht geladen werden."
-        }
-    }
+    // Spec §5: alles aus dem Speicher; Tag-Vorschlaege aus den Exemplaren im Speicher statt aus einem
+    // zweiten Durchlauf durch alle Zeilen. Der Ladebildschirm garantiert Ready -- keine eigene
+    // Ladeanzeige und kein eigener Ladefehler mehr.
+    val store by CollectionStore.state.collectAsState()
+    val ready = store as? StoreState.Ready
+    val cards = ready?.cards ?: emptyList()
+    val copies = ready?.copies ?: emptyList()
+    val containers = ready?.containers ?: emptyList()
+    val tagOptions = remember(ready?.copies) { TagVocabulary.from(copies) }
 
     // Full-screen sub-view takes over the whole tab — system back closes it instead of the tab.
     BackHandler(detailId != null) { detailId = null }
     detailId?.let { id ->
-        CardDetailScreen(
-            cardId = id,
-            initial = cards,
-            initialCopies = copies,
-            onClose = { detailId = null },
-            onChanged = { scope.launch { runCatching { reload() } } },
-        )
+        CardDetailScreen(cardId = id, onClose = { detailId = null })
         return
     }
 
@@ -254,17 +218,6 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            errorMsg?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(8.dp))
-            }
-            // Unconditional (nicht hinter filterOpen versteckt): ein Ladefehler des Behaelter-/
-            // Tag-Vokabulars darf nicht wie "keine Behaelter/Tags vorhanden" aussehen.
-            vocabError?.let {
-                Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(8.dp))
-            }
-            if (loading) { CircularProgressIndicator(); return@Column }
             if (grid) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),

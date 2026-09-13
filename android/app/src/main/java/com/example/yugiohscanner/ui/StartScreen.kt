@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Style
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,19 +36,17 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CatalogState
 import com.example.yugiohscanner.cloud.CatalogSync
-import com.example.yugiohscanner.cloud.CollectionRepository
-import com.example.yugiohscanner.cloud.CopyRow
-import com.example.yugiohscanner.cloud.DealAlert
-import com.example.yugiohscanner.cloud.DealsRepository
-import com.example.yugiohscanner.cloud.SetsRepository
+import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.Snapshot
 import com.example.yugiohscanner.cloud.SnapshotsRepository
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.UnsortedCopies
+import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
@@ -64,8 +61,6 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.TypeSpell
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -86,20 +81,37 @@ fun StartScreen(
     onOpenBinder: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
-    var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
+    // Spec §5: Karten und Exemplare aus dem Speicher; der Ladebildschirm garantiert Ready.
+    val store by CollectionStore.state.collectAsState()
+    val ready = store as? StoreState.Ready
+    val cards = ready?.cards ?: emptyList()
+    val copies = ready?.copies ?: emptyList()
     var snapshots by remember { mutableStateOf<List<Snapshot>>(emptyList()) }
-    var dealAlertCount by remember { mutableStateOf(0) }
-    var topDeals by remember { mutableStateOf<List<DealAlert>>(emptyList()) }
-    var setProgress by remember { mutableStateOf<List<SetProgressRow>>(emptyList()) }
+    val setsCache by SideStores.sets.state.collectAsState()
+    val alertsCache by SideStores.dealAlerts.state.collectAsState()
+    val dealAlertCount = alertsCache.value?.size ?: 0
+    val topDeals = alertsCache.value?.take(2) ?: emptyList()
+    val setProgress = remember(ready?.cards, setsCache.value) {
+        val sets = setsCache.value ?: return@remember emptyList<SetProgressRow>()
+        val ownedByPrefix = HashMap<String, MutableSet<String>>()
+        for (card in cards) {
+            if (card.setCode.equals("Unknown", ignoreCase = true)) continue
+            val prefix = card.setCode.substringBefore("-").uppercase()
+            if (prefix.isBlank()) continue
+            ownedByPrefix.getOrPut(prefix) { HashSet() }.add(card.setCode)
+        }
+        ownedByPrefix.mapNotNull { (prefix, codes) ->
+            val info = sets[prefix] ?: return@mapNotNull null
+            SetProgressRow(info.name, codes.size.coerceAtMost(info.total), info.total)
+        }
+            .filter { it.owned < it.total }
+            .sortedByDescending { it.owned.toFloat() / it.total }
+            .take(3)
+    }
     var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
-    var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    // Spec B1 §10.5: Zähler „Nicht einsortiert" (Gegenstück zu Start.jsx). Eigener Fehlerzustand
-    // -- konnten die Exemplare nicht geladen werden, würde die Zahl sonst "0 nicht einsortiert"
-    // behaupten, wo in Wahrheit einfach nichts geladen werden konnte.
-    var unsortedCount by remember { mutableStateOf(0) }
-    var unsortedError by remember { mutableStateOf(false) }
+    // Spec B1 §10.5: Zaehler "Nicht einsortiert", abgeleitet aus den Exemplaren im Speicher.
+    val unsortedCount = remember(ready?.copies) { UnsortedCopies.from(copies).size }
     val catalogState by CatalogSync.state.collectAsState()
     // Catalog readiness is a SQLite read, so it is hoisted into state instead of being called
     // from composition: this screen recomposes on every Downloading percent tick, and reading
@@ -116,92 +128,41 @@ fun StartScreen(
 
     LaunchedEffect(Unit) {
         scope.launch {
-            // Ob die EXEMPLARE angekommen sind -- der Zaehler "Nicht einsortiert" weiter unten
-            // wird daraus abgeleitet und muss einen Ladefehler von einer leeren Sammlung
-            // unterscheiden koennen.
-            var copiesGeladen = false
-            try {
-                // Zwei voneinander unabhaengige Aufrufe -- nebenlaeufig, gewartet wird auf den
-                // laengeren statt auf die Summe. `coroutineScope` laesst sie als GANZES
-                // scheitern; der bestehende Fangzweig setzt `error` wie bisher.
-                val (c, cp) = coroutineScope {
-                    val dCards = async { CollectionRepository.loadCards() }
-                    val dCopies = async { CollectionRepository.loadCopies() }
-                    dCards.await() to dCopies.await()
-                }
-                cards = c
-                copies = cp
-                copiesGeladen = true
-                try {
-                    val sets = SetsRepository.loadSets()
-                    val ownedByPrefix = HashMap<String, MutableSet<String>>()
-                    for (card in c) {
-                        if (card.setCode.equals("Unknown", ignoreCase = true)) continue
-                        val prefix = card.setCode.substringBefore("-").uppercase()
-                        if (prefix.isBlank()) continue
-                        ownedByPrefix.getOrPut(prefix) { HashSet() }.add(card.setCode)
-                    }
-                    setProgress = ownedByPrefix.mapNotNull { (prefix, codes) ->
-                        val info = sets[prefix] ?: return@mapNotNull null
-                        val owned = codes.size.coerceAtMost(info.total)
-                        SetProgressRow(info.name, owned, info.total)
-                    }
-                        .filter { it.owned < it.total }            // not yet complete
-                        .sortedByDescending { it.owned.toFloat() / it.total }
-                        .take(3)
-                } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
-            } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
+            SideStores.sets.ensureLoaded()
+            SideStores.dealAlerts.refresh()
 
+            // Ohne Ready wird nichts gerechnet und KEIN Tageswert gespeichert -- sonst stuende ein
+            // 0-€-Tag im Verlauf (Spec §7.3). Der Ladebildschirm macht das zum Nicht-Fall.
+            val r = CollectionStore.state.value as? StoreState.Ready ?: return@launch
             try {
-                val dash = computeDashboard(cards, copies)
+                // Review-Fund 1: nicht auf dem Haupt-Dispatcher rechnen -- ein kalter Merker
+                // braucht hier genauso die vollen ~210-406 ms wie in der Anzeige unten.
+                val dash = withContext(Dispatchers.Default) { DashboardMemo.get(r.cards, r.copies) }
                 // Record today's value + read the history for the chart. Non-fatal if the
                 // portfolio_snapshots table isn't set up yet.
                 SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
                 snapshots = SnapshotsRepository.loadSnapshots()
             } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
-
-            try {
-                val alerts = DealsRepository.loadAlerts()
-                dealAlertCount = alerts.size
-                topDeals = alerts.take(2)
-            } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
-
-            // ABGELEITET statt nachgeladen: `copies` enthaelt dieselben Zeilen, und gezaehlt wird
-            // hier ohnehin nur. Der eigene Fehlerzustand bleibt und bedeutet jetzt: die Exemplare
-            // konnten nicht geladen werden. Das ist derselbe Schutz wie vorher -- "0 nicht
-            // einsortiert" darf nie dastehen, wo in Wahrheit nichts geladen werden konnte. Er
-            // haengt am LADEN, nicht an einer leeren Liste: eine wirklich leere Sammlung laedt
-            // erfolgreich und zeigt zu Recht die 0.
-            if (copiesGeladen) {
-                unsortedCount = UnsortedCopies.from(copies).size
-                unsortedError = false
-            } else {
-                unsortedError = true
-            }
-
-            loading = false
         }
     }
 
     Surface(Modifier.fillMaxSize(), color = Background) {
-        if (loading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Primary)
-            }
-            return@Surface
+        RefreshableBox(onRefresh = { CollectionStore.awaitSync(); SideStores.dealAlerts.refreshAndWait() }) {
+        // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
+        // passen) oder null; solange null, bleibt `d` null und die betroffenen Stellen unten
+        // zeigen einen echten Ladehinweis statt Nullwerten -- kein Hauptthread-Block durch die
+        // Berechnung. Review-Fund 2: 0 €/"Keine Daten" sah wie eine leere Sammlung aus, darum
+        // kein EmptyDashboard-Platzhalter mehr; die Stellen unten pruefen `d`/`dash` selbst.
+        val d by produceState<Dashboard?>(DashboardMemo.peek(cards, copies), cards, copies) {
+            value = withContext(Dispatchers.Default) { DashboardMemo.get(cards, copies) }
         }
-
-        val d = computeDashboard(cards, copies)
-        val byKey = copies.groupBy { it.printingKey() }
+        val byKey = remember(copies) { copies.groupBy { it.printingKey() } }
 
         // Window the history by the selected timeframe, spacing points by their real date.
         val nowOrd = System.currentTimeMillis() / 86_400_000L
         val cutoff = if (timeframe == Int.MAX_VALUE) 0L else nowOrd - timeframe
         val windowSnaps = snapshots.filter { dayOrdinal(it.day) >= cutoff }
         val points = windowSnaps.map { dayOrdinal(it.day) to it.totalValue }
-        val startVal = windowSnaps.firstOrNull()?.totalValue ?: d.totalValue
-        val change = d.totalValue - startVal
-        val changePct = if (startVal > 0) change / startVal * 100 else 0.0
 
         Column(
             Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
@@ -217,6 +178,8 @@ fun StartScreen(
                     Icon(Icons.Default.AccountCircle, "Einstellungen", tint = Primary)
                 }
             }
+
+            SyncHint()
 
             // First-run/offline banner: only while the catalog has never been imported yet AND a
             // sync is actively in progress. Disappears the moment CatalogSync reaches Ready (or
@@ -244,7 +207,7 @@ fun StartScreen(
                 }
             }
 
-            error?.let {
+            (error ?: setsCache.error ?: alertsCache.error)?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
@@ -253,17 +216,29 @@ fun StartScreen(
                 Column(Modifier.padding(16.dp)) {
                     SectionHeader("Gesamtwert")
                     Spacer(Modifier.height(4.dp))
-                    Text("%.2f €".format(d.totalValue), style = MaterialTheme.typography.displaySmall,
-                        fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
-                    Text("${d.totalCards} Karten · ${d.entries} Einträge",
-                        style = MaterialTheme.typography.bodySmall, color = Muted)
-                    if (windowSnaps.size >= 2) {
-                        val up = change >= 0
-                        Text(
-                            "${if (up) "+" else ""}%.2f € (%.1f%%)".format(change, changePct),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontFamily = MonoFontFamily, color = if (up) Good else ErrorColor,
-                        )
+                    val dash = d
+                    if (dash != null) {
+                        Text("%.2f €".format(dash.totalValue), style = MaterialTheme.typography.displaySmall,
+                            fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
+                        Text("${dash.totalCards} Karten · ${dash.entries} Einträge",
+                            style = MaterialTheme.typography.bodySmall, color = Muted)
+                        if (windowSnaps.size >= 2) {
+                            val startVal = windowSnaps.firstOrNull()?.totalValue ?: dash.totalValue
+                            val change = dash.totalValue - startVal
+                            val changePct = if (startVal > 0) change / startVal * 100 else 0.0
+                            val up = change >= 0
+                            Text(
+                                "${if (up) "+" else ""}%.2f € (%.1f%%)".format(change, changePct),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontFamily = MonoFontFamily, color = if (up) Good else ErrorColor,
+                            )
+                        }
+                    } else {
+                        // Review-Fund 2: kein Nullwert-Platzhalter, der wie eine leere Sammlung
+                        // aussieht -- echter Ladehinweis im selben Textslot wie der Wert, damit
+                        // die Karte in etwa ihre Hoehe behaelt.
+                        Text("Wert wird berechnet …", style = MaterialTheme.typography.displaySmall,
+                            fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Muted)
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -304,12 +279,12 @@ fun StartScreen(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (unsortedError) "—" else "$unsortedCount",
+                            "$unsortedCount",
                             style = MaterialTheme.typography.titleLarge, fontFamily = MonoFontFamily,
                             fontWeight = FontWeight.Bold, color = TypeSpell,
                         )
                         Text(
-                            "Nicht einsortiert" + if (unsortedError) " (Ladefehler)" else "",
+                            "Nicht einsortiert",
                             style = MaterialTheme.typography.labelSmall, color = Muted,
                         )
                     }
@@ -375,34 +350,40 @@ fun StartScreen(
                 }
             }
 
-            // Teuerste Karten.
-            SpaceCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                    SectionHeader("Teuerste Karten")
-                    Spacer(Modifier.height(8.dp))
-                    if (d.top.isEmpty()) {
-                        Text("Keine Daten", style = MaterialTheme.typography.bodySmall, color = Muted)
-                    } else {
-                        d.top.forEach { c ->
-                            Row(
-                                Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    c.name ?: c.id, Modifier.weight(1f), maxLines = 1,
-                                    style = MaterialTheme.typography.bodySmall, color = OnSurface,
-                                )
-                                ValueText(printingValue(c, byKey), style = MaterialTheme.typography.bodySmall)
+            // Review-Fund 2: Auswertungen haengen am Merker-Ergebnis -- solange das noch nicht
+            // da ist, werden sie ganz ausgelassen statt mit einem Nullwert-/"Keine Daten"-Stand
+            // zu erscheinen, der wie eine leere Sammlung aussieht.
+            d?.let { dash ->
+                // Teuerste Karten.
+                SpaceCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        SectionHeader("Teuerste Karten")
+                        Spacer(Modifier.height(8.dp))
+                        if (dash.top.isEmpty()) {
+                            Text("Keine Daten", style = MaterialTheme.typography.bodySmall, color = Muted)
+                        } else {
+                            dash.top.forEach { c ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        c.name ?: c.id, Modifier.weight(1f), maxLines = 1,
+                                        style = MaterialTheme.typography.bodySmall, color = OnSurface,
+                                    )
+                                    ValueText(printingValue(c, byKey), style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            StatSection("Nach Rarität", d.byRarity)
-            StatSection("Nach Typ", d.byType)
-            StatSection("Nach Set", d.bySet)
-            StatSection("Nach Attribut", d.byAttribute)
+                StatSection("Nach Rarität", dash.byRarity)
+                StatSection("Nach Typ", dash.byType)
+                StatSection("Nach Set", dash.bySet)
+                StatSection("Nach Attribut", dash.byAttribute)
+            }
+        }
         }
     }
 }

@@ -26,14 +26,14 @@ import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CONTAINER_KIND_LABELS
 import com.example.yugiohscanner.cloud.CONTAINER_KIND_OPTIONS
 import com.example.yugiohscanner.cloud.CardRow
-import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.ContainerRow
 import com.example.yugiohscanner.cloud.ContainersRepository
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.BinderGrid
-import com.example.yugiohscanner.ml.ReloadScope
 import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
@@ -48,8 +48,6 @@ import com.example.yugiohscanner.ui.theme.RarityRare
 import com.example.yugiohscanner.ui.theme.RaritySuper
 import com.example.yugiohscanner.ui.theme.TypeMonster
 import com.example.yugiohscanner.ui.theme.TypeSpell
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -78,10 +76,12 @@ private data class BinderForm(
 @Composable
 fun BindersScreen(onOpen: (String) -> Unit) {
     val scope = rememberCoroutineScope()
-    val containers = remember { mutableStateListOf<ContainerRow>() }
-    var cards by remember { mutableStateOf<List<CardRow>>(emptyList()) }
-    var copies by remember { mutableStateOf<List<CopyRow>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+    // Spec §5: aus dem Speicher. `error` bleibt -- fuer Schreibfehler.
+    val store by CollectionStore.state.collectAsState()
+    val ready = store as? StoreState.Ready
+    val containers = ready?.containers ?: emptyList()
+    val cards = ready?.cards ?: emptyList()
+    val copies = ready?.copies ?: emptyList()
     var error by remember { mutableStateOf<String?>(null) }
     var showUnsorted by remember { mutableStateOf(false) }
     // Spec B1 §7.1 Befund 6: Tipp auf ein nicht einsortiertes Exemplar springt ins Kartendetail --
@@ -101,50 +101,10 @@ fun BindersScreen(onOpen: (String) -> Unit) {
 
     var pendingDelete by remember { mutableStateOf<ContainerRow?>(null) }
 
-    // Die drei Aufrufe haengen nicht voneinander ab und laufen deshalb NEBENLAEUFIG -- gewartet
-    // wird auf den laengsten, nicht auf die Summe. Der vierte Aufruf (listUnsortedCopies) ist ganz
-    // weg: `UnsortedCopies.from(cp)` leitet dieselbe Liste in derselben Reihenfolge aus `cp` ab.
-    //
-    // `coroutineScope` haelt die Fehlerbehandlung genau so, wie sie vorher war: schlaegt EINER der
-    // Aufrufe fehl, brechen die anderen ab und der Block wirft an den Aufrufer weiter, der `error`
-    // setzt. Gesetzt wird erst, wenn ALLE da sind -- kein halb gefuellter Bildschirm, der wie
-    // "leer" aussieht (in Spec B1 zweimal ein Befund).
-    suspend fun reload(umfang: ReloadScope.Scope = ReloadScope.Scope.EVERYTHING) {
-        if (umfang == ReloadScope.Scope.CONTAINERS_ONLY) {
-            val c = ContainersRepository.list()
-            containers.clear(); containers.addAll(c)
-            return
-        }
-        coroutineScope {
-            val dContainers = async { ContainersRepository.list() }
-            val dCards = async { CollectionRepository.loadCards() }
-            val dCopies = async { CollectionRepository.loadCopies() }
-            val c = dContainers.await()
-            val cd = dCards.await()
-            val cp = dCopies.await()
-            containers.clear(); containers.addAll(c)
-            cards = cd
-            copies = cp
-        }
-    }
-    LaunchedEffect(Unit) {
-        try { reload(); error = null }
-        // A failed load must not look like an empty collection -- distinct message, kept
-        // visible instead of silently falling through to "Noch keine Behälter angelegt.".
-        catch (e: Exception) { error = e.message ?: "Laden fehlgeschlagen" }
-        finally { loading = false }
-    }
-
     // Full-screen sub-view takes over the whole tab, wie in CollectionScreen.kt.
     BackHandler(detailId != null) { detailId = null }
     detailId?.let { id ->
-        CardDetailScreen(
-            cardId = id,
-            initial = cards,
-            initialCopies = copies,
-            onClose = { detailId = null },
-            onChanged = { scope.launch { runCatching { reload() } } },
-        )
+        CardDetailScreen(cardId = id, onClose = { detailId = null })
         return
     }
 
@@ -178,20 +138,11 @@ fun BindersScreen(onOpen: (String) -> Unit) {
         // Die Einschraenkung der EINGABEN (Faecher-Auswahl nur bei binder, nur 4/9/12) bleibt in
         // der Oberflaeche weiter unten (BinderDialog).
         val pockets = if (form.kind == "binder") form.pocketsPerPage else null
-        // Wie viel danach neu zu laden ist, entscheidet NICHT diese Oberflaeche: ReloadScope kennt
-        // die Regel und begruendet sie Fall fuer Fall. Die bisherige Art muss VOR dem Speichern
-        // abgelesen werden -- danach steht in `containers` die neue.
-        val vorherigeArt = form.containerId?.let { id -> containers.find { it.containerId == id }?.kind }
-        val umfang = ReloadScope.afterSave(form.containerId == null, vorherigeArt, form.kind)
 
         savingRef[0] = true
         saving = true
         dialogError = null
         scope.launch {
-            // Der Dialog schliesst, sobald gespeichert ist -- scheitert danach nur das Nachladen,
-            // gehoert die Meldung auf den Bildschirm, nicht in den geschlossenen Dialog. Sonst sieht
-            // es aus, als sei nichts passiert, und ein zweiter Versuch legt einen zweiten Behaelter an.
-            var gespeichert = false
             try {
                 ContainersRepository.save(
                     ContainerRow(
@@ -200,16 +151,13 @@ fun BindersScreen(onOpen: (String) -> Unit) {
                         color = form.color, sortOrder = form.sortOrder,
                     )
                 )
-                gespeichert = true
                 dialog = null
-                reload(umfang)
+                // Abgleichen statt nachladen (Spec §5). awaitSync wirft nie: scheitert der Abgleich,
+                // zeigt das der Hinweis -- nicht der schon geschlossene Dialog.
+                CollectionStore.awaitSync()
                 error = null
             } catch (e: Exception) {
-                if (gespeichert) {
-                    error = "Gespeichert, aber die Liste konnte nicht neu geladen werden: ${e.message ?: "unbekannter Fehler"}"
-                } else {
-                    dialogError = e.message ?: "Speichern fehlgeschlagen."
-                }
+                dialogError = e.message ?: "Speichern fehlgeschlagen."
             } finally {
                 saving = false
                 savingRef[0] = false
@@ -220,22 +168,15 @@ fun BindersScreen(onOpen: (String) -> Unit) {
     fun deleteContainer(c: ContainerRow) {
         pendingDelete = null
         scope.launch {
-            // reload() steht in BEIDEN Zweigen: delete() raeumt Standorte und Behaelter in zwei
-            // getrennten REST-Aufrufen (bewusst nicht atomar) -- bricht der zweite ab, sind
-            // Exemplare serverseitig bereits standortlos, obwohl der Behaelter noch existiert.
-            // Dieser Zwischenzustand ist echt und muss sichtbar werden, auch im Fehlerfall.
-            var deleteError: String? = null
             try {
                 ContainersRepository.delete(c.containerId)
+                error = null
             } catch (e: Exception) {
-                deleteError = e.message ?: "Löschen fehlgeschlagen"
+                error = e.message ?: "Löschen fehlgeschlagen"
             }
-            try {
-                reload(ReloadScope.afterDelete())
-                error = deleteError
-            } catch (e: Exception) {
-                error = deleteError ?: (e.message ?: "Laden fehlgeschlagen")
-            }
+            // In BEIDEN Faellen abgleichen: delete() raeumt Standorte und Behaelter in zwei getrennten
+            // Aufrufen -- bricht der zweite ab, ist der Zwischenzustand echt und muss sichtbar werden.
+            CollectionStore.awaitSync()
         }
     }
 
@@ -306,13 +247,16 @@ fun BindersScreen(onOpen: (String) -> Unit) {
             }
             Spacer(Modifier.height(12.dp))
 
-            if (loading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
-                }
-            } else if (containers.isEmpty() && error == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Noch keine Behälter angelegt.", color = Muted)
+            if (containers.isEmpty() && error == null) {
+                // Spec §8: ein leerer Behaelter-Ordner braucht trotzdem einen scrollbaren
+                // Nachfahren, sonst greift Nach-unten-ziehen (RefreshableBox, verschachteltes
+                // Scrollen) hier nie -- ein frisch angelegter, leerer Ordner ist genau der Fall.
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Noch keine Behälter angelegt.", color = Muted)
+                        }
+                    }
                 }
             } else {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {

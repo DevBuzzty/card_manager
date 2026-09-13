@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.KeysetPager
+import com.example.yugiohscanner.ml.SyncCursor
 import com.example.yugiohscanner.ml.Tags
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,106 +22,47 @@ class NotMigratedException(message: String) : RuntimeException(message)
 // is a row in `card_copies`; a cloud trigger recounts `cards.quantity`/`deleted` from live copies,
 // so the phone inserts or soft-deletes copies rather than PATCHing quantity directly.
 object CollectionRepository {
-    private const val PAGE = 1000
-
-    // Spec B1: die fuenf Standort-/Tag-Felder gehoeren zu jedem card_copies-Read dazu.
-    // created_at steht seit dem Ladewege-Fix mit dabei -- es ist die Reihenfolge der unsortierten
-    // Liste (UnsortedCopies.from), die sich sonst nur mit einem ZWEITEN Netzaufruf ueber dieselben
-    // Zeilen herstellen liess. NUR gelesen: der Server stempelt die Spalte, kein Schreibweg hier
-    // schickt sie mit (siehe CopyRow.createdAt).
-    private const val COPY_COLS =
-        "copy_id,card_id,set_code,language,rarity,edition,condition,deleted,container_id,page,slot,tags,note,created_at"
-
-    // PostgREST caps every response at a server-side max (1000 rows by default), so a single
-    // GET silently truncates a large collection — the newest rows fall off the end and never
-    // reach the phone. Page through with limit/offset over a STABLE order (the composite key)
-    // and stitch the pages together until a short page signals the end.
-    suspend fun loadCards(): List<CardRow> = withContext(Dispatchers.IO) {
-        val out = ArrayList<CardRow>()
-        var offset = 0
-        while (true) {
-            val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
-                .addQueryParameter("select", "*")
-                .addQueryParameter("deleted", "eq.false")
-                .addQueryParameter("quantity", "gt.0")
-                .addQueryParameter("order", "id.asc,set_code.asc,language.asc,rarity.asc")
-                .addQueryParameter("limit", PAGE.toString())
-                .addQueryParameter("offset", offset.toString())
-                .build()
-            val page = executeWithReauth {
-                Request.Builder()
-                    .url(url)
-                    .addHeader("apikey", SupabaseCloud.key())
-                    .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
-                    .get()
-                    .build()
-            }.use { resp ->
-                val text = resp.body?.string() ?: "[]"
-                if (!resp.isSuccessful) throw RuntimeException("Laden fehlgeschlagen (${resp.code}): $text")
-                parse(JSONArray(text))
-            }
-            out.addAll(page)
-            if (page.size < PAGE) break
-            offset += PAGE
-        }
-        out
-    }
-
-    // Single-page fetch of one card's printings, for the detail screen — avoids paging through
-    // (and re-parsing) the whole collection just to refresh one card.
-    suspend fun loadCardsFor(cardId: String): List<CardRow> = withContext(Dispatchers.IO) {
-        val url = "${SupabaseCloud.base()}/rest/v1/cards".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "*")
-            .addQueryParameter("id", "eq.$cardId")
-            .addQueryParameter("deleted", "eq.false")
-            .addQueryParameter("quantity", "gt.0")
-            .build()
-        executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
-            val text = resp.body?.string() ?: "[]"
-            if (!resp.isSuccessful) throw RuntimeException("Laden fehlgeschlagen (${resp.code}): $text")
-            parse(JSONArray(text))
-        }
-    }
-
-    // Single-page fetch of one card's live copies, for the detail screen.
-    suspend fun loadCopiesFor(cardId: String): List<CopyRow> = withContext(Dispatchers.IO) {
-        val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
-            .addQueryParameter("select", COPY_COLS)
-            .addQueryParameter("card_id", "eq.$cardId")
-            .addQueryParameter("deleted", "eq.false")
-            .build()
-        executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
-            val text = resp.body?.string() ?: "[]"
-            if (!resp.isSuccessful) throw RuntimeException("Exemplare laden fehlgeschlagen (${resp.code}): $text")
-            parseCopies(JSONArray(text))
-        }
-    }
+    // Spalten jedes card_copies-Reads -- eine Quelle mit den Speicher-Abfragen (StoreQueries),
+    // damit ein Exemplar ueberall dieselben Felder traegt. created_at und updated_at sind NUR
+    // gelesen; kein Schreibweg hier sendet sie (siehe CopyRow).
+    private const val COPY_COLS = StoreQueries.COPY_COLS
 
     private fun auth(b: Request.Builder) = b
         .addHeader("apikey", SupabaseCloud.key())
         .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
 
-    suspend fun loadCopies(): List<CopyRow> = withContext(Dispatchers.IO) {
-        val out = ArrayList<CopyRow>()
-        var offset = 0
-        while (true) {
-            val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
-                .addQueryParameter("select", COPY_COLS)
-                .addQueryParameter("deleted", "eq.false")
-                .addQueryParameter("order", "copy_id.asc")
-                .addQueryParameter("limit", PAGE.toString())
-                .addQueryParameter("offset", offset.toString())
-                .build()
-            val page = executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
-                val text = resp.body?.string() ?: "[]"
-                if (!resp.isSuccessful) throw RuntimeException("Exemplare laden fehlgeschlagen (${resp.code}): $text")
-                parseCopies(JSONArray(text))
-            }
-            out.addAll(page)
-            if (page.size < PAGE) break
-            offset += PAGE
+    // Voll- und Delta-Abfragen des Speichers (Spec §4). Blaettern nach Schluessel, siehe Keyset.
+    // Die Serverzeit kommt aus dem `Date`-Header der ERSTEN Seite (Spec §4.3, SyncCursor.lowerBound).
+    suspend fun fetchCards(changedSince: String?): Fetched<CardRow> =
+        fetchAll { after -> getPage("cards", StoreQueries.cards(changedSince, after), "Karten laden") { parse(it) } }
+
+    suspend fun fetchCopies(changedSince: String?): Fetched<CopyRow> =
+        fetchAll { after -> getPage("card_copies", StoreQueries.copies(changedSince, after), "Exemplare laden") { parseCopies(it) } }
+
+    private suspend fun <T> fetchAll(page: suspend (after: T?) -> Pair<List<T>, String?>): Fetched<T> {
+        var serverTime: String? = null
+        val rows = KeysetPager.all<T>(StoreQueries.PAGE) { after ->
+            val (rows, date) = page(after)
+            if (after == null) serverTime = SyncCursor.parseHttpDate(date)
+            rows
         }
-        out
+        return Fetched(rows, serverTime)
+    }
+
+    /** Eine Seite plus roher `Date`-Header der Antwort. */
+    private suspend fun <T> getPage(
+        table: String,
+        params: List<Pair<String, String>>,
+        what: String,
+        parseRows: (JSONArray) -> List<T>,
+    ): Pair<List<T>, String?> = withContext(Dispatchers.IO) {
+        val b = "${SupabaseCloud.base()}/rest/v1/$table".toHttpUrl().newBuilder()
+        for ((k, v) in params) b.addQueryParameter(k, v)
+        executeWithReauth { auth(Request.Builder().url(b.build())).get().build() }.use { resp ->
+            val text = resp.body?.string() ?: "[]"
+            if (!resp.isSuccessful) throw RuntimeException("$what fehlgeschlagen (${resp.code}): $text")
+            parseRows(JSONArray(text)) to resp.header("Date")
+        }
     }
 
     private suspend fun copiesOf(p: CardRow, edition: String? = null, condition: String? = null): List<CopyRow> = withContext(Dispatchers.IO) {
@@ -210,6 +153,7 @@ object CollectionRepository {
             tags = if (o.isNull("tags")) null else o.optString("tags"),
             note = if (o.isNull("note")) null else o.optString("note"),
             createdAt = if (o.isNull("created_at")) null else o.optString("created_at"),
+            updatedAt = if (o.isNull("updated_at")) null else o.optString("updated_at"),
         )
     }
 
@@ -258,34 +202,6 @@ object CollectionRepository {
     // Neuanmeldung).
     suspend fun deleteCopy(copyId: String) = withContext(Dispatchers.IO) {
         patchCopy(copyId, JSONObject().put("deleted", true))
-    }
-
-    // Vorschlagsliste ueber alle lebenden Exemplare: jede Zeile geht durch Tags.parse, die
-    // Zusammenfuehrung ueber alle Zeilen durch Tags.add -- kein eigenes Zerlegen/Entdoppeln hier.
-    suspend fun listTags(): List<String> = withContext(Dispatchers.IO) {
-        var result = emptyList<String>()
-        var offset = 0
-        while (true) {
-            val url = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
-                .addQueryParameter("select", "tags")
-                .addQueryParameter("deleted", "eq.false")
-                .addQueryParameter("tags", "not.is.null")
-                .addQueryParameter("order", "created_at.asc,copy_id.asc")
-                .addQueryParameter("limit", PAGE.toString())
-                .addQueryParameter("offset", offset.toString())
-                .build()
-            val arr = executeWithReauth { auth(Request.Builder().url(url)).get().build() }.use { resp ->
-                val text = resp.body?.string() ?: "[]"
-                if (!resp.isSuccessful) throw RuntimeException("Tags laden fehlgeschlagen (${resp.code}): $text")
-                JSONArray(text)
-            }
-            for (i in 0 until arr.length()) {
-                for (t in Tags.parse(arr.getJSONObject(i).optString("tags", ""))) result = Tags.add(result, t)
-            }
-            if (arr.length() < PAGE) break
-            offset += PAGE
-        }
-        result.sortedWith(String.CASE_INSENSITIVE_ORDER)
     }
 
     suspend fun softDelete(row: CardRow) = withContext(Dispatchers.IO) {
@@ -407,6 +323,8 @@ object CollectionRepository {
                     level = if (o.isNull("level")) null else o.optInt("level"),
                     race = o.strOrNull("race"),
                     attribute = o.strOrNull("attribute"),
+                    deleted = o.optBoolean("deleted", false),
+                    updatedAt = o.strOrNull("updated_at"),
                 )
             )
         }

@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.KeysetPager
+import com.example.yugiohscanner.ml.SyncCursor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -13,6 +15,8 @@ import org.json.JSONObject
 data class ContainerRow(
     val containerId: String, val name: String, val kind: String,
     val pocketsPerPage: Int?, val color: String?, val sortOrder: Int,
+    // Nur gelesen, fuer den Delta-Abgleich (Spec §4.2/§4.3); save() sendet beides nicht.
+    val deleted: Boolean = false, val updatedAt: String? = null,
 )
 
 /**
@@ -36,13 +40,18 @@ private val BINDER_POCKETS = setOf(4, 9, 12)
 // its schema.
 object ContainersRepository {
 
-    suspend fun list(): List<ContainerRow> = withContext(Dispatchers.IO) {
-        val url = "${SupabaseCloud.base()}/rest/v1/containers".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "container_id,name,kind,pockets_per_page,color,sort_order")
-            .addQueryParameter("deleted", "eq.false")
-            .addQueryParameter("order", "sort_order.asc")
-            .build()
-        getArray(url).let { arr -> (0 until arr.length()).map { parseContainer(arr.getJSONObject(it)) } }
+    // Voll- und Delta-Abfrage des Speichers (Spec §4), gleiche Bauart wie CollectionRepository.fetchCopies.
+    // Die Serverzeit kommt aus dem `Date`-Header der ERSTEN Seite (Spec §4.3, SyncCursor.lowerBound).
+    suspend fun fetchContainers(changedSince: String?): Fetched<ContainerRow> {
+        var serverTime: String? = null
+        val rows = KeysetPager.all<ContainerRow>(StoreQueries.PAGE) { after ->
+            val b = "${SupabaseCloud.base()}/rest/v1/containers".toHttpUrl().newBuilder()
+            for ((k, v) in StoreQueries.containers(changedSince, after)) b.addQueryParameter(k, v)
+            val (arr, date) = getArray(b.build())
+            if (after == null) serverTime = SyncCursor.parseHttpDate(date)
+            (0 until arr.length()).map { parseContainer(arr.getJSONObject(it)) }
+        }
+        return Fetched(rows, serverTime)
     }
 
     // Upsert ueber die Primaerschluessel-Spalte container_id: legt neu an oder aktualisiert,
@@ -133,11 +142,12 @@ object ContainersRepository {
             .addHeader("apikey", SupabaseCloud.key())
             .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
 
-    private suspend fun getArray(url: HttpUrl): JSONArray = withContext(Dispatchers.IO) {
+    /** Antwort als Array plus roher `Date`-Header. */
+    private suspend fun getArray(url: HttpUrl): Pair<JSONArray, String?> = withContext(Dispatchers.IO) {
         executeWithReauth { base(url).get().build() }.use { r ->
             val text = r.body?.string() ?: "[]"
             if (!r.isSuccessful) throw RuntimeException("Laden fehlgeschlagen (${r.code}): $text")
-            JSONArray(text)
+            JSONArray(text) to r.header("Date")
         }
     }
 
@@ -160,5 +170,7 @@ object ContainersRepository {
         pocketsPerPage = if (o.isNull("pockets_per_page")) null else o.optInt("pockets_per_page"),
         color = if (o.isNull("color")) null else o.optString("color"),
         sortOrder = o.optInt("sort_order", 0),
+        deleted = o.optBoolean("deleted", false),
+        updatedAt = if (o.isNull("updated_at")) null else o.optString("updated_at"),
     )
 }

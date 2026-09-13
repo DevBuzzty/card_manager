@@ -18,7 +18,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -29,11 +32,17 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import com.example.yugiohscanner.cloud.CatalogSync
+import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.SideStores
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.SupabaseCloud
 import com.example.yugiohscanner.ml.ModelStore
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 object Routes {
     const val START = "start"
@@ -77,11 +86,37 @@ fun AppNav() {
     val prefs = remember { context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE) }
     val nav = rememberNavController()
     var cloudReady by remember { mutableStateOf(false) }
+    // Spec §3.3/§9.7: mit gespeicherten Zugangsdaten steht beim Start der Ladebildschirm, nie der
+    // Login -- auch wenn die automatische Anmeldung scheitert (Flugmodus); dann "Erneut versuchen".
+    var autoLoginRunning by remember { mutableStateOf(SupabaseCloud.isConfigured(prefs)) }
+    var autoLoginError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val storeState by CollectionStore.state.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Jeder Einstieg in ein (anderes) Konto und jedes Abmelden: ALLE Speicher leeren, sonst zeigte
+    // z. B. die Wunschliste noch das alte Konto.
+    fun resetSession() {
+        CollectionStore.clear()
+        SideStores.clearAll()
+    }
+
+    suspend fun autoLogin() {
+        autoLoginRunning = true
+        autoLoginError = null
+        try {
+            SupabaseCloud.init(prefs); SupabaseCloud.signIn(); cloudReady = true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            autoLoginError = e.message ?: "Anmeldung fehlgeschlagen"
+        } finally {
+            autoLoginRunning = false
+        }
+    }
 
     LaunchedEffect(Unit) {
-        if (SupabaseCloud.isConfigured(prefs)) {
-            try { SupabaseCloud.init(prefs); SupabaseCloud.signIn(); cloudReady = true } catch (_: Exception) {}
-        }
+        if (SupabaseCloud.isConfigured(prefs)) autoLogin()
     }
     // Top-level so it runs once per app start, not once per tab switch. Works before login: the
     // catalog table/bucket are public and this never touches SupabaseCloud's session state.
@@ -90,8 +125,53 @@ fun AppNav() {
         ModelStore.checkAndUpdate(context)
     }
 
+    // Spec §3.4: solange die App sichtbar ist, alle 10 s ein Abgleich; im Hintergrund keiner.
+    // repeatOnLifecycle startet den Block beim Zurueckkommen neu -- das ist der sofortige Abgleich.
+    LaunchedEffect(cloudReady) {
+        if (!cloudReady) return@LaunchedEffect
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                CollectionStore.requestSync()
+                delay(10_000)
+            }
+        }
+    }
+    // Spec §3.3: nach der Anmeldung erst laden. Der Speicher startet das Laden in seinem eigenen
+    // Bereich -- ein Wechsel dieses Effekts bricht es nicht ab.
+    LaunchedEffect(cloudReady, storeState is StoreState.Empty) {
+        if (cloudReady && CollectionStore.state.value is StoreState.Empty) CollectionStore.startInitialLoad()
+    }
+    // Ladebildschirm auch, solange die automatische Anmeldung laeuft oder gescheitert ist.
+    val autoLoginPending = !cloudReady && (autoLoginRunning || autoLoginError != null)
+    if (autoLoginPending || (cloudReady && storeState !is StoreState.Ready)) {
+        StartupLoadingScreen(
+            state = if (cloudReady) storeState else autoLoginError?.let { StoreState.Failed(it) } ?: StoreState.Loading,
+            onRetry = {
+                if (cloudReady) {
+                    CollectionStore.startInitialLoad()
+                } else {
+                    // Sofort Loading zeigen, damit ein zweiter Tipp keinen zweiten Versuch startet.
+                    autoLoginRunning = true
+                    autoLoginError = null
+                    scope.launch { autoLogin() }
+                }
+            },
+            onLogout = {
+                prefs.edit().putString("supabase_password", "").apply()
+                SupabaseCloud.signOut()
+                resetSession()
+                autoLoginError = null
+                cloudReady = false
+            },
+        )
+        return
+    }
+
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
+    // Spec §3.4: jeder Wechsel der Destination fordert einen Abgleich an; die Seite zeigt sofort den
+    // Speicherstand.
+    LaunchedEffect(route) { CollectionStore.requestSync() }
     // The camera owns the whole screen; every other destination keeps the bar. Der Einsortier-Modus
     // (Spec B2 §6) ist ebenfalls eine Kamera und bekommt denselben ganzen Schirm.
     val showBar = route != Routes.SCAN && route != Routes.EINSORTIEREN
@@ -111,7 +191,7 @@ fun AppNav() {
                     // Spec B1 Task 10: der Zähler "Nicht einsortiert" springt gezielt in den
                     // Binder-Reiter der Sammlung, nicht in den Standard-Reiter "Karten".
                     onOpenBinder = { nav.navigateTop(Routes.sammlung("binder")) },
-                ) else CloudLoginScreen(prefs) { cloudReady = true }
+                ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
                 Routes.SAMMLUNG,
@@ -122,7 +202,7 @@ fun AppNav() {
                     onSegment = { nav.navigate(Routes.sammlung(it)) { popUpTo(Routes.SAMMLUNG) { inclusive = true } } },
                     onOpenSuche = { nav.navigate(Routes.SUCHE) },
                     onOpenBehaelter = { nav.navigate(Routes.behaelter(it)) },
-                ) else CloudLoginScreen(prefs) { cloudReady = true }
+                ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
                 Routes.BEHAELTER,
@@ -142,7 +222,7 @@ fun AppNav() {
                     onSeiteAufgeschlagen = {
                         backStackEntry.savedStateHandle[Routes.SEITE_NACH_EINSORTIEREN] = null
                     },
-                ) else CloudLoginScreen(prefs) { cloudReady = true }
+                ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
                 Routes.EINSORTIEREN,
@@ -159,25 +239,27 @@ fun AppNav() {
                             nav.previousBackStackEntry
                                 ?.savedStateHandle?.set(Routes.SEITE_NACH_EINSORTIEREN, page)
                         }
+                        // Der Modus hat Standorte geschrieben; Scan-Uebernahmen darin ebenfalls (Spec §7.4).
+                        CollectionStore.requestSync()
                         nav.popBackStack()
                     },
-                ) else CloudLoginScreen(prefs) { cloudReady = true }
+                ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(Routes.SCAN) {
                 if (cloudReady) ScanScreen(onClose = { nav.popBackStack() })
-                else CloudLoginScreen(prefs) { cloudReady = true }
+                else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(Routes.DEALS) {
-                if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { cloudReady = true }
+                if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(Routes.EINSTELLUNGEN) {
                 SettingsScreen(prefs, onBack = { nav.popBackStack() }) {
-                    SupabaseCloud.signOut(); cloudReady = false; nav.popBackStack()
+                    SupabaseCloud.signOut(); resetSession(); cloudReady = false; nav.popBackStack()
                 }
             }
             composable(Routes.SUCHE) {
-                if (cloudReady) SearchScreen(onClose = { nav.popBackStack() }, onAdded = {})
-                else CloudLoginScreen(prefs) { cloudReady = true }
+                if (cloudReady) SearchScreen(onClose = { nav.popBackStack() }, onAdded = { CollectionStore.requestSync() })
+                else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
         }
     }

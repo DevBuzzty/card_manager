@@ -21,11 +21,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CONTAINER_KIND_LABELS
 import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.ContainerRow
-import com.example.yugiohscanner.cloud.ContainersRepository
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.ml.Tags
+import com.example.yugiohscanner.ml.TagVocabulary
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
@@ -55,13 +57,15 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    var containers by remember { mutableStateOf<List<ContainerRow>>(emptyList()) }
-    var tagSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
-    // Eigener Zustand fuer den Vokabular-Ladefehler: anders als der Standort-Chip im Kartendetail
-    // (der defensiv still auf "—" zurueckfaellt) MUSS das hier sichtbar sein -- eine leer
-    // gebliebene Behaelterliste waehrend des Ladens darf nicht wie "kein Behaelter gewaehlt"
-    // aussehen, sonst verschwindet ein echter Standort beim naechsten Speichern lautlos.
-    var loadError by remember { mutableStateOf<String?>(null) }
+    // Spec §5: Behaelter und Tag-Vorschlaege aus dem Speicher -- das Sheet oeffnet ohne Netzabfrage.
+    // Die Meldung bleibt fuer den Fall, dass der Speicher nicht bereit ist: eine leere Behaelterliste
+    // darf nicht wie "kein Behaelter gewaehlt" aussehen, sonst verschwindet ein echter Standort beim
+    // Speichern lautlos.
+    val store by CollectionStore.state.collectAsState()
+    val ready = store as? StoreState.Ready
+    val containers = ready?.containers ?: emptyList()
+    val tagSuggestions = remember(ready?.copies) { TagVocabulary.from(ready?.copies ?: emptyList()) }
+    val loadError = if (ready == null) "Sammlung ist nicht geladen." else null
 
     var containerId by remember { mutableStateOf(copy.containerId) }
     var page by remember { mutableStateOf(copy.page?.toString() ?: "") }
@@ -84,16 +88,6 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
     // BindersScreen.kt's savingRef.
     val savingRef = remember { BooleanArray(1) }
 
-    LaunchedEffect(Unit) {
-        try {
-            containers = ContainersRepository.list()
-            tagSuggestions = CollectionRepository.listTags()
-            loadError = null
-        } catch (e: Exception) {
-            loadError = e.message ?: "Behälter und Tags konnten nicht geladen werden."
-        }
-    }
-
     val selectedContainer = containers.find { it.containerId == containerId }
     val isBinder = selectedContainer?.kind == "binder"
 
@@ -115,6 +109,7 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
 
     fun save() {
         if (savingRef[0]) return
+        if (loadError != null) return
         // Ein eingetippter, aber nicht per Enter/Fertig bestaetigter Tag geht sonst verloren:
         // tagInput lebt nur im Eingabefeld, bisher schickte save() ausschliesslich den tags-
         // Zustand. VOR dem ersten suspend-Aufruf uebernehmen (synchron, wie savingRef oben) und
@@ -271,7 +266,7 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
                 Row {
                     TextButton(onClick = onDismiss, enabled = !saving && !removing) { Text("Abbrechen") }
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { save() }, enabled = !saving && !removing) {
+                    Button(onClick = { save() }, enabled = !saving && !removing && loadError == null) {
                         Text(if (saving) "Wird gespeichert…" else "Speichern")
                     }
                 }

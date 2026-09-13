@@ -30,6 +30,7 @@ import com.example.yugiohscanner.cloud.CardSearchRepository
 import com.example.yugiohscanner.cloud.Deck
 import com.example.yugiohscanner.cloud.DeckCard
 import com.example.yugiohscanner.cloud.DecksRepository
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Background
@@ -52,27 +53,25 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
     }
 
     val scope = rememberCoroutineScope()
-    val decks = remember { mutableStateListOf<Deck>() }
+    val cache by SideStores.decks.state.collectAsState()
+    val decks = cache.value ?: emptyList()
     var name by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var writeError by remember { mutableStateOf<String?>(null) }
+    val loading = busy || (cache.value == null && cache.error == null)
+    val error = writeError ?: cache.error
 
-    suspend fun reload() {
-        decks.clear(); decks.addAll(DecksRepository.loadDecks())
-    }
-    LaunchedEffect(Unit) {
-        try { reload() } catch (e: Exception) { error = e.message } finally { loading = false }
-    }
+    LaunchedEffect(Unit) { SideStores.decks.refresh() }
 
     val create = {
         val n = name.trim()
         if (n.isNotBlank()) {
             name = ""
             scope.launch {
-                loading = true
-                try { DecksRepository.createDeck(n); reload(); error = null }
-                catch (e: Exception) { error = e.message }
-                loading = false
+                busy = true
+                try { DecksRepository.createDeck(n); SideStores.decks.refreshAndWait(); writeError = null }
+                catch (e: Exception) { writeError = e.message }
+                busy = false
             }
         }
     }
@@ -106,12 +105,22 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
 
             Spacer(Modifier.height(12.dp))
             if (loading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
+                // Spec §8: scrollbarer Nachfahre statt eines nackten Box -- sonst greift
+                // Nach-unten-ziehen (verschachteltes Scrollen) hier nie.
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Primary)
+                        }
+                    }
                 }
             } else if (decks.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Noch keine Decks.", color = Muted)
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Noch keine Decks.", color = Muted)
+                        }
+                    }
                 }
             } else {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -121,8 +130,8 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
                             onOpen = { openDeck = deck },
                             onDelete = {
                                 scope.launch {
-                                    try { DecksRepository.deleteDeck(deck.id); reload() }
-                                    catch (e: Exception) { error = e.message }
+                                    try { DecksRepository.deleteDeck(deck.id); SideStores.decks.refreshAndWait() }
+                                    catch (e: Exception) { writeError = e.message }
                                 }
                             },
                         )
@@ -174,24 +183,22 @@ private fun buildYdk(cards: List<DeckCard>): String {
 private fun DeckEditor(deck: Deck, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val cards = remember { mutableStateListOf<DeckCard>() }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val deckCache = remember(deck.id) { SideStores.deckCards(deck.id) }
+    val cache by deckCache.state.collectAsState()
+    val cards = cache.value ?: emptyList()
+    var writeError by remember { mutableStateOf<String?>(null) }
+    val loading = cache.value == null && cache.error == null
+    val error = writeError ?: cache.error
 
     var query by remember { mutableStateOf("") }
     val results = remember { mutableStateListOf<CardRow>() }
     var searching by remember { mutableStateOf(false) }
 
-    suspend fun reload() {
-        cards.clear(); cards.addAll(DecksRepository.loadCards(deck.id))
-    }
-    LaunchedEffect(deck.id) {
-        try { reload() } catch (e: Exception) { error = e.message } finally { loading = false }
-    }
+    LaunchedEffect(deck.id) { deckCache.refresh() }
 
     fun mutate(block: suspend () -> Unit) {
         scope.launch {
-            try { block(); reload(); error = null } catch (e: Exception) { error = e.message }
+            try { block(); deckCache.refreshAndWait(); writeError = null } catch (e: Exception) { writeError = e.message }
         }
     }
 
@@ -203,8 +210,8 @@ private fun DeckEditor(deck: Deck, onBack: () -> Unit) {
                 try {
                     val found = CardSearchRepository.search(q)
                     results.clear(); results.addAll(found.take(8))
-                    error = null
-                } catch (e: Exception) { error = e.message }
+                    writeError = null
+                } catch (e: Exception) { writeError = e.message }
                 searching = false
             }
         }
@@ -269,8 +276,14 @@ private fun DeckEditor(deck: Deck, onBack: () -> Unit) {
 
             Spacer(Modifier.height(16.dp))
             if (loading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
+                // Spec §8: scrollbarer Nachfahre statt eines nackten Box -- sonst greift
+                // Nach-unten-ziehen (verschachteltes Scrollen) hier nie.
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Primary)
+                        }
+                    }
                 }
             } else {
                 val main = cards.filter { it.section == "main" }
