@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.KeysetPager
 import com.example.yugiohscanner.ml.Tags
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,13 +23,10 @@ class NotMigratedException(message: String) : RuntimeException(message)
 object CollectionRepository {
     private const val PAGE = 1000
 
-    // Spec B1: die fuenf Standort-/Tag-Felder gehoeren zu jedem card_copies-Read dazu.
-    // created_at steht seit dem Ladewege-Fix mit dabei -- es ist die Reihenfolge der unsortierten
-    // Liste (UnsortedCopies.from), die sich sonst nur mit einem ZWEITEN Netzaufruf ueber dieselben
-    // Zeilen herstellen liess. NUR gelesen: der Server stempelt die Spalte, kein Schreibweg hier
-    // schickt sie mit (siehe CopyRow.createdAt).
-    private const val COPY_COLS =
-        "copy_id,card_id,set_code,language,rarity,edition,condition,deleted,container_id,page,slot,tags,note,created_at"
+    // Spalten jedes card_copies-Reads -- eine Quelle mit den Speicher-Abfragen (StoreQueries),
+    // damit ein Exemplar ueberall dieselben Felder traegt. created_at und updated_at sind NUR
+    // gelesen; kein Schreibweg hier sendet sie (siehe CopyRow).
+    private const val COPY_COLS = StoreQueries.COPY_COLS
 
     // PostgREST caps every response at a server-side max (1000 rows by default), so a single
     // GET silently truncates a large collection — the newest rows fall off the end and never
@@ -98,6 +96,32 @@ object CollectionRepository {
     private fun auth(b: Request.Builder) = b
         .addHeader("apikey", SupabaseCloud.key())
         .addHeader("Authorization", "Bearer ${SupabaseCloud.token()}")
+
+    // Voll- und Delta-Abfragen des Speichers (Spec §4). Blaettern nach Schluessel, siehe Keyset.
+    suspend fun fetchCards(changedSince: String?): List<CardRow> =
+        KeysetPager.all(StoreQueries.PAGE) { after ->
+            getPage("cards", StoreQueries.cards(changedSince, after), "Karten laden") { parse(it) }
+        }
+
+    suspend fun fetchCopies(changedSince: String?): List<CopyRow> =
+        KeysetPager.all(StoreQueries.PAGE) { after ->
+            getPage("card_copies", StoreQueries.copies(changedSince, after), "Exemplare laden") { parseCopies(it) }
+        }
+
+    private suspend fun <T> getPage(
+        table: String,
+        params: List<Pair<String, String>>,
+        what: String,
+        parseRows: (JSONArray) -> List<T>,
+    ): List<T> = withContext(Dispatchers.IO) {
+        val b = "${SupabaseCloud.base()}/rest/v1/$table".toHttpUrl().newBuilder()
+        for ((k, v) in params) b.addQueryParameter(k, v)
+        executeWithReauth { auth(Request.Builder().url(b.build())).get().build() }.use { resp ->
+            val text = resp.body?.string() ?: "[]"
+            if (!resp.isSuccessful) throw RuntimeException("$what fehlgeschlagen (${resp.code}): $text")
+            parseRows(JSONArray(text))
+        }
+    }
 
     suspend fun loadCopies(): List<CopyRow> = withContext(Dispatchers.IO) {
         val out = ArrayList<CopyRow>()
@@ -210,6 +234,7 @@ object CollectionRepository {
             tags = if (o.isNull("tags")) null else o.optString("tags"),
             note = if (o.isNull("note")) null else o.optString("note"),
             createdAt = if (o.isNull("created_at")) null else o.optString("created_at"),
+            updatedAt = if (o.isNull("updated_at")) null else o.optString("updated_at"),
         )
     }
 
@@ -407,6 +432,8 @@ object CollectionRepository {
                     level = if (o.isNull("level")) null else o.optInt("level"),
                     race = o.strOrNull("race"),
                     attribute = o.strOrNull("attribute"),
+                    deleted = o.optBoolean("deleted", false),
+                    updatedAt = o.strOrNull("updated_at"),
                 )
             )
         }

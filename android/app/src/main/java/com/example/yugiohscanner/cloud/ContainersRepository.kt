@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.KeysetPager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -46,6 +47,14 @@ object ContainersRepository {
             .build()
         getArray(url).let { arr -> (0 until arr.length()).map { parseContainer(arr.getJSONObject(it)) } }
     }
+
+    // Voll- und Delta-Abfrage des Speichers (Spec §4), gleiche Bauart wie CollectionRepository.fetchCopies.
+    suspend fun fetchContainers(changedSince: String?): List<ContainerRow> =
+        KeysetPager.all(StoreQueries.PAGE) { after ->
+            val b = "${SupabaseCloud.base()}/rest/v1/containers".toHttpUrl().newBuilder()
+            for ((k, v) in StoreQueries.containers(changedSince, after)) b.addQueryParameter(k, v)
+            getArray(b.build()).let { arr -> (0 until arr.length()).map { parseContainer(arr.getJSONObject(it)) } }
+        }
 
     // Upsert ueber die Primaerschluessel-Spalte container_id: legt neu an oder aktualisiert,
     // je nachdem ob die Zeile schon existiert. Der Aufrufer erzeugt die container_id (UUID) beim
@@ -162,5 +171,7 @@ object ContainersRepository {
         pocketsPerPage = if (o.isNull("pockets_per_page")) null else o.optInt("pockets_per_page"),
         color = if (o.isNull("color")) null else o.optString("color"),
         sortOrder = o.optInt("sort_order", 0),
+        deleted = o.optBoolean("deleted", false),
+        updatedAt = if (o.isNull("updated_at")) null else o.optString("updated_at"),
     )
 }
