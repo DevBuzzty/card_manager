@@ -103,12 +103,22 @@ fun WishlistScreen(onClose: (() -> Unit)? = null) {
 
             Spacer(Modifier.height(12.dp))
             if (loading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
+                // Spec §8: scrollbarer Nachfahre statt eines nackten Box -- sonst greift
+                // Nach-unten-ziehen (verschachteltes Scrollen) hier nie.
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Primary)
+                        }
+                    }
                 }
             } else if (items.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Noch keine Wunschkarten.", color = Muted)
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Noch keine Wunschkarten.", color = Muted)
+                        }
+                    }
                 }
             } else {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {

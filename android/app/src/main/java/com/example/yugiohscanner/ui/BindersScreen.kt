@@ -248,8 +248,15 @@ fun BindersScreen(onOpen: (String) -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             if (containers.isEmpty() && error == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Noch keine Behälter angelegt.", color = Muted)
+                // Spec §8: ein leerer Behaelter-Ordner braucht trotzdem einen scrollbaren
+                // Nachfahren, sonst greift Nach-unten-ziehen (RefreshableBox, verschachteltes
+                // Scrollen) hier nie -- ein frisch angelegter, leerer Ordner ist genau der Fall.
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Noch keine Behälter angelegt.", color = Muted)
+                        }
+                    }
                 }
             } else {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {

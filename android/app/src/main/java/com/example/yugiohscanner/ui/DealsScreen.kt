@@ -108,7 +108,7 @@ fun DealsScreen() {
     Surface(Modifier.fillMaxSize(), color = Background) {
         RefreshableBox(
             onRefresh = {
-                try { DealsRepository.triggerScrape() } catch (e: Exception) { writeError = e.message }
+                try { DealsRepository.triggerScrape(); writeError = null } catch (e: Exception) { writeError = e.message }
                 SideStores.dealWatches.refreshAndWait()
                 SideStores.dealAlerts.refreshAndWait()
             },
@@ -183,11 +183,17 @@ fun DealsScreen() {
 
             Spacer(Modifier.height(12.dp))
             if (alerts.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        if (loading) "Suche Deals …" else "Noch keine Deals. Lege einen Watch an.",
-                        color = Muted
-                    )
+                // Spec §8: scrollbarer Nachfahre statt eines nackten Box -- sonst greift
+                // Nach-unten-ziehen (verschachteltes Scrollen) hier nie.
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                if (loading) "Suche Deals …" else "Noch keine Deals. Lege einen Watch an.",
+                                color = Muted
+                            )
+                        }
+                    }
                 }
             } else {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {

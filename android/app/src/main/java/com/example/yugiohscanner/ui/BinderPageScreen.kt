@@ -222,8 +222,14 @@ fun BinderPageScreen(
             Spacer(Modifier.height(12.dp))
 
             if (container == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Behälter nicht gefunden.", color = Muted)
+                // Spec §8: scrollbarer Nachfahre statt eines nackten Box -- sonst greift
+                // Nach-unten-ziehen (verschachteltes Scrollen) hier nie.
+                LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Behälter nicht gefunden.", color = Muted)
+                        }
+                    }
                 }
             } else if (isBinder) {
                 val page = pagerState.currentPage + 1
@@ -289,8 +295,15 @@ fun BinderPageScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 if (myCopies.isEmpty() && error == null) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Noch nichts in diesem Behälter.", color = Muted)
+                    // Spec §8: ein frisch angelegter, leerer Behaelter (Box/Deckbox) braucht
+                    // trotzdem einen scrollbaren Nachfahren, sonst greift Nach-unten-ziehen
+                    // (RefreshableBox, verschachteltes Scrollen) hier nie.
+                    LazyColumn(Modifier.fillMaxSize()) {
+                        item {
+                            Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("Noch nichts in diesem Behälter.", color = Muted)
+                            }
+                        }
                     }
                 } else {
                     CopyList(

@@ -90,15 +90,29 @@ fun SetCompletionScreen(onClose: (() -> Unit)? = null) {
                 }
                 Spacer(Modifier.height(12.dp))
             }
+            // Spec §8: jeder Platzhalter-Zweig braucht einen scrollbaren Nachfahren, sonst greift
+            // Nach-unten-ziehen (RefreshableBox, verschachteltes Scrollen) hier nie.
             when {
-                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Primary)
+                loading -> LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = Primary)
+                        }
+                    }
                 }
-                error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(error!!, color = ErrorColor)
+                error != null -> LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(error!!, color = ErrorColor)
+                        }
+                    }
                 }
-                rows.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Noch keine Sets — scanne oder importiere Karten.", color = Muted)
+                rows.isEmpty() -> LazyColumn(Modifier.fillMaxSize()) {
+                    item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("Noch keine Sets — scanne oder importiere Karten.", color = Muted)
+                        }
+                    }
                 }
                 else -> LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(rows, key = { it.prefix }) { SetRow(it) }
