@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.BoundedMap
+import com.example.yugiohscanner.ml.PriceRef
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,6 +19,18 @@ object SideStores {
     val dealAlerts = ListCache(scope) { DealsRepository.loadAlerts() }
     val sets = ListCache(scope) { SetsRepository.loadSets() }
 
+    // Spec G1 §4.3/§4.4: Referenzpreise einmal pro UTC-Tag, Wertverlauf, Preisverlauf je Printing (max. 20).
+    val reference7 = DailyListCache(scope) { PriceHistoryRepository.reference(7) }
+    val reference30 = DailyListCache(scope) { PriceHistoryRepository.reference(30) }
+    val snapshots = ListCache(scope) { SnapshotsRepository.loadSnapshots() }
+
+    private val historyCaches = BoundedMap<String, ListCache<List<PriceRef>>>(20)
+
+    fun history(card: CardRow): ListCache<List<PriceRef>> =
+        historyCaches.getOrPut(card.printingKey()) { ListCache(scope) { PriceHistoryRepository.history(card) } }
+
+    fun reference(days: Int): DailyListCache<List<PriceRef>> = if (days == 30) reference30 else reference7
+
     private val deckCardCaches = HashMap<Long, ListCache<List<DeckCard>>>()
 
     fun deckCards(deckId: Long): ListCache<List<DeckCard>> = synchronized(deckCardCaches) {
@@ -26,6 +40,9 @@ object SideStores {
     /** Beim Abmelden und Kontowechsel (Spec §4.4). */
     fun clearAll() {
         wishlist.clear(); decks.clear(); dealWatches.clear(); dealAlerts.clear(); sets.clear()
+        reference7.clear(); reference30.clear(); snapshots.clear()
+        historyCaches.values().forEach { it.clear() }
+        historyCaches.clear()
         synchronized(deckCardCaches) {
             deckCardCaches.values.forEach { it.clear() }
             deckCardCaches.clear()
