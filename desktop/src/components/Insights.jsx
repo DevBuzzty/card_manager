@@ -1,6 +1,8 @@
 import { useState, lazy, Suspense } from 'react';
-import { TrendingUp, BarChart3, Loader2 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { TrendingUp, BarChart3, ArrowUpDown, Loader2 } from 'lucide-react';
 import Statistics from './Statistics';
+import MoversPanel from './MoversPanel';
 
 const Portfolio = lazy(() => import('./Portfolio'));
 
@@ -19,22 +21,24 @@ const Tab = ({ id, icon, label, view, setView }) => {
 };
 
 export default function Insights() {
-  const [view, setView] = useState('value');
+  const location = useLocation();
+  const [view, setView] = useState(location.state?.tab || 'value');
 
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
       <div className="inline-flex self-start bg-obsidian-700 border border-line rounded-xl p-1 gap-1 mb-5">
-        <Tab id="value" icon={TrendingUp} label="Value" view={view} setView={setView} />
-        <Tab id="breakdown" icon={BarChart3} label="Breakdown" view={view} setView={setView} />
+        <Tab id="value" icon={TrendingUp} label="Wert" view={view} setView={setView} />
+        <Tab id="bewegungen" icon={ArrowUpDown} label="Bewegungen" view={view} setView={setView} />
+        <Tab id="breakdown" icon={BarChart3} label="Aufteilung" view={view} setView={setView} />
       </div>
       <div className="flex-1 overflow-auto">
-        {view === 'value' ? (
+        {view === 'value' && (
           <Suspense fallback={<div className="flex items-center justify-center h-64 text-space-violet"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
             <Portfolio />
           </Suspense>
-        ) : (
-          <Statistics />
         )}
+        {view === 'bewegungen' && <MoversPanel />}
+        {view === 'breakdown' && <Statistics />}
       </div>
     </div>
   );
