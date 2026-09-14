@@ -31,6 +31,7 @@ export default function PriceHistoryChart({ printing }) {
     return <div className="text-[11px] text-ink-faint py-1">{error ? 'Verlauf nicht verfügbar' : 'Verlauf lädt …'}</div>;
   }
   if (steps.kind === 'none') return <div className="text-[11px] text-ink-faint py-1">Noch kein Verlauf</div>;
+  if (steps.kind === 'series' && steps.points.length < 2) return <div className="text-[11px] text-ink-faint py-1">Noch kein Verlauf</div>;
   if (steps.kind === 'flat') {
     return <div className="text-[11px] text-ink-faint py-1">Seit {fmtDayDE(steps.flatDay)} unverändert {fmtEUR(steps.flatPrice)}</div>;
   }

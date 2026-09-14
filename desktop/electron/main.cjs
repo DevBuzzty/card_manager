@@ -688,10 +688,12 @@ function startCardmarketPoller() {
         headless: true,   // never surface a window; skip challenged cards silently, retry next tick
         shouldAbort: () => cmAbort,
       });
-      if (res.updated > 0 && mainWindow) {
+      if (res.updated > 0) {
         recordPortfolioValue(db);
-        const stats = { totalValue: totalValue(db) };
-        mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+        if (mainWindow) {
+          const stats = { totalValue: totalValue(db) };
+          mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+        }
       }
     } catch (e) { console.error('Cardmarket poller error:', e); }
     finally { cmRunning = false; }
@@ -706,10 +708,12 @@ function bulkDue() {
   return !last || (Date.now() - new Date(last).getTime()) > 24 * 60 * 60 * 1000;
 }
 function notifyBulk(res) {
-  if (res && res.priced > 0 && mainWindow) {
+  if (res && res.priced > 0) {
     recordPortfolioValue(db);
-    const stats = { totalValue: totalValue(db) };
-    mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+    if (mainWindow) {
+      const stats = { totalValue: totalValue(db) };
+      mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+    }
   }
 }
 function startCardmarketBulkScheduler() {

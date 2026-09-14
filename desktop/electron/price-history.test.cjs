@@ -74,3 +74,87 @@ test('seedPriceHistory: ohne Setting, aber mit vorhandenen Zeilen idempotent', (
   d.prepare(`DELETE FROM settings WHERE key = 'price_history_seeded'`).run();
   assert.deepStrictEqual(seedPriceHistory(d, '2026-09-14'), { inserted: 0, skipped: false });
 });
+
+const { mergeRemotePriceHistory } = require('./price-history.cjs');
+
+function mergeDb() {
+  const d = new Database(':memory:');
+  d.exec(`CREATE TABLE cards (id TEXT, quantity INTEGER, rarity TEXT, set_code TEXT, price REAL, language TEXT, updated_at DATETIME, deleted INTEGER DEFAULT 0, PRIMARY KEY (id,set_code,language,rarity));
+          CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY, total_value REAL);`);
+  ensureCopiesSchema(d);
+  return d;
+}
+
+test('mergeRemotePriceHistory: fuegt neue Cloud-Zeile ein, recorded_at umgewandelt', () => {
+  const d = mergeDb();
+  const n = mergeRemotePriceHistory(d, [
+    { card_id: '1', set_code: 'LOB-DE001', language: 'DE', rarity: 'Ultra Rare', variant: 'base', day: '2026-09-14', price: 5, source: 'cloud', recorded_at: '2026-09-14T05:00:01.123+00:00' },
+  ]);
+  assert.equal(n, 1);
+  const row = d.prepare('SELECT price, source, recorded_at FROM price_history').get();
+  assert.deepStrictEqual(row, { price: 5, source: 'cloud', recorded_at: '2026-09-14 05:00:01' });
+});
+
+test('mergeRemotePriceHistory: vorhandene lokale Zeile gleichen Schluessels bleibt unveraendert', () => {
+  const d = mergeDb();
+  d.prepare(`INSERT INTO price_history (card_id,set_code,language,rarity,variant,day,price,source,recorded_at) VALUES ('1','LOB-DE001','DE','Ultra Rare','base','2026-09-14',3,'ygoprodeck','2026-09-14 04:00:00')`).run();
+  const n = mergeRemotePriceHistory(d, [
+    { card_id: '1', set_code: 'LOB-DE001', language: 'DE', rarity: 'Ultra Rare', variant: 'base', day: '2026-09-14', price: 5, source: 'cloud', recorded_at: '2026-09-14T05:00:01.123+00:00' },
+  ]);
+  assert.equal(n, 0);
+  const row = d.prepare('SELECT price, source FROM price_history').get();
+  assert.deepStrictEqual(row, { price: 3, source: 'ygoprodeck' });
+});
+
+test('mergeRemotePriceHistory: price <= 0 und fehlendes day werden uebersprungen', () => {
+  const d = mergeDb();
+  const n = mergeRemotePriceHistory(d, [
+    { card_id: '1', set_code: 'A', language: 'DE', rarity: 'Rare', variant: 'base', day: '2026-09-14', price: 0, source: 'cloud', recorded_at: '2026-09-14T05:00:01Z' },
+    { card_id: '2', set_code: 'A', language: 'DE', rarity: 'Rare', variant: 'base', day: null, price: 5, source: 'cloud', recorded_at: '2026-09-14T05:00:01Z' },
+  ]);
+  assert.equal(n, 0);
+  assert.equal(d.prepare('SELECT COUNT(*) n FROM price_history').get().n, 0);
+});
+
+test('mergeRemotePriceHistory: leere Raritaet landet unter Unknown', () => {
+  const d = mergeDb();
+  mergeRemotePriceHistory(d, [
+    { card_id: '1', set_code: 'A', language: 'DE', rarity: '', variant: 'base', day: '2026-09-14', price: 5, source: 'cloud', recorded_at: '2026-09-14T05:00:01Z' },
+  ]);
+  const row = d.prepare('SELECT rarity FROM price_history').get();
+  assert.deepStrictEqual(row, { rarity: 'Unknown' });
+});
+
+// F3 (Minor 1) — Startzeile normalisiert den Schluessel wie recordPrice/norm.
+function seedEdgeDb() {
+  const d = new Database(':memory:');
+  d.exec(`CREATE TABLE cards (id TEXT, quantity INTEGER, rarity TEXT, set_code TEXT, price REAL, price_locked INTEGER DEFAULT 0, language TEXT, updated_at DATETIME, deleted INTEGER DEFAULT 0, PRIMARY KEY (id,set_code,language,rarity));
+          CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY, total_value REAL);`);
+  ensureCopiesSchema(d);
+  // Karte 7: Raritaet '' (leer). Karte 8: Raritaet NULL. Beide card_copies bereits mit 'Unknown',
+  // so wie es add-card-to-db/die Migration tatsaechlich schreiben (card_copies.rarity ist NOT NULL).
+  d.prepare('INSERT INTO cards (id,set_code,language,rarity,price,price_locked,quantity,deleted) VALUES (?,?,?,?,?,?,0,0)').run('7', 'B-DE007', 'DE', '', 4, 0);
+  d.prepare(`INSERT INTO card_copies (copy_id,card_id,set_code,language,rarity,deleted) VALUES ('c7','7','B-DE007','DE','Unknown',0)`).run();
+  d.prepare('INSERT INTO cards (id,set_code,language,rarity,price,price_locked,quantity,deleted) VALUES (?,?,?,?,?,?,0,0)').run('8', 'B-DE008', 'DE', null, 6, 0);
+  d.prepare(`INSERT INTO card_copies (copy_id,card_id,set_code,language,rarity,deleted) VALUES ('c8','8','B-DE008','DE','Unknown',0)`).run();
+  return d;
+}
+
+test('seedPriceHistory: leere/NULL Raritaet bekommt eine Startzeile unter Unknown', () => {
+  const d = seedEdgeDb();
+  const r = seedPriceHistory(d, '2026-09-14');
+  assert.deepStrictEqual(r, { inserted: 2, skipped: false });
+  const rows = d.prepare(`SELECT card_id, rarity FROM price_history ORDER BY card_id`).all();
+  assert.deepStrictEqual(rows, [
+    { card_id: '7', rarity: 'Unknown' },
+    { card_id: '8', rarity: 'Unknown' },
+  ]);
+});
+
+test('seedPriceHistory: anschliessendes recordPrice (rarity "") schreibt unter denselben Schluessel, keine zweite Zeile', () => {
+  const d = seedEdgeDb();
+  seedPriceHistory(d, '2026-09-14');
+  assert.equal(recordPrice(d, { id: '7', set_code: 'B-DE007', language: 'DE', rarity: '' }, 4, 'ygoprodeck'), false,
+    'gleicher Preis unter demselben normalisierten Schluessel -> kein weiterer Schreibvorgang');
+  assert.equal(d.prepare(`SELECT COUNT(*) n FROM price_history WHERE card_id = '7'`).get().n, 1, 'keine zweite Zeile fuer denselben Tag/Schluessel');
+});
