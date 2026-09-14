@@ -15,6 +15,7 @@ const { computeMovers, addDays } = require('./movers.cjs');
 const { referenceRows, cardHistory } = require('./price-reference.cjs');
 const { recordPortfolioValue } = require('./portfolio-value.cjs');
 const { totalValue, copyCount } = require('./valuation.cjs');
+const { alertText } = require('./alert-text.cjs');
 const copies = require('./copies.cjs');
 const { deleteContainer } = require('./containers-schema.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
@@ -101,12 +102,14 @@ const getSetting = (key) => {
 };
 
 app.whenReady().then(() => {
+  // Windows zeigt Benachrichtigungen nur mit App-ID (gleich appId in package.json).
+  if (process.platform === 'win32') app.setAppUserModelId('com.yugioh.cardmanager');
   createWindow();
   startSocketServer();
   startPricePoller();
   startCardmarketPoller();
   startCardmarketBulkScheduler();
-  sync = startSync(db, () => mainWindow);
+  sync = startSync(db, () => mainWindow, { onPriceAlerts: showPriceAlertNotification });
   startCatalogScheduler();
   // Deals now live in Supabase (the cloud Edge Function scrapes, shared with the phone).
   // The old local SQLite poller is disabled — the desktop reads/writes the cloud tables.
@@ -261,6 +264,112 @@ ipcMain.handle('trigger-deal-scrape', async () => {
     return true;
 });
 ipcMain.handle('open-external', (event, url) => { if (url) shell.openExternal(url); });
+
+// --- Spec G2: Preis-Alarme (Supabase; ausgewertet nur von der Edge Function evaluate-price-alerts) ---
+async function alertsClient() {
+    const c = sync && await sync.ensureClient();
+    if (!c) throw new Error('Cloud nicht verbunden');
+    return c;
+}
+const alertPrinting = (p = {}) => ({
+    card_id: String(p.id), set_code: p.set_code || 'Unknown', language: p.language || 'DE', rarity: p.rarity || 'Unknown',
+});
+function cardNameOf(cardId) {
+    try { return db.prepare('SELECT name FROM cards WHERE id = ? AND name IS NOT NULL LIMIT 1').get(String(cardId))?.name || null; }
+    catch { return null; }
+}
+function withAlertText(e) {
+    const name = cardNameOf(e.card_id);
+    return { ...e, name, text: alertText({ ...e, name }) };
+}
+function notifyPriceAlertsChanged() {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('price-alerts-changed');
+}
+// Referenz halten, sonst raeumt der GC die Notification weg und der Klick kommt nie an.
+const liveNotifications = new Set();
+function showPriceAlertNotification(r) {
+    if (!Notification.isSupported()) return;
+    const body = r.notify === 'one' ? withAlertText(r.event).text : `${r.count} neue Preis-Alarme`;
+    const n = new Notification({ title: 'Preis-Alarm', body });
+    liveNotifications.add(n);
+    const drop = () => liveNotifications.delete(n);
+    n.on('click', () => {
+        drop();
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.webContents.send('open-price-alerts');
+    });
+    n.on('close', drop);
+    n.show();
+}
+ipcMain.handle('price-alerts-move-get', async () => {
+    const c = await alertsClient();
+    const { data, error } = await c.from('price_alert_rules').select('id,pct,min_eur,days,active')
+        .eq('kind', 'move').maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? { ...data, pct: Number(data.pct), min_eur: Number(data.min_eur), days: Number(data.days) } : null;
+});
+// Ohne Zeile ist der Bewegungsalarm aus (Spec §4.1); speichern legt sie an oder aktualisiert sie.
+ipcMain.handle('price-alerts-move-save', async (event, { pct, min_eur, days, active } = {}) => {
+    const c = await alertsClient();
+    const row = { pct: Number(pct), min_eur: Number(min_eur), days: Number(days) === 30 ? 30 : 7, active: !!active };
+    const { data: cur, error: readError } = await c.from('price_alert_rules').select('id').eq('kind', 'move').maybeSingle();
+    if (readError) throw new Error(readError.message);
+    const { error } = cur
+        ? await c.from('price_alert_rules').update(row).eq('id', cur.id)
+        : await c.from('price_alert_rules').insert({ kind: 'move', ...row });
+    if (error) throw new Error(error.message);
+    return true;
+});
+ipcMain.handle('price-alerts-targets-get', async (event, printing) => {
+    const c = await alertsClient();
+    const { data, error } = await c.from('price_alert_rules').select('kind,threshold,armed')
+        .in('kind', ['above', 'below']).eq('active', true).match(alertPrinting(printing));
+    if (error) throw new Error(error.message);
+    const pick = (kind) => {
+        const r = (data || []).find((x) => x.kind === kind);
+        return r ? { threshold: Number(r.threshold), armed: !!r.armed } : null;
+    };
+    return { above: pick('above'), below: pick('below') };
+});
+// threshold null = entfernen (active = false, Treffer bleiben). Setzen macht den Zielpreis wieder scharf.
+ipcMain.handle('price-alerts-target-save', async (event, { printing, kind, threshold } = {}) => {
+    if (kind !== 'above' && kind !== 'below') throw new Error('Unbekannte Alarmart');
+    const c = await alertsClient();
+    const key = alertPrinting(printing);
+    const value = threshold == null || threshold === '' ? null : Number(threshold);
+    const { error } = value == null
+        ? await c.from('price_alert_rules').update({ active: false }).eq('kind', kind).match(key)
+        : await c.from('price_alert_rules').upsert(
+            { kind, ...key, threshold: value, active: true, armed: true },
+            { onConflict: 'user_id,kind,card_id,set_code,language,rarity' },
+        );
+    if (error) throw new Error(error.message);
+    return true;
+});
+ipcMain.handle('price-alerts-events-list', async () => {
+    const c = await alertsClient();
+    const { data, error } = await c.from('price_alert_events').select('*')
+        .eq('dismissed', false).order('id', { ascending: false }).limit(200);
+    if (error) throw new Error(error.message);
+    return (data || []).map(withAlertText);
+});
+ipcMain.handle('price-alerts-event-dismiss', async (event, id) => {
+    const c = await alertsClient();
+    const { error } = await c.from('price_alert_events').update({ dismissed: true }).eq('id', id);
+    if (error) throw new Error(error.message);
+    notifyPriceAlertsChanged();
+    return true;
+});
+ipcMain.handle('price-alerts-events-dismiss-all', async () => {
+    const c = await alertsClient();
+    const { error } = await c.from('price_alert_events').update({ dismissed: true }).eq('dismissed', false);
+    if (error) throw new Error(error.message);
+    notifyPriceAlertsChanged();
+    return true;
+});
 
 ipcMain.handle('fetch-card-data', async (event, passcode) => {
     try {
