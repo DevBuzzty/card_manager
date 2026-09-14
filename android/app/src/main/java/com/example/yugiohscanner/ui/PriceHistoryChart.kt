@@ -48,7 +48,9 @@ fun PriceHistoryChart(card: CardRow) {
         "none" -> Text("Noch kein Verlauf", style = MaterialTheme.typography.labelSmall, color = Muted)
         "flat" -> Text("Seit ${UtcDay.formatDe(steps.flatDay!!)} unverändert %.2f €".format(steps.flatPrice),
             style = MaterialTheme.typography.labelSmall, color = Muted)
-        else -> Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        else -> if (steps.points.size < 2) {
+            Text("Noch kein Verlauf", style = MaterialTheme.typography.labelSmall, color = Muted)
+        } else Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(30, 90, 365).forEach { w ->
                     FilterChip(selected = window == w, onClick = { window = w },
@@ -64,13 +66,18 @@ fun PriceHistoryChart(card: CardRow) {
                 val range = (max - min).coerceAtLeast(1e-6)
                 val minOrd = ords.first()
                 val ordRange = (ords.last() - minOrd).coerceAtLeast(1L).toFloat()
+                val pad = size.height * 0.12f
                 fun x(o: Long) = (o - minOrd).toFloat() / ordRange * size.width
-                fun y(v: Double) = (size.height - ((v - min) / range).toFloat() * size.height)
+                fun y(v: Double) = size.height - pad - ((v - min) / range).toFloat() * (size.height - 2 * pad)
                 val path = Path()
                 pts.forEachIndexed { i, p ->
                     if (i == 0) path.moveTo(x(ords[0]), y(p.price))
                     else { path.lineTo(x(ords[i]), y(pts[i - 1].price)); path.lineTo(x(ords[i]), y(p.price)) }
                 }
+                val fill = Path().apply {
+                    addPath(path); lineTo(size.width, size.height); lineTo(0f, size.height); close()
+                }
+                drawPath(fill, Primary.copy(alpha = 0.12f))
                 drawPath(path, Primary, style = Stroke(width = 3f))
                 markerOrds.forEach { o ->
                     drawLine(Gold, Offset(x(o), 0f), Offset(x(o), size.height), strokeWidth = 2f,
