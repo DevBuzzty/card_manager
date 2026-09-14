@@ -1,0 +1,45 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { valueBreakdown, typeGroup, UNSORTED_LABEL } from './breakdown.js';
+
+const cards = [
+  { id: '1', set_code: 'LOB-DE001', language: 'DE', rarity: 'Ultra Rare', type: 'Normal Monster', price: 10, quantity: 2, value: 18.5 },
+  { id: '2', set_code: 'LOB-DE002', language: 'DE', rarity: 'Common', type: 'Spell Card', price: 1, quantity: 1, value: 1 },
+  { id: '3', set_code: 'MRD-DE003', language: 'DE', rarity: 'Common', type: 'Trap Card', price: 4, quantity: 1, value: 4 },
+];
+const copies = [
+  { card_id: '1', set_code: 'LOB-DE001', language: 'DE', rarity: 'Ultra Rare', condition: 'NM', container_id: 'b1' },
+  { card_id: '1', set_code: 'LOB-DE001', language: 'DE', rarity: 'Ultra Rare', condition: 'EX', container_id: null },
+  { card_id: '2', set_code: 'LOB-DE002', language: 'DE', rarity: 'Common', condition: 'NM', container_id: 'b1' },
+  { card_id: '3', set_code: 'MRD-DE003', language: 'DE', rarity: 'Common', condition: 'NM', container_id: 'weg' },
+];
+const containers = [{ container_id: 'b1', name: 'Ordner Blau' }];
+
+test('typeGroup', () => {
+  assert.equal(typeGroup('Effect Monster'), 'Monster');
+  assert.equal(typeGroup('Spell Card'), 'Zauber');
+  assert.equal(typeGroup('Trap Card'), 'Falle');
+  assert.equal(typeGroup(null), 'Sonstige');
+});
+
+test('Typ nach Wert', () => {
+  assert.deepEqual(valueBreakdown({ cards, copies, containers, dimension: 'type' }), [
+    { label: 'Monster', count: 2, value: 18.5 },
+    { label: 'Falle', count: 1, value: 4 },
+    { label: 'Zauber', count: 1, value: 1 },
+  ]);
+});
+
+test('Set nach Praefix', () => {
+  assert.deepEqual(valueBreakdown({ cards, copies, containers, dimension: 'set' }), [
+    { label: 'LOB', count: 3, value: 19.5 },
+    { label: 'MRD', count: 1, value: 4 },
+  ]);
+});
+
+test('Binder: Exemplare mit Zustandsfaktor, ohne oder unbekannter Behaelter = Nicht einsortiert', () => {
+  assert.deepEqual(valueBreakdown({ cards, copies, containers, dimension: 'binder' }), [
+    { label: 'Ordner Blau', count: 2, value: 11 },
+    { label: UNSORTED_LABEL, count: 2, value: 12.5 },
+  ].sort((a, b) => b.value - a.value));
+});

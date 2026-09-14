@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { TrendingUp, BarChart3, ArrowUpDown, Loader2 } from 'lucide-react';
 import Statistics from './Statistics';
 import MoversPanel from './MoversPanel';
+import ValueBreakdown from './ValueBreakdown';
 
 const Portfolio = lazy(() => import('./Portfolio'));
 
@@ -23,6 +24,7 @@ const Tab = ({ id, icon, label, view, setView }) => {
 export default function Insights() {
   const location = useLocation();
   const [view, setView] = useState(location.state?.tab || 'value');
+  const [metric, setMetric] = useState('count');
 
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
@@ -38,7 +40,17 @@ export default function Insights() {
           </Suspense>
         )}
         {view === 'bewegungen' && <MoversPanel />}
-        {view === 'breakdown' && <Statistics />}
+        {view === 'breakdown' && (
+          <div className="space-y-4">
+            <div className="inline-flex bg-obsidian-700 border border-line rounded-xl p-1 gap-1">
+              {[{ id: 'count', label: 'Anzahl' }, { id: 'value', label: 'Wert' }].map((m) => (
+                <button key={m.id} onClick={() => setMetric(m.id)}
+                  className={`px-4 py-1.5 rounded-lg text-sm ${metric === m.id ? 'bg-space-violet text-white' : 'text-ink-muted hover:text-ink'}`}>{m.label}</button>
+              ))}
+            </div>
+            {metric === 'count' ? <Statistics /> : <ValueBreakdown />}
+          </div>
+        )}
       </div>
     </div>
   );

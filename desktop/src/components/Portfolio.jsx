@@ -206,7 +206,7 @@ export default function Portfolio() {
                     <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-[#252525]">
                         <h3 className="text-xl font-bold text-white flex items-center">
                             <ArrowUpRight className="w-5 h-5 mr-2 text-space-violet" />
-                            Top Performers
+                            Wertvollste Bestände
                         </h3>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
