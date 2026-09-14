@@ -82,14 +82,14 @@ fun computeDashboard(cards: List<CardRow>, copies: List<CopyRow>): Dashboard {
     val totalCards = cards.sumOf { it.quantity }
     val top = cards.sortedByDescending { printingValue(it, byKey) }.take(10)
 
-    val byRarity = groupCards(cards, byKey) { it.rarity ?: "Unbekannt" }
+    val byRarity = groupCards(cards, byKey) { it.rarity?.takeIf { s -> s.isNotBlank() && s != "Unknown" } ?: "Unbekannt" }
         .sortedBy { rarityRank(if (it.label == "Unbekannt") null else it.label) }
 
     val typeOrder = listOf("Monster", "Zauber", "Falle", "Sonstige")
     val typeMap = groupCards(cards, byKey) { typeGroup(it.type) }.associateBy { it.label }
     val byType = typeOrder.mapNotNull { typeMap[it] }
 
-    val bySet = groupCards(cards, byKey) { it.setCode }
+    val bySet = groupCards(cards, byKey) { it.setCode.takeIf { s -> s.isNotBlank() && s != "Unknown" } ?: "Unbekannt" }
         .sortedByDescending { it.count }.take(10)
 
     val byAttribute = groupCards(cards, byKey, include = { !it.attribute.isNullOrBlank() }) { it.attribute }

@@ -70,7 +70,7 @@ fun MoversSection(days: Int, top: Int, full: Boolean, onOpenCard: (String) -> Un
                 r == null -> Placeholders(if (full) 6 else 3)
                 else -> {
                     if (refState.error != null) {
-                        Text("Stand von zuvor — Aktualisieren fehlgeschlagen", style = MaterialTheme.typography.labelSmall, color = Muted)
+                        Text("Stand von zuvor — Aktualisieren fehlgeschlagen.", style = MaterialTheme.typography.labelSmall, color = Muted)
                         Spacer(Modifier.height(4.dp))
                     }
                     val message = moversMessage(r, days)
@@ -115,12 +115,13 @@ private fun MoverList(title: String, movers: List<Mover>, full: Boolean, onOpenC
         // wenn die gespeicherte Raritaet woertlich "Unknown" ist. Der interne Schluessel bleibt
         // unveraendert bei "Unknown" (printingKey(), PriceRef.key()).
         val rarityLabel = m.card.rarity?.takeIf { it.isNotBlank() && it != "Unknown" } ?: "Unbekannt"
+        val setCodeLabel = m.card.setCode.takeIf { it.isNotBlank() && it != "Unknown" } ?: "Unbekannt"
         Row(Modifier.fillMaxWidth().clickable { onOpenCard(m.card.id) }.padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(m.card.name ?: m.card.id, maxLines = 1, style = MaterialTheme.typography.bodySmall, color = OnSurface)
                 val extra = if (full) " · %.2f € → %.2f € · %d×".format(m.oldPrice, m.newPrice, m.copies) else ""
-                Text("${m.card.setCode} · $rarityLabel$extra", maxLines = 1,
+                Text("$setCodeLabel · $rarityLabel$extra", maxLines = 1,
                     style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = Muted)
             }
             Column(horizontalAlignment = Alignment.End) {

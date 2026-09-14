@@ -12,6 +12,8 @@ export default function MoversList({ movers, full = false }) {
     <div className="divide-y divide-line">
       {movers.map((m) => {
         const up = m.deltaHolding > 0;
+        const setCodeLabel = m.set_code && m.set_code !== 'Unknown' ? m.set_code : 'Unbekannt';
+        const rarityLabel = m.rarity && m.rarity !== 'Unknown' ? m.rarity : 'Unbekannt';
         return (
           <button key={m.key} type="button"
             onClick={() => navigate(cardRoute(m), { state: { background: location, list } })}
@@ -22,12 +24,12 @@ export default function MoversList({ movers, full = false }) {
             <div className="min-w-0 flex-1">
               <div className="text-sm text-ink truncate">{m.name || m.id}</div>
               <div className="text-[11px] text-ink-faint font-mono truncate">
-                {m.set_code} · {m.rarity}{full ? ` · ${fmtEUR(m.oldPrice)} → ${fmtEUR(m.newPrice)} · ${m.copies}×` : ''}
+                {setCodeLabel} · {rarityLabel}{full ? ` · ${fmtEUR(m.oldPrice)} → ${fmtEUR(m.newPrice)} · ${m.copies}×` : ''}
               </div>
             </div>
             <div className="text-right shrink-0">
               <div className={`font-mono text-sm ${up ? 'text-good' : 'text-crit'}`}>{fmtSignedEUR(m.deltaHolding)}</div>
-              <div className={`font-mono text-[11px] ${up ? 'text-good' : 'text-crit'}`}>{up ? '+' : ''}{m.pct.toFixed(1)} %</div>
+              <div className={`font-mono text-[11px] ${up ? 'text-good' : 'text-crit'}`}>{up ? '+' : ''}{m.pct.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %</div>
             </div>
           </button>
         );
