@@ -273,7 +273,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                           </div>
                       </div>
 
-                      <PriceHistoryChart printing={printingOf(variant)} />
+                      <PriceHistoryChart key={`${card.id}|${variant.set_code}|${variant.language || 'DE'}|${variant.rarity}`} printing={printingOf(variant)} />
 
                       <div>
                           {groupCopies(copiesByKey[vKey(variant)] || []).map(g => {
