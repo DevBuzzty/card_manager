@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { valueBreakdown, typeGroup, UNSORTED_LABEL } from './breakdown.js';
+import { valueBreakdown, typeGroup, UNSORTED_LABEL, UNKNOWN_LABEL } from './breakdown.js';
 
 const cards = [
   { id: '1', set_code: 'LOB-DE001', language: 'DE', rarity: 'Ultra Rare', type: 'Normal Monster', price: 10, quantity: 2, value: 18.5 },
@@ -42,4 +42,18 @@ test('Binder: Exemplare mit Zustandsfaktor, ohne oder unbekannter Behaelter = Ni
     { label: 'Ordner Blau', count: 2, value: 11 },
     { label: UNSORTED_LABEL, count: 2, value: 12.5 },
   ].sort((a, b) => b.value - a.value));
+});
+
+test('Unbekanntes Set und fehlende Raritaet heissen Unbekannt', () => {
+  const cards2 = [
+    { id: '9', set_code: 'Unknown', language: 'DE', rarity: 'Unknown', type: 'Normal Monster', price: 2, quantity: 1, value: 2 },
+    { id: '8', set_code: 'LOB-DE008', language: 'DE', rarity: null, type: 'Spell Card', price: 1, quantity: 1, value: 1 },
+  ];
+  assert.deepEqual(valueBreakdown({ cards: cards2, copies: [], containers: [], dimension: 'set' }), [
+    { label: UNKNOWN_LABEL, count: 1, value: 2 },
+    { label: 'LOB', count: 1, value: 1 },
+  ]);
+  assert.deepEqual(valueBreakdown({ cards: cards2, copies: [], containers: [], dimension: 'rarity' }), [
+    { label: UNKNOWN_LABEL, count: 2, value: 3 },
+  ]);
 });

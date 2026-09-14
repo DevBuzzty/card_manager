@@ -3,6 +3,7 @@ import { conditionFactor } from './valuation.js';
 // Spec G1 §4.6 — Aufteilung nach Wert. Karten-Dimensionen nutzen `value`/`quantity` aus get-collection;
 // die Binder-Dimension rechnet pro lebendem Exemplar (Preis x Zustandsfaktor).
 export const UNSORTED_LABEL = 'Nicht einsortiert';
+export const UNKNOWN_LABEL = 'Unbekannt';
 
 export function typeGroup(type) {
   const t = String(type || '');
@@ -38,8 +39,8 @@ export function valueBreakdown({ cards = [], copies = [], containers = [], dimen
   }
   for (const c of cards) {
     const label = dimension === 'type' ? typeGroup(c.type)
-      : dimension === 'set' ? (c.set_code ? c.set_code.split('-')[0] : 'Unknown')
-      : (c.rarity || 'Unknown');
+      : dimension === 'set' ? (c.set_code && c.set_code !== 'Unknown' ? c.set_code.split('-')[0] : UNKNOWN_LABEL)
+      : (c.rarity && c.rarity !== 'Unknown' ? c.rarity : UNKNOWN_LABEL);
     add(label, Number(c.quantity) || 0, Number(c.value) || 0);
   }
   return finish(m);
