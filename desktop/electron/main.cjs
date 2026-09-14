@@ -11,6 +11,9 @@ const { runCardmarketScrape } = require('./cardmarket-scraper.cjs');
 const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
 const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = require('./catalog-builder.cjs');
 const { recordPrice } = require('./price-history.cjs');
+const { computeMovers, addDays } = require('./movers.cjs');
+const { referenceRows, cardHistory } = require('./price-reference.cjs');
+const { recordPortfolioValue } = require('./portfolio-value.cjs');
 const { totalValue, copyCount } = require('./valuation.cjs');
 const copies = require('./copies.cjs');
 const { deleteContainer } = require('./containers-schema.cjs');
@@ -556,6 +559,21 @@ ipcMain.handle('get-price-history', () => {
     } catch (e) { return []; }
 });
 
+// Spec G1 §4.3: Gewinner/Verlierer ueber 7 oder 30 Tage (Regel in movers.cjs).
+ipcMain.handle('get-movers', (event, { days } = {}) => {
+    try {
+        const n = Number(days) === 30 ? 30 : 7;
+        const today = new Date().toISOString().slice(0, 10);
+        const cards = db.prepare('SELECT id, set_code, language, rarity, name, image_url, price, price_locked FROM cards WHERE deleted = 0').all();
+        return computeMovers({ cards, copies: copies.listAllCopies(db), references: referenceRows(db, addDays(today, -n)), today, days: n, top: 10 });
+    } catch (e) { console.error('[get-movers]', e); throw new Error('Bewegungen konnten nicht geladen werden.'); }
+});
+
+ipcMain.handle('get-card-history', (event, printing) => {
+    try { return cardHistory(db, printing || {}); }
+    catch (e) { console.error('[get-card-history]', e); throw new Error('Verlauf nicht verfügbar.'); }
+});
+
 ipcMain.handle('cleanup-database', async () => {
     db.exec('VACUUM');
     return { success: true };
@@ -622,6 +640,7 @@ ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price
     db.prepare("UPDATE cards SET price = ?, price_locked = 2 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
       .run(Number(price) || 0, String(id), set_code, language || 'DE', rarity || 'Unknown');
     recordPrice(db, { id, set_code, language, rarity }, Number(price) || 0, 'manual');
+    recordPortfolioValue(db);
     return { success: true };
   } catch (e) { return { success: false, error: e.message }; }
 });
@@ -647,6 +666,7 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
       shouldAbort: () => cmAbort,
       onChallenge: (win) => { cmWin = win; try { event.sender.send('cm-challenge'); } catch (e) {} },
     });
+    if (res && res.updated > 0) recordPortfolioValue(db);
     send({ current: 1, total: 1 }); // clears the bar
     return res;
   } finally { cmRunning = false; cmWin = null; }
@@ -668,9 +688,12 @@ function startCardmarketPoller() {
         headless: true,   // never surface a window; skip challenged cards silently, retry next tick
         shouldAbort: () => cmAbort,
       });
-      if (res.updated > 0 && mainWindow) {
-        const stats = { totalValue: totalValue(db) };
-        mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+      if (res.updated > 0) {
+        recordPortfolioValue(db);
+        if (mainWindow) {
+          const stats = { totalValue: totalValue(db) };
+          mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+        }
       }
     } catch (e) { console.error('Cardmarket poller error:', e); }
     finally { cmRunning = false; }
@@ -685,9 +708,12 @@ function bulkDue() {
   return !last || (Date.now() - new Date(last).getTime()) > 24 * 60 * 60 * 1000;
 }
 function notifyBulk(res) {
-  if (res && res.priced > 0 && mainWindow) {
-    const stats = { totalValue: totalValue(db) };
-    mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+  if (res && res.priced > 0) {
+    recordPortfolioValue(db);
+    if (mainWindow) {
+      const stats = { totalValue: totalValue(db) };
+      mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+    }
   }
 }
 function startCardmarketBulkScheduler() {
@@ -802,7 +828,6 @@ function startPricePoller() {
 
             const apiCards = data.data;
             let updates = [];
-            let totalValueChange = 0;
 
             // Get price source
             let priceSource = 'cardmarket';
@@ -840,7 +865,6 @@ function startPricePoller() {
                         updateStmt.run({ price: newPrice, id: localCard.id, set_code: localCard.set_code, language: localCard.language, rarity: localCard.rarity });
                         recordPrice(db, localCard, newPrice, 'ygoprodeck');
                         updates.push({ id: localCard.id, newPrice });
-                        totalValueChange += (newPrice - (localCard.price || 0));
                     } else {
                         // Still update timestamp
                         db.prepare('UPDATE cards SET last_updated = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?').run(localCard.id, localCard.set_code, localCard.language, localCard.rarity);
@@ -849,11 +873,8 @@ function startPricePoller() {
             })();
 
             if (updates.length > 0) {
-                const stats = { totalValue: totalValue(db) };
-                if (Math.abs(totalValueChange) > 0.5) {
-                    db.prepare("INSERT INTO portfolio_history (total_value) VALUES (@val)").run({ val: stats.totalValue || 0 });
-                }
-                mainWindow.webContents.send('price-update', { updates, totalValue: stats.totalValue || 0 });
+                recordPortfolioValue(db);
+                mainWindow.webContents.send('price-update', { updates, totalValue: totalValue(db) });
             }
         } catch (e) { console.error("Price Poller Error:", e); }
     }, 60000);
@@ -963,9 +984,8 @@ ipcMain.handle('update-all-cards', async (event) => {
         })();
 
         try {
-            const stats = { totalValue: totalValue(db) };
-            db.prepare('INSERT INTO portfolio_history (total_value) VALUES (@val)').run({ val: stats.totalValue || 0 });
-            if (mainWindow) mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+            recordPortfolioValue(db);
+            if (mainWindow) mainWindow.webContents.send('price-update', { updates: [], totalValue: totalValue(db) });
         } catch (e) { /* history snapshot is best-effort */ }
 
         if (event.sender) event.sender.send('update-progress', { current: uniqueIds.length, total: uniqueIds.length });

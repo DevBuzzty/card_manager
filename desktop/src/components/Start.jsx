@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning, Award, PackageOpen } from 'lucide-react';
 import CardTile from './CardTile';
 import SetCompletion from './SetCompletion';
+import MoversCard from './MoversCard';
 import { fmtEUR, fmtSignedEUR } from '../utils/format';
 import { ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
@@ -183,6 +184,9 @@ export default function Start({ onOpenPalette }) {
           </button>
         </div>
       </div>
+
+      {/* Spec G1: Bewegungen */}
+      <MoversCard />
 
       {/* Recently added */}
       <div className="bg-obsidian-700 border border-line rounded-2xl p-6">

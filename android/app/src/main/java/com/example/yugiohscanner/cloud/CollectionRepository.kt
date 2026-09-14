@@ -325,6 +325,7 @@ object CollectionRepository {
                     attribute = o.strOrNull("attribute"),
                     deleted = o.optBoolean("deleted", false),
                     updatedAt = o.strOrNull("updated_at"),
+                    priceLocked = if (o.isNull("price_locked")) 0 else o.optInt("price_locked", 0),
                 )
             )
         }

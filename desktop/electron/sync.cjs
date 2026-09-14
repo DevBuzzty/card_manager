@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { totalValue, copyCount } = require('./valuation.cjs');
 const { CONTAINER_COLS, clearContainerLocations } = require('./containers-schema.cjs');
+const { mergeRemotePriceHistory } = require('./price-history.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
@@ -346,7 +347,42 @@ function startSync(db, getWindow) {
     setSetting(db, 'sync_containers_last_push', changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor));
   }
 
-  // Append-only: the desktop pushes price history, never pulls it (phone charts read the cloud table).
+  // Spec G1 §4.12 — the daily cloud Edge Function writes source='cloud' rows the desktop would
+  // otherwise never see; pull them first (INSERT OR IGNORE via mergeRemotePriceHistory, so an
+  // existing local row with the same key is left untouched), then push local rows as before.
+  async function pullPriceHistory(c) {
+    const cursor = getSetting(db, 'sync_price_history_last_pull') || '1970-01-01T00:00:00Z';
+    const PAGE = 1000;
+    let applied = 0;
+    let lastTs = null;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await c.from('price_history')
+        .select('card_id,set_code,language,rarity,variant,day,price,source,recorded_at')
+        .eq('source', 'cloud')
+        .gt('recorded_at', cursor)
+        .order('recorded_at', { ascending: true })
+        .order('card_id', { ascending: true })
+        .order('set_code', { ascending: true })
+        .order('language', { ascending: true })
+        .order('rarity', { ascending: true })
+        .order('variant', { ascending: true })
+        .order('day', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error('Pull price_history failed: ' + error.message);
+      if (!data || data.length === 0) break;
+      applied += mergeRemotePriceHistory(db, data);
+      // recorded_at is the primary sort key, so the last row of the last page is the max. One Edge
+      // Function run stamps many rows with the SAME recorded_at, so the cursor only advances once
+      // every page has been drained -- never mid-run, or same-timestamp rows on a later page would
+      // be skipped for good.
+      lastTs = data[data.length - 1].recorded_at;
+      if (data.length < PAGE) break;
+    }
+    if (lastTs) setSetting(db, 'sync_price_history_last_pull', lastTs);
+    return applied;
+  }
+
+  // Append-only from the desktop's side: local rows are pushed once and never updated/deleted.
   async function pushPriceHistory(c) {
     const cursor = getSetting(db, 'sync_price_history_last_push') || '1970-01-01T00:00:00Z';
     const rows = db.prepare("SELECT card_id, set_code, language, rarity, variant, day, price, source, recorded_at FROM price_history WHERE recorded_at > ? AND recorded_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
@@ -387,6 +423,7 @@ function startSync(db, getWindow) {
       await push(c);
       await pushContainers(c);
       await pushCopies(c);
+      await pullPriceHistory(c);
       await pushPriceHistory(c);
       await syncSnapshot(c);
       const totalPulled = pulled + pulledContainers + pulledCopies;

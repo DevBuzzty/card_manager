@@ -12,7 +12,7 @@ import org.json.JSONObject
 
 data class Snapshot(val day: String, val totalValue: Double)
 
-// Portfolio value over time. The phone upserts today's total when the Wert screen loads
+// Portfolio value over time. The phone upserts today's total when the Start screen loads
 // (one row per user per day), and reads the recent history for the value chart.
 object SnapshotsRepository {
 
@@ -27,20 +27,25 @@ object SnapshotsRepository {
         }.use { r -> if (!r.isSuccessful) err("Snapshot speichern", r) }
     }
 
-    suspend fun loadSnapshots(days: Int = 120): List<Snapshot> = withContext(Dispatchers.IO) {
+    // Spec G1 §4.4: die JUENGSTEN 1000 Tage (vorher `day.asc&limit=120` = die aeltesten 120).
+    fun snapshotParams(): List<Pair<String, String>> =
+        listOf("select" to "day,total_value", "order" to "day.desc", "limit" to "1000")
+
+    fun parseSnapshots(text: String): List<Snapshot> {
+        val arr = JSONArray(text)
+        return (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            Snapshot(o.optString("day"), o.optDouble("total_value", 0.0))
+        }.reversed()
+    }
+
+    suspend fun loadSnapshots(): List<Snapshot> = withContext(Dispatchers.IO) {
         val url = "${SupabaseCloud.base()}/rest/v1/portfolio_snapshots".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "day,total_value")
-            .addQueryParameter("order", "day.asc")
-            .addQueryParameter("limit", days.toString())
-            .build()
+            .apply { snapshotParams().forEach { (k, v) -> addQueryParameter(k, v) } }.build()
         executeWithReauth { base(url).get().build() }.use { r ->
             val text = r.body?.string() ?: "[]"
             if (!r.isSuccessful) throw RuntimeException("Verlauf laden fehlgeschlagen (${r.code}): $text")
-            val arr = JSONArray(text)
-            (0 until arr.length()).map {
-                val o = arr.getJSONObject(it)
-                Snapshot(o.optString("day"), o.optDouble("total_value", 0.0))
-            }
+            parseSnapshots(text)
         }
     }
 

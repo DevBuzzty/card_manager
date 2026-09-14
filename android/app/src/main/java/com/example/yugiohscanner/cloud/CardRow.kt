@@ -22,4 +22,6 @@ data class CardRow(
     // damit sie lokal verschwindet. Beide Felder werden NUR gelesen; kein Schreibweg sendet sie.
     val deleted: Boolean = false,
     val updatedAt: String? = null,
+    // Spec G1 §4.2: Quellenfamilie des aktuellen Preises (0 YGOPRODeck, 1 Cardmarket, 2 manuell). Nur gelesen.
+    val priceLocked: Int = 0,
 )

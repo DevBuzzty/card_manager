@@ -4,6 +4,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import CustomSelect from './CustomSelect';
 import Flag from './Flag';
 import CopySheet from './CopySheet';
+import PriceHistoryChart from './PriceHistoryChart';
 import { groupCopies, valueOf, CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { parseTags } from '../utils/tags';
 import { fmtEUR } from '../utils/format';
@@ -271,6 +272,8 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                               </button>
                           </div>
                       </div>
+
+                      <PriceHistoryChart key={`${card.id}|${variant.set_code}|${variant.language || 'DE'}|${variant.rarity}`} printing={printingOf(variant)} />
 
                       <div>
                           {groupCopies(copiesByKey[vKey(variant)] || []).map(g => {
