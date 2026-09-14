@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
-import com.example.yugiohscanner.ml.BinderBreakdown
 import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.Muted
@@ -64,10 +63,8 @@ fun InsightsScreen(onBack: () -> Unit) {
                     val dash by produceState(DashboardMemo.peek(cards, copies), cards, copies) {
                         value = withContext(Dispatchers.Default) { DashboardMemo.get(cards, copies) }
                     }
-                    val binders by produceState<List<StatGroup>?>(null, cards, copies, containers) {
-                        value = withContext(Dispatchers.Default) {
-                            BinderBreakdown.compute(cards, copies, containers).map { StatGroup(it.label, it.count, it.value) }
-                        }
+                    val binders by produceState(BinderBreakdownMemo.peek(cards, copies, containers), cards, copies, containers) {
+                        value = withContext(Dispatchers.Default) { BinderBreakdownMemo.get(cards, copies, containers) }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         FilterChip(selected = !byValue, onClick = { byValue = false }, label = { Text("Anzahl") })
