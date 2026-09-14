@@ -1,0 +1,121 @@
+{
+  "cases": [
+    {
+      "name": "Gewinner und Verlierer nach Bestandsdelta; Stichtag zaehlt; Auswahl der Referenzzeile",
+      "input": {
+        "today": "2026-09-20", "days": 7, "top": 10,
+        "cards": [
+          { "id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "name": "A", "image_url": null, "price": 12.0, "price_locked": 1 },
+          { "id": "2", "set_code": "MRD-DE002", "language": "DE", "rarity": "Common", "name": "B", "image_url": null, "price": 1.6, "price_locked": 1 },
+          { "id": "3", "set_code": "SDK-DE003", "language": "DE", "rarity": "Secret Rare", "name": "C", "image_url": null, "price": 30.0, "price_locked": 0 }
+        ],
+        "copies": [
+          { "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "condition": "NM" },
+          { "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "condition": "NM" },
+          { "card_id": "2", "set_code": "MRD-DE002", "language": "DE", "rarity": "Common", "condition": "EX" },
+          { "card_id": "3", "set_code": "SDK-DE003", "language": "DE", "rarity": "Secret Rare", "condition": "NM" },
+          { "card_id": "3", "set_code": "SDK-DE003", "language": "DE", "rarity": "Secret Rare", "condition": "LP" }
+        ],
+        "references": [
+          { "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-05", "price": 9.0, "source": "cm_bulk" },
+          { "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-10", "price": 10.0, "source": "cm_bulk" },
+          { "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-15", "price": 11.5, "source": "cm_bulk" },
+          { "card_id": "2", "set_code": "MRD-DE002", "language": "DE", "rarity": "Common", "day": "2026-09-13", "price": 2.0, "source": "cloud" },
+          { "card_id": "3", "set_code": "SDK-DE003", "language": "DE", "rarity": "Secret Rare", "day": "2026-09-01", "price": 25.0, "source": "ygoprodeck" }
+        ]
+      },
+      "expected": {
+        "status": "ok", "firstDay": null,
+        "winners": [
+          { "key": "3|SDK-DE003|DE|Secret Rare", "oldPrice": 25.0, "newPrice": 30.0, "deltaUnit": 5.0, "pct": 20.0, "weight": 1.5, "copies": 2, "deltaHolding": 7.5 },
+          { "key": "1|LOB-DE001|DE|Ultra Rare", "oldPrice": 10.0, "newPrice": 12.0, "deltaUnit": 2.0, "pct": 20.0, "weight": 2.0, "copies": 2, "deltaHolding": 4.0 }
+        ],
+        "losers": [
+          { "key": "2|MRD-DE002|DE|Common", "oldPrice": 2.0, "newPrice": 1.6, "deltaUnit": -0.4, "pct": -20.0, "weight": 0.85, "copies": 1, "deltaHolding": -0.34 }
+        ]
+      }
+    },
+    {
+      "name": "Quellenwechsel, manuell, unbekannte Quelle, kein Damals, Delta 0, ohne lebende Exemplare",
+      "input": {
+        "today": "2026-09-20", "days": 7, "top": 10,
+        "cards": [
+          { "id": "4", "set_code": "X-DE004", "language": "DE", "rarity": "Rare", "name": "D", "image_url": null, "price": 20.0, "price_locked": 1 },
+          { "id": "5", "set_code": "X-DE005", "language": "DE", "rarity": "Rare", "name": "E", "image_url": null, "price": 5.0, "price_locked": 2 },
+          { "id": "6", "set_code": "X-DE006", "language": "DE", "rarity": "Rare", "name": "F", "image_url": null, "price": 5.0, "price_locked": 1 },
+          { "id": "7", "set_code": "X-DE007", "language": "DE", "rarity": "Rare", "name": "G", "image_url": null, "price": 8.0, "price_locked": 1 },
+          { "id": "8", "set_code": "X-DE008", "language": "DE", "rarity": "Rare", "name": "H", "image_url": null, "price": 3.0, "price_locked": 1 },
+          { "id": "9", "set_code": "X-DE009", "language": "DE", "rarity": "Rare", "name": "I", "image_url": null, "price": 9.0, "price_locked": 1 }
+        ],
+        "copies": [
+          { "card_id": "4", "set_code": "X-DE004", "language": "DE", "rarity": "Rare", "condition": "NM" },
+          { "card_id": "5", "set_code": "X-DE005", "language": "DE", "rarity": "Rare", "condition": "NM" },
+          { "card_id": "6", "set_code": "X-DE006", "language": "DE", "rarity": "Rare", "condition": "NM" },
+          { "card_id": "7", "set_code": "X-DE007", "language": "DE", "rarity": "Rare", "condition": "NM" },
+          { "card_id": "8", "set_code": "X-DE008", "language": "DE", "rarity": "Rare", "condition": "NM" },
+          { "card_id": "9", "set_code": "X-DE009", "language": "DE", "rarity": "Rare", "condition": "NM", "deleted": true }
+        ],
+        "references": [
+          { "card_id": "4", "set_code": "X-DE004", "language": "DE", "rarity": "Rare", "day": "2026-09-01", "price": 10.0, "source": "ygoprodeck" },
+          { "card_id": "5", "set_code": "X-DE005", "language": "DE", "rarity": "Rare", "day": "2026-09-01", "price": 4.0, "source": "manual" },
+          { "card_id": "6", "set_code": "X-DE006", "language": "DE", "rarity": "Rare", "day": "2026-09-01", "price": 4.0, "source": "import" },
+          { "card_id": "7", "set_code": "X-DE007", "language": "DE", "rarity": "Rare", "day": "2026-09-15", "price": 7.0, "source": "cm_bulk" },
+          { "card_id": "8", "set_code": "X-DE008", "language": "DE", "rarity": "Rare", "day": "2026-09-01", "price": 3.0, "source": "cm_bulk" },
+          { "card_id": "9", "set_code": "X-DE009", "language": "DE", "rarity": "Rare", "day": "2026-09-01", "price": 1.0, "source": "cm_bulk" }
+        ]
+      },
+      "expected": { "status": "ok", "firstDay": null, "winners": [], "losers": [] }
+    },
+    {
+      "name": "Noch kein Damals: no_reference mit fruehestem Tag",
+      "input": {
+        "today": "2026-09-20", "days": 7, "top": 10,
+        "cards": [
+          { "id": "20", "set_code": "Y-DE020", "language": "DE", "rarity": "Common", "name": "J", "image_url": null, "price": 4.0, "price_locked": 1 },
+          { "id": "21", "set_code": "Y-DE021", "language": "DE", "rarity": "Common", "name": "K", "image_url": null, "price": 2.0, "price_locked": 1 },
+          { "id": "22", "set_code": "Y-DE022", "language": "DE", "rarity": "Common", "name": "L", "image_url": null, "price": 2.0, "price_locked": 1 }
+        ],
+        "copies": [
+          { "card_id": "20", "set_code": "Y-DE020", "language": "DE", "rarity": "Common", "condition": "NM" },
+          { "card_id": "21", "set_code": "Y-DE021", "language": "DE", "rarity": "Common", "condition": "NM" },
+          { "card_id": "22", "set_code": "Y-DE022", "language": "DE", "rarity": "Common", "condition": "NM" }
+        ],
+        "references": [
+          { "card_id": "20", "set_code": "Y-DE020", "language": "DE", "rarity": "Common", "day": "2026-09-19", "price": 3.5, "source": "cm_bulk" },
+          { "card_id": "20", "set_code": "Y-DE020", "language": "DE", "rarity": "Common", "day": "2026-09-16", "price": 3.0, "source": "cm_bulk" },
+          { "card_id": "21", "set_code": "Y-DE021", "language": "DE", "rarity": "Common", "day": "2026-09-18", "price": 1.0, "source": "cm_bulk" }
+        ]
+      },
+      "expected": { "status": "no_reference", "firstDay": "2026-09-23", "winners": [], "losers": [] }
+    },
+    {
+      "name": "Gleichstand nach Schluessel, Top N, fehlende Raritaet als Unknown, 30 Tage",
+      "input": {
+        "today": "2026-09-20", "days": 30, "top": 2,
+        "cards": [
+          { "id": "11", "set_code": "AAA-DE002", "language": "DE", "rarity": "Common", "name": "N", "image_url": null, "price": 3.0, "price_locked": 1 },
+          { "id": "10", "set_code": "AAA-DE001", "language": "DE", "rarity": "Common", "name": "M", "image_url": null, "price": 3.0, "price_locked": 1 },
+          { "id": "12", "set_code": "AAA-DE003", "language": "DE", "rarity": null, "name": "P", "image_url": null, "price": 2.5, "price_locked": 1 }
+        ],
+        "copies": [
+          { "card_id": "10", "set_code": "AAA-DE001", "language": "DE", "rarity": "Common", "condition": "NM" },
+          { "card_id": "11", "set_code": "AAA-DE002", "language": "DE", "rarity": "Common", "condition": "NM" },
+          { "card_id": "12", "set_code": "AAA-DE003", "language": "DE", "rarity": "Unknown", "condition": "NM" }
+        ],
+        "references": [
+          { "card_id": "10", "set_code": "AAA-DE001", "language": "DE", "rarity": "Common", "day": "2026-08-01", "price": 2.0, "source": "cm_scrape" },
+          { "card_id": "11", "set_code": "AAA-DE002", "language": "DE", "rarity": "Common", "day": "2026-08-01", "price": 2.0, "source": "cm_scrape" },
+          { "card_id": "12", "set_code": "AAA-DE003", "language": "DE", "rarity": "Unknown", "day": "2026-08-01", "price": 2.0, "source": "cloud" }
+        ]
+      },
+      "expected": {
+        "status": "ok", "firstDay": null,
+        "winners": [
+          { "key": "10|AAA-DE001|DE|Common", "oldPrice": 2.0, "newPrice": 3.0, "deltaUnit": 1.0, "pct": 50.0, "weight": 1.0, "copies": 1, "deltaHolding": 1.0 },
+          { "key": "11|AAA-DE002|DE|Common", "oldPrice": 2.0, "newPrice": 3.0, "deltaUnit": 1.0, "pct": 50.0, "weight": 1.0, "copies": 1, "deltaHolding": 1.0 }
+        ],
+        "losers": []
+      }
+    }
+  ]
+}
