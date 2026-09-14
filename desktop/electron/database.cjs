@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { ensureCopiesSchema, backfillCopies, reconcileCopies } = require('./copies-schema.cjs');
 const { ensureContainersSchema } = require('./containers-schema.cjs');
+const { seedPriceHistory } = require('./price-history.cjs');
 
 let db;
 
@@ -281,6 +282,8 @@ function runMigrations() {
         if (!bf.skipped) console.log(`Copies backfill: created ${bf.created} copies from quantities.`);
         const rc = reconcileCopies(db);
         if (!rc.skipped && rc.created > 0) console.log(`Copies reconcile: created ${rc.created} missing copies across ${rc.printings} printing(s).`);
+        const seed = seedPriceHistory(db);
+        if (!seed.skipped) console.log(`Price history seed: ${seed.inserted} start row(s).`);
     } catch (e) {
         console.log("Migration check failed or not needed", e);
     }

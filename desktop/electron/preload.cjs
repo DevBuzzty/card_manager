@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('api', {
   checkCardExists: (passcode) => ipcRenderer.invoke('check-card-exists', passcode),
   getPortfolio: () => ipcRenderer.invoke('get-portfolio'),
   getPriceHistory: () => ipcRenderer.invoke('get-price-history'),
+  getMovers: (days) => ipcRenderer.invoke('get-movers', { days }),
+  getCardHistory: (printing) => ipcRenderer.invoke('get-card-history', printing),
   updateCardMeta: (data) => ipcRenderer.invoke('update-card-meta', data),
   setCardPrice: (data) => ipcRenderer.invoke('set-card-price', data),
   deleteCard: (data) => ipcRenderer.invoke('delete-card', data),
