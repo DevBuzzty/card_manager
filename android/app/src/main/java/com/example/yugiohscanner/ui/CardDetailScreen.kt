@@ -171,6 +171,7 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                             Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error)
                         }
                     }
+                    PriceHistoryChart(v)
                     if (!migrated) {
                         Text("${v.quantity}× NM · Unbek. (nicht migriert – Desktop einmal starten)", style = MaterialTheme.typography.bodySmall, color = Muted)
                     }
