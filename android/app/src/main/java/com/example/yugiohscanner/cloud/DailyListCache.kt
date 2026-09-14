@@ -27,6 +27,11 @@ class DailyListCache<T>(
     val state: StateFlow<CacheState<T>> get() = cache.state
 
     fun ensureFresh() {
+        // loadedDay wird erst NACH dem Laden gesetzt, ausserhalb der Generationspruefung von
+        // ListCache -- ungefaehrlich, weil diese Bedingung zusaetzlich s.value == null prueft: ein
+        // gescheitertes Laden laesst loadedDay unveraendert (auf dem alten Tag stehen), aber value
+        // bleibt dann ebenfalls null, sodass jeder weitere Aufruf (also jeder Seitenbesuch) erneut
+        // laedt. Das ist die gewollte Wiederholung nach einem Fehlschlag, kein Bug.
         val s = cache.state.value
         if (!s.loading && (s.value == null || loadedDay != today())) cache.refresh()
     }
