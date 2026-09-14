@@ -1,0 +1,30 @@
+{
+  "_comment": "Spec G2 §8 — Treffertexte. desktop/electron/alert-text.test.cjs und AlertTextTest.kt lesen diese Datei.",
+  "cases": [
+    {
+      "name": "Bewegung aufwärts",
+      "event": { "kind": "move", "name": "Blauäugiger w. Drache", "card_id": "89631139", "set_code": "LOB-DE001", "rarity": "Ultra Rare", "old_price": 10, "new_price": 12, "pct": 20, "days": 7, "threshold": null },
+      "text": "Blauäugiger w. Drache · LOB-DE001 · Ultra Rare: +20,0 % in 7 Tagen (10,00 € → 12,00 €)"
+    },
+    {
+      "name": "Bewegung abwärts, 30 Tage, Tausenderpunkt",
+      "event": { "kind": "move", "name": "Dunkler Magier", "card_id": "46986414", "set_code": "SDY-DE005", "rarity": "Common", "old_price": 1234.5, "new_price": 925.88, "pct": -25, "days": 30, "threshold": null },
+      "text": "Dunkler Magier · SDY-DE005 · Common: −25,0 % in 30 Tagen (1.234,50 € → 925,88 €)"
+    },
+    {
+      "name": "Rundung auf Zehntelprozent und große Beträge",
+      "event": { "kind": "move", "name": "Kuriboh", "card_id": "40640057", "set_code": "MRD-DE071", "rarity": "Rare", "old_price": 932.2, "new_price": 1000000, "pct": 7.25, "days": 7, "threshold": null },
+      "text": "Kuriboh · MRD-DE071 · Rare: +7,3 % in 7 Tagen (932,20 € → 1.000.000,00 €)"
+    },
+    {
+      "name": "Zielpreis oben",
+      "event": { "kind": "above", "name": "Exodia", "card_id": "33396948", "set_code": "LOB-DE124", "rarity": "Ultra Rare", "old_price": 45.5, "new_price": 50, "pct": null, "days": null, "threshold": 50 },
+      "text": "Exodia · LOB-DE124 · Ultra Rare: Zielpreis ≥ 50,00 € erreicht (50,00 €)"
+    },
+    {
+      "name": "Zielpreis unten ohne Namen, Unknown und leere Rarität",
+      "event": { "kind": "below", "name": null, "card_id": "46986414", "set_code": "Unknown", "rarity": "", "old_price": null, "new_price": 4, "pct": null, "days": null, "threshold": 5 },
+      "text": "46986414 · Unbekannt · Unbekannt: Zielpreis ≤ 5,00 € erreicht (4,00 €)"
+    }
+  ]
+}
