@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -29,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
@@ -41,11 +43,12 @@ import com.example.yugiohscanner.cloud.CatalogState
 import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SideStores
-import com.example.yugiohscanner.cloud.Snapshot
 import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.SnapshotSeries
 import com.example.yugiohscanner.ml.UnsortedCopies
+import com.example.yugiohscanner.ml.UtcDay
 import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
@@ -79,6 +82,7 @@ fun StartScreen(
     onOpenDeals: () -> Unit,
     onOpenEinstellungen: () -> Unit,
     onOpenBinder: () -> Unit,
+    onOpenInsights: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     // Spec §5: Karten und Exemplare aus dem Speicher; der Ladebildschirm garantiert Ready.
@@ -86,7 +90,10 @@ fun StartScreen(
     val ready = store as? StoreState.Ready
     val cards = ready?.cards ?: emptyList()
     val copies = ready?.copies ?: emptyList()
-    var snapshots by remember { mutableStateOf<List<Snapshot>>(emptyList()) }
+    val snapshotsCache by SideStores.snapshots.state.collectAsState()
+    val snapshots = snapshotsCache.value ?: emptyList()
+    // Spec G1 §4.7: Kartendetail aus Start heraus, wie in CollectionScreen (Detail bleibt verschachtelt).
+    var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     val setsCache by SideStores.sets.state.collectAsState()
     val alertsCache by SideStores.dealAlerts.state.collectAsState()
     val dealAlertCount = alertsCache.value?.size ?: 0
@@ -141,13 +148,25 @@ fun StartScreen(
                 // Record today's value + read the history for the chart. Non-fatal if the
                 // portfolio_snapshots table isn't set up yet.
                 SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
-                snapshots = SnapshotsRepository.loadSnapshots()
+                val snaps = SideStores.snapshots
+                if (snaps.state.value.value == null) snaps.refreshAndWait()
+                else snaps.update { SnapshotSeries.withToday(it, UtcDay.today(), dash.totalValue) }
             } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
         }
     }
 
+    BackHandler(detailId != null) { detailId = null }
+    detailId?.let { id ->
+        CardDetailScreen(cardId = id, onClose = { detailId = null })
+        return
+    }
     Surface(Modifier.fillMaxSize(), color = Background) {
-        RefreshableBox(onRefresh = { CollectionStore.awaitSync(); SideStores.dealAlerts.refreshAndWait() }) {
+        RefreshableBox(onRefresh = {
+            CollectionStore.awaitSync()
+            SideStores.dealAlerts.refreshAndWait()
+            SideStores.snapshots.refreshAndWait()
+            SideStores.reference7.refreshAndWait()
+        }) {
         // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
         // passen) oder null; solange null, bleibt `d` null und die betroffenen Stellen unten
         // zeigen einen echten Ladehinweis statt Nullwerten -- kein Hauptthread-Block durch die
@@ -207,7 +226,7 @@ fun StartScreen(
                 }
             }
 
-            (error ?: setsCache.error ?: alertsCache.error)?.let {
+            (error ?: setsCache.error ?: alertsCache.error ?: snapshotsCache.error)?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
 
@@ -261,6 +280,8 @@ fun StartScreen(
                     }
                 }
             }
+
+            MoversSection(days = 7, top = 3, full = false, onOpenCard = { detailId = it }, onOpenAll = onOpenInsights)
 
             // Quick actions.
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -378,10 +399,12 @@ fun StartScreen(
                     }
                 }
 
-                StatSection("Nach Rarität", dash.byRarity)
-                StatSection("Nach Typ", dash.byType)
-                StatSection("Nach Set", dash.bySet)
-                StatSection("Nach Attribut", dash.byAttribute)
+                SpaceCard(Modifier.fillMaxWidth().clickable { onOpenInsights() }) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Aufteilung ansehen", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = OnSurface)
+                        Text("→", style = MaterialTheme.typography.bodyMedium, color = Primary)
+                    }
+                }
             }
         }
         }
@@ -400,19 +423,6 @@ private fun QuickAction(label: String, icon: ImageVector, modifier: Modifier, on
             Text(label, style = MaterialTheme.typography.labelMedium, color = OnSurface)
         }
     }
-}
-
-@Composable
-private fun StatSection(title: String, groups: List<StatGroup>) {
-    Spacer(Modifier.height(16.dp))
-    SectionHeader(title)
-    Spacer(Modifier.height(4.dp))
-    if (groups.isEmpty()) {
-        Text("Keine Daten", style = MaterialTheme.typography.bodySmall, color = Muted)
-        return
-    }
-    val maxCount = groups.maxOf { it.count }.coerceAtLeast(1)
-    groups.forEach { g -> StatBar(g.label, g.count, g.value, g.count.toFloat() / maxCount) }
 }
 
 // Minimal value-over-time line chart (no chart library): a violet polyline with a soft fill.

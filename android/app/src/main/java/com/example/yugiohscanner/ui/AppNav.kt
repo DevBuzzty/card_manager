@@ -46,6 +46,8 @@ import kotlinx.coroutines.launch
 
 object Routes {
     const val START = "start"
+    // Spec G1 §4.7: Unterseite von Start. Erstes Segment "start", damit die untere Leiste Start markiert.
+    const val INSIGHTS = "start/insights"
     const val SCAN = "scan"
     const val DEALS = "deals"
     const val EINSTELLUNGEN = "einstellungen"
@@ -191,7 +193,12 @@ fun AppNav() {
                     // Spec B1 Task 10: der Zähler "Nicht einsortiert" springt gezielt in den
                     // Binder-Reiter der Sammlung, nicht in den Standard-Reiter "Karten".
                     onOpenBinder = { nav.navigateTop(Routes.sammlung("binder")) },
+                    onOpenInsights = { nav.navigate(Routes.INSIGHTS) { launchSingleTop = true } },
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
+            }
+            composable(Routes.INSIGHTS) {
+                if (cloudReady) InsightsScreen(onBack = { nav.popBackStack() })
+                else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
                 Routes.SAMMLUNG,

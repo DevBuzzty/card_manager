@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,7 +18,9 @@ import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.theme.Line
+import com.example.yugiohscanner.ui.theme.Muted
 
 // One row of a breakdown: a label with its card count and summed value.
 data class StatGroup(val label: String, val count: Int, val value: Double)
@@ -136,5 +139,24 @@ fun StatBar(label: String, count: Int, value: Double, fraction: Float) {
                     .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp))
             )
         }
+    }
+}
+
+// Spec G1 §4.7: eine Aufteilung als Balken; `byValue` sortiert und misst nach Wert statt nach Anzahl.
+@Composable
+internal fun StatSection(title: String, groups: List<StatGroup>, byValue: Boolean = false) {
+    Spacer(Modifier.height(16.dp))
+    SectionHeader(title)
+    Spacer(Modifier.height(4.dp))
+    if (groups.isEmpty()) {
+        Text("Keine Daten", style = MaterialTheme.typography.bodySmall, color = Muted)
+        return
+    }
+    val shown = if (byValue) groups.sortedByDescending { it.value } else groups
+    val maxCount = shown.maxOf { it.count }.coerceAtLeast(1)
+    val maxValue = shown.maxOf { it.value }.coerceAtLeast(1e-6)
+    shown.forEach { g ->
+        val fraction = if (byValue) (g.value / maxValue).toFloat() else g.count.toFloat() / maxCount
+        StatBar(g.label, g.count, g.value, fraction)
     }
 }
