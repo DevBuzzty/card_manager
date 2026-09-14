@@ -159,6 +159,14 @@ Die Abnahme prüft 7 Tage mit echten Daten; 30 Tage und Leerzustände über Fixt
 **Android:** neu `ml/Movers.kt`, `ml/PriceSteps.kt`, `cloud/PriceHistoryRepository.kt`, `ui/InsightsScreen.kt`, `ui/MoversSection.kt`, `ui/PriceHistoryChart.kt` (+ Tests); geändert `CardRow.kt` (`priceLocked`), `CollectionRepository.kt` (Parse), `SideStores.kt`, `SnapshotsRepository.kt`, `StartScreen.kt`, `Dashboard.kt` (Binder-Aufteilung), `CardDetailScreen.kt`, `AppNav.kt`.
 **Fixtures:** `docs/fixtures/portfolio/movers.json`, `docs/fixtures/portfolio/price-steps.json`.
 
+### 4.12 Ergänzung nach dem Abschlussreview (2026-09-14)
+
+- **Cloud-Verlauf zum Desktop.** Die tägliche Cloud-Aktualisierung schreibt `price_history`-Zeilen mit `source = 'cloud'`. Der Desktop holt sie im Sync-Zyklus ab (Schritt vor dem Push, `INSERT OR IGNORE`, Stichtag `sync_price_history_last_pull`, Helfer `mergeRemotePriceHistory`). Damit sehen beide Geräte dieselben Damals-Preise, auch nach Tagen ohne Desktop.
+- **„Jetzt" am Desktop.** `cards.price` gleicht der Desktop weiter über seinen täglichen Bulk-Lauf an (30 s nach dem Start). Das Erfolgskriterium aus §4.1 gilt, sobald der Desktop nach dem letzten Preiswechsel einmal gelaufen ist.
+- **Startzeilen normalisieren den Schlüssel** wie `recordPrice` (`set_code`/`rarity` leer oder NULL → `Unknown`, `language` leer oder NULL → `DE`), lokal und in `price_history_seed.sql`.
+- **Sichtbare Rückfälle:** Gespeichertes `Unknown` bei Set-Code und Rarität heißt auf beiden Geräten „Unbekannt"; Δ % hat auf beiden Geräten ein deutsches Dezimalkomma.
+- **Desktop-Chart:** Eine Stufenreihe mit weniger als zwei Punkten zeigt „Noch kein Verlauf" (wie am Handy).
+
 ## 5. Was unverändert gilt
 
 Spec G §3 (Nicht-Ziele), §5.4–§5.5, §6, §7.2 Sealed, §7.3 Alarm-Zeile und 1st-Ed-Preiszeile, §7.4 und §8 gelten für G2–G4 fort, vorbehaltlich der dort anstehenden Nachträge und der Korrekturen in §1 dieses Dokuments.
