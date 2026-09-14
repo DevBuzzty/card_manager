@@ -1,0 +1,50 @@
+{
+  "cases": [
+    { "name": "keine Zeile", "today": "2026-09-20", "window": 30, "rows": [],
+      "expected": { "kind": "none", "points": [], "markers": [] } },
+    { "name": "eine Zeile", "today": "2026-09-20", "window": 30,
+      "rows": [ { "day": "2026-09-05", "price": 12.4, "source": "cm_bulk" } ],
+      "expected": { "kind": "flat", "flatDay": "2026-09-05", "flatPrice": 12.4, "points": [], "markers": [] } },
+    { "name": "Anfangswert vor dem Fenster, Wechselmarke, Verlaengerung bis heute", "today": "2026-09-20", "window": 30,
+      "rows": [
+        { "day": "2026-08-01", "price": 10, "source": "ygoprodeck" },
+        { "day": "2026-09-01", "price": 12, "source": "cm_bulk" },
+        { "day": "2026-09-10", "price": 11, "source": "cm_bulk" }
+      ],
+      "expected": { "kind": "series",
+        "points": [ { "day": "2026-08-21", "price": 10 }, { "day": "2026-09-01", "price": 12 }, { "day": "2026-09-10", "price": 11 }, { "day": "2026-09-20", "price": 11 } ],
+        "markers": [ { "day": "2026-09-01", "family": "cm" } ] } },
+    { "name": "alles im Fenster, letzter Punkt heute, cloud und cm_bulk sind eine Familie", "today": "2026-09-20", "window": 30,
+      "rows": [
+        { "day": "2026-09-15", "price": 3, "source": "cloud" },
+        { "day": "2026-09-20", "price": 4, "source": "cm_bulk" }
+      ],
+      "expected": { "kind": "series",
+        "points": [ { "day": "2026-09-15", "price": 3 }, { "day": "2026-09-20", "price": 4 } ],
+        "markers": [] } },
+    { "name": "unsortierte Eingabe, 7 Tage", "today": "2026-09-20", "window": 7,
+      "rows": [
+        { "day": "2026-09-18", "price": 5, "source": "ygoprodeck" },
+        { "day": "2026-09-12", "price": 6, "source": "ygoprodeck" }
+      ],
+      "expected": { "kind": "series",
+        "points": [ { "day": "2026-09-13", "price": 6 }, { "day": "2026-09-18", "price": 5 }, { "day": "2026-09-20", "price": 5 } ],
+        "markers": [] } },
+    { "name": "alle Zeilen vor dem Fenster", "today": "2026-09-20", "window": 30,
+      "rows": [
+        { "day": "2026-07-01", "price": 5, "source": "ygoprodeck" },
+        { "day": "2026-07-15", "price": 6, "source": "ygoprodeck" }
+      ],
+      "expected": { "kind": "series",
+        "points": [ { "day": "2026-08-21", "price": 6 }, { "day": "2026-09-20", "price": 6 } ],
+        "markers": [] } },
+    { "name": "erste Fensterzeile genau am Fensteranfang", "today": "2026-09-20", "window": 7,
+      "rows": [
+        { "day": "2026-09-01", "price": 2, "source": "manual" },
+        { "day": "2026-09-13", "price": 3, "source": "cm_scrape" }
+      ],
+      "expected": { "kind": "series",
+        "points": [ { "day": "2026-09-13", "price": 3 }, { "day": "2026-09-20", "price": 3 } ],
+        "markers": [ { "day": "2026-09-13", "family": "cm" } ] } }
+  ]
+}
