@@ -54,5 +54,16 @@ begin
 end
 $$;
 
-revoke all on function public.apply_cardmarket_sealed_prices(jsonb) from public;
+-- "revoke ... from public" allein reicht nicht: Supabase vergibt an neue Functions im Schema
+-- "public" standardmaessig zusaetzlich EXECUTE an "anon" und "authenticated". Da diese Funktion
+-- security definer ist, muss sie explizit auch diesen beiden Rollen entzogen werden.
+revoke all on function public.apply_cardmarket_sealed_prices(jsonb) from public, anon, authenticated;
 grant execute on function public.apply_cardmarket_sealed_prices(jsonb) to service_role;
+-- Pruefen: select has_function_privilege('anon', 'public.apply_cardmarket_sealed_prices(jsonb)', 'execute'); -- erwartet: false
+
+-- Dieselbe Luecke besteht bei der bestehenden Karten-RPC (price_history_schema.sql): auch sie ist
+-- security definer und bekam von Supabase automatisch EXECUTE fuer "anon"/"authenticated". Hier
+-- mitschliessen (idempotent), damit beide RPCs denselben Schutz haben.
+revoke all on function public.apply_cardmarket_prices(jsonb) from public, anon, authenticated;
+grant execute on function public.apply_cardmarket_prices(jsonb) to service_role;
+-- Pruefen: select has_function_privilege('anon', 'public.apply_cardmarket_prices(jsonb)', 'execute'); -- erwartet: false
