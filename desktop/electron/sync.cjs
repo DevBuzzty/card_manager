@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { copyCount } = require('./valuation.cjs');
-const { portfolioTotals } = require('./portfolio-value.cjs');
+const { portfolioTotals, recordPortfolioValue } = require('./portfolio-value.cjs');
 const { SEALED_COLS } = require('./sealed-items.cjs');
 const { toUtcMillis } = require('./sealed-value.cjs');
 const { CONTAINER_COLS, clearContainerLocations } = require('./containers-schema.cjs');
@@ -185,19 +185,41 @@ function remoteToLocalSealed(r) {
   out.deleted = r.deleted ? 1 : 0;
   return out;
 }
+// Fix I2 (final-review-report.md): ohne ein explizites updated_at stempelt trg_sealed_updated
+// (sealed-items.cjs) eine angewandte Zeile auf CURRENT_TIMESTAMP, und der naechste pushSealed schiebt
+// sie als "lokale Aenderung" zurueck -- das kann eine inzwischen neuere Handy-Schreibaktion ueberschreiben.
+// Deshalb bekommt jede gezogene Zeile hier ihr updated_at explizit auf eine Grenze gesetzt, die den
+// Push-Cursor nie ueberholt (den Cursor selbst, oder '1970-01-01 00:00:00' ohne Cursor).
+function sealedUpdatedAtCeiling(db) {
+  const cursor = getSetting(db, 'sync_sealed_last_push') || '1970-01-01T00:00:00Z';
+  return tsCloudToLocal(cursor) || '1970-01-01 00:00:00';
+}
+// Faellt die Grenze zufaellig mit dem bisherigen updated_at zusammen (z.B. zwei Zeilen derselben Zeile,
+// gezogen ohne dass sich der Push-Cursor dazwischen bewegt hat), wuerde UPDATE ... SET updated_at = @x
+// NEW.updated_at = OLD.updated_at hinterlassen -- genau die Bedingung, unter der trg_sealed_updated
+// erneut auf CURRENT_TIMESTAMP stempelt. Dann eine Sekunde vor die Grenze ausweichen: das bleibt weiterhin
+// nicht neuer als der Cursor, unterscheidet sich aber von OLD.updated_at.
+function sealedUpdatedAtFor(ceiling, oldValue) {
+  if (ceiling !== oldValue) return ceiling;
+  const ms = toUtcMillis(ceiling);
+  return new Date(ms - 1000).toISOString().slice(0, 19).replace('T', ' ');
+}
 // Nur schreiben, wenn sich etwas unterscheidet -- sonst stempelte trg_sealed_updated die Zeile neu und der
 // naechste Push schoebe sie grundlos zurueck.
 function applyRemoteSealed(db, r) {
   const l = remoteToLocalSealed(r);
   const cur = db.prepare('SELECT * FROM sealed_items WHERE sealed_id = ?').get(l.sealed_id);
+  const ceiling = sealedUpdatedAtCeiling(db);
   if (!cur) {
-    db.prepare(`INSERT INTO sealed_items (${SEALED_SYNC_COLS.join(',')})
-                VALUES (${SEALED_SYNC_COLS.map(c => '@' + c).join(',')})`).run(l);
+    l.updated_at = ceiling;
+    db.prepare(`INSERT INTO sealed_items (${SEALED_SYNC_COLS.join(',')}, updated_at)
+                VALUES (${SEALED_SYNC_COLS.map(c => '@' + c).join(',')}, @updated_at)`).run(l);
     return;
   }
   const changed = SEALED_SYNC_COLS.some(c => c !== 'sealed_id' && (cur[c] ?? null) !== (l[c] ?? null));
   if (!changed) return;
-  const sets = SEALED_SYNC_COLS.filter(c => c !== 'sealed_id').map(c => `${c} = @${c}`).join(', ');
+  l.updated_at = sealedUpdatedAtFor(ceiling, cur.updated_at);
+  const sets = SEALED_SYNC_COLS.filter(c => c !== 'sealed_id').map(c => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
   db.prepare(`UPDATE sealed_items SET ${sets} WHERE sealed_id = @sealed_id`).run(l);
 }
 
@@ -573,7 +595,12 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       await syncPriceAlerts(c);
       const pulledCollection = pulled + pulledContainers + pulledCopies;
       if (pulledCollection > 0) { const w = getWindow(); if (w) w.webContents.send('collection-changed'); }
-      if (pulledSealed > 0) { const w = getWindow(); if (w) w.webContents.send('sealed-changed'); }
+      // M1: gezogene Sealed-Aenderungen (Handy-Schreibvorgaenge, Cloud-Preislauf) sollen die Tageshistorie
+      // sofort mitziehen, nicht erst mit der naechsten Preisaenderung ueber der Schwelle. Nie fatal.
+      if (pulledSealed > 0) {
+        const w = getWindow(); if (w) w.webContents.send('sealed-changed');
+        try { recordPortfolioValue(db); } catch (e) { console.error('[sync] recordPortfolioValue:', e.message); }
+      }
       const totalPulled = pulledCollection + pulledSealed;
       emit('idle', totalPulled > 0 ? `pulled ${totalPulled}` : 'up to date');
     } catch (e) {

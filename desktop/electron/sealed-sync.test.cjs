@@ -104,6 +104,56 @@ test('Push-Auswahl: nach dem Cursor, ohne die laufende Sekunde, mit Soft-Deletes
   assert.equal(sealedToRemote(rows.find((r) => r.sealed_id === 's-weg')).deleted, true);
 });
 
+// Fix I2 (final-review-report.md): eine gezogene Aenderung darf nicht als "lokale Aenderung" erneut
+// hochgeschoben werden -- sonst kann sie eine inzwischen neuere Handy-Schreibaktion ueberschreiben.
+// Die Zusicherungen vergleichen updated_at direkt mit dem Cursor (Zeichenkettenvergleich, wie
+// sealedPushRows selbst es tut) statt ueber _sealedPushRows' eigene "nicht in der laufenden Sekunde"-
+// Ausnahme zu gehen -- die waere gegen die echte Uhrzeit lauffaehig instabil.
+const CURSOR = '2026-09-14 00:00:00';
+function withPushCursor(db, cursor) {
+  db.prepare("INSERT INTO settings (key, value) VALUES ('sync_sealed_last_push', ?)").run(cursor);
+}
+
+test('Fix I2: eine neu gezogene Zeile bekommt keinen updated_at neuer als der Push-Cursor', () => {
+  const db = freshDb();
+  _recentlyPushedSealed.clear();
+  withPushCursor(db, CURSOR);
+  assert.equal(_applyPulledSealed(db, [REMOTE]), 1);
+  assert.ok(row(db, 's1').updated_at <= CURSOR, `updated_at (${row(db, 's1').updated_at}) darf den Cursor nicht ueberholen`);
+  const rows = _sealedPushRows(db, CURSOR);
+  assert.deepEqual(rows.map((r) => r.sealed_id), [], 'die gezogene Neuanlage darf nicht zurueckgeschoben werden');
+});
+
+test('Fix I2: eine gezogene Aenderung einer vorhandenen Zeile bekommt keinen updated_at neuer als der Push-Cursor', () => {
+  const db = freshDb();
+  _recentlyPushedSealed.clear();
+  withPushCursor(db, CURSOR);
+  _applyPulledSealed(db, [REMOTE]);
+  // Der Push-Cursor bewegt sich zwischenzeitlich nicht (kein lokaler Push) -- die Grenze bleibt dieselbe,
+  // die die erste Anwendung schon benutzt hat: OLD.updated_at ist danach bereits gleich dem Cursor.
+  // Genau dieser Fall darf trg_sealed_updated nicht erneut auf CURRENT_TIMESTAMP stempeln lassen.
+  assert.equal(row(db, 's1').updated_at, CURSOR, 'Testannahme: die erste Anwendung stempelt bereits auf den Cursor');
+  const changed = { ...REMOTE, quantity: 3, updated_at: '2026-09-15T09:00:00+00:00' };
+  assert.equal(_applyPulledSealed(db, [changed]), 1);
+  assert.equal(row(db, 's1').quantity, 3);
+  assert.ok(row(db, 's1').updated_at <= CURSOR, `updated_at (${row(db, 's1').updated_at}) darf den Cursor nicht ueberholen`);
+  const rows = _sealedPushRows(db, CURSOR);
+  assert.deepEqual(rows.map((r) => r.sealed_id), [], 'die gezogene Aenderung darf nicht zurueckgeschoben werden');
+});
+
+test('Fix I2: eine lokale Aenderung nach dem Pull erscheint weiterhin in der Push-Auswahl', () => {
+  const db = freshDb();
+  _recentlyPushedSealed.clear();
+  withPushCursor(db, CURSOR);
+  _applyPulledSealed(db, [REMOTE]);
+  // Eine echte lokale Schreibaktion laesst updated_at unberuehrt, sodass trg_sealed_updated stempelt --
+  // hier fest auf einen Zeitpunkt zwischen Cursor und "jetzt" gesetzt, damit der Test nicht von der
+  // echten Uhrzeit abhaengt (sealedPushRows schliesst die laufende Sekunde aus).
+  db.prepare("UPDATE sealed_items SET quantity = 1, updated_at = '2026-09-14 12:00:00' WHERE sealed_id = ?").run('s1');
+  const rows = _sealedPushRows(db, CURSOR);
+  assert.deepEqual(rows.map((r) => r.sealed_id), ['s1'], 'eine lokale Aenderung nach dem Pull muss gepusht werden');
+});
+
 // Quelltext-Zaun wie in test-sync.cjs: prueft die Reihenfolge der Aufrufe in cycle(), keine Semantik.
 test('Zyklus: Sealed nach den Exemplaren gezogen und geschoben, vor Preishistorie, Tageswert und Alarmen', () => {
   const src = fs.readFileSync(path.join(__dirname, 'sync.cjs'), 'utf8');
