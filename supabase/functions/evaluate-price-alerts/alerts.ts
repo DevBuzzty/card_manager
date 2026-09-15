@@ -1,5 +1,6 @@
 // Spec G2 §5 — wann ein Preis-Alarm ausloest. Reine Regel ohne Netz; index.ts laedt und schreibt.
 // Bewegungsalarm mit derselben Familienregel wie Spec G1 §4.2 (electron/movers.cjs, ml/Movers.kt).
+// ZWILLING: keyOf/addDays spiegeln dieselben Helfer in electron/movers.cjs / ml/Movers.kt.
 import { familyOfLock, familyOfSource } from "./families.ts";
 
 export type Rule = {
@@ -15,6 +16,7 @@ export type Rule = {
   days: number | null;
   threshold: number | null;
   armed: boolean;
+  updated_at?: string;
 };
 
 /** Ein Printing mit deleted = false, lebender Kopie und price > 0. */
@@ -188,4 +190,14 @@ function evaluateTarget(
   } else if (!met && !rule.armed) {
     armedUpdates.push({ id: rule.id, armed: true });
   }
+}
+
+// Spec G2 §5.4 — entschaerft wird nur, wessen Treffer tatsaechlich eingefuegt wurde. Kollidiert ein
+// Treffer mit einem Treffer desselben Tages (Upsert ignoriert ihn), bleibt die Regel scharf und loest
+// beim naechsten moeglichen Lauf aus (spaetestens am Folgetag) — nie ein verlorener Treffer.
+export function armedUpdatesAfterInsert(
+  armedUpdates: { id: number; armed: boolean }[],
+  insertedRuleIds: Set<number>,
+): { id: number; armed: boolean }[] {
+  return armedUpdates.filter((u) => u.armed || insertedRuleIds.has(u.id));
 }

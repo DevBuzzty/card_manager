@@ -12,6 +12,7 @@
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import {
   addDays,
+  armedUpdatesAfterInsert,
   evaluate,
   keyOf,
   type Printing,
@@ -150,29 +151,41 @@ Deno.serve(async (req) => {
     const recentEvents = await loadRecentEvents(sb, today);
 
     const { events, armedUpdates } = evaluate({ today, rules, printings, references, lastBefore, recentEvents });
+    const updatedAtById = new Map(rules.map((r) => [r.id, r.updated_at]));
 
-    // §5.3: erst Treffer (idempotent pro Tag), dann armed — ein Abbruch verliert so nie einen Treffer.
+    // §5.3/§5.4: erst Treffer (idempotent pro Tag), dann armed — ein Abbruch verliert so nie einen
+    // Treffer. Kollidiert ein Treffer mit einem Treffer desselben Tages (ignoreDuplicates), bleibt die
+    // Regel scharf statt entschaerft zu werden — der naechste Lauf holt sie spaetestens am Folgetag nach.
     let inserted = 0;
+    const insertedRuleIds = new Set<number>();
     for (let i = 0; i < events.length; i += 500) {
       const { data, error } = await sb.from("price_alert_events")
         .upsert(events.slice(i, i + 500), {
           onConflict: "rule_id,card_id,set_code,language,rarity,day",
           ignoreDuplicates: true,
         })
-        .select("id");
+        .select("id,rule_id");
       if (error) throw new Error(error.message);
       inserted += data?.length ?? 0;
+      for (const row of data ?? []) insertedRuleIds.add(Number((row as { rule_id: unknown }).rule_id));
     }
-    for (const u of armedUpdates) {
-      const { error } = await sb.from("price_alert_rules").update({ armed: u.armed }).eq("id", u.id);
+    const toApply = armedUpdatesAfterInsert(armedUpdates, insertedRuleIds);
+    for (const u of toApply) {
+      // Minor 1: nur anwenden, wenn die Regel seit dem Laden unveraendert ist — sonst haette der
+      // Nutzer zwischen loadRules und hier eine neue Regel gespeichert, die nicht verworfen werden soll.
+      // Ein uebersprungenes Update ist kein Fehler: die naechste Auswertung greift die Regel neu auf.
+      let query = sb.from("price_alert_rules").update({ armed: u.armed }).eq("id", u.id);
+      const updatedAt = updatedAtById.get(u.id);
+      if (updatedAt) query = query.eq("updated_at", updatedAt);
+      const { error } = await query;
       if (error) throw new Error(error.message);
     }
 
     console.log(
-      `[evaluate-price-alerts] rules=${rules.length} printings=${printings.length} new=${inserted} armed=${armedUpdates.length}`,
+      `[evaluate-price-alerts] rules=${rules.length} printings=${printings.length} new=${inserted} armed=${toApply.length}`,
     );
     // Nur Zaehler — nie Inhalte fremder Regeln.
-    return json({ rules: rules.length, events: inserted, armed: armedUpdates.length });
+    return json({ rules: rules.length, events: inserted, armed: toApply.length });
   } catch (e) {
     console.error("[evaluate-price-alerts]", (e as Error).message);
     return json({ error: (e as Error).message }, 500);
