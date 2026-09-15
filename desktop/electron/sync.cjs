@@ -108,16 +108,22 @@ function applyRemoteRow(db, r) {
 
 // Upsert one pulled copy; only writes when something differs so the local updated_at trigger
 // (and therefore the next push) fires only for real changes.
+// Fix I2 (final-review-report.md): siehe pulledUpdatedAtCeiling/pulledUpdatedAtFor weiter unten --
+// ohne ein explizites updated_at stempelt trg_copies_updated (copies-schema.cjs) eine angewandte
+// Zeile auf CURRENT_TIMESTAMP, und der naechste pushCopies schiebt sie als "lokale Aenderung" zurueck.
 function applyRemoteCopy(db, r) {
   const l = remoteToLocalCopy(r);
   const cur = db.prepare('SELECT * FROM card_copies WHERE copy_id = ?').get(l.copy_id);
+  const ceiling = pulledUpdatedAtCeiling(db, 'sync_copies_last_push');
   if (!cur) {
-    db.prepare(`INSERT INTO card_copies (${COPY_COLS.join(',')}) VALUES (${COPY_COLS.map(c => '@' + c).join(',')})`).run(l);
+    l.updated_at = ceiling;
+    db.prepare(`INSERT INTO card_copies (${COPY_COLS.join(',')}, updated_at) VALUES (${COPY_COLS.map(c => '@' + c).join(',')}, @updated_at)`).run(l);
     return;
   }
   const changed = COPY_COLS.some(c => c !== 'copy_id' && (cur[c] ?? null) !== (l[c] ?? null));
   if (!changed) return;
-  const sets = COPY_COLS.filter(c => c !== 'copy_id').map(c => `${c} = @${c}`).join(', ');
+  l.updated_at = pulledUpdatedAtFor(ceiling, cur.updated_at);
+  const sets = COPY_COLS.filter(c => c !== 'copy_id').map(c => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
   db.prepare(`UPDATE card_copies SET ${sets} WHERE copy_id = @copy_id`).run(l);
 }
 
@@ -139,18 +145,25 @@ function remoteToLocalContainer(r) {
 // bevor der Desktop ein inzwischen zugewiesenes Exemplar gezogen hatte), muss dieselbe Aufraeumpflicht
 // ausloesen wie das lokale Loeschen (deleteContainer) -- sonst zeigt ein Exemplar auf einen Behaelter,
 // den es lokal nicht mehr (oder nie) lebend gab, und ist nirgends mehr sichtbar (Befund 1).
+// Fix I2 (final-review-report.md): siehe pulledUpdatedAtCeiling/pulledUpdatedAtFor weiter unten --
+// ohne ein explizites updated_at stempelt trg_containers_updated (containers-schema.cjs) eine
+// angewandte Zeile auf CURRENT_TIMESTAMP, und der naechste pushContainers schiebt sie als "lokale
+// Aenderung" zurueck.
 function applyRemoteContainer(db, r) {
   const l = remoteToLocalContainer(r);
   const cur = db.prepare('SELECT * FROM containers WHERE container_id = ?').get(l.container_id);
+  const ceiling = pulledUpdatedAtCeiling(db, 'sync_containers_last_push');
   if (l.deleted && (!cur || !cur.deleted)) clearContainerLocations(db, l.container_id);
   if (!cur) {
-    db.prepare(`INSERT INTO containers (${CONTAINER_LOCAL_COLS.join(',')})
-                VALUES (${CONTAINER_LOCAL_COLS.map(c => '@' + c).join(',')})`).run(l);
+    l.updated_at = ceiling;
+    db.prepare(`INSERT INTO containers (${CONTAINER_LOCAL_COLS.join(',')}, updated_at)
+                VALUES (${CONTAINER_LOCAL_COLS.map(c => '@' + c).join(',')}, @updated_at)`).run(l);
     return;
   }
   const changed = CONTAINER_LOCAL_COLS.some(c => c !== 'container_id' && (cur[c] ?? null) !== (l[c] ?? null));
   if (!changed) return;
-  const sets = CONTAINER_LOCAL_COLS.filter(c => c !== 'container_id').map(c => `${c} = @${c}`).join(', ');
+  l.updated_at = pulledUpdatedAtFor(ceiling, cur.updated_at);
+  const sets = CONTAINER_LOCAL_COLS.filter(c => c !== 'container_id').map(c => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
   db.prepare(`UPDATE containers SET ${sets} WHERE container_id = @container_id`).run(l);
 }
 
@@ -185,21 +198,24 @@ function remoteToLocalSealed(r) {
   out.deleted = r.deleted ? 1 : 0;
   return out;
 }
-// Fix I2 (final-review-report.md): ohne ein explizites updated_at stempelt trg_sealed_updated
-// (sealed-items.cjs) eine angewandte Zeile auf CURRENT_TIMESTAMP, und der naechste pushSealed schiebt
-// sie als "lokale Aenderung" zurueck -- das kann eine inzwischen neuere Handy-Schreibaktion ueberschreiben.
-// Deshalb bekommt jede gezogene Zeile hier ihr updated_at explizit auf eine Grenze gesetzt, die den
-// Push-Cursor nie ueberholt (den Cursor selbst, oder '1970-01-01 00:00:00' ohne Cursor).
-function sealedUpdatedAtCeiling(db) {
-  const cursor = getSetting(db, 'sync_sealed_last_push') || '1970-01-01T00:00:00Z';
+// Fix I2 (final-review-report.md): ohne ein explizites updated_at stempeln die AFTER-UPDATE-Trigger
+// (trg_sealed_updated in sealed-items.cjs, trg_containers_updated in containers-schema.cjs,
+// trg_copies_updated in copies-schema.cjs -- alle drei mit derselben WHEN NEW.updated_at = OLD.updated_at
+// Bedingung) eine angewandte Zeile auf CURRENT_TIMESTAMP, und der naechste push* schiebt sie als "lokale
+// Aenderung" zurueck -- das kann eine inzwischen neuere Handy-Schreibaktion ueberschreiben. Deshalb
+// bekommt jede gezogene Zeile in allen drei Stroemen ihr updated_at explizit auf eine Grenze gesetzt,
+// die den jeweiligen Push-Cursor (cursorKey) nie ueberholt (den Cursor selbst, oder '1970-01-01
+// 00:00:00' ohne Cursor). Gemeinsam extrahiert, weil alle drei Stroeme genau dasselbe brauchen.
+function pulledUpdatedAtCeiling(db, cursorKey) {
+  const cursor = getSetting(db, cursorKey) || '1970-01-01T00:00:00Z';
   return tsCloudToLocal(cursor) || '1970-01-01 00:00:00';
 }
 // Faellt die Grenze zufaellig mit dem bisherigen updated_at zusammen (z.B. zwei Zeilen derselben Zeile,
 // gezogen ohne dass sich der Push-Cursor dazwischen bewegt hat), wuerde UPDATE ... SET updated_at = @x
-// NEW.updated_at = OLD.updated_at hinterlassen -- genau die Bedingung, unter der trg_sealed_updated
+// NEW.updated_at = OLD.updated_at hinterlassen -- genau die Bedingung, unter der der jeweilige Trigger
 // erneut auf CURRENT_TIMESTAMP stempelt. Dann eine Sekunde vor die Grenze ausweichen: das bleibt weiterhin
 // nicht neuer als der Cursor, unterscheidet sich aber von OLD.updated_at.
-function sealedUpdatedAtFor(ceiling, oldValue) {
+function pulledUpdatedAtFor(ceiling, oldValue) {
   if (ceiling !== oldValue) return ceiling;
   const ms = toUtcMillis(ceiling);
   return new Date(ms - 1000).toISOString().slice(0, 19).replace('T', ' ');
@@ -209,7 +225,7 @@ function sealedUpdatedAtFor(ceiling, oldValue) {
 function applyRemoteSealed(db, r) {
   const l = remoteToLocalSealed(r);
   const cur = db.prepare('SELECT * FROM sealed_items WHERE sealed_id = ?').get(l.sealed_id);
-  const ceiling = sealedUpdatedAtCeiling(db);
+  const ceiling = pulledUpdatedAtCeiling(db, 'sync_sealed_last_push');
   if (!cur) {
     l.updated_at = ceiling;
     db.prepare(`INSERT INTO sealed_items (${SEALED_SYNC_COLS.join(',')}, updated_at)
@@ -218,7 +234,7 @@ function applyRemoteSealed(db, r) {
   }
   const changed = SEALED_SYNC_COLS.some(c => c !== 'sealed_id' && (cur[c] ?? null) !== (l[c] ?? null));
   if (!changed) return;
-  l.updated_at = sealedUpdatedAtFor(ceiling, cur.updated_at);
+  l.updated_at = pulledUpdatedAtFor(ceiling, cur.updated_at);
   const sets = SEALED_SYNC_COLS.filter(c => c !== 'sealed_id').map(c => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
   db.prepare(`UPDATE sealed_items SET ${sets} WHERE sealed_id = @sealed_id`).run(l);
 }

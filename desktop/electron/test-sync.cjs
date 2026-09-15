@@ -216,3 +216,102 @@ function freshSyncDb() {
   assert.ok(!String(row.created_at).includes('T'), 'created_at muss im lokalen Format stehen, nicht dem der Cloud: ' + row.created_at);
   console.log('sync containers local timestamp format test: PASS');
 }
+
+// Fix I2 (final-review-report.md), Behaelter- und Exemplar-Strom: wie beim bereits gemergten Fix fuer
+// Sealed (siehe sealed-sync.test.cjs) darf eine gezogene Zeile nicht als "lokale Aenderung" erneut
+// hochgeschoben werden -- sonst kann sie eine inzwischen neuere Handy-Schreibaktion ueberschreiben.
+// Die Push-Auswahl wird hier wortgleich zur echten SQL in pushContainers/pushCopies nachgebaut (dort
+// nicht in eine eigene Funktion ausgelagert, anders als bei Sealed), damit der Test dieselbe Bedingung
+// prueft, die push* tatsaechlich verwendet.
+const I2_CURSOR = '2026-09-14 00:00:00';
+function withPushCursor(db, key, cursor) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(key, cursor);
+}
+const containerPushRows = (db, cursor) =>
+  db.prepare("SELECT * FROM containers WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
+const copyPushRows = (db, cursor) =>
+  db.prepare("SELECT * FROM card_copies WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
+
+// Fix I2: eine neu gezogene Behaelter-Zeile bekommt keinen updated_at neuer als der Push-Cursor.
+{
+  const db = freshSyncDb();
+  _recentlyPushedContainers.clear();
+  withPushCursor(db, 'sync_containers_last_push', I2_CURSOR);
+  const applied = _applyPulledContainers(db, [
+    { container_id: 'c1', name: 'Blau', kind: 'binder', updated_at: '2026-09-15T05:00:00+00:00' },
+  ]);
+  assert.equal(applied, 1);
+  const row = db.prepare('SELECT updated_at FROM containers WHERE container_id = ?').get('c1');
+  assert.ok(row.updated_at <= I2_CURSOR, `updated_at (${row.updated_at}) darf den Cursor nicht ueberholen`);
+  assert.deepEqual(containerPushRows(db, I2_CURSOR).map((r) => r.container_id), [], 'die gezogene Neuanlage darf nicht zurueckgeschoben werden');
+  console.log('sync containers Fix I2 (Neuanlage) test: PASS');
+}
+
+// Fix I2: eine gezogene Aenderung einer vorhandenen Behaelter-Zeile bekommt ebenfalls keinen updated_at
+// neuer als der Push-Cursor.
+{
+  const db = freshSyncDb();
+  _recentlyPushedContainers.clear();
+  withPushCursor(db, 'sync_containers_last_push', I2_CURSOR);
+  _applyPulledContainers(db, [{ container_id: 'c1', name: 'Blau', kind: 'binder', updated_at: '2026-09-15T05:00:00+00:00' }]);
+  const applied = _applyPulledContainers(db, [{ container_id: 'c1', name: 'Blau neu', kind: 'binder', updated_at: '2026-09-15T06:00:00+00:00' }]);
+  assert.equal(applied, 1);
+  const row = db.prepare('SELECT name, updated_at FROM containers WHERE container_id = ?').get('c1');
+  assert.equal(row.name, 'Blau neu');
+  assert.ok(row.updated_at <= I2_CURSOR, `updated_at (${row.updated_at}) darf den Cursor nicht ueberholen`);
+  assert.deepEqual(containerPushRows(db, I2_CURSOR).map((r) => r.container_id), [], 'die gezogene Aenderung darf nicht zurueckgeschoben werden');
+  console.log('sync containers Fix I2 (Aenderung) test: PASS');
+}
+
+// Fix I2: eine lokale Aenderung nach dem Pull erscheint weiterhin in der Push-Auswahl.
+{
+  const db = freshSyncDb();
+  _recentlyPushedContainers.clear();
+  withPushCursor(db, 'sync_containers_last_push', I2_CURSOR);
+  _applyPulledContainers(db, [{ container_id: 'c1', name: 'Blau', kind: 'binder', updated_at: '2026-09-15T05:00:00+00:00' }]);
+  db.prepare("UPDATE containers SET name = 'Lokal', updated_at = '2026-09-14 12:00:00' WHERE container_id = 'c1'").run();
+  assert.deepEqual(containerPushRows(db, I2_CURSOR).map((r) => r.container_id), ['c1'], 'eine lokale Aenderung nach dem Pull muss gepusht werden');
+  console.log('sync containers Fix I2 (lokale Aenderung bleibt push-faehig) test: PASS');
+}
+
+// Fix I2: eine neu gezogene Exemplar-Zeile bekommt keinen updated_at neuer als der Push-Cursor.
+{
+  const { applyRemoteCopy } = require('./sync.cjs');
+  const db = freshSyncDb();
+  withPushCursor(db, 'sync_copies_last_push', I2_CURSOR);
+  applyRemoteCopy(db, { copy_id: 'k1', card_id: '1', set_code: 'LOB-EN001', language: 'DE', rarity: 'Common',
+    edition: 'first', condition: 'NM', deleted: false, updated_at: '2026-09-15T05:00:00+00:00' });
+  const row = db.prepare('SELECT updated_at FROM card_copies WHERE copy_id = ?').get('k1');
+  assert.ok(row.updated_at <= I2_CURSOR, `updated_at (${row.updated_at}) darf den Cursor nicht ueberholen`);
+  assert.deepEqual(copyPushRows(db, I2_CURSOR).map((r) => r.copy_id), [], 'die gezogene Neuanlage darf nicht zurueckgeschoben werden');
+  console.log('sync copies Fix I2 (Neuanlage) test: PASS');
+}
+
+// Fix I2: eine gezogene Aenderung einer vorhandenen Exemplar-Zeile bekommt ebenfalls keinen updated_at
+// neuer als der Push-Cursor.
+{
+  const { applyRemoteCopy } = require('./sync.cjs');
+  const db = freshSyncDb();
+  withPushCursor(db, 'sync_copies_last_push', I2_CURSOR);
+  applyRemoteCopy(db, { copy_id: 'k1', card_id: '1', set_code: 'LOB-EN001', language: 'DE', rarity: 'Common',
+    edition: 'first', condition: 'NM', deleted: false, updated_at: '2026-09-15T05:00:00+00:00' });
+  applyRemoteCopy(db, { copy_id: 'k1', card_id: '1', set_code: 'LOB-EN001', language: 'DE', rarity: 'Common',
+    edition: 'first', condition: 'GD', deleted: false, updated_at: '2026-09-15T06:00:00+00:00' });
+  const row = db.prepare('SELECT condition, updated_at FROM card_copies WHERE copy_id = ?').get('k1');
+  assert.equal(row.condition, 'GD');
+  assert.ok(row.updated_at <= I2_CURSOR, `updated_at (${row.updated_at}) darf den Cursor nicht ueberholen`);
+  assert.deepEqual(copyPushRows(db, I2_CURSOR).map((r) => r.copy_id), [], 'die gezogene Aenderung darf nicht zurueckgeschoben werden');
+  console.log('sync copies Fix I2 (Aenderung) test: PASS');
+}
+
+// Fix I2: eine lokale Aenderung nach dem Pull erscheint weiterhin in der Push-Auswahl.
+{
+  const { applyRemoteCopy } = require('./sync.cjs');
+  const db = freshSyncDb();
+  withPushCursor(db, 'sync_copies_last_push', I2_CURSOR);
+  applyRemoteCopy(db, { copy_id: 'k1', card_id: '1', set_code: 'LOB-EN001', language: 'DE', rarity: 'Common',
+    edition: 'first', condition: 'NM', deleted: false, updated_at: '2026-09-15T05:00:00+00:00' });
+  db.prepare("UPDATE card_copies SET condition = 'EX', updated_at = '2026-09-14 12:00:00' WHERE copy_id = 'k1'").run();
+  assert.deepEqual(copyPushRows(db, I2_CURSOR).map((r) => r.copy_id), ['k1'], 'eine lokale Aenderung nach dem Pull muss gepusht werden');
+  console.log('sync copies Fix I2 (lokale Aenderung bleibt push-faehig) test: PASS');
+}
