@@ -60,10 +60,12 @@ fun PriceAlertsSection(full: Boolean, onOpenCard: (String) -> Unit, onOpenAll: (
                 if (full && !events.isNullOrEmpty()) {
                     Text("Alle erledigt", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.clickable {
+                            // Nur die gerade angezeigten Treffer (Spec G2 §5.4); Math.max zur Sicherheit.
+                            val maxId = events.maxOf { it.id }
                             scope.launch {
                                 try {
-                                    PriceAlertsRepository.dismissAllEvents()
-                                    SideStores.priceAlertEvents.update { emptyList() }
+                                    PriceAlertsRepository.dismissAllEvents(maxId)
+                                    SideStores.priceAlertEvents.update { list -> list.filterNot { it.id <= maxId } }
                                     actionError = null
                                 } catch (e: Exception) {
                                     actionError = "Erledigen fehlgeschlagen."

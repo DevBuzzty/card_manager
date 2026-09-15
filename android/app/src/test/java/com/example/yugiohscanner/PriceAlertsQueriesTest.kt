@@ -19,6 +19,13 @@ class PriceAlertsQueriesTest {
         )
     }
 
+    @Test fun `Alle erledigt nur bis zur groessten angezeigten id`() {
+        assertEquals(
+            listOf("dismissed" to "eq.false", "id" to "lte.42"),
+            PriceAlertsRepository.dismissAllParams(42),
+        )
+    }
+
     @Test fun `Bewegungsregel und aktive Zielpreise`() {
         assertEquals(
             listOf("select" to "id,pct,min_eur,days,active", "kind" to "eq.move", "limit" to "1"),

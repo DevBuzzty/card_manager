@@ -104,8 +104,14 @@ object PriceAlertsRepository {
     suspend fun dismissEvent(id: Long) =
         patch("price_alert_events", listOf("id" to "eq.$id"), JSONObject().put("dismissed", true), "Erledigen")
 
-    suspend fun dismissAllEvents() =
-        patch("price_alert_events", listOf("dismissed" to "eq.false"), JSONObject().put("dismissed", true), "Alle erledigen")
+    // Nur die beim Laden angezeigten Treffer (id <= maxId), damit ein Treffer, der zwischen Laden und
+    // Tippen dazukommt, nicht ungesehen mit erledigt wird (Spec G2 §5.4).
+    fun dismissAllParams(maxId: Long): List<Pair<String, String>> = listOf(
+        "dismissed" to "eq.false", "id" to "lte.$maxId",
+    )
+
+    suspend fun dismissAllEvents(maxId: Long) =
+        patch("price_alert_events", dismissAllParams(maxId), JSONObject().put("dismissed", true), "Alle erledigen")
 
     /** Ohne Zeile ist der Bewegungsalarm aus; die erste Speicherung legt sie an (Spec §4.1). */
     suspend fun saveMoveRule(pct: Double, minEur: Double, days: Int, active: Boolean) {

@@ -9,9 +9,11 @@ export default function PriceAlertsPanel() {
   const { loading, error, events } = usePriceAlertEvents();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  // Nur die gerade angezeigten Treffer (events sind neueste zuerst; Math.max zur Sicherheit).
   const dismissAll = () => {
     setBusy(true);
-    window.api.dismissAllPriceAlertEvents()
+    const maxId = Math.max(...events.map((e) => e.id));
+    window.api.dismissAllPriceAlertEvents(maxId)
       .then(() => setFailed(false))
       .catch(() => setFailed(true))
       .finally(() => setBusy(false));

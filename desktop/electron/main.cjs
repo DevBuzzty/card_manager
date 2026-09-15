@@ -363,9 +363,13 @@ ipcMain.handle('price-alerts-event-dismiss', async (event, id) => {
     notifyPriceAlertsChanged();
     return true;
 });
-ipcMain.handle('price-alerts-events-dismiss-all', async () => {
+// Nur die beim Laden angezeigten Treffer (id <= maxId), damit ein Treffer, der zwischen Laden und
+// Klick dazukommt, nicht ungesehen mit erledigt wird (Spec G2 §5.4).
+ipcMain.handle('price-alerts-events-dismiss-all', async (event, maxId) => {
+    if (!Number.isFinite(maxId)) throw new Error('Ungültige Auswahl');
     const c = await alertsClient();
-    const { error } = await c.from('price_alert_events').update({ dismissed: true }).eq('dismissed', false);
+    const { error } = await c.from('price_alert_events').update({ dismissed: true })
+        .eq('dismissed', false).lte('id', maxId);
     if (error) throw new Error(error.message);
     notifyPriceAlertsChanged();
     return true;

@@ -127,7 +127,7 @@ contextBridge.exposeInMainWorld('api', {
   savePriceAlertTarget: (data) => ipcRenderer.invoke('price-alerts-target-save', data),
   listPriceAlertEvents: () => ipcRenderer.invoke('price-alerts-events-list'),
   dismissPriceAlertEvent: (id) => ipcRenderer.invoke('price-alerts-event-dismiss', id),
-  dismissAllPriceAlertEvents: () => ipcRenderer.invoke('price-alerts-events-dismiss-all'),
+  dismissAllPriceAlertEvents: (maxId) => ipcRenderer.invoke('price-alerts-events-dismiss-all', maxId),
   onPriceAlertsChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('price-alerts-changed', s); return () => ipcRenderer.removeListener('price-alerts-changed', s); },
   onOpenPriceAlerts: (cb) => { const s = (_e) => cb(); ipcRenderer.on('open-price-alerts', s); return () => ipcRenderer.removeListener('open-price-alerts', s); },
 });
