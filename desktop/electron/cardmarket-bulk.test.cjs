@@ -150,3 +150,17 @@ test('Schritt C: runBulkRefresh setzt Sealed-Preise aus demselben Price-Guide, n
   const failed = await runBulkRefresh(db, { userDataPath: null, files: { error: new Error('boom') } });
   assert.equal(failed.sealedPriced, 0);
 });
+
+test('Schritt C: wirft applySealedPrices, laufen A/B trotzdem durch und cm_bulk_last_run wird gestempelt', async () => {
+  const db = makeDb();
+  db.exec('DROP TABLE sealed_items'); // laesst applySealedPrices scheitern (no such table)
+  const res = await runBulkRefresh(db, { userDataPath: null, files });
+  assert.equal(res.resolved, 1);
+  assert.equal(res.priced, 2);
+  assert.equal(res.skipped, 1);
+  assert.equal(res.unchanged, 0);
+  assert.equal(res.unresolved, 1);
+  assert.equal(typeof res.sealed?.error, 'string');
+  assert.ok(res.sealed.error.length > 0);
+  assert.ok(getBulkStatus(db).lastRun, 'cm_bulk_last_run wird trotz gescheitertem Sealed-Schritt gestempelt');
+});

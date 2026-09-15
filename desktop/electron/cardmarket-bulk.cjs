@@ -154,10 +154,20 @@ async function runBulkRefresh(db, { userDataPath, force = false, files = null } 
   }
   const a = await resolveMissing(db, data);
   const b = applyPrices(db, data.guide);
-  const sealedPriced = applySealedPrices(db, data.guide); // Step C
+  // Step C runs isolated: a failure here must not lose the A/B numbers already written, nor skip
+  // the cm_bulk_last_run stamp (the bulk run would otherwise look overdue forever).
+  let sealedPriced = 0;
+  let sealedError = null;
+  try {
+    sealedPriced = applySealedPrices(db, data.guide); // Step C
+  } catch (e) {
+    console.error('[cm-bulk] sealed step failed:', e.message);
+    sealedError = e.message;
+  }
   db.prepare("INSERT INTO settings (key, value) VALUES ('cm_bulk_last_run', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
     .run(new Date().toISOString());
   const out = { resolved: a.resolved, reasons: a.reasons, priced: b.priced, skipped: b.skipped, unchanged: b.unchanged, sealedPriced, unresolved: countUnresolved(db) };
+  if (sealedError) out.sealed = { error: sealedError };
   console.log('[cardmarket-bulk]', JSON.stringify(out));
   return out;
 }
