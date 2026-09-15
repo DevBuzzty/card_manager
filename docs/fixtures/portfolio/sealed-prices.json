@@ -1,0 +1,72 @@
+{
+  "_comment": "Spec G3 §5 — Trend-Regel fuer Sealed. sealed_test.ts (Deno) und desktop/electron/sealed-prices.test.cjs lesen diese Datei.",
+  "cases": [
+    {
+      "name": "neu: Zeile ohne Preis bekommt den Trend",
+      "items": [{ "sealed_id": "s1", "cm_product_id": 254469, "price": null }],
+      "guide": [{ "idProduct": 254469, "idCategory": 42, "avg": 6500, "low": 465, "trend": 499.29 }],
+      "expected": [{ "sealed_id": "s1", "cm_product_id": 254469, "price": 499.29 }]
+    },
+    {
+      "name": "geändert: anderer Trend ersetzt den Preis",
+      "items": [{ "sealed_id": "s1", "cm_product_id": 254469, "price": 450 }],
+      "guide": [{ "idProduct": 254469, "idCategory": 42, "avg": 6500, "low": 465, "trend": 499.29 }],
+      "expected": [{ "sealed_id": "s1", "cm_product_id": 254469, "price": 499.29 }]
+    },
+    {
+      "name": "unverändert: gleicher Trend schreibt nichts",
+      "items": [{ "sealed_id": "s1", "cm_product_id": 254469, "price": 499.29 }],
+      "guide": [{ "idProduct": 254469, "idCategory": 42, "avg": 6500, "low": 465, "trend": 499.29 }],
+      "expected": []
+    },
+    {
+      "name": "Trend 0 zählt nicht",
+      "items": [{ "sealed_id": "s1", "cm_product_id": 999001, "price": 12 }],
+      "guide": [{ "idProduct": 999001, "idCategory": 42, "avg": null, "low": 0.02, "trend": 0 }],
+      "expected": []
+    },
+    {
+      "name": "fehlend: Produkt nicht im Price-Guide",
+      "items": [{ "sealed_id": "s1", "cm_product_id": 555555, "price": 12 }],
+      "guide": [{ "idProduct": 254469, "idCategory": 42, "avg": 6500, "low": 465, "trend": 499.29 }],
+      "expected": []
+    },
+    {
+      "name": "Trend null, kein Rückfall auf low oder avg",
+      "items": [{ "sealed_id": "s1", "cm_product_id": 230006, "price": null }],
+      "guide": [{ "idProduct": 230006, "idCategory": 6, "avg": 35, "low": 20, "trend": null }],
+      "expected": []
+    },
+    {
+      "name": "Trend als Text zählt nicht",
+      "items": [{ "sealed_id": "s1", "cm_product_id": 230006, "price": null }],
+      "guide": [{ "idProduct": 230006, "idCategory": 6, "avg": 35, "low": 20, "trend": "34.22" }],
+      "expected": []
+    },
+    {
+      "name": "doppelter Eintrag: erster gültiger Trend gilt",
+      "items": [{ "sealed_id": "s1", "cm_product_id": 230007, "price": null }],
+      "guide": [
+        { "idProduct": 230007, "idCategory": 6, "trend": 0 },
+        { "idProduct": 230007, "idCategory": 6, "trend": 46.11 },
+        { "idProduct": 230007, "idCategory": 6, "trend": 50 }
+      ],
+      "expected": [{ "sealed_id": "s1", "cm_product_id": 230007, "price": 46.11 }]
+    },
+    {
+      "name": "zwei Zeilen desselben Produkts, nur die geänderte",
+      "items": [
+        { "sealed_id": "s2", "cm_product_id": 230007, "price": 40 },
+        { "sealed_id": "s3", "cm_product_id": 230007, "price": 46.11 }
+      ],
+      "guide": [{ "idProduct": 230007, "idCategory": 6, "avg": 48, "low": 45, "trend": 46.11 }],
+      "expected": [{ "sealed_id": "s2", "cm_product_id": 230007, "price": 46.11 }]
+    },
+    {
+      "name": "kaputter Price-Guide",
+      "items": [{ "sealed_id": "s1", "cm_product_id": 254469, "price": null }],
+      "guide": null,
+      "expected": []
+    }
+  ]
+}
