@@ -26,6 +26,9 @@ object CatalogRepository {
     /** Number of cards in the imported catalog, or 0 if none. Shared connection, see [version]. */
     fun cardCount(): Int = db?.cardCount() ?: 0
 
+    /** Anzahl der Sealed-Produkte im importierten Katalog; 0 ohne Katalog oder mit Katalog von vor G3. */
+    fun sealedProductCount(): Int = db?.sealedProductCount() ?: 0
+
     fun card(passcode: String): CatalogCard? {
         val database = db?.readableDatabase ?: return null
         val card = database.query(
@@ -76,6 +79,32 @@ object CatalogRepository {
             }
         }
         return results.map { it.copy(printings = printings(it.id)) }
+    }
+
+    /** Spec G3 §3: SQL und Argumente der Sealed-Suche -- rein, damit die Escape-Regel ohne SQLite testbar ist. */
+    internal fun sealedSearchQuery(name: String, limit: Int = 50): Pair<String, Array<String>> =
+        "SELECT cm_product_id, name, kind, trend FROM sealed_products WHERE name LIKE ? ESCAPE '\\' ORDER BY name LIMIT ?" to
+            arrayOf("%${escapeLike(name.trim())}%", limit.toString())
+
+    /** Name enthaelt Suchtext (escaptes LIKE wie [search]), max. [limit], sortiert nach Name. */
+    fun searchSealed(name: String, limit: Int = 50): List<CatalogSealedProduct> {
+        val database = db?.readableDatabase ?: return emptyList()
+        if (name.isBlank()) return emptyList()
+        val (sql, args) = sealedSearchQuery(name, limit)
+        val results = mutableListOf<CatalogSealedProduct>()
+        database.rawQuery(sql, args).use { c ->
+            while (c.moveToNext()) {
+                results.add(
+                    CatalogSealedProduct(
+                        cmProductId = c.getLong(0),
+                        name = c.getString(1) ?: "",
+                        kind = c.getString(2) ?: "other",
+                        trend = if (c.isNull(3)) null else c.getDouble(3),
+                    )
+                )
+            }
+        }
+        return results
     }
 
     private fun escapeLike(input: String): String =

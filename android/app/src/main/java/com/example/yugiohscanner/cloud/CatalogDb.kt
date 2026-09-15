@@ -14,7 +14,12 @@ import android.database.sqlite.SQLiteOpenHelper
  * round-trip: SQLite does not guarantee rows come back in insertion order, so every read orders
  * explicitly by `ord` — without it, "verified first" would be lost silently.
  */
-class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, 1) {
+class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, VERSION) {
+
+    companion object {
+        /** Spec G3 §3: v2 bringt `sealed_products`. onUpgrade verwirft den alten Katalog, CatalogSync laedt neu. */
+        const val VERSION = 2
+    }
 
     init {
         // WAL: [importAll] holds a multi-second write transaction, and readers (scan, search,
@@ -44,12 +49,15 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
         db.execSQL("CREATE INDEX printings_card_idx ON printings(card_id)")
         db.execSQL("CREATE INDEX cards_name_de_idx ON cards(name_de)")
         db.execSQL("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
+        db.execSQL("CREATE TABLE sealed_products (cm_product_id INTEGER PRIMARY KEY, name TEXT, kind TEXT, trend REAL)")
+        db.execSQL("CREATE INDEX sealed_products_name_idx ON sealed_products(name)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         db.execSQL("DROP TABLE IF EXISTS printings")
         db.execSQL("DROP TABLE IF EXISTS cards")
         db.execSQL("DROP TABLE IF EXISTS meta")
+        db.execSQL("DROP TABLE IF EXISTS sealed_products")
         onCreate(db)
     }
 
@@ -67,6 +75,7 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
         try {
             db.delete("printings", null, null)
             db.delete("cards", null, null)
+            db.delete("sealed_products", null, null)
 
             val cardValues = ContentValues()
             val printingValues = ContentValues()
@@ -98,6 +107,17 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
                 }
             }
 
+            // Spec G3 §3: Sealed-Produktliste in derselben Transaktion (doppelte IDs ersetzen einander).
+            val sealedValues = ContentValues()
+            for (p in parsed.sealedProducts) {
+                sealedValues.clear()
+                sealedValues.put("cm_product_id", p.cmProductId)
+                sealedValues.put("name", p.name)
+                sealedValues.put("kind", p.kind)
+                if (p.trend == null) sealedValues.putNull("trend") else sealedValues.put("trend", p.trend)
+                db.insertWithOnConflict("sealed_products", null, sealedValues, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+
             val metaValues = ContentValues()
             metaValues.put("key", "version")
             metaValues.put("value", parsed.version.toString())
@@ -119,6 +139,13 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
 
     fun cardCount(): Int {
         readableDatabase.rawQuery("SELECT COUNT(*) FROM cards", null).use { c ->
+            if (c.moveToFirst()) return c.getInt(0)
+        }
+        return 0
+    }
+
+    fun sealedProductCount(): Int {
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM sealed_products", null).use { c ->
             if (c.moveToFirst()) return c.getInt(0)
         }
         return 0
