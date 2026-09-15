@@ -178,6 +178,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
             }
         }
 
+        // ---- Preis-Alarme (Spec G2) ----------------------------------------
+        PriceAlertSettingsSection()
+
         // ---- Standards ----------------------------------------------------
         val ctx = androidx.compose.ui.platform.LocalContext.current
         var defEdition by remember { mutableStateOf(com.example.yugiohscanner.Prefs.defaultEdition(ctx)) }

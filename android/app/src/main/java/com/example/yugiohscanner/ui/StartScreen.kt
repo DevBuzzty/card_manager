@@ -83,6 +83,7 @@ fun StartScreen(
     onOpenEinstellungen: () -> Unit,
     onOpenBinder: () -> Unit,
     onOpenInsights: () -> Unit,
+    onOpenAlerts: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     // Spec §5: Karten und Exemplare aus dem Speicher; der Ladebildschirm garantiert Ready.
@@ -166,6 +167,7 @@ fun StartScreen(
             SideStores.dealAlerts.refreshAndWait()
             SideStores.snapshots.refreshAndWait()
             SideStores.reference7.refreshAndWait()
+            SideStores.priceAlertEvents.refreshAndWait()
         }) {
         // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
         // passen) oder null; solange null, bleibt `d` null und die betroffenen Stellen unten
@@ -280,6 +282,9 @@ fun StartScreen(
                     }
                 }
             }
+
+            // Spec G2 §7: Preis-Alarme direkt über den Bewegungen, nur bei offenen Treffern.
+            PriceAlertsSection(full = false, onOpenCard = { detailId = it }, onOpenAll = onOpenAlerts)
 
             MoversSection(days = 7, top = 3, full = false, onOpenCard = { detailId = it }, onOpenAll = onOpenInsights)
 
