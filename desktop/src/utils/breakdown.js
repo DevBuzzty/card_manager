@@ -1,7 +1,8 @@
-import { conditionFactor } from './valuation.js';
+import { conditionFactor, unitPrice } from './valuation.js';
 
 // Spec G1 §4.6 — Aufteilung nach Wert. Karten-Dimensionen nutzen `value`/`quantity` aus get-collection;
 // die Binder-Dimension rechnet pro lebendem Exemplar (Preis x Zustandsfaktor).
+// Spec G4: die Binder-Dimension nutzt unitPrice (1st-Ed-Preis fuer edition = 'first').
 export const UNSORTED_LABEL = 'Nicht einsortiert';
 export const UNKNOWN_LABEL = 'Unbekannt';
 
@@ -29,11 +30,11 @@ export function valueBreakdown({ cards = [], copies = [], containers = [], dimen
     g.count += count; g.value += value; m.set(label, g);
   };
   if (dimension === 'binder') {
-    const price = new Map(cards.map((c) => [keyOf(c.id, c.set_code, c.language, c.rarity), Number(c.price) || 0]));
+    const byKey = new Map(cards.map((c) => [keyOf(c.id, c.set_code, c.language, c.rarity), c]));
     const names = new Map(containers.map((c) => [c.container_id, c.name]));
     for (const cp of copies) {
       const label = (cp.container_id && names.get(cp.container_id)) || UNSORTED_LABEL;
-      add(label, 1, (price.get(keyOf(cp.card_id, cp.set_code, cp.language, cp.rarity)) || 0) * conditionFactor(cp.condition));
+      add(label, 1, unitPrice(byKey.get(keyOf(cp.card_id, cp.set_code, cp.language, cp.rarity)), cp) * conditionFactor(cp.condition));
     }
     return finish(m);
   }

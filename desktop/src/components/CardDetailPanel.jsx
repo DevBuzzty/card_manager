@@ -6,7 +6,7 @@ import Flag from './Flag';
 import CopySheet from './CopySheet';
 import PriceHistoryChart from './PriceHistoryChart';
 import PriceAlertTargets from './PriceAlertTargets';
-import { groupCopies, valueOf, CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
+import { groupCopies, valueOf, firstEdLine, CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { parseTags } from '../utils/tags';
 import { fmtEUR } from '../utils/format';
 import { printingFromParams, cardRoute, ROUTES } from '../utils/routes';
@@ -252,7 +252,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   <span className="font-mono text-sm text-yellow-500 font-bold">{variant.set_code}</span>
                                   <span className="text-xs text-gray-400 border border-gray-700 px-1 rounded">{variant.rarity}</span>
                               </div>
-                              <span className="text-xs text-space-violet">{fmtEUR(variant.price || 0)}</span>
+                              <span className="text-xs text-space-violet">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
                           </div>
                           <div className="flex flex-col items-end gap-2">
                               <input type="number" step="0.01" min="0" defaultValue={variant.price ?? 0}
@@ -298,7 +298,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                       className="bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white">
                                       {EDITIONS.map(ed => <option key={ed} value={ed}>{EDITION_LABELS[ed]}</option>)}
                                   </select>
-                                  <span className="ml-auto font-mono text-xs text-gold">{fmtEUR(valueOf(variant.price, [g]))}</span>
+                                  <span className="ml-auto font-mono text-xs text-gold">{fmtEUR(valueOf(variant, [g]))}</span>
                               </div>
                               {/* Spec B1 §7.3: je Exemplar der Gruppe eine Zeile mit Standort- und Tag-Chips; ein Klick oeffnet das Exemplar-Sheet. */}
                               <div className="mt-1 space-y-1">

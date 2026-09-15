@@ -6,7 +6,7 @@ import CopySheet from './CopySheet';
 import { fmtEUR } from '../utils/format';
 import { ROUTES, cardRoute } from '../utils/routes';
 import { formatCopyLocation } from '../utils/copyLocation';
-import { EDITION_LABELS, conditionFactor } from '../utils/valuation';
+import { EDITION_LABELS, conditionFactor, unitPrice } from '../utils/valuation';
 import { candidateGroups, candidatesEmpty, columns, loose, pageCount, slots } from '../utils/binderGrid';
 import { copyKey, printingKey } from '../utils/printingKey';
 import { KIND_LABELS } from '../utils/containerKinds';
@@ -114,8 +114,9 @@ export default function BinderView({ panelOpen = false }) {
   // Sammlung, weil er an der Druckvariante haengt und nicht am Exemplar.
   const nameOf = (cp) => cardsByKey.get(copyKey(cp))?.name ?? cp.card_name ?? null;
   const imageOf = (cp) => cardsByKey.get(copyKey(cp))?.image_url ?? cp.card_image_url ?? null;
+  // Spec G4 §6: unitPrice nimmt fuer edition = 'first' den 1st-Ed-Preis der Druckvariante.
   const valueOf = (list) => list.reduce(
-    (sum, cp) => sum + (Number(cardsByKey.get(copyKey(cp))?.price) || 0) * conditionFactor(cp.condition),
+    (sum, cp) => sum + unitPrice(cardsByKey.get(copyKey(cp)), cp) * conditionFactor(cp.condition),
     0,
   );
 
