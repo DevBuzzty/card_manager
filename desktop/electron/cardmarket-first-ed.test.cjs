@@ -58,6 +58,12 @@ test('Kandidaten: limit', () => {
   assert.deepEqual(ids(firstEdCandidates(candidateDb(), { minRank: 1, nowMs: NOW, limit: 1 })), ['1']);
 });
 
+test('Kandidaten: set_code Unknown ist nie Kandidat', () => {
+  const db = candidateDb();
+  printing(db, { id: '8', set_code: 'Unknown', rarity: 'Unknown' }, [{ edition: 'first' }]);
+  assert.deepEqual(ids(firstEdCandidates(db, { minRank: 1, nowMs: NOW })), ['1', '5', '7']);
+});
+
 // --- Durchgang mit gestubbtem Fenster ---
 const VERSIONS = 'https://www.cardmarket.com/en/YuGiOh/Cards/Test-Card/Versions';
 const PRODUCT = 'https://www.cardmarket.com/en/YuGiOh/Products/Singles/Maze-of-Memories/Test-Card-V1-Ultra-Rare';
@@ -131,22 +137,28 @@ test('Durchgang: Cloudflare-Pruefung auf der Produktseite -> nichts geschrieben'
   assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });
 });
 
-test('Durchgang: fromAll fehlt -> gefilterte Seite nicht geladen, nichts geschrieben', async () => {
+test('Durchgang: fromAll fehlt -> gefilterte Seite nicht geladen, nur Zeitstempel gesetzt', async () => {
   const db = mamoDb();
   const s = stub({ [VERSIONS]: { rows: ROWS }, [PRODUCT]: { pairs: [] } });
   const out = await runFirstEdPass(db, { force: true, deps: s.deps });
   assert.deepEqual(s.visited, [VERSIONS, PRODUCT]);
   assert.equal(out.skipped, 1);
-  assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });
+  const r = MAMO(db);
+  assert.equal(r.pfe, null);
+  assert.equal(r.f, null);
+  assert.ok(r.ts, 'cm_first_ed_updated_at gesetzt, wie der Basis-Durchgang bei "kein Treffer"');
 });
 
-test('Durchgang: kein Produkt-Link oder keine Zeile -> nichts geschrieben', async () => {
+test('Durchgang: kein Produkt-Link oder keine Zeile -> nur Zeitstempel gesetzt', async () => {
   const db = mamoDb();
   const s = stub({ [VERSIONS]: { rows: [{ ...ROWS[0], href: '' }] } });
   const out = await runFirstEdPass(db, { force: true, deps: s.deps });
   assert.deepEqual(s.visited, [VERSIONS]);
   assert.equal(out.skipped, 1);
-  assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });
+  const r = MAMO(db);
+  assert.equal(r.pfe, null);
+  assert.equal(r.f, null);
+  assert.ok(r.ts, 'cm_first_ed_updated_at gesetzt, wie der Basis-Durchgang bei "kein Treffer"');
 });
 
 test('Durchgang: maxCards begrenzt die Kandidaten (Poller 2)', async () => {
