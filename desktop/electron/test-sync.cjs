@@ -25,6 +25,18 @@ assert.strictEqual(locked.cm_product_id, 102801);
 assert.strictEqual(locked.price_locked, 2, 'manual lock (2) survives the mapping');
 assert.strictEqual(rowToRemote({ ...local, price_locked: 1 }).price_locked, 1);
 
+// Spec G4 §5: cm_first_ed_factor reist im Push-Payload mit (null, wenn nicht gesetzt) und beim Einfuegen
+// einer fehlenden Zeile; price_first_ed bleibt ebenfalls im Payload.
+assert.strictEqual(remote.cm_first_ed_factor, null, 'fehlender Faktor spiegelt als null');
+{
+  const withFactor = rowToRemote({ ...local, cm_first_ed_factor: 1.0545, price_first_ed: 77.87 });
+  assert.strictEqual(withFactor.cm_first_ed_factor, 1.0545, 'Faktor im Push-Payload');
+  assert.strictEqual(withFactor.price_first_ed, 77.87, 'price_first_ed bleibt im Push-Payload');
+  assert.strictEqual(remoteToLocalFull({ id: '9', set_code: 'MAMO-DE020', cm_first_ed_factor: 1.0545 }).cm_first_ed_factor, 1.0545);
+  assert.strictEqual(remoteToLocalFull({ id: '9', set_code: 'MAMO-DE020' }).cm_first_ed_factor, null);
+  console.log('sync cm_first_ed_factor mapping test: PASS');
+}
+
 // applyRemoteRow must not re-dirty a row whose quantity/deleted didn't actually change (F1):
 // an unconditional UPDATE would fire trg_cards_updated, bump updated_at, and cause the next
 // push to re-upload the desktop's stale price over the cloud's fresh one.
@@ -34,7 +46,7 @@ assert.strictEqual(rowToRemote({ ...local, price_locked: 1 }).price_locked, 1);
     id TEXT, set_code TEXT, language TEXT DEFAULT 'DE', name TEXT, type TEXT, desc TEXT,
     image_url TEXT, atk INTEGER, def INTEGER, level INTEGER, race TEXT, attribute TEXT,
     quantity INTEGER DEFAULT 1, rarity TEXT, price REAL, deleted INTEGER DEFAULT 0,
-    cm_product_id INTEGER, price_locked INTEGER DEFAULT 0, price_first_ed REAL,
+    cm_product_id INTEGER, price_locked INTEGER DEFAULT 0, price_first_ed REAL, cm_first_ed_factor REAL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, set_code, language, rarity)
   )`);
@@ -60,6 +72,11 @@ assert.strictEqual(rowToRemote({ ...local, price_locked: 1 }).price_locked, 1);
   assert.ok(ins, 'missing row was inserted');
   assert.strictEqual(ins.cm_product_id, 777, 'cm_product_id carried on insert');
   assert.strictEqual(ins.price_locked, 2, 'price_locked carried on insert');
+
+  applyRemoteRow(db, { id: '3', set_code: 'MAMO-DE020', language: 'DE', rarity: 'Ultra Rare', deleted: false, price: 73.85, price_first_ed: 77.87, cm_first_ed_factor: 1.0545 });
+  const fe = db.prepare("SELECT price_first_ed, cm_first_ed_factor FROM cards WHERE id='3'").get();
+  assert.strictEqual(fe.cm_first_ed_factor, 1.0545, 'cm_first_ed_factor carried on insert');
+  assert.strictEqual(fe.price_first_ed, 77.87, 'price_first_ed carried on insert');
 
   console.log('sync applyRemoteRow (F1) test: PASS');
 }

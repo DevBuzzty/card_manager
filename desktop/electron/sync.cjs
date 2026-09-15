@@ -11,9 +11,10 @@ const { nextNotification, openSignature } = require('./alert-notify.cjs');
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
 // phone's rows and skip manual prices (price_locked = 2) without the desktop being on.
 // quantity is NOT mirrored any more: both sides derive it from card_copies via triggers.
+// Spec G4 §5: cm_first_ed_factor mit; die Cloud rechnet price_first_ed per Trigger aus price x Faktor.
 const MIRROR_COLS = ['id', 'set_code', 'language', 'name', 'type', 'desc',
   'image_url', 'atk', 'def', 'level', 'race', 'attribute',
-  'rarity', 'price', 'deleted', 'cm_product_id', 'price_locked', 'price_first_ed'];
+  'rarity', 'price', 'deleted', 'cm_product_id', 'price_locked', 'price_first_ed', 'cm_first_ed_factor'];
 
 const COPY_COLS = ['copy_id', 'card_id', 'set_code', 'language', 'rarity', 'edition', 'condition', 'deleted',
   'container_id', 'page', 'slot', 'tags', 'note', 'needs_review', 'review_reason', 'for_sale'];
@@ -52,6 +53,7 @@ function rowToRemote(row) {
     else if (c === 'price_locked') out.price_locked = Number(row.price_locked) || 0; // cloud column is smallint 0/1/2
     else if (c === 'cm_product_id') out.cm_product_id = row.cm_product_id ?? null;
     else if (c === 'price_first_ed') out.price_first_ed = row.price_first_ed ?? null;
+    else if (c === 'cm_first_ed_factor') out.cm_first_ed_factor = row.cm_first_ed_factor ?? null;
     else out[c] = row[c];
   }
   return out;
@@ -73,6 +75,7 @@ function remoteToLocalFull(r) {
     price: r.price ?? null, deleted: r.deleted ? 1 : 0,
     cm_product_id: r.cm_product_id ?? null, price_locked: Number(r.price_locked) || 0,
     price_first_ed: r.price_first_ed ?? null,
+    cm_first_ed_factor: r.cm_first_ed_factor ?? null,
   };
 }
 
@@ -97,8 +100,8 @@ function applyRemoteRow(db, r) {
   const exists = db.prepare('SELECT 1 FROM cards WHERE id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity LIMIT 1').get(p);
   if (!exists) {
     db.prepare(`INSERT OR IGNORE INTO cards
-      (id, set_code, language, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, price, deleted, cm_product_id, price_locked, price_first_ed)
-      VALUES (@id,@set_code,@language,@name,@type,@desc,@image_url,@atk,@def,@level,@race,@attribute,@quantity,@rarity,@price,@deleted,@cm_product_id,@price_locked,@price_first_ed)`)
+      (id, set_code, language, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, price, deleted, cm_product_id, price_locked, price_first_ed, cm_first_ed_factor)
+      VALUES (@id,@set_code,@language,@name,@type,@desc,@image_url,@atk,@def,@level,@race,@attribute,@quantity,@rarity,@price,@deleted,@cm_product_id,@price_locked,@price_first_ed,@cm_first_ed_factor)`)
       .run(remoteToLocalFull(r));
     return;
   }
