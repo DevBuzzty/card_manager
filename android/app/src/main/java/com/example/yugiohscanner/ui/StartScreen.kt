@@ -47,6 +47,7 @@ import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.SealedSnapshot
+import com.example.yugiohscanner.ml.SealedValue
 import com.example.yugiohscanner.ml.SnapshotSeries
 import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ml.UtcDay
@@ -94,6 +95,9 @@ fun StartScreen(
     val copies = ready?.copies ?: emptyList()
     val snapshotsCache by SideStores.snapshots.state.collectAsState()
     val snapshots = snapshotsCache.value ?: emptyList()
+    // Spec G3 §8: Sealed-Anteil des Gesamtwerts; die Summe nur neu, wenn sich die Liste aendert.
+    val sealedCache by SideStores.sealedItems.state.collectAsState()
+    val sealedTotal = remember(sealedCache.value) { sealedCache.value?.let { SealedValue.sealedValue(it) } }
     // Spec G1 §4.7: Kartendetail aus Start heraus, wie in CollectionScreen (Detail bleibt verschachtelt).
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     val setsCache by SideStores.sets.state.collectAsState()
@@ -248,14 +252,25 @@ fun StartScreen(
                     SectionHeader("Gesamtwert")
                     Spacer(Modifier.height(4.dp))
                     val dash = d
-                    if (dash != null) {
-                        Text("%.2f €".format(dash.totalValue), style = MaterialTheme.typography.displaySmall,
+                    // Spec G3 §8: solange die Sealed-Liste noch nie geladen wurde, zeigt die Karte den Ladezustand.
+                    val sealedLoading = sealedCache.value == null && sealedCache.error == null
+                    if (dash != null && !sealedLoading) {
+                        val total = dash.totalValue + (sealedTotal ?: 0.0)
+                        Text("%.2f €".format(total), style = MaterialTheme.typography.displaySmall,
                             fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
                         Text("${dash.totalCards} Karten · ${dash.entries} Einträge",
                             style = MaterialTheme.typography.bodySmall, color = Muted)
+                        if (sealedTotal == null) {
+                            // Ladefehler ohne frueheren Stand: nur der Kartenwert, mit Hinweis (kein Tageswert, Task 10).
+                            Text("Sealed-Wert nicht geladen — zum Aktualisieren ziehen",
+                                style = MaterialTheme.typography.labelSmall, color = ErrorColor)
+                        } else if (sealedCache.value?.isNotEmpty() == true) {
+                            Text("Karten %.2f € · Sealed %.2f €".format(dash.totalValue, sealedTotal),
+                                style = MaterialTheme.typography.bodySmall, color = Muted)
+                        }
                         if (windowSnaps.size >= 2) {
-                            val startVal = windowSnaps.firstOrNull()?.totalValue ?: dash.totalValue
-                            val change = dash.totalValue - startVal
+                            val startVal = windowSnaps.firstOrNull()?.totalValue ?: total
+                            val change = total - startVal
                             val changePct = if (startVal > 0) change / startVal * 100 else 0.0
                             val up = change >= 0
                             Text(

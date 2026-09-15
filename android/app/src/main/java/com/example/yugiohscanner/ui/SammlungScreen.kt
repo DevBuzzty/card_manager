@@ -12,13 +12,15 @@ import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 
-// Karten · Binder · Wunschliste · Sets · Decks -- the two most-used segments lead (Spec §11).
+// Karten · Binder · Wunschliste · Sets · Decks · Sealed -- the two most-used segments lead (Spec §11),
+// Sealed (Spec G3 §8) comes last.
 private val SEGMENTS = listOf(
     "karten" to "Karten",
     "binder" to "Binder",
     "wunschliste" to "Wunschliste",
     "sets" to "Sets",
     "decks" to "Decks",
+    "sealed" to "Sealed",
 )
 
 // Everything that is "my collection" lives on one tab; the tabs swap the content below.
@@ -30,6 +32,8 @@ fun SammlungScreen(
     onSegment: (String) -> Unit,
     onOpenSuche: () -> Unit,
     onOpenBehaelter: (String) -> Unit,
+    onOpenScan: () -> Unit,
+    onOpenSealedSuche: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         Text("Sammlung", style = MaterialTheme.typography.headlineSmall, color = OnSurface,
@@ -52,6 +56,7 @@ fun SammlungScreen(
                     "wunschliste" -> SideStores.wishlist.refreshAndWait()
                     "decks" -> SideStores.decks.refreshAndWait()
                     "sets" -> { CollectionStore.awaitSync(); SideStores.sets.refreshAndWait() }
+                    "sealed" -> SideStores.sealedItems.refreshAndWait()
                     else -> CollectionStore.awaitSync()
                 }
             },
@@ -62,6 +67,7 @@ fun SammlungScreen(
                 "wunschliste" -> WishlistScreen()
                 "sets" -> SetCompletionScreen()
                 "decks" -> DecksScreen()
+                "sealed" -> SealedScreen(onOpenScan = onOpenScan, onOpenSuche = onOpenSealedSuche)
                 else -> CollectionScreen(onOpenSuche = onOpenSuche)
             }
         }

@@ -54,6 +54,10 @@ object Routes {
     const val DEALS = "deals"
     const val EINSTELLUNGEN = "einstellungen"
     const val SUCHE = "suche"
+    // Spec G3 §8: Suche in der Sealed-Produktliste. Unter "sammlung/", damit die untere Leiste Sammlung
+    // markiert; drei Segmente mit "sealed" als zweitem kollidieren weder mit "sammlung/{segment}" noch mit
+    // "sammlung/binder/{containerId}".
+    const val SEALED_SUCHE = "sammlung/sealed/suche"
     const val SAMMLUNG = "sammlung/{segment}"
     fun sammlung(segment: String = "karten") = "sammlung/$segment"
     // Spec B2 §7.2: EIN aufgeschlagener Behaelter. Bewusst unter "sammlung/", damit die untere
@@ -225,6 +229,8 @@ fun AppNav() {
                     onSegment = { nav.navigate(Routes.sammlung(it)) { popUpTo(Routes.SAMMLUNG) { inclusive = true } } },
                     onOpenSuche = { nav.navigate(Routes.SUCHE) },
                     onOpenBehaelter = { nav.navigate(Routes.behaelter(it)) },
+                    onOpenScan = { nav.navigate(Routes.SCAN) { launchSingleTop = true } },
+                    onOpenSealedSuche = { nav.navigate(Routes.SEALED_SUCHE) },
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
@@ -282,6 +288,10 @@ fun AppNav() {
             }
             composable(Routes.SUCHE) {
                 if (cloudReady) SearchScreen(onClose = { nav.popBackStack() }, onAdded = { CollectionStore.requestSync() })
+                else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
+            }
+            composable(Routes.SEALED_SUCHE) {
+                if (cloudReady) SealedSearchScreen(onClose = { nav.popBackStack() })
                 else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
         }
