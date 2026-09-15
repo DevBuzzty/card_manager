@@ -29,12 +29,8 @@ export default function PriceAlertSettings() {
     return () => { alive = false; };
   }, []);
 
-  const save = async (patch) => {
-    const pct = parsePct(text.pct);
-    const minEur = parseMinEur(text.min_eur);
-    setErrors({ pct: pct.error, min_eur: minEur.error, save: null });
-    if (pct.error || minEur.error) return;
-    const next = { ...rule, pct: pct.value, min_eur: minEur.value, ...patch };
+  // Speichert eine vollstaendige Regel, wenn sie sich von der zuletzt gespeicherten unterscheidet.
+  const saveRule = async (next) => {
     if (next.pct === rule.pct && next.min_eur === rule.min_eur && next.days === rule.days && next.active === rule.active) return;
     try {
       await window.api.savePriceAlertMove(next);
@@ -42,6 +38,29 @@ export default function PriceAlertSettings() {
     } catch {
       setErrors((e) => ({ ...e, save: 'Speichern fehlgeschlagen' }));
     }
+  };
+
+  // Kontrollkaestchen und Tage-Auswahl speichern unabhaengig von den Textfeldern: sie senden die
+  // zuletzt gespeicherte pct/min_eur zusammen mit dem geaenderten Wert, ohne den Feldtext zu pruefen.
+  const saveToggle = (patch) => {
+    setErrors((e) => ({ ...e, save: null }));
+    saveRule({ ...rule, ...patch });
+  };
+
+  // Jedes Zahlenfeld prueft beim Verlassen nur sich selbst; das jeweils andere Feld bleibt
+  // unangetastet und kann ungueltigen/unvollstaendigen Text behalten, ohne das Speichern zu blockieren.
+  const savePct = () => {
+    const parsed = parsePct(text.pct);
+    setErrors((e) => ({ ...e, pct: parsed.error, save: null }));
+    if (parsed.error) return;
+    saveRule({ ...rule, pct: parsed.value });
+  };
+
+  const saveMinEur = () => {
+    const parsed = parseMinEur(text.min_eur);
+    setErrors((e) => ({ ...e, min_eur: parsed.error, save: null }));
+    if (parsed.error) return;
+    saveRule({ ...rule, min_eur: parsed.value });
   };
 
   return (
@@ -54,7 +73,7 @@ export default function PriceAlertSettings() {
       {status === 'ready' && (
         <div className="space-y-3">
           <label className="flex items-center gap-3 text-sm text-ink cursor-pointer">
-            <input type="checkbox" checked={rule.active} onChange={(e) => save({ active: e.target.checked })}
+            <input type="checkbox" checked={rule.active} onChange={(e) => saveToggle({ active: e.target.checked })}
               className="accent-space-violet w-4 h-4" />
             Bewegungsalarm
           </label>
@@ -62,13 +81,13 @@ export default function PriceAlertSettings() {
             <span>ab</span>
             <input value={text.pct} inputMode="decimal" aria-label="ab Prozent"
               onChange={(e) => setText((t) => ({ ...t, pct: e.target.value }))}
-              onBlur={() => save({})} onKeyDown={enterBlur} className={inputCls(errors.pct)} />
+              onBlur={savePct} onKeyDown={enterBlur} className={inputCls(errors.pct)} />
             <span>% und ab</span>
             <input value={text.min_eur} inputMode="decimal" aria-label="ab Euro"
               onChange={(e) => setText((t) => ({ ...t, min_eur: e.target.value }))}
-              onBlur={() => save({})} onKeyDown={enterBlur} className={inputCls(errors.min_eur)} />
+              onBlur={saveMinEur} onKeyDown={enterBlur} className={inputCls(errors.min_eur)} />
             <span>€ in</span>
-            <select value={rule.days} onChange={(e) => save({ days: Number(e.target.value) })}
+            <select value={rule.days} onChange={(e) => saveToggle({ days: Number(e.target.value) })}
               className="bg-obsidian border border-line text-ink rounded-lg px-2 py-1">
               <option value={7}>7 Tagen</option>
               <option value={30}>30 Tagen</option>

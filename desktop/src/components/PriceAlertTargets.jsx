@@ -13,7 +13,10 @@ export default function PriceAlertTargets({ printing }) {
     : { error: 'nicht verfügbar', targets: null }));
   const [text, setText] = useState({ above: '', below: '' });
   const [fieldError, setFieldError] = useState({ above: null, below: null });
-  const [tick, setTick] = useState(0);
+  // reload.kind: welches Feld den Nachlade-Trigger ausgeloest hat. null beim ersten Laden (dann werden
+  // beide Felder gesetzt); nach dem Speichern eines Felds wird nur dieses Feld aktualisiert, damit ein
+  // noch unbestaetigter Text im jeweils anderen Feld nicht ueberschrieben wird.
+  const [reload, setReload] = useState({ n: 0, kind: null });
 
   useEffect(() => {
     if (!window.api?.getPriceAlertTargets) return undefined;
@@ -22,11 +25,15 @@ export default function PriceAlertTargets({ printing }) {
       .then((targets) => {
         if (!alive) return;
         setState({ error: null, targets });
-        setText({ above: toInput(targets.above?.threshold), below: toInput(targets.below?.threshold) });
+        if (reload.kind) {
+          setText((t) => ({ ...t, [reload.kind]: toInput(targets[reload.kind]?.threshold) }));
+        } else {
+          setText({ above: toInput(targets.above?.threshold), below: toInput(targets.below?.threshold) });
+        }
       })
       .catch((e) => { if (alive) setState((s) => ({ error: errorText(e), targets: s.targets })); });
     return () => { alive = false; };
-  }, [id, setCode, language, rarity, tick]);
+  }, [id, setCode, language, rarity, reload]);
 
   const save = async (kind) => {
     const parsed = parseTarget(text[kind]);
@@ -36,7 +43,7 @@ export default function PriceAlertTargets({ printing }) {
     if (parsed.value === current) return;
     try {
       await window.api.savePriceAlertTarget({ printing: { id, set_code: setCode, language, rarity }, kind, threshold: parsed.value });
-      setTick((t) => t + 1);
+      setReload((r) => ({ n: r.n + 1, kind }));
     } catch {
       setFieldError((f) => ({ ...f, [kind]: 'Speichern fehlgeschlagen' }));
     }
