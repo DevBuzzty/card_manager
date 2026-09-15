@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { CONDITIONS, EDITIONS, conditionFactor, factorCaseSql } = require('./valuation.cjs');
+const { CONDITIONS, EDITIONS, conditionFactor, factorCaseSql, unitPriceCaseSql } = require('./valuation.cjs');
 
 // Erwartete, benutzersichtbare Fehler (falsche Eingabe, unbekannte ID) -- main.cjs erkennt sie an
 // dieser Klasse und reicht ihre deutsche Meldung unveraendert durch. Alles andere (z.B. ein
@@ -241,6 +241,7 @@ function listTags(db) {
 
 // Behaelter mit Belegung: Anzahl lebender Exemplare und ihr Wert (Preis x Zustandsfaktor,
 // derselbe Weg wie valuation.cjs#totalValue -- keine zweite Formel).
+// Seit Spec G4: unitPrice (1st-Ed-Preis fuer edition = 'first') x Zustandsfaktor.
 //
 // max_page ist die hoechste belegte Seite eines Behaelters (Spec 5.3: "die hoechste belegte Seite
 // bestimmt die Anzeige") -- NULL, wenn kein lebendes Exemplar in einem darstellbaren Fach liegt
@@ -265,7 +266,7 @@ function listContainers(db) {
            MAX(CASE WHEN cp.page >= 1 AND cp.slot >= 1
                      AND cp.slot <= (CASE WHEN ct.pockets_per_page > 0 THEN ct.pockets_per_page ELSE 4 END)
                     THEN cp.page END) AS max_page,
-           COALESCE(SUM(COALESCE(c.price, 0) * ${factorCaseSql('cp.condition')}), 0) AS value
+           COALESCE(SUM(${unitPriceCaseSql('c', 'cp')} * ${factorCaseSql('cp.condition')}), 0) AS value
       FROM containers ct
       LEFT JOIN card_copies cp ON cp.container_id = ct.container_id AND cp.deleted = 0
       LEFT JOIN cards c ON c.id = cp.card_id AND c.set_code = cp.set_code

@@ -24,6 +24,11 @@ test('collectionSql yields value/factor_sum/nonstandard/conditions/editions', ()
   assert.equal(rows[0].nonstandard, 1);
   assert.deepStrictEqual(rows[0].conditions.split(',').sort(), ['GD', 'NM']);
   assert.deepStrictEqual(rows[0].editions.split(',').sort(), ['first', 'unknown']);
+  // Spec G4 §6: das 1st-Ed-Exemplar (GD) zaehlt mit price_first_ed, die beiden unknown mit price.
+  d.prepare("UPDATE cards SET price_first_ed = 20 WHERE id = '1'").run();
+  const [fe] = d.prepare(collectionSql()).all({ def_condition: 'NM', def_edition: 'unknown' });
+  assert.equal(fe.value, 34, '2 × 10 × 1,0 + 20 × 0,7');
+  assert.ok(Math.abs(fe.factor_sum - 2.7) < 1e-9, 'factor_sum bleibt die reine Faktorsumme');
 });
 
 test('parseImportCsv: legacy column-2 passcodes and optional edition/condition headers', () => {
