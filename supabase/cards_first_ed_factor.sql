@@ -3,17 +3,20 @@
 -- price_first_ed = round(price x cm_first_ed_factor, 2), nachgefuehrt per Trigger. Die Edge Function
 -- refresh-cardmarket-prices setzt nur price; dieser Trigger rechnet den 1st-Ed-Preis mit demselben Faktor nach.
 -- ZWILLING: desktop/electron/copies-schema.cjs (FIRST_ED_SQL, trg_cards_first_ed_ins/_upd).
--- Rundung exakt in numeric (price::numeric), damit ,xx5 kaufmaennisch rundet wie SQLite mit + 1e-7.
+-- Spaltentyp double precision, wie price/price_first_ed -- PostgREST liefert numeric sonst als
+-- JSON-String, ungetestet auf Desktop (REAL) und Handy (Double). Rundung bleibt exakt: beide
+-- Operanden (price::numeric und cm_first_ed_factor::numeric) werden vor der Multiplikation nach
+-- numeric gecastet, damit ,xx5 kaufmaennisch rundet wie SQLite mit + 1e-7.
 -- Abnahme-Fixture: docs/fixtures/valuation/first-ed.json, Abschnitt trigger.
 
-alter table public.cards add column if not exists cm_first_ed_factor numeric;
+alter table public.cards add column if not exists cm_first_ed_factor double precision;
 
 create or replace function public.cards_price_first_ed()
 returns trigger language plpgsql as $$
 begin
   new.price_first_ed := case
     when new.cm_first_ed_factor is not null and new.price is not null
-      then round(new.price::numeric * new.cm_first_ed_factor, 2)::double precision
+      then round(new.price::numeric * new.cm_first_ed_factor::numeric, 2)::double precision
   end;
   return new;
 end $$;
@@ -27,11 +30,11 @@ create trigger trg_cards_price_first_ed
 update public.cards
    set price_first_ed = case
          when cm_first_ed_factor is not null and price is not null
-           then round(price::numeric * cm_first_ed_factor, 2)::double precision
+           then round(price::numeric * cm_first_ed_factor::numeric, 2)::double precision
        end
  where price_first_ed is distinct from case
          when cm_first_ed_factor is not null and price is not null
-           then round(price::numeric * cm_first_ed_factor, 2)::double precision
+           then round(price::numeric * cm_first_ed_factor::numeric, 2)::double precision
        end;
 
 -- Abnahme (Nutzer, von Hand): Fixture-Faelle pruefen, erwartet 77.87 | 10.01 | null | null
