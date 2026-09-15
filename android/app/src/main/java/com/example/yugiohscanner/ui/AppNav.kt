@@ -141,6 +141,7 @@ fun AppNav() {
                 onEnter = {
                     SideStores.priceAlertEvents.refresh()
                     SideStores.priceAlertTargets.refresh()
+                    SideStores.sealedItems.refresh()   // Spec G3 §8
                 },
                 tick = { CollectionStore.requestSync() },
             )

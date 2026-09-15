@@ -32,6 +32,10 @@ object SideStores {
     val priceAlertMoveRule = ListCache(scope) { listOfNotNull(PriceAlertsRepository.loadMoveRule()) }
     val priceAlertTargets = ListCache(scope) { PriceAlertsRepository.loadTargets() }
 
+    // Spec G3 §8: Sealed-Bestand. Kleine Liste, voll neu laden: beim Start, beim Vordergrund (AppNav, mit den
+    // Preis-Alarmen), per Ziehen und nach eigenem Speichern (refreshAndWait).
+    val sealedItems = ListCache(scope) { SealedRepository.loadLive() }
+
     private val historyCaches = BoundedMap<String, ListCache<List<PriceRef>>>(20)
 
     fun history(card: CardRow): ListCache<List<PriceRef>> =
@@ -50,6 +54,7 @@ object SideStores {
         wishlist.clear(); decks.clear(); dealWatches.clear(); dealAlerts.clear(); sets.clear()
         reference7.clear(); reference30.clear(); snapshots.clear()
         priceAlertEvents.clear(); priceAlertMoveRule.clear(); priceAlertTargets.clear()
+        sealedItems.clear()
         historyCaches.values().forEach { it.clear() }
         historyCaches.clear()
         synchronized(deckCardCaches) {

@@ -46,6 +46,7 @@ import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.SealedSnapshot
 import com.example.yugiohscanner.ml.SnapshotSeries
 import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ml.UtcDay
@@ -146,12 +147,19 @@ fun StartScreen(
                 // Review-Fund 1: nicht auf dem Haupt-Dispatcher rechnen -- ein kalter Merker
                 // braucht hier genauso die vollen ~210-406 ms wie in der Anzeige unten.
                 val dash = withContext(Dispatchers.Default) { DashboardMemo.get(r.cards, r.copies) }
-                // Record today's value + read the history for the chart. Non-fatal if the
-                // portfolio_snapshots table isn't set up yet.
-                SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
+                // Spec G3 §8: Tageswert = Karten + Sealed, erst mit an diesem Start geladener Sealed-Liste;
+                // bei Ladefehler kein Tageswert. Den Verlauf fuer das Diagramm trotzdem laden.
+                // Non-fatal if the portfolio_snapshots table isn't set up yet.
+                SideStores.sealedItems.refreshAndWait()
+                val values = SealedSnapshot.decide(dash.totalValue, SideStores.sealedItems.state.value)
                 val snaps = SideStores.snapshots
-                if (snaps.state.value.value == null) snaps.refreshAndWait()
-                else snaps.update { SnapshotSeries.withToday(it, UtcDay.today(), dash.totalValue) }
+                if (values != null) {
+                    SnapshotsRepository.upsertToday(values.total, dash.totalCards, values.sealed)
+                    if (snaps.state.value.value == null) snaps.refreshAndWait()
+                    else snaps.update { SnapshotSeries.withToday(it, UtcDay.today(), values.total) }
+                } else if (snaps.state.value.value == null) {
+                    snaps.refreshAndWait()
+                }
             } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
         }
     }
@@ -169,6 +177,7 @@ fun StartScreen(
             SideStores.reference7.refreshAndWait()
             SideStores.priceAlertEvents.refreshAndWait()
             SideStores.priceAlertTargets.refreshAndWait()
+            SideStores.sealedItems.refreshAndWait()
         }) {
         // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
         // passen) oder null; solange null, bleibt `d` null und die betroffenen Stellen unten

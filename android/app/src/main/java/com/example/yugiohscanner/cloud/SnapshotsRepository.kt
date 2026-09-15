@@ -16,9 +16,12 @@ data class Snapshot(val day: String, val totalValue: Double)
 // (one row per user per day), and reads the recent history for the value chart.
 object SnapshotsRepository {
 
-    suspend fun upsertToday(totalValue: Double, cardCount: Int) = withContext(Dispatchers.IO) {
-        val body = JSONObject()
-            .put("total_value", totalValue).put("card_count", cardCount).toString()
+    // Spec G3 §4.2: total_value = Karten + Sealed, sealed_value = Sealed-Anteil.
+    fun upsertBody(totalValue: Double, cardCount: Int, sealedValue: Double): JSONObject = JSONObject()
+        .put("total_value", totalValue).put("card_count", cardCount).put("sealed_value", sealedValue)
+
+    suspend fun upsertToday(totalValue: Double, cardCount: Int, sealedValue: Double) = withContext(Dispatchers.IO) {
+        val body = upsertBody(totalValue, cardCount, sealedValue).toString()
         executeWithReauth {
             base("${SupabaseCloud.base()}/rest/v1/portfolio_snapshots".toHttpUrl())
                 .addHeader("Content-Type", "application/json")
