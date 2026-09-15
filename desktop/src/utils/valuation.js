@@ -27,10 +27,15 @@ export function valueOf(card, copies) {
 }
 
 // Spec G4 §7 — Preiszeile im Karten-Detail. ZWILLING: Valuation.firstEdLine (Kotlin), Fixture-Abschnitt line.
+// Faktor vor dem Formatieren auf 2 Nachkommastellen runden (Math.round statt Intl/toFixed) — sonst rundet
+// dieselbe Zahl (z.B. 1.005) auf Desktop und Handy verschieden, weil beide Plattformen ihre eigene
+// Nachkomma-Rundung mitbringen.
 export function firstEdLine(card) {
   if (!card || card.price_first_ed == null) return null;
   const line = `Basis ${fmtEUR(card.price)} · 1st Ed ${fmtEUR(card.price_first_ed)}`;
-  return card.cm_first_ed_factor == null ? line : `${line} (×${fmtNum(card.cm_first_ed_factor)})`;
+  if (card.cm_first_ed_factor == null) return line;
+  const f = Math.round(card.cm_first_ed_factor * 100) / 100;
+  return `${line} (×${fmtNum(f)})`;
 }
 
 // [{edition, condition, ...}] -> [{edition, condition, count}] in display order.

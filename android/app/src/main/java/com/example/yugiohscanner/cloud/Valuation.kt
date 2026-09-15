@@ -29,12 +29,18 @@ object Valuation {
         return Math.round(v * 100.0) / 100.0
     }
 
-    /** Spec G4 §7 -- Preiszeile "Basis … · 1st Ed … (×…)". ZWILLING: firstEdLine in desktop/src/utils/valuation.js. */
+    /**
+     * Spec G4 §7 -- Preiszeile "Basis … · 1st Ed … (×…)". ZWILLING: firstEdLine in desktop/src/utils/valuation.js.
+     * Faktor vor dem Formatieren auf 2 Nachkommastellen runden (Math.round statt %.2f/HALF_UP) -- sonst rundet
+     * dieselbe Zahl (z.B. 1.005) auf Desktop und Handy verschieden, weil beide Plattformen ihre eigene
+     * Nachkomma-Rundung mitbringen.
+     */
     fun firstEdLine(card: CardRow): String? {
         val first = card.priceFirstEd ?: return null
         val line = String.format(Locale.GERMANY, "Basis %,.2f € · 1st Ed %,.2f €", card.price ?: 0.0, first)
         val f = card.cmFirstEdFactor ?: return line
-        return line + String.format(Locale.GERMANY, " (×%.2f)", f)
+        val rounded = Math.round(f * 100.0) / 100.0
+        return line + String.format(Locale.GERMANY, " (×%.2f)", rounded)
     }
 
     data class Group(val edition: String, val condition: String, val count: Int)

@@ -38,6 +38,7 @@
     { "name": "mit Faktor", "card": { "price": 73.85, "price_first_ed": 77.87, "cm_first_ed_factor": 1.0545 }, "line": "Basis 73,85 € · 1st Ed 77,87 € (×1,05)" },
     { "name": "Tausenderpunkt", "card": { "price": 1234.5, "price_first_ed": 1301.16, "cm_first_ed_factor": 1.054 }, "line": "Basis 1.234,50 € · 1st Ed 1.301,16 € (×1,05)" },
     { "name": "ohne Faktor keine Klammer", "card": { "price": 73.85, "price_first_ed": 77.87, "cm_first_ed_factor": null }, "line": "Basis 73,85 € · 1st Ed 77,87 €" },
-    { "name": "ohne price_first_ed keine Zeile", "card": { "price": 73.85, "price_first_ed": null, "cm_first_ed_factor": 1.0545 }, "line": null }
+    { "name": "ohne price_first_ed keine Zeile", "card": { "price": 73.85, "price_first_ed": null, "cm_first_ed_factor": 1.0545 }, "line": null },
+    { "name": "Faktor 1.005 rundet auf beiden Geräten gleich", "card": { "price": 10, "price_first_ed": 10.05, "cm_first_ed_factor": 1.005 }, "line": "Basis 10,00 € · 1st Ed 10,05 € (×1,00)" }
   ]
 }
