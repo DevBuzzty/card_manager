@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { ensureCopiesSchema, backfillCopies, reconcileCopies } = require('./copies-schema.cjs');
 const { ensureContainersSchema } = require('./containers-schema.cjs');
+const { ensureSealedSchema } = require('./sealed-items.cjs');
 const { seedPriceHistory } = require('./price-history.cjs');
 
 let db;
@@ -278,6 +279,7 @@ function runMigrations() {
         // Spec A: physical copies + price history + cross-spec columns. Backfill is desktop-only and guarded.
         ensureCopiesSchema(db);
         ensureContainersSchema(db);
+        ensureSealedSchema(db);   // Spec G3: Sealed-Bestand
         const bf = backfillCopies(db);
         if (!bf.skipped) console.log(`Copies backfill: created ${bf.created} copies from quantities.`);
         const rc = reconcileCopies(db);

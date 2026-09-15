@@ -2,12 +2,14 @@
 // Daily Cardmarket price refresh WITHOUT scraping: downloads Cardmarket's free JSON files, resolves
 // each printing's idProduct where unambiguous (Step A) and applies the price-guide `trend` to every
 // resolved printing in one transaction (Step B). Ambiguous printings stay NULL for the scraper.
+// Step C (Spec G3 §5) applies the same guide's trend to every live sealed_items row (sealed-items.cjs).
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { cachedFetch, fetchCardData } = require('./api-handler.cjs');
 const { buildExpansionIndex, buildSinglesIndex, resolveProduct } = require('./cardmarket-bulk-parse.cjs');
 const { recordPrice } = require('./price-history.cjs');
+const { applySealedPrices } = require('./sealed-items.cjs');
 
 const H = 3600 * 1000;
 const FILES = {
@@ -148,13 +150,14 @@ async function runBulkRefresh(db, { userDataPath, force = false, files = null } 
     data = files || await loadAll(userDataPath, force);
   } catch (e) {
     console.error('[cardmarket-bulk] load failed:', e.message);
-    return { error: 'download', message: e.message, resolved: 0, priced: 0, skipped: 0, unchanged: 0, unresolved: countUnresolved(db), reasons: {} };
+    return { error: 'download', message: e.message, resolved: 0, priced: 0, skipped: 0, unchanged: 0, sealedPriced: 0, unresolved: countUnresolved(db), reasons: {} };
   }
   const a = await resolveMissing(db, data);
   const b = applyPrices(db, data.guide);
+  const sealedPriced = applySealedPrices(db, data.guide); // Step C
   db.prepare("INSERT INTO settings (key, value) VALUES ('cm_bulk_last_run', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
     .run(new Date().toISOString());
-  const out = { resolved: a.resolved, reasons: a.reasons, priced: b.priced, skipped: b.skipped, unchanged: b.unchanged, unresolved: countUnresolved(db) };
+  const out = { resolved: a.resolved, reasons: a.reasons, priced: b.priced, skipped: b.skipped, unchanged: b.unchanged, sealedPriced, unresolved: countUnresolved(db) };
   console.log('[cardmarket-bulk]', JSON.stringify(out));
   return out;
 }
