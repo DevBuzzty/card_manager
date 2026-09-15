@@ -36,12 +36,12 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.SupabaseCloud
+import com.example.yugiohscanner.ml.ForegroundTick
 import com.example.yugiohscanner.ml.ModelStore
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 object Routes {
@@ -129,13 +129,14 @@ fun AppNav() {
 
     // Spec §3.4: solange die App sichtbar ist, alle 10 s ein Abgleich; im Hintergrund keiner.
     // repeatOnLifecycle startet den Block beim Zurueckkommen neu -- das ist der sofortige Abgleich.
+    // Spec G2 §7: beim selben Eintritt die Preis-Alarme nachladen (nicht bei Seitenwechseln).
     LaunchedEffect(cloudReady) {
         if (!cloudReady) return@LaunchedEffect
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                CollectionStore.requestSync()
-                delay(10_000)
-            }
+            ForegroundTick.run(
+                onEnter = { SideStores.priceAlertEvents.refresh() },
+                tick = { CollectionStore.requestSync() },
+            )
         }
     }
     // Spec §3.3: nach der Anmeldung erst laden. Der Speicher startet das Laden in seinem eigenen
