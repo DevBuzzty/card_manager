@@ -11,3 +11,8 @@ for (const c of FIX.cases) {
     assertEquals(pickSealedUpdates(c.items, c.guide), c.expected);
   });
 }
+
+// Zwilling desktop/electron/sealed-prices.cjs nutzt `rows || []`; gleiche Nachsicht bei null/undefined hier.
+Deno.test("sealed: rows null -> []", () => {
+  assertEquals(pickSealedUpdates(null as unknown as SealedRow[], []), []);
+});

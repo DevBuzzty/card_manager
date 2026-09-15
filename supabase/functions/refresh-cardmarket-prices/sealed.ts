@@ -23,7 +23,7 @@ export function trendById(priceGuides: unknown): Map<number, number> {
 export function pickSealedUpdates(rows: SealedRow[], priceGuides: unknown): SealedUpdate[] {
   const trends = trendById(priceGuides);
   const out: SealedUpdate[] = [];
-  for (const r of rows) {
+  for (const r of rows ?? []) {
     const t = trends.get(Number(r.cm_product_id));
     if (t == null) continue;
     if (r.price != null && Number(r.price) === t) continue;
