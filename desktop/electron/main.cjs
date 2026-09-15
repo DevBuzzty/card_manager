@@ -7,7 +7,7 @@ const { initDatabase, getDb } = require('./database.cjs');
 const { fetchCardData, fetchYugipediaSets, fetchJapaneseSets } = require('./api-handler.cjs');
 const { startSync } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
-const { runCardmarketScrape } = require('./cardmarket-scraper.cjs');
+const { runCardmarketScrape, runFirstEdPass } = require('./cardmarket-scraper.cjs');
 const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
 const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = require('./catalog-builder.cjs');
 const { recordPrice } = require('./price-history.cjs');
@@ -828,22 +828,36 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
   cmAbort = false; cmRunning = true;
   const send = (p) => { try { event.sender.send('update-progress', p); } catch (e) {} };
   try {
+    const onChallenge = (win) => { cmWin = win; try { event.sender.send('cm-challenge'); } catch (e) {} };
     const res = await runCardmarketScrape(db, {
       minRank: Number(minRank) || 1,
       force: true, // a manual click means "re-fetch now" — ignore the 7-day freshness window
       onProgress: (p) => send({ current: p.current, total: p.total }),
       shouldAbort: () => cmAbort,
-      onChallenge: (win) => { cmWin = win; try { event.sender.send('cm-challenge'); } catch (e) {} },
+      onChallenge,
     });
-    if (res && res.updated > 0) recordPortfolioValue(db);
+    // Spec G4 §4: 1st-Ed-Durchgang nach dem Basis-Durchgang, im selben cmRunning-Schutz, ohne Grenze.
+    // Eigener try/catch: ein Ausfall hier laesst das Basis-Ergebnis unberuehrt.
+    let firstEd = { candidates: 0, updated: 0, noOffers: 0, skipped: 0, errors: 0 };
+    try {
+      firstEd = await runFirstEdPass(db, {
+        minRank: Number(minRank) || 1,
+        force: true,
+        onProgress: (p) => send({ current: p.current, total: p.total }),
+        shouldAbort: () => cmAbort,
+        onChallenge,
+      });
+    } catch (e) { console.error('[cardmarket] 1st-Ed-Durchgang:', e); }
+    if ((res && res.updated > 0) || firstEd.updated > 0) recordPortfolioValue(db);
     send({ current: 1, total: 1 }); // clears the bar
-    return res;
+    return { ...res, firstEd };
   } finally { cmRunning = false; cmWin = null; }
 });
 
 // Background Cardmarket poller: every 10 min, trickle-scrape a few of the stalest qualifying cards
 // (rarity >= cm_auto_min_rank, priced > 7 days ago), so per-rarity prices refresh on their own.
 // Only the desktop can scrape (real browser + residential IP); the fresh prices then sync to Supabase.
+// Spec G4: danach bis zu 2 Printings mit 1st-Ed-Exemplaren (Aufschlagsfaktor, runFirstEdPass).
 function startCardmarketPoller() {
   if (cmPollInterval) clearInterval(cmPollInterval);
   cmPollInterval = setInterval(async () => {
@@ -851,13 +865,20 @@ function startCardmarketPoller() {
     if (getSetting('cm_auto_enabled') !== 'true') return;
     cmAbort = false; cmRunning = true;
     try {
+      const minRank = Number(getSetting('cm_auto_min_rank')) || 5;
       const res = await runCardmarketScrape(db, {
-        minRank: Number(getSetting('cm_auto_min_rank')) || 5,
+        minRank,
         maxCards: 4,      // small polite batch per tick
         headless: true,   // never surface a window; skip challenged cards silently, retry next tick
         shouldAbort: () => cmAbort,
       });
-      if (res.updated > 0) {
+      // Spec G4 §4: danach hoechstens 2 Kandidaten der Ersten Auflage; eigener try/catch.
+      let firstEdUpdated = 0;
+      try {
+        const fe = await runFirstEdPass(db, { minRank, maxCards: 2, headless: true, shouldAbort: () => cmAbort });
+        firstEdUpdated = fe.updated;
+      } catch (e) { console.error('Cardmarket 1st-Ed poller error:', e); }
+      if (res.updated > 0 || firstEdUpdated > 0) {
         recordPortfolioValue(db);
         if (mainWindow) {
           const stats = { totalValue: portfolioTotals(db).total };

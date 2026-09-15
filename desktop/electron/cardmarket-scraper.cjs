@@ -3,7 +3,7 @@
 // (real Chromium on the user's residential IP). Sequential + polite; the user solves the rare
 // Cloudflare/captcha challenge manually, then the run resumes.
 const { BrowserWindow, session } = require('electron');
-const { rarityRank, selectVersionRow } = require('./cardmarket-parse.cjs');
+const { rarityRank, selectVersionRow, productUrl, firstEdUrl, parseFromPrice, firstEdFactor } = require('./cardmarket-parse.cjs');
 const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 const { recordPrice } = require('./price-history.cjs');
@@ -42,6 +42,17 @@ const EXTRACT_JS = `(() => {
     if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc, href });
   });
   return rows;
+})()`;
+
+// Spec G4 §4 — dt/dd-Paare des Infokastens einer Produktseite; die Auswertung (Label "From"/"Ab") macht
+// der reine Parser parseFromPrice in cardmarket-parse.cjs.
+const INFO_PAIRS_JS = `(() => {
+  const out = [];
+  document.querySelectorAll('.info-list-container dt').forEach(dt => {
+    const dd = dt.nextElementSibling;
+    if (dd && dd.tagName === 'DD') out.push({ label: (dt.textContent || '').trim(), value: (dd.textContent || '').trim() });
+  });
+  return out;
 })()`;
 
 function looksLikeChallenge(html, title) {
@@ -149,6 +160,78 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
   return { updated, noMatch, errors, noMatchList, idMissed };
 }
 
+// Spec G4 §4 — Kandidaten des 1st-Ed-Durchgangs: Printings mit mindestens einem lebenden Exemplar edition = 'first',
+// Rarity ab minRank, nicht manuell gesperrt (price_locked 2), 1st-Ed-Stand aelter als 7 Tage (force ignoriert die Frist),
+// unabhaengig von cm_product_id (Bulk-Printings zaehlen). Aeltester Stand zuerst.
+function firstEdCandidates(db, { minRank = 1, force = false, nowMs = Date.now(), limit = Infinity } = {}) {
+  const rows = db.prepare(`
+    SELECT c.id, c.name, c.set_code, c.language, c.rarity, c.cm_first_ed_updated_at
+      FROM cards c
+     WHERE c.deleted = 0 AND COALESCE(c.price_locked, 0) != 2
+       AND EXISTS (SELECT 1 FROM card_copies cp
+                    WHERE cp.card_id = c.id AND cp.set_code = c.set_code AND cp.language = c.language
+                      AND cp.rarity = c.rarity AND cp.deleted = 0 AND cp.edition = 'first')
+     ORDER BY COALESCE(c.cm_first_ed_updated_at, '1970-01-01') ASC, c.id, c.set_code, c.language, c.rarity`).all();
+  return rows
+    .filter(r => rarityRank(r.rarity) >= minRank
+      && (force || !r.cm_first_ed_updated_at || (nowMs - new Date(r.cm_first_ed_updated_at + 'Z').getTime()) > FRESH_MS))
+    .slice(0, limit);
+}
+
+// Spec G4 §4 — zweiter Durchgang: je Kandidat Versions-Seite (Zeile + Produkt-Link), Produktseite ohne Filter
+// (fromAll) und mit ?isFirstEd=Y (fromFirst). Schreibt nur cm_first_ed_factor + cm_first_ed_updated_at;
+// price_first_ed setzt der Trigger (copies-schema.cjs). Keine price_history-Zeile. Challenge, keine Zeile,
+// kein Link oder fehlendes fromAll: nichts schreiben, der naechste Lauf versucht es wieder.
+// `deps` ersetzt im Test Fenster, Netz und Pausen.
+async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infinity, headless = false, onChallenge, shouldAbort, onProgress, deps = {} } = {}) {
+  const d = {
+    makeWindow,
+    loadPage,
+    readRows: (win) => win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []),
+    readInfoPairs: (win) => win.webContents.executeJavaScript(INFO_PAIRS_JS).catch(() => []),
+    sleep: () => sleep(DELAY_MIN_MS + Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS)),
+    setNameFor,
+    cardName: async (c) => c.name || (await fetchCardData(c.id))?.data?.[0]?.name,
+    ...deps,
+  };
+  const list = firstEdCandidates(db, { minRank, force, nowMs: Date.now(), limit: maxCards });
+  const out = { candidates: list.length, updated: 0, noOffers: 0, skipped: 0, errors: 0 };
+  if (list.length === 0) return out;
+  const write = db.prepare('UPDATE cards SET cm_first_ed_factor = ?, cm_first_ed_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?');
+  const win = await d.makeWindow();
+  try {
+    for (let i = 0; i < list.length; i++) {
+      if (shouldAbort && shouldAbort()) break;
+      const p = list[i];
+      onProgress && onProgress({ current: i + 1, total: list.length, name: p.name });
+      try {
+        const name = await d.cardName(p);
+        const versionsUrl = name ? resolveUrl(name) : null;
+        if (!versionsUrl || !(await d.loadPage(win, versionsUrl, onChallenge, headless))) { out.skipped++; continue; }
+        const hit = await selectVersionRow(await d.readRows(win), p, () => d.setNameFor(p.id, p.set_code));
+        const product = hit ? productUrl(hit.href) : null;
+        if (!product) { out.skipped++; continue; }
+        await d.sleep();
+        if (!(await d.loadPage(win, product, onChallenge, headless))) { out.skipped++; continue; }
+        const fromAll = parseFromPrice(await d.readInfoPairs(win));
+        if (!(fromAll > 0)) { out.skipped++; continue; }
+        await d.sleep();
+        if (!(await d.loadPage(win, firstEdUrl(product), onChallenge, headless))) { out.skipped++; continue; }
+        const { write: ok, factor } = firstEdFactor(fromAll, parseFromPrice(await d.readInfoPairs(win)));
+        if (!ok) { out.skipped++; continue; }
+        write.run(factor, String(p.id), p.set_code, p.language, p.rarity);
+        out.updated++;
+        if (factor == null) out.noOffers++;
+      } catch (e) {
+        out.errors++;
+      } finally {
+        await d.sleep();
+      }
+    }
+  } finally { win.destroy(); }
+  return out;
+}
+
 // Set NAME for a (passcode, set_code) via YGOPRODeck card_sets (cached in api-handler).
 async function setNameFor(id, setCode) {
   try {
@@ -159,4 +242,4 @@ async function setNameFor(id, setCode) {
   } catch { return null; }
 }
 
-module.exports = { runCardmarketScrape };
+module.exports = { runCardmarketScrape, runFirstEdPass, firstEdCandidates };
