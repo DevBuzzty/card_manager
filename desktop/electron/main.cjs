@@ -872,7 +872,7 @@ function startCatalogScheduler() {
     if (catalogRunning || !sync || !catalogDue()) return;
     catalogRunning = true;
     try {
-      const res = await runCatalogBuild(db, { ensureClient: sync.ensureClient });
+      const res = await runCatalogBuild(db, { ensureClient: sync.ensureClient, userDataPath });
       if (res && res.error) console.error('[catalog-builder] scheduled build failed:', res.error, res.message);
     } catch (e) { console.error('Catalog build error:', e); }
     finally { catalogRunning = false; }
@@ -887,7 +887,7 @@ ipcMain.handle('catalog-build-now', async () => {
   catalogRunning = true;
   try {
     const ensureClient = sync ? sync.ensureClient : async () => null;
-    return await runCatalogBuild(db, { ensureClient, force: true });
+    return await runCatalogBuild(db, { ensureClient, force: true, userDataPath });
   } catch (e) { console.error('Catalog build error:', e); return { error: 'internal', message: String(e && e.message || e) }; }
   finally { catalogRunning = false; }
 });

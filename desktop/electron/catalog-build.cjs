@@ -2,6 +2,7 @@
 // Reine Katalogbau-Funktionen: Merge der YGOPRODeck-Dumps (EN + DE), Anhang der vom Desktop
 // bestätigten Set-Codes, gzip-Packen. Kein Netz, keine DB, kein Supabase — alles Testbare hier.
 const zlib = require('node:zlib');
+const { trendById } = require('./sealed-prices.cjs');
 
 // Die Kartenliste des englischen Dumps ist das Gerüst (vollständige Printings, Stats, Bilder);
 // aus dem deutschen Dump kommen nur Name und Text, mit Rückfall auf Englisch.
@@ -56,10 +57,41 @@ function attachVerified(cards, verifiedByPasscode) {
   return cards;
 }
 
-function packCatalog(cards, version) {
-  const json = JSON.stringify({ version, built_at: new Date().toISOString(), cards });
+// Spec G3 §3 — Art eines Sealed-Produkts aus der Cardmarket-Kategorie. EINZIGE Stelle dieser Zuordnung;
+// die Werte sind die sechs erlaubten sealed_items.kind (sealed-value.cjs#SEALED_KINDS).
+const SEALED_KIND_BY_CATEGORY = {
+  'Yugioh Display': 'display',
+  'Yugioh Booster': 'booster',
+  'Yugioh Collector Tins': 'tin',
+  'Yugioh Structure Deck': 'deck',
+  'Yugioh Starter Deck': 'deck',
+  'Yugioh Special Edition': 'special',
+};
+function sealedKindOf(categoryName) {
+  return categoryName != null && Object.hasOwn(SEALED_KIND_BY_CATEGORY, categoryName)
+    ? SEALED_KIND_BY_CATEGORY[categoryName]
+    : 'other';
+}
+
+// Produktliste fuer Suche und Katalog: jedes Nicht-Einzelkarten-Produkt einmal, mit Art und dem Trend
+// zum Bauzeitpunkt (null bei fehlendem oder 0 — gleiche Auswahl wie die Preisregel, sealed-prices.cjs).
+function buildSealedProducts(nonsingles, priceGuides) {
+  const trends = trendById(priceGuides);
+  const seen = new Set();
+  const out = [];
+  for (const p of nonsingles || []) {
+    const id = Number(p && p.idProduct);
+    if (!Number.isInteger(id) || id <= 0 || seen.has(id) || !p.name) continue;
+    seen.add(id);
+    out.push({ cm_product_id: id, name: String(p.name), kind: sealedKindOf(p.categoryName), trend: trends.get(id) ?? null });
+  }
+  return out;
+}
+
+function packCatalog(cards, version, sealedProducts = []) {
+  const json = JSON.stringify({ version, built_at: new Date().toISOString(), cards, sealed_products: sealedProducts });
   const buffer = zlib.gzipSync(Buffer.from(json, 'utf8'), { level: 9 });
   return { buffer, json, bytes: buffer.length };
 }
 
-module.exports = { mergeCards, attachVerified, packCatalog };
+module.exports = { mergeCards, attachVerified, sealedKindOf, buildSealedProducts, packCatalog };
