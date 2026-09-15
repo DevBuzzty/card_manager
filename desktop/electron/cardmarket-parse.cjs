@@ -95,10 +95,11 @@ function productUrl(href) {
 
 const firstEdUrl = (url) => `${url}?isFirstEd=Y`;
 
-// "58,00 €" / "1.234,56 €" -> Zahl; alles andere -> null.
+// "58 €" / "58,00 €" / "1.234 €" / "1.234,56 €" -> Zahl; Cent-Teil optional (asymmetrisches Risiko: fehlt er
+// nur auf der gefilterten Seite, wuerde sonst der Faktor NULL geschrieben); alles andere -> null.
 function parseEuro(text) {
-  const m = String(text || '').replace(/\s/g, '').match(/(\d{1,3}(?:\.\d{3})+|\d+),(\d{2})/);
-  return m ? Number(`${m[1].replace(/\./g, '')}.${m[2]}`) : null;
+  const m = String(text || '').replace(/\s/g, '').match(/(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?/);
+  return m ? Number(`${m[1].replace(/\./g, '')}${m[2] ? '.' + m[2] : ''}`) : null;
 }
 
 // Ab-Preis aus den dt/dd-Paaren des Infokastens (.info-list-container); Label "From" (en) oder "Ab" (de).

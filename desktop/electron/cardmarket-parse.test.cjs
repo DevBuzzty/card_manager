@@ -86,6 +86,8 @@ test('parseFromPrice: From/Ab, Tausenderpunkt, fehlend, andere Labels ignoriert'
   assert.equal(parseFromPrice([{ label: 'Available items', value: '50' }, { label: 'From', value: '58,00 €' }, { label: 'Price Trend', value: '72,33 €' }]), 58);
   assert.equal(parseFromPrice([{ label: 'Ab', value: '1.234,56 €' }]), 1234.56);
   assert.equal(parseFromPrice([{ label: 'Ab:', value: '0,15 €' }]), 0.15);
+  assert.equal(parseFromPrice([{ label: 'From', value: '58 €' }]), 58);
+  assert.equal(parseFromPrice([{ label: 'From', value: '1.234 €' }]), 1234);
   assert.equal(parseFromPrice([{ label: 'Price Trend', value: '72,33 €' }]), null);
   assert.equal(parseFromPrice([{ label: 'From', value: 'N/A' }]), null);
   assert.equal(parseFromPrice([]), null);
