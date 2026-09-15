@@ -839,15 +839,17 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
     // Spec G4 §4: 1st-Ed-Durchgang nach dem Basis-Durchgang, im selben cmRunning-Schutz, ohne Grenze.
     // Eigener try/catch: ein Ausfall hier laesst das Basis-Ergebnis unberuehrt.
     let firstEd = { candidates: 0, updated: 0, noOffers: 0, skipped: 0, errors: 0 };
-    try {
-      firstEd = await runFirstEdPass(db, {
-        minRank: Number(minRank) || 1,
-        force: true,
-        onProgress: (p) => send({ current: p.current, total: p.total }),
-        shouldAbort: () => cmAbort,
-        onChallenge,
-      });
-    } catch (e) { console.error('[cardmarket] 1st-Ed-Durchgang:', e); }
+    if (!cmAbort) {
+      try {
+        firstEd = await runFirstEdPass(db, {
+          minRank: Number(minRank) || 1,
+          force: true,
+          onProgress: (p) => send({ current: p.current, total: p.total }),
+          shouldAbort: () => cmAbort,
+          onChallenge,
+        });
+      } catch (e) { console.error('[cardmarket] 1st-Ed-Durchgang:', e); }
+    }
     if ((res && res.updated > 0) || firstEd.updated > 0) recordPortfolioValue(db);
     send({ current: 1, total: 1 }); // clears the bar
     return { ...res, firstEd };
@@ -874,10 +876,12 @@ function startCardmarketPoller() {
       });
       // Spec G4 §4: danach hoechstens 2 Kandidaten der Ersten Auflage; eigener try/catch.
       let firstEdUpdated = 0;
-      try {
-        const fe = await runFirstEdPass(db, { minRank, maxCards: 2, headless: true, shouldAbort: () => cmAbort });
-        firstEdUpdated = fe.updated;
-      } catch (e) { console.error('Cardmarket 1st-Ed poller error:', e); }
+      if (!cmAbort) {
+        try {
+          const fe = await runFirstEdPass(db, { minRank, maxCards: 2, headless: true, shouldAbort: () => cmAbort });
+          firstEdUpdated = fe.updated;
+        } catch (e) { console.error('Cardmarket 1st-Ed poller error:', e); }
+      }
       if (res.updated > 0 || firstEdUpdated > 0) {
         recordPortfolioValue(db);
         if (mainWindow) {

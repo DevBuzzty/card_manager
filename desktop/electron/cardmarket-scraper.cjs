@@ -197,6 +197,8 @@ async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infin
   const list = firstEdCandidates(db, { minRank, force, nowMs: Date.now(), limit: maxCards });
   const out = { candidates: list.length, updated: 0, noOffers: 0, skipped: 0, errors: 0 };
   if (list.length === 0) return out;
+  // Already aborted before the loop starts — never open the hidden window for a run that won't do anything.
+  if (shouldAbort && shouldAbort()) return out;
   const write = db.prepare('UPDATE cards SET cm_first_ed_factor = ?, cm_first_ed_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?');
   const win = await d.makeWindow();
   try {

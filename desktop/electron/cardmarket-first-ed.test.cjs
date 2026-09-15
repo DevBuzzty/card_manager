@@ -157,3 +157,15 @@ test('Durchgang: maxCards begrenzt die Kandidaten (Poller 2)', async () => {
   assert.equal(out.candidates, 2);
   assert.equal(s.visited.length, 2, 'je Kandidat nur die Versions-Seite (ohne Zeilen)');
 });
+
+test('Durchgang: bereits abgebrochen vor der Schleife -> kein Fenster, nichts besucht, nichts geschrieben', async () => {
+  const db = mamoDb();
+  const s = stub({ [VERSIONS]: { rows: ROWS }, [PRODUCT]: { pairs: [{ label: 'From', value: '55,00 €' }] }, [FIRST]: { pairs: [{ label: 'From', value: '58,00 €' }] } });
+  let makeWindowCalls = 0;
+  const deps = { ...s.deps, makeWindow: async () => { makeWindowCalls++; return { url: null, destroy() {} }; } };
+  const out = await runFirstEdPass(db, { force: true, shouldAbort: () => true, deps });
+  assert.equal(makeWindowCalls, 0, 'makeWindow wird bei bereits gesetztem Abbruch nicht gerufen');
+  assert.deepEqual(s.visited, []);
+  assert.equal(out.updated, 0);
+  assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });
+});
