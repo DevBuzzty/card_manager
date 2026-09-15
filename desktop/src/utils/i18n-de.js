@@ -10,6 +10,7 @@ export const T = {
   wunschliste: 'Wunschliste',
   sets: 'Sets',
   decks: 'Decks',
+  sealed: 'Sealed',
   deals: 'Deals',
   insights: 'Insights',
   einstellungen: 'Einstellungen',

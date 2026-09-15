@@ -3,6 +3,7 @@ import { ROUTES, binderRoute, cardRoute, printingFromParams } from './routes.js'
 
 assert.equal(ROUTES.start, '/start');
 assert.equal(ROUTES.karten, '/sammlung/karten');
+assert.equal(ROUTES.sealed, '/sammlung/sealed');
 assert.equal(ROUTES.einstellungen, '/einstellungen');
 
 // A printing key round-trips, including a rarity with a slash and a space.

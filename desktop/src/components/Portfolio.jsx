@@ -85,9 +85,15 @@ export default function Portfolio() {
                 setTimeout(() => loadData(), 0);
             });
 
+            // Spec G3: Sealed-Änderungen ändern den Gesamtwert
+            const cleanupSealed = window.api.onSealedChanged && window.api.onSealedChanged(() => {
+                setTimeout(() => loadData(), 0);
+            });
+
             return () => {
                 if (cleanup) cleanup();
                 if (cleanupSync) cleanupSync();
+                if (cleanupSealed) cleanupSealed();
             }
         }
     }, []);

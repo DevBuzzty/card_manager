@@ -13,11 +13,13 @@ const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = 
 const { recordPrice } = require('./price-history.cjs');
 const { computeMovers, addDays } = require('./movers.cjs');
 const { referenceRows, cardHistory } = require('./price-reference.cjs');
-const { recordPortfolioValue } = require('./portfolio-value.cjs');
-const { totalValue, copyCount } = require('./valuation.cjs');
+const { recordPortfolioValue, portfolioTotals } = require('./portfolio-value.cjs');
+const { copyCount } = require('./valuation.cjs');
 const { alertText } = require('./alert-text.cjs');
 const copies = require('./copies.cjs');
 const { deleteContainer } = require('./containers-schema.cjs');
+const sealed = require('./sealed-items.cjs');
+const { readSealedProducts, searchSealedProducts } = require('./sealed-products.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 
 // Initialize Database
@@ -526,8 +528,49 @@ ipcMain.handle('delete-card', (event, { id, set_code, language, rarity }) => {
 ipcMain.handle('get-portfolio', () => {
     try {
         const unique = db.prepare('SELECT COUNT(*) AS n FROM cards WHERE quantity > 0 AND deleted = 0').get().n || 0;
-        return { totalValue: totalValue(db), totalCards: copyCount(db), uniqueCards: unique };
-    } catch (e) { return { totalValue: 0, totalCards: 0, uniqueCards: 0 }; }
+        // Spec G3 §6/§7.3: totalValue = Karten + Sealed (Start, Insights › Wert); die Unterzeile nur mit Sealed-Bestand.
+        const t = portfolioTotals(db);
+        return { totalValue: t.total, cardValue: t.cards, sealedValue: t.sealed, hasSealed: t.sealedCount > 0, totalCards: copyCount(db), uniqueCards: unique };
+    } catch (e) { return { totalValue: 0, cardValue: 0, sealedValue: 0, hasSealed: false, totalCards: 0, uniqueCards: 0 }; }
+});
+
+// --- Spec G3: Sealed-Bestand (lokal in SQLite; der Sync schiebt in die Cloud) ---
+const SEALED_NO_PRODUCTS = 'Produktliste nicht verfügbar — Cardmarket-Preise einmal aktualisieren.';
+// Wie containerCopyErrorMessage: erwartete Fehler (SealedError) tragen schon eine deutsche Meldung.
+function sealedErrorMessage(e, channel) {
+    if (e instanceof sealed.SealedError) return e.message;
+    console.error(`[${channel}]`, e);
+    return CONTAINER_COPY_ERROR_MSG;
+}
+ipcMain.handle('sealed-list', () => {
+    try { return sealed.listSealed(db); }
+    catch (e) { console.error('[sealed-list]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
+});
+// Name, Art und Startpreis kommen aus der lokalen Produktliste, nie vom Renderer.
+ipcMain.handle('sealed-add', (event, { cm_product_id, quantity } = {}) => {
+    try {
+        const products = readSealedProducts(userDataPath);
+        if (!products) return { success: false, error: SEALED_NO_PRODUCTS };
+        const product = products.find((p) => p.cm_product_id === Number(cm_product_id));
+        return { success: true, ...sealed.addSealed(db, product, quantity) };
+    } catch (e) { return { success: false, error: sealedErrorMessage(e, 'sealed-add') }; }
+});
+ipcMain.handle('sealed-set-quantity', (event, { sealed_id, quantity } = {}) => {
+    try { sealed.setSealedQuantity(db, { sealed_id, quantity }); return { success: true }; }
+    catch (e) { return { success: false, error: sealedErrorMessage(e, 'sealed-set-quantity') }; }
+});
+ipcMain.handle('sealed-open', (event, sealedId) => {
+    try { return { success: true, ...sealed.openSealed(db, sealedId) }; }
+    catch (e) { return { success: false, error: sealedErrorMessage(e, 'sealed-open') }; }
+});
+ipcMain.handle('sealed-delete', (event, sealedId) => {
+    try { sealed.deleteSealed(db, sealedId); return { success: true }; }
+    catch (e) { return { success: false, error: sealedErrorMessage(e, 'sealed-delete') }; }
+});
+ipcMain.handle('sealed-products-search', (event, query) => {
+    const products = readSealedProducts(userDataPath);
+    if (!products) return { available: false, results: [] };
+    return { available: true, results: searchSealedProducts(products, query) };
 });
 
 // --- Deck Builder Handlers ---
@@ -804,7 +847,7 @@ function startCardmarketPoller() {
       if (res.updated > 0) {
         recordPortfolioValue(db);
         if (mainWindow) {
-          const stats = { totalValue: totalValue(db) };
+          const stats = { totalValue: portfolioTotals(db).total };
           mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
         }
       }
@@ -821,11 +864,13 @@ function bulkDue() {
   return !last || (Date.now() - new Date(last).getTime()) > 24 * 60 * 60 * 1000;
 }
 function notifyBulk(res) {
-  if (res && res.priced > 0) {
+  if (res && (res.priced > 0 || res.sealedPriced > 0)) {
     recordPortfolioValue(db);
     if (mainWindow) {
-      const stats = { totalValue: totalValue(db) };
+      const stats = { totalValue: portfolioTotals(db).total };
       mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
+      // Spec G3: Schritt C hat Sealed-Preise geaendert -- Sealed-Liste, Start und Insights › Wert laden neu.
+      if (res.sealedPriced > 0) mainWindow.webContents.send('sealed-changed');
     }
   }
 }
@@ -987,7 +1032,7 @@ function startPricePoller() {
 
             if (updates.length > 0) {
                 recordPortfolioValue(db);
-                mainWindow.webContents.send('price-update', { updates, totalValue: totalValue(db) });
+                mainWindow.webContents.send('price-update', { updates, totalValue: portfolioTotals(db).total });
             }
         } catch (e) { console.error("Price Poller Error:", e); }
     }, 60000);
@@ -1098,7 +1143,7 @@ ipcMain.handle('update-all-cards', async (event) => {
 
         try {
             recordPortfolioValue(db);
-            if (mainWindow) mainWindow.webContents.send('price-update', { updates: [], totalValue: totalValue(db) });
+            if (mainWindow) mainWindow.webContents.send('price-update', { updates: [], totalValue: portfolioTotals(db).total });
         } catch (e) { /* history snapshot is best-effort */ }
 
         if (event.sender) event.sender.send('update-progress', { current: uniqueIds.length, total: uniqueIds.length });
