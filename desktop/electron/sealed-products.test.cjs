@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { readSealedProducts, sealedProductsForCatalog, searchSealedProducts } = require('./sealed-products.cjs');
+const { readSealedProducts, sealedProductsForCatalog, searchSealedProducts, sealedProductsAvailable } = require('./sealed-products.cjs');
 
 // Echte Zeilen aus dem Cardmarket-Cache (products_nonsingles_3.json vom 2026-09-09, price_guide_3.json vom 2026-09-14).
 const PRODUCTS = [
@@ -53,6 +53,16 @@ test('Produktliste aus dem Cache mit Art und Trend', () => {
   ];
   assert.deepStrictEqual(readSealedProducts(dir), expected);
   assert.deepStrictEqual(sealedProductsForCatalog(dir), expected);
+});
+
+// Fix M3 (final-review-report.md): die Verfuegbarkeitspruefung fuer den Dialog darf nur statten, nie parsen.
+test('sealedProductsAvailable: fehlen die Cache-Dateien, ist die Liste nicht verfuegbar', () => {
+  assert.equal(sealedProductsAvailable(userData(false)), false);
+  assert.equal(sealedProductsAvailable(null), false);
+});
+
+test('sealedProductsAvailable: liegen beide Cache-Dateien vor, ist die Liste verfuegbar', () => {
+  assert.equal(sealedProductsAvailable(userData(true)), true);
 });
 
 test('Suche: Teilstring ohne Groß-/Kleinschreibung, nach Name sortiert, höchstens limit, mit kindLabel', () => {

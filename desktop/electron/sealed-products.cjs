@@ -34,6 +34,21 @@ function readSealedProducts(userDataPath) {
 // Spec G3 §3: fehlt der Cache beim Katalog-Bau, bleibt sealed_products leer; der Bau scheitert nicht.
 const sealedProductsForCatalog = (userDataPath) => readSealedProducts(userDataPath) || [];
 
+// Fix M3 (final-review-report.md): der Dialog soll beim Oeffnen nur pruefen koennen, ob ueberhaupt eine
+// Produktliste existiert, ohne die ~17 MB dafuer zu parsen (readSealedProducts). Nur die beiden Dateien
+// statten -- das Parsen bleibt der ersten echten Suche vorbehalten (readSealedProducts/Cache oben).
+function sealedProductsAvailable(userDataPath) {
+  if (!userDataPath) return false;
+  const dir = path.join(userDataPath, 'cardmarket');
+  try {
+    fs.statSync(path.join(dir, 'products_nonsingles_3.json'));
+    fs.statSync(path.join(dir, 'price_guide_3.json'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const cmp = (x, y) => (x < y ? -1 : x > y ? 1 : 0);
 
 // Name enthaelt Suchtext (ohne Gross-/Kleinschreibung), sortiert nach Name, hoechstens `limit`.
@@ -47,4 +62,4 @@ function searchSealedProducts(products, query, limit = 50) {
     .map((p) => ({ ...p, kindLabel: kindLabel(p.kind) }));
 }
 
-module.exports = { readSealedProducts, sealedProductsForCatalog, searchSealedProducts };
+module.exports = { readSealedProducts, sealedProductsForCatalog, searchSealedProducts, sealedProductsAvailable };

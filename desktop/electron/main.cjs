@@ -19,7 +19,7 @@ const { alertText } = require('./alert-text.cjs');
 const copies = require('./copies.cjs');
 const { deleteContainer } = require('./containers-schema.cjs');
 const sealed = require('./sealed-items.cjs');
-const { readSealedProducts, searchSealedProducts } = require('./sealed-products.cjs');
+const { readSealedProducts, searchSealedProducts, sealedProductsAvailable } = require('./sealed-products.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 
 // Initialize Database
@@ -546,25 +546,35 @@ ipcMain.handle('sealed-list', () => {
     try { return sealed.listSealed(db); }
     catch (e) { console.error('[sealed-list]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
 });
+// Spec G3 M1: die Tageshistorie (7T/30T-Aenderung, Sparkline, Insights-Chart) soll Sealed-Aenderungen
+// nicht erst mit der naechsten Preisaenderung nachziehen. Nie fatal fuer den IPC-Aufruf.
+function recordPortfolioValueSafe() {
+    try { recordPortfolioValue(db); } catch (e) { console.error('[sealed] recordPortfolioValue:', e); }
+}
 // Name, Art und Startpreis kommen aus der lokalen Produktliste, nie vom Renderer.
 ipcMain.handle('sealed-add', (event, { cm_product_id, quantity } = {}) => {
     try {
         const products = readSealedProducts(userDataPath);
         if (!products) return { success: false, error: SEALED_NO_PRODUCTS };
         const product = products.find((p) => p.cm_product_id === Number(cm_product_id));
-        return { success: true, ...sealed.addSealed(db, product, quantity) };
+        const result = { success: true, ...sealed.addSealed(db, product, quantity) };
+        recordPortfolioValueSafe();
+        return result;
     } catch (e) { return { success: false, error: sealedErrorMessage(e, 'sealed-add') }; }
 });
 ipcMain.handle('sealed-set-quantity', (event, { sealed_id, quantity } = {}) => {
-    try { sealed.setSealedQuantity(db, { sealed_id, quantity }); return { success: true }; }
+    try { sealed.setSealedQuantity(db, { sealed_id, quantity }); recordPortfolioValueSafe(); return { success: true }; }
     catch (e) { return { success: false, error: sealedErrorMessage(e, 'sealed-set-quantity') }; }
 });
 ipcMain.handle('sealed-open', (event, sealedId) => {
-    try { return { success: true, ...sealed.openSealed(db, sealedId) }; }
-    catch (e) { return { success: false, error: sealedErrorMessage(e, 'sealed-open') }; }
+    try {
+        const result = { success: true, ...sealed.openSealed(db, sealedId) };
+        recordPortfolioValueSafe();
+        return result;
+    } catch (e) { return { success: false, error: sealedErrorMessage(e, 'sealed-open') }; }
 });
 ipcMain.handle('sealed-delete', (event, sealedId) => {
-    try { sealed.deleteSealed(db, sealedId); return { success: true }; }
+    try { sealed.deleteSealed(db, sealedId); recordPortfolioValueSafe(); return { success: true }; }
     catch (e) { return { success: false, error: sealedErrorMessage(e, 'sealed-delete') }; }
 });
 ipcMain.handle('sealed-products-search', (event, query) => {
@@ -572,6 +582,9 @@ ipcMain.handle('sealed-products-search', (event, query) => {
     if (!products) return { available: false, results: [] };
     return { available: true, results: searchSealedProducts(products, query) };
 });
+// Fix M3 (final-review-report.md): der Dialog soll beim Oeffnen nur pruefen, ob die Produktliste da ist,
+// ohne die ~17 MB dafuer zu parsen (nur fs.statSync, siehe sealed-products.cjs).
+ipcMain.handle('sealed-products-available', () => sealedProductsAvailable(userDataPath));
 
 // --- Deck Builder Handlers ---
 

@@ -18,10 +18,12 @@ export default function SealedAddDialog({ onClose, onAdded }) {
   const [save, setSave] = useState({ busy: false, error: null });
 
   // Ohne Cardmarket-Cache soll der Hinweis sofort stehen, nicht erst nach der ersten Suche.
+  // Fix M3 (final-review-report.md): nur pruefen, ob die Produktliste da ist (fs.statSync), nicht die
+  // ~17 MB dafuer parsen -- das passiert erst bei der ersten echten Suche (runSearch).
   useEffect(() => {
     let alive = true;
-    window.api.searchSealedProducts('')
-      .then((r) => { if (alive) setAvailable(!!r?.available); })
+    window.api.sealedProductsAvailable()
+      .then((r) => { if (alive) setAvailable(!!r); })
       .catch(() => { if (alive) setAvailable(false); });
     return () => { alive = false; };
   }, []);

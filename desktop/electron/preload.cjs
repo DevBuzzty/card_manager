@@ -138,5 +138,6 @@ contextBridge.exposeInMainWorld('api', {
   openSealed: (sealedId) => ipcRenderer.invoke('sealed-open', sealedId),
   deleteSealed: (sealedId) => ipcRenderer.invoke('sealed-delete', sealedId),
   searchSealedProducts: (query) => ipcRenderer.invoke('sealed-products-search', query),
+  sealedProductsAvailable: () => ipcRenderer.invoke('sealed-products-available'),
   onSealedChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('sealed-changed', s); return () => ipcRenderer.removeListener('sealed-changed', s); },
 });
