@@ -168,6 +168,7 @@ fun StartScreen(
             SideStores.snapshots.refreshAndWait()
             SideStores.reference7.refreshAndWait()
             SideStores.priceAlertEvents.refreshAndWait()
+            SideStores.priceAlertTargets.refreshAndWait()
         }) {
         // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
         // passen) oder null; solange null, bleibt `d` null und die betroffenen Stellen unten

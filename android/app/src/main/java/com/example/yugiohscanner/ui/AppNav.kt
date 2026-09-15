@@ -132,11 +132,16 @@ fun AppNav() {
     // Spec §3.4: solange die App sichtbar ist, alle 10 s ein Abgleich; im Hintergrund keiner.
     // repeatOnLifecycle startet den Block beim Zurueckkommen neu -- das ist der sofortige Abgleich.
     // Spec G2 §7: beim selben Eintritt die Preis-Alarme nachladen (nicht bei Seitenwechseln).
+    // Ziele mit den Treffern zusammen, weil die Cloud dort "armed" aendert (sonst zeigt das Handy
+    // "ausgeloest" erst nach einem Kaltstart).
     LaunchedEffect(cloudReady) {
         if (!cloudReady) return@LaunchedEffect
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             ForegroundTick.run(
-                onEnter = { SideStores.priceAlertEvents.refresh() },
+                onEnter = {
+                    SideStores.priceAlertEvents.refresh()
+                    SideStores.priceAlertTargets.refresh()
+                },
                 tick = { CollectionStore.requestSync() },
             )
         }

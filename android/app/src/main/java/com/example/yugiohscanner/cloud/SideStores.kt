@@ -25,8 +25,9 @@ object SideStores {
     val snapshots = ListCache(scope) { SnapshotsRepository.loadSnapshots() }
 
     // Spec G2 §7: Preis-Alarme. Treffer laden beim Eintritt in den Vordergrund (AppNav) und per Ziehen,
-    // Regeln einmal und nach eigenem Speichern. Die Bewegungsregel als Liste mit 0 oder 1 Element, weil
-    // ListCache "null" fuer "noch nie geladen" braucht.
+    // Regeln einmal und nach eigenem Speichern. Ziele werden zusammen mit den Treffern neu geladen
+    // (Vordergrund und Ziehen), weil die Cloud dort "armed" aendert. Die Bewegungsregel als Liste mit
+    // 0 oder 1 Element, weil ListCache "null" fuer "noch nie geladen" braucht.
     val priceAlertEvents = ListCache(scope) { PriceAlertsRepository.loadEvents() }
     val priceAlertMoveRule = ListCache(scope) { listOfNotNull(PriceAlertsRepository.loadMoveRule()) }
     val priceAlertTargets = ListCache(scope) { PriceAlertsRepository.loadTargets() }

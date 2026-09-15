@@ -4,6 +4,7 @@
 -- Ist das Secret ALERTS_TRIGGER_SECRET gesetzt, im headers-JSON zusaetzlich
 --   "x-alerts-secret": "<geheimnis>"
 -- eintragen.
+-- timeout_milliseconds: pg_net wartet sonst nur 5 s; der Auswerter laedt die ganze Sammlung.
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
@@ -16,7 +17,8 @@ select cron.schedule(
   select net.http_post(
     url := 'https://uirfqwklvavgjklgqpnn.supabase.co/functions/v1/evaluate-price-alerts',
     headers := '{"Content-Type": "application/json"}'::jsonb,
-    body := '{}'::jsonb
+    body := '{}'::jsonb,
+    timeout_milliseconds := 60000
   );
   $$
 );

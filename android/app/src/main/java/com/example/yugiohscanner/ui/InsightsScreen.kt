@@ -39,6 +39,7 @@ fun InsightsScreen(initialTab: String = "bewegungen", onBack: () -> Unit) {
             CollectionStore.awaitSync()
             SideStores.reference(days).refreshAndWait()
             SideStores.priceAlertEvents.refreshAndWait()
+            SideStores.priceAlertTargets.refreshAndWait()
         }) {
             Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
