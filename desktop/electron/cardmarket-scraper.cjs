@@ -3,7 +3,7 @@
 // (real Chromium on the user's residential IP). Sequential + polite; the user solves the rare
 // Cloudflare/captcha challenge manually, then the run resumes.
 const { BrowserWindow, session } = require('electron');
-const { matchRow, normName, rarityKey, rarityRank } = require('./cardmarket-parse.cjs');
+const { rarityRank, selectVersionRow } = require('./cardmarket-parse.cjs');
 const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 const { recordPrice } = require('./price-history.cjs');
@@ -18,11 +18,14 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // Each printing is a `.card-column` in `#ReprintSection` carrying the expansion name + symbol code,
 // the rarity (inside the image alt parenthetical, e.g. "... (V.4 - Secret Rare)"), and the "Ab"
 // (from) price. `trend` here holds that from-price (the user chose the pure-scrape from-price).
+// Spec G4: href = Produkt-Link der Printing-Spalte (/Products/Singles/{Expansion}/{Karte}[-V{n}-{Rarity}]).
 const EXTRACT_JS = `(() => {
   const num = (t) => { const m = (t||'').replace(/\\./g,'').replace(',', '.').match(/[0-9]+(?:\\.[0-9]+)?/); return m ? parseFloat(m[0]) : null; };
   const rows = [];
   document.querySelectorAll('#ReprintSection .card-column').forEach(col => {
-    if (!col.querySelector('a[href*="/Products/Singles/"]')) return;
+    const link = col.querySelector('a[href*="/Products/Singles/"]');
+    if (!link) return;
+    const href = link.getAttribute('href') || '';
     const exp = (col.querySelector('h3 .text-start')?.textContent || '').trim();
     const code = (col.querySelector('.expansion-symbol span')?.textContent || '').trim();
     const imgEl = col.querySelector('img');
@@ -36,7 +39,7 @@ const EXTRACT_JS = `(() => {
     col.querySelectorAll('p').forEach(p => {
       if (/\\b(Ab|From)\\b/i.test(p.textContent)) { const b = p.querySelector('b'); price = num(b ? b.textContent : p.textContent); }
     });
-    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc });
+    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc, href });
   });
   return rows;
 })()`;
@@ -124,20 +127,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
           // "25LP") + rarity — far more reliable than the expansion name. Some expansions list the
           // same rarity twice (alt-art versions we can't tell apart from the set code); take the
           // cheapest of those. Fall back to fuzzy expansion-name matching when no code matches.
-          const codePrefix = (p.set_code || '').split('-')[0];
-          const wantRar = rarityKey(p.rarity), wantCode = normName(codePrefix);
-          const codeRows = rows.filter(r => r.code && r.trend != null && normName(r.code) === wantCode);
-          let hit = null;
-          if (codeRows.length === 1) {
-            hit = codeRows[0];               // one printing in that set -> unambiguous (Cardmarket omits the rarity label)
-          } else if (codeRows.length > 1) {  // multiple in the set -> Cardmarket DOES label rarity; disambiguate, cheapest wins
-            const rarHits = codeRows.filter(r => rarityKey(r.rarity) === wantRar);
-            if (rarHits.length) hit = rarHits.reduce((a, b) => (b.trend < a.trend ? b : a));
-          }
-          if (!hit) {
-            const setName = await setNameFor(cards[i].id, p.set_code);
-            hit = setName ? matchRow(rows, setName, p.rarity) : null;
-          }
+          const hit = await selectVersionRow(rows, p, () => setNameFor(cards[i].id, p.set_code));
           if (hit && hit.trend != null) {
             const pid = idProductFromImageUrl(hit.imgSrc);
             if (!pid) { if (idMissed === 0) console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc); idMissed++; }
