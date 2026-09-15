@@ -130,4 +130,14 @@ contextBridge.exposeInMainWorld('api', {
   dismissAllPriceAlertEvents: (maxId) => ipcRenderer.invoke('price-alerts-events-dismiss-all', maxId),
   onPriceAlertsChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('price-alerts-changed', s); return () => ipcRenderer.removeListener('price-alerts-changed', s); },
   onOpenPriceAlerts: (cb) => { const s = (_e) => cb(); ipcRenderer.on('open-price-alerts', s); return () => ipcRenderer.removeListener('open-price-alerts', s); },
+
+  // Sealed-Bestand (Spec G3) — lokal in SQLite, der Sync schiebt
+  listSealed: () => ipcRenderer.invoke('sealed-list'),
+  addSealed: (data) => ipcRenderer.invoke('sealed-add', data),
+  setSealedQuantity: (data) => ipcRenderer.invoke('sealed-set-quantity', data),
+  openSealed: (sealedId) => ipcRenderer.invoke('sealed-open', sealedId),
+  deleteSealed: (sealedId) => ipcRenderer.invoke('sealed-delete', sealedId),
+  searchSealedProducts: (query) => ipcRenderer.invoke('sealed-products-search', query),
+  sealedProductsAvailable: () => ipcRenderer.invoke('sealed-products-available'),
+  onSealedChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('sealed-changed', s); return () => ipcRenderer.removeListener('sealed-changed', s); },
 });

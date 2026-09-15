@@ -9,6 +9,7 @@ const SEGMENTS = [
   { to: ROUTES.wunschliste, label: T.wunschliste },
   { to: ROUTES.sets, label: T.sets },
   { to: ROUTES.decks, label: T.decks },
+  { to: ROUTES.sealed, label: T.sealed },
 ];
 
 // Everything that is "my collection" lives on one page; the segments swap the content below.

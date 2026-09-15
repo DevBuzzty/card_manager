@@ -9,6 +9,7 @@ import Binders from './components/Binders';
 import BinderView from './components/BinderView';
 import Wishlist from './components/Wishlist';
 import SetCompletion from './components/SetCompletion';
+import SealedList from './components/SealedList';
 import Settings from './components/Settings';
 import Start from './components/Start';
 import Deals from './components/Deals';
@@ -122,6 +123,7 @@ function App() {
                       <Route path="wunschliste" element={<Wishlist />} />
                       <Route path="sets" element={<SetCompletion />} />
                       <Route path="decks" element={<DeckBuilder />} />
+                      <Route path="sealed" element={<SealedList />} />
                     </Route>
                     <Route path="/deals" element={<Deals />} />
                     <Route path="/insights" element={<Insights />} />

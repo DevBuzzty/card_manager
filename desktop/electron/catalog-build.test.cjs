@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const zlib = require('node:zlib');
-const { mergeCards, attachVerified, packCatalog } = require('./catalog-build.cjs');
+const { mergeCards, attachVerified, packCatalog, sealedKindOf, buildSealedProducts } = require('./catalog-build.cjs');
 
 const EN = [{
   id: 46986414, name: 'Dark Magician', type: 'Normal Monster', desc: 'The ultimate wizard.',
@@ -102,4 +102,54 @@ test('packCatalog bleibt für einen realistischen Katalog unter 8 MB', () => {
   }));
   const { bytes } = packCatalog(mergeCards(many, []), 1);
   assert.ok(bytes <= 8 * 1024 * 1024, `Katalog ist ${(bytes / 1048576).toFixed(2)} MB, Limit 8 MB`);
+});
+
+// Spec G3 §3 — Art-Zuordnung aus der Cardmarket-Kategorie. Die neun Kategorien stehen so im echten
+// products_nonsingles_3.json (Stand 2026-09-09).
+test('sealedKindOf ordnet alle neun Kategorien und Unbekanntes zu', () => {
+  const cases = [
+    ['Yugioh Display', 'display'],
+    ['Yugioh Booster', 'booster'],
+    ['Yugioh Collector Tins', 'tin'],
+    ['Yugioh Structure Deck', 'deck'],
+    ['Yugioh Starter Deck', 'deck'],
+    ['Yugioh Special Edition', 'special'],
+    ['Yugioh Promo Products', 'other'],
+    ['Yugioh Lot', 'other'],
+    ['Yugioh Event Tickets', 'other'],
+    ['Yugioh Playmat', 'other'],
+    [undefined, 'other'],
+    ['toString', 'other'],
+  ];
+  for (const [category, kind] of cases) assert.equal(sealedKindOf(category), kind, String(category));
+});
+
+test('buildSealedProducts: Name, Art, Trend nur > 0, doppelte und kaputte Produkte übersprungen', () => {
+  const nonsingles = [
+    { idProduct: 254469, name: 'Metal Raiders Booster Box', idCategory: 42, categoryName: 'Yugioh Display', idExpansion: 1016, idMetacard: 0, dateAdded: '2007-01-01 00:00:00' },
+    { idProduct: 230006, name: 'Force of the Breaker Booster', idCategory: 6, categoryName: 'Yugioh Booster', idExpansion: 1011, idMetacard: 0, dateAdded: '2007-01-01 00:00:00' },
+    { idProduct: 999001, name: 'Beispiel-Turnierticket', idCategory: 1024, categoryName: 'Yugioh Event Tickets', idExpansion: 0, idMetacard: 0, dateAdded: '2020-01-01 00:00:00' },
+    { idProduct: 254469, name: 'Metal Raiders Booster Box', idCategory: 42, categoryName: 'Yugioh Display', idExpansion: 1016, idMetacard: 0, dateAdded: '2007-01-01 00:00:00' },
+    { idProduct: 0, name: 'ohne gültige ID', idCategory: 6, categoryName: 'Yugioh Booster' },
+    { idProduct: 230007, name: '', idCategory: 6, categoryName: 'Yugioh Booster' },
+  ];
+  const guide = [
+    { idProduct: 254469, idCategory: 42, avg: 6500, low: 465, trend: 499.29 },
+    { idProduct: 230006, idCategory: 6, avg: 35, low: 20, trend: 0 },
+  ];
+  assert.deepEqual(buildSealedProducts(nonsingles, guide), [
+    { cm_product_id: 254469, name: 'Metal Raiders Booster Box', kind: 'display', trend: 499.29 },
+    { cm_product_id: 230006, name: 'Force of the Breaker Booster', kind: 'booster', trend: null },
+    { cm_product_id: 999001, name: 'Beispiel-Turnierticket', kind: 'other', trend: null },
+  ]);
+  assert.deepEqual(buildSealedProducts(null, null), []);
+});
+
+test('packCatalog schreibt sealed_products, ohne Angabe leer', () => {
+  const plain = JSON.parse(zlib.gunzipSync(packCatalog(mergeCards(EN, DE), 12).buffer).toString('utf8'));
+  assert.deepEqual(plain.sealed_products, []);
+  const products = [{ cm_product_id: 254469, name: 'Metal Raiders Booster Box', kind: 'display', trend: 499.29 }];
+  const withSealed = JSON.parse(zlib.gunzipSync(packCatalog(mergeCards(EN, DE), 13, products).buffer).toString('utf8'));
+  assert.deepEqual(withSealed.sealed_products, products);
+  assert.equal(withSealed.cards.length, 1);
 });

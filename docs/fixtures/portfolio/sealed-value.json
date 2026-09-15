@@ -1,0 +1,84 @@
+{
+  "_comment": "Spec G3 §6 — desktop/electron/sealed-value.test.cjs und SealedValueTest.kt lesen diese Datei.",
+  "value": [
+    { "name": "leer", "items": [], "value": 0 },
+    {
+      "name": "Menge mal Preis über zwei Zeilen",
+      "items": [
+        { "quantity": 2, "price": 499.25, "deleted": false },
+        { "quantity": 1, "price": 34.5, "deleted": false }
+      ],
+      "value": 1033
+    },
+    {
+      "name": "Zeile ohne Preis zählt nicht",
+      "items": [
+        { "quantity": 3, "price": null, "deleted": false },
+        { "quantity": 1, "price": 12.75, "deleted": false }
+      ],
+      "value": 12.75
+    },
+    {
+      "name": "gelöschte Zeile zählt nicht (Boolean)",
+      "items": [
+        { "quantity": 2, "price": 10, "deleted": true },
+        { "quantity": 2, "price": 10, "deleted": false }
+      ],
+      "value": 20
+    },
+    {
+      "name": "gelöschte Zeile zählt nicht (SQLite 0/1)",
+      "items": [
+        { "quantity": 5, "price": 100, "deleted": 1 },
+        { "quantity": 1, "price": 0.5, "deleted": 0 }
+      ],
+      "value": 0.5
+    }
+  ],
+  "now": "2026-09-15T12:00:00Z",
+  "stale": [
+    { "name": "ohne Zeitstempel", "price_updated_at": null, "stale": false },
+    { "name": "leerer Zeitstempel", "price_updated_at": "", "stale": false },
+    { "name": "unlesbarer Zeitstempel", "price_updated_at": "kaputt", "stale": false },
+    { "name": "lokal, fünf Tage alt", "price_updated_at": "2026-09-10 08:00:00", "stale": false },
+    { "name": "genau 30 Tage ist nicht veraltet", "price_updated_at": "2026-08-16T12:00:00Z", "stale": false },
+    { "name": "lokal, 30 Tage und 1 Sekunde", "price_updated_at": "2026-08-16 11:59:59", "stale": true },
+    { "name": "Cloud mit Mikrosekunden", "price_updated_at": "2026-08-01T09:30:00.123456+00:00", "stale": true },
+    { "name": "Cloud mit einer Nachkommastelle, jung", "price_updated_at": "2026-08-20T10:15:00.5+00:00", "stale": false },
+    { "name": "Zeitzone +02:00 zählt in UTC", "price_updated_at": "2026-08-16T13:00:00+02:00", "stale": true },
+    { "name": "Unvollständig: nur Datum, alt", "price_updated_at": "2026-01-01", "stale": false },
+    { "name": "Unvollständig: nur Stunden und Minuten, alt", "price_updated_at": "2026-01-01T05:00", "stale": false }
+  ],
+  "kinds": [
+    { "kind": "display", "label": "Display" },
+    { "kind": "booster", "label": "Booster" },
+    { "kind": "tin", "label": "Tin" },
+    { "kind": "deck", "label": "Deck" },
+    { "kind": "special", "label": "Special Edition" },
+    { "kind": "other", "label": "Sonstiges" },
+    { "kind": "karton", "label": "Sonstiges" },
+    { "kind": null, "label": "Sonstiges" }
+  ],
+  "order": [
+    {
+      "name": "Zeilensumme absteigend, gleiche Summe nach Name, ohne Preis ans Ende",
+      "items": [
+        { "sealed_id": "s-a", "name": "Metal Raiders Booster Box", "quantity": 1, "price": 499.29, "deleted": false },
+        { "sealed_id": "s-b", "name": "Force of the Breaker Booster", "quantity": 20, "price": 34.22, "deleted": false },
+        { "sealed_id": "s-c", "name": "Legend of Blue Eyes White Dragon Booster Box", "quantity": 1, "price": null, "deleted": false },
+        { "sealed_id": "s-d", "name": "Collector Tin 2024", "quantity": 2, "price": null, "deleted": false },
+        { "sealed_id": "s-e", "name": "Spell Ruler Booster Box", "quantity": 1, "price": 97.05, "deleted": false },
+        { "sealed_id": "s-f", "name": "Magic Ruler Booster Box", "quantity": 1, "price": 97.05, "deleted": false }
+      ],
+      "expected": ["s-b", "s-a", "s-f", "s-e", "s-d", "s-c"]
+    },
+    {
+      "name": "gleicher Name und gleiche Summe nach sealed_id",
+      "items": [
+        { "sealed_id": "s-2", "name": "Spell Ruler Booster Box", "quantity": 1, "price": 97.05, "deleted": false },
+        { "sealed_id": "s-1", "name": "Spell Ruler Booster Box", "quantity": 1, "price": 97.05, "deleted": false }
+      ],
+      "expected": ["s-1", "s-2"]
+    }
+  ]
+}

@@ -5,7 +5,7 @@ assert.deepStrictEqual(NAV.map(n => n.key), ['start', 'scannen', 'sammlung', 'de
 assert.deepStrictEqual(NAV.map(n => n.to), ['/start', '/scannen', '/sammlung/karten', '/deals', '/insights']);
 assert.deepStrictEqual(NAV.map(n => n.label), ['Start', 'Scannen', 'Sammlung', 'Deals', 'Insights']);
 
-for (const k of ['start', 'scannen', 'sammlung', 'karten', 'wunschliste', 'sets', 'decks', 'deals',
+for (const k of ['start', 'scannen', 'sammlung', 'karten', 'wunschliste', 'sets', 'decks', 'sealed', 'deals',
                  'insights', 'einstellungen', 'uebernehmen', 'pruefen', 'abbrechen', 'zurueck',
                  'suchen', 'keineTreffer', 'exemplar', 'exemplare']) {
   assert.ok(typeof T[k] === 'string' && T[k].length > 0, `missing vocabulary key: ${k}`);

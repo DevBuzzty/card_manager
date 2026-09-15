@@ -7,6 +7,7 @@ import com.example.yugiohscanner.cloud.CatalogCard
 import com.example.yugiohscanner.cloud.CatalogDb
 import com.example.yugiohscanner.cloud.CatalogPrinting
 import com.example.yugiohscanner.cloud.CatalogRepository
+import com.example.yugiohscanner.cloud.CatalogSealedProduct
 import com.example.yugiohscanner.cloud.ParsedCatalog
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -67,8 +68,14 @@ class CatalogDbTest {
         )
     )
 
-    private fun catalog(version: Int, cards: List<CatalogCard>) =
-        ParsedCatalog(version = version, builtAt = "2026-09-06T00:00:00Z", cards = cards)
+    private fun sealedProducts() = listOf(
+        CatalogSealedProduct(254470L, "Spell Ruler Booster Box", "display", 97.05),
+        CatalogSealedProduct(254469L, "Metal Raiders Booster Box", "display", 499.29),
+        CatalogSealedProduct(230006L, "Force of the Breaker Booster", "booster", null),
+    )
+
+    private fun catalog(version: Int, cards: List<CatalogCard>, sealed: List<CatalogSealedProduct> = emptyList()) =
+        ParsedCatalog(version = version, builtAt = "2026-09-06T00:00:00Z", cards = cards, sealedProducts = sealed)
 
     @Before
     fun setUp() {
@@ -87,7 +94,7 @@ class CatalogDbTest {
     @Test
     fun importReadReplaceAndAtomicRollback() {
         // Import eines kleinen Katalogs -> version() und cardCount() stimmen.
-        db.importAll(catalog(12, listOf(darkMagician(), blueEyes())))
+        db.importAll(catalog(12, listOf(darkMagician(), blueEyes()), sealedProducts()))
         assertEquals(12, db.version())
         assertEquals(2, db.cardCount())
 
@@ -108,24 +115,35 @@ class CatalogDbTest {
         assertTrue(CatalogRepository.search("Dunkler").any { it.id == "46986414" })
         assertTrue(CatalogRepository.search("zzz").isEmpty())
 
+        // Spec G3 §3: Sealed-Produkte importiert; Suche nach Name sortiert, LIKE-Zeichen escaped.
+        assertEquals(3, db.sealedProductCount())
+        assertEquals(
+            listOf("Metal Raiders Booster Box", "Spell Ruler Booster Box"),
+            CatalogRepository.searchSealed("booster box").map { it.name },
+        )
+        assertNull(CatalogRepository.searchSealed("force").single().trend)
+        assertTrue(CatalogRepository.searchSealed("100%").isEmpty())
+
         // Zweiter Import mit anderer Version ersetzt vollstaendig.
         db.importAll(catalog(13, listOf(blueEyes())))
         assertEquals(13, db.version())
         assertEquals(1, db.cardCount())
         assertNull(CatalogRepository.card("46986414"))
+        assertEquals(0, db.sealedProductCount())
         assertNotNull(CatalogRepository.card("89631139"))
 
         // Ein Import, der mitten drin wirft (doppelte id -> PRIMARY KEY-Verletzung), laesst
         // Version und Inhalt des vorherigen Imports unangetastet.
         var threw = false
         try {
-            db.importAll(catalog(99, listOf(blueEyes(), blueEyes())))
+            db.importAll(catalog(99, listOf(blueEyes(), blueEyes()), sealedProducts()))
         } catch (e: Exception) {
             threw = true
         }
         assertTrue("importAll sollte bei doppelter id werfen", threw)
         assertEquals(13, db.version())
         assertEquals(1, db.cardCount())
+        assertEquals(0, db.sealedProductCount())
         assertNotNull(CatalogRepository.card("89631139"))
     }
 }

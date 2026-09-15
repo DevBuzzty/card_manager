@@ -1,5 +1,8 @@
 const { createClient } = require('@supabase/supabase-js');
-const { totalValue, copyCount } = require('./valuation.cjs');
+const { copyCount } = require('./valuation.cjs');
+const { portfolioTotals, recordPortfolioValue } = require('./portfolio-value.cjs');
+const { SEALED_COLS } = require('./sealed-items.cjs');
+const { toUtcMillis } = require('./sealed-value.cjs');
 const { CONTAINER_COLS, clearContainerLocations } = require('./containers-schema.cjs');
 const { mergeRemotePriceHistory } = require('./price-history.cjs');
 const { nextNotification, openSignature } = require('./alert-notify.cjs');
@@ -151,6 +154,75 @@ function applyRemoteContainer(db, r) {
   db.prepare(`UPDATE containers SET ${sets} WHERE container_id = @container_id`).run(l);
 }
 
+// Spec G3 §7.1 — Sealed-Bestand als vierter Strom, gebaut wie die Behaelter. created_at/updated_at wandern
+// aus denselben Gruenden wie bei CONTAINER_PUSH_COLS/CONTAINER_LOCAL_COLS in keine Richtung mit.
+// price_updated_at MUSS mit, wird aber umgeformt: lokal sekundengenau ohne Zone ('2026-09-15 05:00:03'),
+// in der Cloud timestamptz. So bleibt jeder lokale Vergleich ein Vergleich gleicher Formen.
+const SEALED_SYNC_COLS = SEALED_COLS.filter(c => c !== 'updated_at' && c !== 'created_at');
+function tsLocalToCloud(s) {
+  const ms = toUtcMillis(s);
+  return ms == null ? null : new Date(ms).toISOString();
+}
+function tsCloudToLocal(s) {
+  const ms = toUtcMillis(s);
+  return ms == null ? null : new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+}
+function sealedToRemote(row) {
+  const out = {};
+  for (const c of SEALED_SYNC_COLS) out[c] = row[c] ?? null;
+  out.deleted = !!row.deleted;
+  out.price_updated_at = tsLocalToCloud(row.price_updated_at);
+  return out;
+}
+function remoteToLocalSealed(r) {
+  const out = {};
+  for (const c of SEALED_SYNC_COLS) out[c] = r[c] ?? null;
+  out.sealed_id = String(r.sealed_id);
+  out.cm_product_id = Number(r.cm_product_id);
+  out.quantity = Number(r.quantity);
+  out.price = r.price == null ? null : Number(r.price);
+  out.price_updated_at = tsCloudToLocal(r.price_updated_at);
+  out.deleted = r.deleted ? 1 : 0;
+  return out;
+}
+// Fix I2 (final-review-report.md): ohne ein explizites updated_at stempelt trg_sealed_updated
+// (sealed-items.cjs) eine angewandte Zeile auf CURRENT_TIMESTAMP, und der naechste pushSealed schiebt
+// sie als "lokale Aenderung" zurueck -- das kann eine inzwischen neuere Handy-Schreibaktion ueberschreiben.
+// Deshalb bekommt jede gezogene Zeile hier ihr updated_at explizit auf eine Grenze gesetzt, die den
+// Push-Cursor nie ueberholt (den Cursor selbst, oder '1970-01-01 00:00:00' ohne Cursor).
+function sealedUpdatedAtCeiling(db) {
+  const cursor = getSetting(db, 'sync_sealed_last_push') || '1970-01-01T00:00:00Z';
+  return tsCloudToLocal(cursor) || '1970-01-01 00:00:00';
+}
+// Faellt die Grenze zufaellig mit dem bisherigen updated_at zusammen (z.B. zwei Zeilen derselben Zeile,
+// gezogen ohne dass sich der Push-Cursor dazwischen bewegt hat), wuerde UPDATE ... SET updated_at = @x
+// NEW.updated_at = OLD.updated_at hinterlassen -- genau die Bedingung, unter der trg_sealed_updated
+// erneut auf CURRENT_TIMESTAMP stempelt. Dann eine Sekunde vor die Grenze ausweichen: das bleibt weiterhin
+// nicht neuer als der Cursor, unterscheidet sich aber von OLD.updated_at.
+function sealedUpdatedAtFor(ceiling, oldValue) {
+  if (ceiling !== oldValue) return ceiling;
+  const ms = toUtcMillis(ceiling);
+  return new Date(ms - 1000).toISOString().slice(0, 19).replace('T', ' ');
+}
+// Nur schreiben, wenn sich etwas unterscheidet -- sonst stempelte trg_sealed_updated die Zeile neu und der
+// naechste Push schoebe sie grundlos zurueck.
+function applyRemoteSealed(db, r) {
+  const l = remoteToLocalSealed(r);
+  const cur = db.prepare('SELECT * FROM sealed_items WHERE sealed_id = ?').get(l.sealed_id);
+  const ceiling = sealedUpdatedAtCeiling(db);
+  if (!cur) {
+    l.updated_at = ceiling;
+    db.prepare(`INSERT INTO sealed_items (${SEALED_SYNC_COLS.join(',')}, updated_at)
+                VALUES (${SEALED_SYNC_COLS.map(c => '@' + c).join(',')}, @updated_at)`).run(l);
+    return;
+  }
+  const changed = SEALED_SYNC_COLS.some(c => c !== 'sealed_id' && (cur[c] ?? null) !== (l[c] ?? null));
+  if (!changed) return;
+  l.updated_at = sealedUpdatedAtFor(ceiling, cur.updated_at);
+  const sets = SEALED_SYNC_COLS.filter(c => c !== 'sealed_id').map(c => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
+  db.prepare(`UPDATE sealed_items SET ${sets} WHERE sealed_id = @sealed_id`).run(l);
+}
+
 function getSetting(db, key) {
   try { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? r.value : null; }
   catch { return null; }
@@ -165,6 +237,7 @@ function setSetting(db, key, value) {
 const recentlyPushed = new Map();
 const recentlyPushedCopies = new Map();
 const recentlyPushedContainers = new Map();
+const recentlyPushedSealed = new Map();
 
 // Apply a page of pulled container rows, skipping any that are the echo of our own push
 // (same container_id, same updated_at as what Supabase just handed back on push). Factored
@@ -181,6 +254,25 @@ function applyPulledContainers(db, rows) {
     applied++;
   }
   return applied;
+}
+
+// Spec G3 §7.1: eine gezogene Seite Sealed-Zeilen anwenden, das Echo des eigenen Pushs ueberspringen.
+function applyPulledSealed(db, rows) {
+  let applied = 0;
+  for (const r of rows) {
+    if (recentlyPushedSealed.get(r.sealed_id) === r.updated_at) {
+      recentlyPushedSealed.delete(r.sealed_id);
+      continue;
+    }
+    applyRemoteSealed(db, r);
+    applied++;
+  }
+  return applied;
+}
+
+// Lokale Sealed-Zeilen seit dem Push-Cursor, ohne die der laufenden Sekunde (Begruendung in push()).
+function sealedPushRows(db, cursor) {
+  return db.prepare("SELECT * FROM sealed_items WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
 }
 
 function startSync(db, getWindow, { onPriceAlerts } = {}) {
@@ -349,6 +441,47 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     setSetting(db, 'sync_containers_last_push', changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor));
   }
 
+  async function pullSealed(c) {
+    const cursor = getSetting(db, 'sync_sealed_last_pull') || '1970-01-01T00:00:00Z';
+    const PAGE = 1000; let applied = 0; let lastTs = null;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await c.from('sealed_items').select('*')
+        .gt('updated_at', cursor).order('updated_at', { ascending: true }).order('sealed_id', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error('Pull sealed failed: ' + error.message);
+      if (!data || data.length === 0) break;
+      db.transaction(() => { applied += applyPulledSealed(db, data); })();
+      lastTs = data[data.length - 1].updated_at;
+      if (data.length < PAGE) break;
+    }
+    if (lastTs) setSetting(db, 'sync_sealed_last_pull', lastTs);
+    return applied;
+  }
+
+  async function pushSealed(c) {
+    const cursor = getSetting(db, 'sync_sealed_last_push') || '1970-01-01T00:00:00Z';
+    const changed = sealedPushRows(db, cursor);
+    if (changed.length === 0) return;
+    for (let i = 0; i < changed.length; i += 500) {
+      const { data, error } = await c.from('sealed_items')
+        .upsert(changed.slice(i, i + 500).map(sealedToRemote), { onConflict: 'sealed_id' }).select('sealed_id,updated_at');
+      if (error) throw new Error('Push sealed failed: ' + error.message);
+      for (const r of (data || [])) recentlyPushedSealed.set(r.sealed_id, r.updated_at);
+    }
+    setSetting(db, 'sync_sealed_last_push', changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor));
+  }
+
+  // Spec G3 §7.1: fehlt die Cloud-Tabelle sealed_items noch (SQL nicht eingespielt) oder scheitert der
+  // Strom sonst, laufen Preishistorie, Tageswert und Preis-Alarme trotzdem. Die Cursor bleiben dann stehen.
+  async function pullSealedSafe(c) {
+    try { return await pullSealed(c); }
+    catch (e) { console.error('[sync] sealed pull:', e.message); return 0; }
+  }
+  async function pushSealedSafe(c) {
+    try { await pushSealed(c); }
+    catch (e) { console.error('[sync] sealed push:', e.message); }
+  }
+
   // Spec G1 §4.12 — the daily cloud Edge Function writes source='cloud' rows the desktop would
   // otherwise never see; pull them first (INSERT OR IGNORE via mergeRemotePriceHistory, so an
   // existing local row with the same key is left untouched), then push local rows as before.
@@ -399,10 +532,12 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
 
   // Additive: record today's collection value to Supabase so the phone's value chart fills
   // even when only the desktop runs. One row per user per day (merge-duplicates). Non-fatal.
+  // Spec G3 §4.2: total_value = Karten + Sealed, sealed_value = Sealed-Anteil.
   async function syncSnapshot(c) {
     try {
+      const t = portfolioTotals(db);
       await c.from('portfolio_snapshots')
-        .upsert({ total_value: totalValue(db), card_count: copyCount(db) }, { onConflict: 'user_id,day' });
+        .upsert({ total_value: t.total, sealed_value: t.sealed, card_count: copyCount(db) }, { onConflict: 'user_id,day' });
     } catch (e) {
       // table may not be created yet, or a transient error — never break the sync cycle
     }
@@ -448,15 +583,25 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       // copy from ever pointing at a container the desktop doesn't have yet. Do not reorder.
       const pulledContainers = await pullContainers(c);
       const pulledCopies = await pullCopies(c);
+      // Spec G3 §7.1: Sealed als vierter Strom nach den Exemplaren, in beide Richtungen; nie fatal.
+      const pulledSealed = await pullSealedSafe(c);
       await push(c);
       await pushContainers(c);
       await pushCopies(c);
+      await pushSealedSafe(c);
       await pullPriceHistory(c);
       await pushPriceHistory(c);
       await syncSnapshot(c);
       await syncPriceAlerts(c);
-      const totalPulled = pulled + pulledContainers + pulledCopies;
-      if (totalPulled > 0) { const w = getWindow(); if (w) w.webContents.send('collection-changed'); }
+      const pulledCollection = pulled + pulledContainers + pulledCopies;
+      if (pulledCollection > 0) { const w = getWindow(); if (w) w.webContents.send('collection-changed'); }
+      // M1: gezogene Sealed-Aenderungen (Handy-Schreibvorgaenge, Cloud-Preislauf) sollen die Tageshistorie
+      // sofort mitziehen, nicht erst mit der naechsten Preisaenderung ueber der Schwelle. Nie fatal.
+      if (pulledSealed > 0) {
+        const w = getWindow(); if (w) w.webContents.send('sealed-changed');
+        try { recordPortfolioValue(db); } catch (e) { console.error('[sync] recordPortfolioValue:', e.message); }
+      }
+      const totalPulled = pulledCollection + pulledSealed;
       emit('idle', totalPulled > 0 ? `pulled ${totalPulled}` : 'up to date');
     } catch (e) {
       // Only drop the session on auth/token failures; keep it through transient
@@ -482,9 +627,14 @@ module.exports = {
   startSync, rowToRemote, remoteToLocalPatch, remoteToLocalFull, applyRemoteRow,
   copyToRemote, remoteToLocalCopy, applyRemoteCopy,
   containerToRemote, remoteToLocalContainer, applyRemoteContainer,
+  sealedToRemote, remoteToLocalSealed, applyRemoteSealed,
   // Test-only hooks into the containers echo-lock (see test-sync.cjs): the module-level map and
   // apply function that pullContainers itself uses internally. Not called by production code
   // outside sync.cjs; calling startSync() just to reach them would also start its real timers.
   _recentlyPushedContainers: recentlyPushedContainers,
   _applyPulledContainers: applyPulledContainers,
+  // Test-only hooks for the sealed stream (sealed-sync.test.cjs), same reasoning as the containers hooks.
+  _recentlyPushedSealed: recentlyPushedSealed,
+  _applyPulledSealed: applyPulledSealed,
+  _sealedPushRows: sealedPushRows,
 };

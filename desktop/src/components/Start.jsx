@@ -12,6 +12,9 @@ import { T } from '../utils/i18n-de';
 export default function Start({ onOpenPalette }) {
   const navigate = useNavigate();
   const [stats, setStats] = useState({ totalValue: 0, totalCards: 0, uniqueCards: 0 });
+  // Bis der erste getPortfolio-Aufruf zurueck ist, darf die Wertkarte kein "0,00 €" zeigen --
+  // das saehe wie ein echter Nullwert aus statt wie eine noch ladende Sammlung.
+  const [statsLoaded, setStatsLoaded] = useState(false);
   const [cards, setCards] = useState([]);
   const [history, setHistory] = useState([]);
   const [quickAddCode, setQuickAddCode] = useState('');
@@ -23,12 +26,15 @@ export default function Start({ onOpenPalette }) {
 
   useEffect(() => {
     if (!window.api) return;
-    window.api.getPortfolio().then(d => setStats(d || { totalValue: 0, totalCards: 0, uniqueCards: 0 }));
+    window.api.getPortfolio().then(d => { setStats(d || { totalValue: 0, totalCards: 0, uniqueCards: 0 }); setStatsLoaded(true); });
     window.api.getCollection().then(c => setCards(c || []));
     window.api.getPriceHistory().then(h => setHistory(h || []));
     (window.api.listUnsortedCopies?.() ?? Promise.resolve([]))
       .then(u => { setUnsortedCount(Array.isArray(u) ? u.length : 0); setUnsortedError(false); })
       .catch(() => setUnsortedError(true));
+    // Spec G3: Sealed-Änderungen (Sync, Bulk-Schritt C) ändern Gesamtwert und Unterzeile.
+    const offSealed = window.api.onSealedChanged?.(() => window.api.getPortfolio().then(d => d && setStats(d)));
+    return () => offSealed?.();
   }, []);
 
   const recent = useMemo(
@@ -134,7 +140,13 @@ export default function Start({ onOpenPalette }) {
         <div className="relative overflow-hidden bg-obsidian-700 border border-line rounded-2xl p-6"
           style={{ backgroundImage: 'linear-gradient(150deg, rgba(245,197,66,.10), transparent 45%), linear-gradient(210deg, rgba(157,0,255,.12), transparent 50%)' }}>
           <div className="font-display text-[11px] tracking-[0.14em] uppercase text-ink-muted">Sammlungswert</div>
-          <div className="font-display font-bold text-4xl text-ink mt-2">{money(stats.totalValue)}</div>
+          <div className="font-display font-bold text-4xl text-ink mt-2">
+            {statsLoaded ? money(stats.totalValue) : <span className="inline-block h-9 w-40 rounded-lg bg-obsidian-800 animate-pulse align-middle" />}
+          </div>
+          {/* Spec G3 §7.3: Aufteilung nur bei Sealed-Bestand */}
+          {stats.hasSealed && (
+            <div className="text-xs text-ink-muted mt-1">Karten {money(stats.cardValue)} · Sealed {money(stats.sealedValue)}</div>
+          )}
           <div className="flex gap-4 mt-1.5">
             {renderDelta(delta.d7, '7T')}
             {renderDelta(delta.d30, '30T')}

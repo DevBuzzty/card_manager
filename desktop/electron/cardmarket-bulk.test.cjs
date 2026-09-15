@@ -5,6 +5,7 @@ const assert = require('node:assert');
 const Database = require('better-sqlite3');
 const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
 const { ensureCopiesSchema } = require('./copies-schema.cjs');
+const { ensureSealedSchema, addSealed } = require('./sealed-items.cjs');
 
 function makeDb() {
   const db = new Database(':memory:');
@@ -17,6 +18,7 @@ function makeDb() {
     CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY AUTOINCREMENT, total_value REAL);
   `);
   ensureCopiesSchema(db); // recordPrice (wired into applyPrices) needs price_history
+  ensureSealedSchema(db); // Spec G3 Schritt C liest sealed_items
   const ins = db.prepare("INSERT INTO cards (id, name, set_code, rarity, price, cm_product_id) VALUES (?, ?, ?, ?, ?, ?)");
   ins.run('46986414', 'Dark Magician', 'MRD-DE001', 'Common', 0.5, null);       // unambiguous in files -> resolves to 102801
   ins.run('46986414', 'Dark Magician', 'LOB-DE005', 'Ultra Rare', 9.0, null);   // 4 products in LOB -> stays NULL
@@ -134,4 +136,31 @@ test('countUnresolved / getBulkStatus exclude set_code = Unknown rows', async ()
   const res = await runBulkRefresh(db, { userDataPath: null, files });
   assert.equal(res.unresolved, 1); // still just the ambiguous LOB Dark Magician
   assert.equal(getBulkStatus(db).unresolvedCount, 1);
+});
+
+test('Schritt C: runBulkRefresh setzt Sealed-Preise aus demselben Price-Guide, nur bei Aenderung', async () => {
+  const db = makeDb();
+  // cm_product_id 741145 steht im Test-Guide oben mit trend 12.5.
+  addSealed(db, { cm_product_id: 741145, name: 'Testdisplay', kind: 'display', trend: 10 }, 2);
+  const res = await runBulkRefresh(db, { userDataPath: null, files });
+  assert.equal(res.sealedPriced, 1);
+  assert.equal(db.prepare('SELECT price FROM sealed_items').get().price, 12.5);
+  const res2 = await runBulkRefresh(db, { userDataPath: null, files });
+  assert.equal(res2.sealedPriced, 0);
+  const failed = await runBulkRefresh(db, { userDataPath: null, files: { error: new Error('boom') } });
+  assert.equal(failed.sealedPriced, 0);
+});
+
+test('Schritt C: wirft applySealedPrices, laufen A/B trotzdem durch und cm_bulk_last_run wird gestempelt', async () => {
+  const db = makeDb();
+  db.exec('DROP TABLE sealed_items'); // laesst applySealedPrices scheitern (no such table)
+  const res = await runBulkRefresh(db, { userDataPath: null, files });
+  assert.equal(res.resolved, 1);
+  assert.equal(res.priced, 2);
+  assert.equal(res.skipped, 1);
+  assert.equal(res.unchanged, 0);
+  assert.equal(res.unresolved, 1);
+  assert.equal(typeof res.sealed?.error, 'string');
+  assert.ok(res.sealed.error.length > 0);
+  assert.ok(getBulkStatus(db).lastRun, 'cm_bulk_last_run wird trotz gescheitertem Sealed-Schritt gestempelt');
 });

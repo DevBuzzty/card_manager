@@ -46,6 +46,8 @@ import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.SealedSnapshot
+import com.example.yugiohscanner.ml.SealedValue
 import com.example.yugiohscanner.ml.SnapshotSeries
 import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ml.UtcDay
@@ -93,6 +95,9 @@ fun StartScreen(
     val copies = ready?.copies ?: emptyList()
     val snapshotsCache by SideStores.snapshots.state.collectAsState()
     val snapshots = snapshotsCache.value ?: emptyList()
+    // Spec G3 §8: Sealed-Anteil des Gesamtwerts; die Summe nur neu, wenn sich die Liste aendert.
+    val sealedCache by SideStores.sealedItems.state.collectAsState()
+    val sealedTotal = remember(sealedCache.value) { sealedCache.value?.let { SealedValue.sealedValue(it) } }
     // Spec G1 §4.7: Kartendetail aus Start heraus, wie in CollectionScreen (Detail bleibt verschachtelt).
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     val setsCache by SideStores.sets.state.collectAsState()
@@ -146,12 +151,19 @@ fun StartScreen(
                 // Review-Fund 1: nicht auf dem Haupt-Dispatcher rechnen -- ein kalter Merker
                 // braucht hier genauso die vollen ~210-406 ms wie in der Anzeige unten.
                 val dash = withContext(Dispatchers.Default) { DashboardMemo.get(r.cards, r.copies) }
-                // Record today's value + read the history for the chart. Non-fatal if the
-                // portfolio_snapshots table isn't set up yet.
-                SnapshotsRepository.upsertToday(dash.totalValue, dash.totalCards)
+                // Spec G3 §8: Tageswert = Karten + Sealed, erst mit an diesem Start geladener Sealed-Liste;
+                // bei Ladefehler kein Tageswert. Den Verlauf fuer das Diagramm trotzdem laden.
+                // Non-fatal if the portfolio_snapshots table isn't set up yet.
+                SideStores.sealedItems.refreshAndWait()
+                val values = SealedSnapshot.decide(dash.totalValue, SideStores.sealedItems.state.value)
                 val snaps = SideStores.snapshots
-                if (snaps.state.value.value == null) snaps.refreshAndWait()
-                else snaps.update { SnapshotSeries.withToday(it, UtcDay.today(), dash.totalValue) }
+                if (values != null) {
+                    SnapshotsRepository.upsertToday(values.total, dash.totalCards, values.sealed)
+                    if (snaps.state.value.value == null) snaps.refreshAndWait()
+                    else snaps.update { SnapshotSeries.withToday(it, UtcDay.today(), values.total) }
+                } else if (snaps.state.value.value == null) {
+                    snaps.refreshAndWait()
+                }
             } catch (e: Exception) { if (error == null) error = e.message ?: "Laden fehlgeschlagen" }
         }
     }
@@ -169,6 +181,7 @@ fun StartScreen(
             SideStores.reference7.refreshAndWait()
             SideStores.priceAlertEvents.refreshAndWait()
             SideStores.priceAlertTargets.refreshAndWait()
+            SideStores.sealedItems.refreshAndWait()
         }) {
         // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
         // passen) oder null; solange null, bleibt `d` null und die betroffenen Stellen unten
@@ -239,14 +252,28 @@ fun StartScreen(
                     SectionHeader("Gesamtwert")
                     Spacer(Modifier.height(4.dp))
                     val dash = d
-                    if (dash != null) {
-                        Text("%.2f €".format(dash.totalValue), style = MaterialTheme.typography.displaySmall,
+                    // Spec G3 §8: solange die Sealed-Liste noch nie geladen wurde, zeigt die Karte den Ladezustand.
+                    val sealedLoading = sealedCache.value == null && sealedCache.error == null
+                    if (dash != null && !sealedLoading) {
+                        val total = dash.totalValue + (sealedTotal ?: 0.0)
+                        Text("%.2f €".format(total), style = MaterialTheme.typography.displaySmall,
                             fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
                         Text("${dash.totalCards} Karten · ${dash.entries} Einträge",
                             style = MaterialTheme.typography.bodySmall, color = Muted)
-                        if (windowSnaps.size >= 2) {
-                            val startVal = windowSnaps.firstOrNull()?.totalValue ?: dash.totalValue
-                            val change = dash.totalValue - startVal
+                        if (sealedTotal == null) {
+                            // Ladefehler ohne frueheren Stand: nur der Kartenwert, mit Hinweis (kein Tageswert, Task 10).
+                            Text("Sealed-Wert nicht geladen — zum Aktualisieren ziehen",
+                                style = MaterialTheme.typography.labelSmall, color = ErrorColor)
+                        } else if (sealedCache.value?.isNotEmpty() == true) {
+                            Text("Karten %.2f € · Sealed %.2f €".format(dash.totalValue, sealedTotal),
+                                style = MaterialTheme.typography.bodySmall, color = Muted)
+                        }
+                        // Fix M2 (final-review-report.md): ohne bekannten Sealed-Wert waere die Basis-Momentaufnahme
+                        // (die Sealed einschliesst) nicht mit `total` (nur Karten) vergleichbar -- die Delta-Zeile
+                        // bliebe irrefuehrend, bis der Sealed-Wert bekannt ist.
+                        if (sealedTotal != null && windowSnaps.size >= 2) {
+                            val startVal = windowSnaps.firstOrNull()?.totalValue ?: total
+                            val change = total - startVal
                             val changePct = if (startVal > 0) change / startVal * 100 else 0.0
                             val up = change >= 0
                             Text(

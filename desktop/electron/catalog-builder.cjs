@@ -6,6 +6,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { cachedFetch } = require('./api-handler.cjs');
 const { mergeCards, attachVerified, packCatalog } = require('./catalog-build.cjs');
+const { sealedProductsForCatalog } = require('./sealed-products.cjs');
 
 const EN_URL = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
 const DE_URL = 'https://db.ygoprodeck.com/api/v7/cardinfo.php?language=de';
@@ -166,7 +167,7 @@ function readVerified(db) {
 
 // ---- Bauen, hochladen, Version verbuchen --------------------------------------------------------
 
-async function runCatalogBuild(db, { ensureClient, force = false } = {}) {
+async function runCatalogBuild(db, { ensureClient, force = false, userDataPath = null } = {}) {
   try {
     // Attempt-Marker zuerst (Review Fix 1): erlaubt dem Scheduler, nach einem fehlgeschlagenen
     // Versuch (Client fehlt, Upload schlägt fehl, ...) zurückzustehen statt stündlich erneut den
@@ -189,7 +190,9 @@ async function runCatalogBuild(db, { ensureClient, force = false } = {}) {
 
     const localVersion = Number(getSetting(db, 'catalog_version')) || 0;
     const version = (await seedVersion(client, 'catalog', localVersion)) + 1;
-    const { buffer, bytes } = packCatalog(cards, version);
+    // Spec G3 §3: Sealed-Produktliste aus dem Cardmarket-Cache; ohne Cache [].
+    const sealedProducts = sealedProductsForCatalog(userDataPath);
+    const { buffer, bytes } = packCatalog(cards, version, sealedProducts);
 
     const fileName = `catalog.v${version}.json.gz`;
     const { error: upErr } = await client.storage.from(BUCKET).upload(fileName, buffer, { contentType: 'application/gzip', upsert: true });
@@ -210,7 +213,7 @@ async function runCatalogBuild(db, { ensureClient, force = false } = {}) {
     setSetting(db, 'catalog_last_run', built_at);
     setSetting(db, 'catalog_bytes', bytes);
 
-    return { version, bytes, url, cards: cards.length, verified: verifiedByPasscode.size };
+    return { version, bytes, url, cards: cards.length, verified: verifiedByPasscode.size, sealed: sealedProducts.length };
   } catch (e) {
     console.error('[catalog-builder] runCatalogBuild failed:', e.message);
     return errResult('internal', e.message);

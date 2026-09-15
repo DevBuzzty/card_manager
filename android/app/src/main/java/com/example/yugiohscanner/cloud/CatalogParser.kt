@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.SealedValue
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.util.zip.GZIPInputStream
@@ -27,10 +28,19 @@ data class CatalogPrinting(
     val verified: Boolean
 )
 
+/** Spec G3 §3 -- ein Sealed-Produkt aus `sealed_products` im Katalog; `trend` ist der Cardmarket-Trend beim Bau oder null. */
+data class CatalogSealedProduct(
+    val cmProductId: Long,
+    val name: String,
+    val kind: String,
+    val trend: Double?,
+)
+
 data class ParsedCatalog(
     val version: Int,
     val builtAt: String,
-    val cards: List<CatalogCard>
+    val cards: List<CatalogCard>,
+    val sealedProducts: List<CatalogSealedProduct> = emptyList(),
 )
 
 object CatalogParser {
@@ -133,7 +143,28 @@ object CatalogParser {
         return ParsedCatalog(
             version = version,
             builtAt = builtAt,
-            cards = cards
+            cards = cards,
+            sealedProducts = parseSealedProducts(rootJson),
         )
+    }
+
+    /**
+     * Spec G3 §3: fehlt der Schluessel (Katalog von vor G3), bleibt die Liste leer. Eintraege ohne gueltige
+     * ID oder ohne Namen fallen weg; eine unbekannte Art wird "other", ein Trend <= 0 wird null.
+     */
+    internal fun parseSealedProducts(root: JSONObject): List<CatalogSealedProduct> {
+        val arr = root.optJSONArray("sealed_products") ?: return emptyList()
+        val out = mutableListOf<CatalogSealedProduct>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            if (o.isNull("cm_product_id") || o.isNull("name")) continue
+            val id = o.optLong("cm_product_id", 0L)
+            val name = o.optString("name")
+            if (id <= 0L || name.isBlank()) continue
+            val kind = o.optString("kind").takeIf { it in SealedValue.KIND_LABELS } ?: "other"
+            val trend = if (o.isNull("trend")) null else o.optDouble("trend").takeIf { it > 0.0 }
+            out.add(CatalogSealedProduct(id, name, kind, trend))
+        }
+        return out
     }
 }

@@ -8,6 +8,7 @@ export const ROUTES = {
   wunschliste: '/sammlung/wunschliste',
   sets: '/sammlung/sets',
   decks: '/sammlung/decks',
+  sealed: '/sammlung/sealed',
   deals: '/deals',
   insights: '/insights',
   einstellungen: '/einstellungen',
