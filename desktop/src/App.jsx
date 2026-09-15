@@ -15,6 +15,7 @@ import Deals from './components/Deals';
 import ErrorBoundary from './components/ErrorBoundary';
 import CardDetailPanel from './components/CardDetailPanel';
 import { applyScan } from './utils/scanAggregate.js';
+import { ROUTES } from './utils/routes';
 
 // Heavy tabs are code-split so the initial load stays light.
 const Insights = lazy(() => import('./components/Insights'));
@@ -70,6 +71,9 @@ function App() {
       };
     }
   }, []);
+
+  // Spec G2 §6.2: Klick auf die Windows-Benachrichtigung -> Insights, Reiter „Alarme".
+  useEffect(() => window.api?.onOpenPriceAlerts?.(() => navigate(ROUTES.insights, { state: { tab: 'alarme' } })), [navigate]);
 
   // Cmd/Ctrl+K opens the palette; Alt+Arrow walks the history like a browser (Electron's
   // mouse back/forward buttons already drive the same history).

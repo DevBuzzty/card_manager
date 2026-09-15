@@ -4,6 +4,7 @@ import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning, 
 import CardTile from './CardTile';
 import SetCompletion from './SetCompletion';
 import MoversCard from './MoversCard';
+import PriceAlertsCard from './PriceAlertsCard';
 import { fmtEUR, fmtSignedEUR } from '../utils/format';
 import { ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
@@ -184,6 +185,9 @@ export default function Start({ onOpenPalette }) {
           </button>
         </div>
       </div>
+
+      {/* Spec G2: Preis-Alarme direkt über den Bewegungen, nur bei offenen Treffern */}
+      <PriceAlertsCard />
 
       {/* Spec G1: Bewegungen */}
       <MoversCard />

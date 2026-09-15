@@ -1,0 +1,38 @@
+import { useState } from 'react';
+import { CheckCheck } from 'lucide-react';
+import PriceAlertsList from './PriceAlertsList';
+import { MoversSkeleton } from './MoversList';
+import { usePriceAlertEvents } from '../utils/usePriceAlertEvents';
+
+// Spec G2 §6.3 — Insights-Reiter "Alarme": alle offenen Treffer, oben "Alle erledigt".
+export default function PriceAlertsPanel() {
+  const { loading, error, events } = usePriceAlertEvents();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const dismissAll = () => {
+    setBusy(true);
+    window.api.dismissAllPriceAlertEvents()
+      .then(() => setFailed(false))
+      .catch(() => setFailed(true))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-display text-sm tracking-[0.12em] uppercase text-ink-muted">Preis-Alarme</h3>
+        {events && events.length > 0 && (
+          <button onClick={dismissAll} disabled={busy}
+            className="flex items-center gap-1 text-xs text-ink-muted hover:text-ink border border-line rounded-lg px-2 py-1 disabled:opacity-50">
+            <CheckCheck className="w-3 h-3" /> Alle erledigt
+          </button>
+        )}
+      </div>
+      {failed && <div className="text-[11px] text-crit mb-2">Erledigen fehlgeschlagen.</div>}
+      {!events && loading && <MoversSkeleton rows={4} />}
+      {!events && !loading && error && <div className="text-sm text-crit">{error}</div>}
+      {events && error && <div className="text-[11px] text-ink-faint mb-2">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
+      {events && events.length === 0 && <div className="text-sm text-ink-faint">Keine offenen Preis-Alarme</div>}
+      {events && events.length > 0 && <PriceAlertsList events={events} />}
+    </div>
+  );
+}
