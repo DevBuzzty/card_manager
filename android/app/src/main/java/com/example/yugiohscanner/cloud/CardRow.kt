@@ -24,4 +24,7 @@ data class CardRow(
     val updatedAt: String? = null,
     // Spec G1 §4.2: Quellenfamilie des aktuellen Preises (0 YGOPRODeck, 1 Cardmarket, 2 manuell). Nur gelesen.
     val priceLocked: Int = 0,
+    // Spec G4 §6: 1st-Ed-Preis (Cloud-Trigger aus price x cm_first_ed_factor) und Aufschlagsfaktor. Nur gelesen.
+    val priceFirstEd: Double? = null,
+    val cmFirstEdFactor: Double? = null,
 )

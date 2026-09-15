@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.cloud
 
+import java.util.Locale
+
 // Fixed condition factors — MUST equal desktop/electron/condition-factors.json (ValuationTest checks).
 object Valuation {
     val CONDITIONS = listOf("MT", "NM", "EX", "GD", "LP", "PL", "PO")
@@ -9,11 +11,30 @@ object Valuation {
 
     fun factor(condition: String?): Double = FACTORS[condition?.uppercase() ?: ""] ?: 1.0
 
-    fun valueOf(price: Double?, copies: List<CopyRow>): Double {
-        val p = price ?: 0.0
-        if (p <= 0.0 || copies.isEmpty()) return 0.0
-        val f = copies.filter { !it.deleted }.sumOf { factor(it.condition) }
-        return Math.round(p * f * 100.0) / 100.0
+    /**
+     * Spec G4 §6 -- Einzelpreis eines Exemplars: 1st-Ed-Preis fuer edition = "first", sonst Basispreis.
+     * ZWILLING: desktop/electron/valuation.cjs (unitPrice/valueOf/unitPriceCaseSql) und desktop/src/utils/valuation.js.
+     * Gemeinsame Fixture docs/fixtures/valuation/first-ed.json (ValuationTest). Wer eine Fassung aendert, aendert alle.
+     */
+    fun unitPrice(card: CardRow, copy: CopyRow): Double {
+        val first = card.priceFirstEd
+        return if (copy.edition == "first" && first != null) first else card.price ?: 0.0
+    }
+
+    /** Summe unitPrice x Zustandsfaktor ueber lebende Exemplare, auf Cent gerundet. */
+    fun valueOf(card: CardRow, copies: List<CopyRow>): Double {
+        if (copies.isEmpty()) return 0.0
+        var v = 0.0
+        for (c in copies) if (!c.deleted) v += unitPrice(card, c) * factor(c.condition)
+        return Math.round(v * 100.0) / 100.0
+    }
+
+    /** Spec G4 §7 -- Preiszeile "Basis … · 1st Ed … (×…)". ZWILLING: firstEdLine in desktop/src/utils/valuation.js. */
+    fun firstEdLine(card: CardRow): String? {
+        val first = card.priceFirstEd ?: return null
+        val line = String.format(Locale.GERMANY, "Basis %,.2f € · 1st Ed %,.2f €", card.price ?: 0.0, first)
+        val f = card.cmFirstEdFactor ?: return line
+        return line + String.format(Locale.GERMANY, " (×%.2f)", f)
     }
 
     data class Group(val edition: String, val condition: String, val count: Int)

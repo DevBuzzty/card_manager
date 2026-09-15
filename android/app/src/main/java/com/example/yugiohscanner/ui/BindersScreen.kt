@@ -114,7 +114,7 @@ fun BindersScreen(onOpen: (String) -> Unit) {
     val unsortedCopies = remember(copies) { UnsortedCopies.from(copies) }
     val copiesByContainer = remember(copies) { copies.filter { it.containerId != null }.groupBy { it.containerId!! } }
     fun countFor(id: String) = copiesByContainer[id]?.size ?: 0
-    fun valueFor(id: String) = copiesByContainer[id]?.sumOf { c -> (cardsByKey[c.printingKey()]?.price ?: 0.0) * Valuation.factor(c.condition) } ?: 0.0
+    fun valueFor(id: String) = copiesByContainer[id]?.sumOf { c -> (cardsByKey[c.printingKey()]?.let { Valuation.unitPrice(it, c) } ?: 0.0) * Valuation.factor(c.condition) } ?: 0.0
     // Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nicht ceil(Anzahl/Faecher) --
     // null, wenn kein Exemplar dieses Behaelters in einem darstellbaren Fach liegt (BinderRow
     // zeigt dann die 1). Gleiche Regel wie listContainers' max_page am Desktop

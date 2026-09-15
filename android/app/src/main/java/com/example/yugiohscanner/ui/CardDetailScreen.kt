@@ -166,10 +166,14 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         RarityChip(v.rarity)
                         Text("${langFlag(v.language)} ${v.setCode}", style = MaterialTheme.typography.bodyMedium, fontFamily = MonoFontFamily, color = Muted, modifier = Modifier.weight(1f))
-                        ValueText(Valuation.valueOf(v.price, mine), style = MaterialTheme.typography.bodyMedium)
+                        ValueText(Valuation.valueOf(v, mine), style = MaterialTheme.typography.bodyMedium)
                         IconButton(enabled = migrated, onClick = { scope.launch { try { CollectionRepository.softDelete(v); error = null; refresh() } catch (e: Exception) { error = e.message } } }) {
                             Icon(Icons.Default.Delete, "Löschen", tint = MaterialTheme.colorScheme.error)
                         }
+                    }
+                    // Spec G4 §7: Preiszeile nur bei gesetztem 1st-Ed-Preis (Gegenstueck zu CardDetailPanel.jsx).
+                    Valuation.firstEdLine(v)?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = MonoFontFamily, color = Muted)
                     }
                     PriceHistoryChart(v)
                     PriceAlertTargetsRow(v)
@@ -190,7 +194,7 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                                 scope.launch { try { CollectionRepository.updateCopyGroup(v, g.edition, g.condition, e, c); error = null; refresh() } catch (ex: Exception) { error = ex.message } }
                             }
                             Spacer(Modifier.weight(1f))
-                            ValueText(Valuation.valueOf(v.price, mine.filter { it.edition == g.edition && it.condition == g.condition }), style = MaterialTheme.typography.bodySmall)
+                            ValueText(Valuation.valueOf(v, mine.filter { it.edition == g.edition && it.condition == g.condition }), style = MaterialTheme.typography.bodySmall)
                         }
                         // Spec B1 §10.3: je Exemplar der Gruppe eine anklickbare Zeile mit
                         // Standort- und Tag-Chips -- oeffnet das Exemplar-Sheet fuer GENAU dieses

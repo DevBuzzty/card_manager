@@ -34,4 +34,14 @@ class BinderBreakdownTest {
             BinderBreakdown.compute(cards, copies, containers),
         )
     }
+
+    @Test fun `1st-Ed-Exemplar zaehlt mit price_first_ed`() {
+        val cards = listOf(CardRow("5", "MAMO-DE020", "DE", "M", null, "Ultra Rare", 2, 73.85, priceFirstEd = 77.87))
+        val copies = listOf(
+            CopyRow("f", "5", "MAMO-DE020", "DE", "Ultra Rare", "first", "NM", false, containerId = "b1", page = null, slot = null, tags = null, note = null),
+            CopyRow("u", "5", "MAMO-DE020", "DE", "Ultra Rare", "unknown", "NM", false, containerId = "b1", page = null, slot = null, tags = null, note = null),
+        )
+        val containers = listOf(ContainerRow("b1", "Ordner Blau", "binder", 9, null, 0))
+        assertEquals(listOf(ValueGroup("Ordner Blau", 2, 151.72)), BinderBreakdown.compute(cards, copies, containers))
+    }
 }
