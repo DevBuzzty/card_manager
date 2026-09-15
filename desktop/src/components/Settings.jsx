@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers, Cpu, UploadCloud } from 'lucide-react';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { T } from '../utils/i18n-de';
+import PriceAlertSettings from './PriceAlertSettings';
 
 const SECTIONS = [
     { id: 'konto', label: 'Konto & Sync' },
@@ -313,6 +314,8 @@ export default function Settings() {
                                     </div>
                                 </div>
                             )}
+
+                            <PriceAlertSettings />
                         </div>
                     </div>
                 )}

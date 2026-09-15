@@ -107,6 +107,16 @@
 - Erst Treffer schreiben (Upsert, `ignoreDuplicates`), dann `armed`-Änderungen. Bricht ein Lauf ab, erzeugt eine Wiederholung am selben Tag keine Dublette; schlimmstenfalls ein doppelter Treffer am Folgetag, nie ein verlorener.
 - Die Familienzuordnung liegt in `families.ts` als **markierter dritter Zwilling** von `desktop/electron/price-families.json` / `ml/PriceFamily.kt`; ein Deno-Test vergleicht gegen die JSON-Datei.
 
+### §5.4 Ergänzung nach Abschlussreview
+
+Entschärft (`armed = false`) wird eine Zielpreis-Regel nur, wenn ihr Treffer tatsächlich eingefügt
+wurde. Kollidiert der Treffer mit einem Treffer desselben Tages (Upsert mit `ignoreDuplicates`), bleibt
+die Regel scharf und löst beim nächsten möglichen Lauf aus, spätestens am Folgetag — wie §5.3 es für
+einen abgebrochenen Lauf bereits zulässt. `armed`-Updates werden außerdem nur angewendet, wenn die Regel
+seit dem Laden unverändert ist (`updated_at`); ein übersprungenes Update ist kein Fehler, die nächste
+Auswertung greift die Regel neu auf. Ergänzend zu §6.1: „Alle erledigt" erledigt nur die zum Zeitpunkt
+des Listenladens angezeigten Treffer (`id ≤ größte angezeigte id`), nie Treffer, die danach hinzukamen.
+
 ## 6. Desktop
 
 ### 6.1 IPC (jeweils `main.cjs` **und** `preload.cjs`)

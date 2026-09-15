@@ -66,7 +66,7 @@ export default function Deals() {
     <div className="max-w-5xl mx-auto w-full">
       <div className="flex items-center gap-3 mb-5">
         <Tag className="w-6 h-6 text-space-violet" strokeWidth={1.8} />
-        <h2 className="font-display text-xl font-bold text-ink flex-1">Deals & Preis-Alerts</h2>
+        <h2 className="font-display text-xl font-bold text-ink flex-1">Deals</h2>
         <button
           onClick={scrapeAndRefresh}
           disabled={scraping}

@@ -24,6 +24,14 @@ object SideStores {
     val reference30 = DailyListCache(scope) { PriceHistoryRepository.reference(30) }
     val snapshots = ListCache(scope) { SnapshotsRepository.loadSnapshots() }
 
+    // Spec G2 §7: Preis-Alarme. Treffer laden beim Eintritt in den Vordergrund (AppNav) und per Ziehen,
+    // Regeln einmal und nach eigenem Speichern. Ziele werden zusammen mit den Treffern neu geladen
+    // (Vordergrund und Ziehen), weil die Cloud dort "armed" aendert. Die Bewegungsregel als Liste mit
+    // 0 oder 1 Element, weil ListCache "null" fuer "noch nie geladen" braucht.
+    val priceAlertEvents = ListCache(scope) { PriceAlertsRepository.loadEvents() }
+    val priceAlertMoveRule = ListCache(scope) { listOfNotNull(PriceAlertsRepository.loadMoveRule()) }
+    val priceAlertTargets = ListCache(scope) { PriceAlertsRepository.loadTargets() }
+
     private val historyCaches = BoundedMap<String, ListCache<List<PriceRef>>>(20)
 
     fun history(card: CardRow): ListCache<List<PriceRef>> =
@@ -41,6 +49,7 @@ object SideStores {
     fun clearAll() {
         wishlist.clear(); decks.clear(); dealWatches.clear(); dealAlerts.clear(); sets.clear()
         reference7.clear(); reference30.clear(); snapshots.clear()
+        priceAlertEvents.clear(); priceAlertMoveRule.clear(); priceAlertTargets.clear()
         historyCaches.values().forEach { it.clear() }
         historyCaches.clear()
         synchronized(deckCardCaches) {

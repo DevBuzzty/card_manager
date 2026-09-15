@@ -1,9 +1,10 @@
 import { useState, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
-import { TrendingUp, BarChart3, ArrowUpDown, Loader2 } from 'lucide-react';
+import { TrendingUp, BarChart3, ArrowUpDown, BellRing, Loader2 } from 'lucide-react';
 import Statistics from './Statistics';
 import MoversPanel from './MoversPanel';
 import ValueBreakdown from './ValueBreakdown';
+import PriceAlertsPanel from './PriceAlertsPanel';
 
 const Portfolio = lazy(() => import('./Portfolio'));
 
@@ -23,7 +24,14 @@ const Tab = ({ id, icon, label, view, setView }) => {
 
 export default function Insights() {
   const location = useLocation();
-  const [view, setView] = useState(location.state?.tab || 'value');
+  // Spec G2 §6.2: der Klick auf die Benachrichtigung navigiert mit state.tab = 'alarme', auch wenn
+  // Insights schon offen ist. Eine Reiterwahl gilt deshalb nur fuer den Navigationseintrag, auf dem
+  // sie getroffen wurde (location.key) — ein neuer Eintrag nimmt wieder seinen state.tab, ohne setState
+  // im Effekt.
+  const requested = location.state?.tab || 'value';
+  const [pick, setPick] = useState({ key: location.key, view: requested });
+  const view = pick.key === location.key ? pick.view : requested;
+  const setView = (v) => setPick({ key: location.key, view: v });
   const [metric, setMetric] = useState('count');
 
   return (
@@ -32,6 +40,7 @@ export default function Insights() {
         <Tab id="value" icon={TrendingUp} label="Wert" view={view} setView={setView} />
         <Tab id="bewegungen" icon={ArrowUpDown} label="Bewegungen" view={view} setView={setView} />
         <Tab id="breakdown" icon={BarChart3} label="Aufteilung" view={view} setView={setView} />
+        <Tab id="alarme" icon={BellRing} label="Alarme" view={view} setView={setView} />
       </div>
       <div className="flex-1 overflow-auto">
         {view === 'value' && (
@@ -51,6 +60,7 @@ export default function Insights() {
             {metric === 'count' ? <Statistics /> : <ValueBreakdown />}
           </div>
         )}
+        {view === 'alarme' && <PriceAlertsPanel />}
       </div>
     </div>
   );

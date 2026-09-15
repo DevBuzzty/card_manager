@@ -119,4 +119,15 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   onDealAlert: (cb) => { const s = (_e, v) => cb(v); ipcRenderer.on('deal-alert', s); return () => ipcRenderer.removeListener('deal-alert', s); },
   onDealWatchesChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('deal-watches-changed', s); return () => ipcRenderer.removeListener('deal-watches-changed', s); },
+
+  // Preis-Alarme (Spec G2) — ausgewertet in der Cloud, hier nur lesen/pflegen
+  getPriceAlertMove: () => ipcRenderer.invoke('price-alerts-move-get'),
+  savePriceAlertMove: (data) => ipcRenderer.invoke('price-alerts-move-save', data),
+  getPriceAlertTargets: (printing) => ipcRenderer.invoke('price-alerts-targets-get', printing),
+  savePriceAlertTarget: (data) => ipcRenderer.invoke('price-alerts-target-save', data),
+  listPriceAlertEvents: () => ipcRenderer.invoke('price-alerts-events-list'),
+  dismissPriceAlertEvent: (id) => ipcRenderer.invoke('price-alerts-event-dismiss', id),
+  dismissAllPriceAlertEvents: (maxId) => ipcRenderer.invoke('price-alerts-events-dismiss-all', maxId),
+  onPriceAlertsChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('price-alerts-changed', s); return () => ipcRenderer.removeListener('price-alerts-changed', s); },
+  onOpenPriceAlerts: (cb) => { const s = (_e) => cb(); ipcRenderer.on('open-price-alerts', s); return () => ipcRenderer.removeListener('open-price-alerts', s); },
 });

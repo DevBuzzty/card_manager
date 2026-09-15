@@ -1,0 +1,269 @@
+{
+  "_comment": "Spec G2 §5 — Faelle der Ausloeseregel supabase/functions/evaluate-price-alerts/alerts.ts (alerts_test.ts).",
+  "cases": [
+    {
+      "name": "move: Grenze exakt 20 % und 2 € löst aus",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 12, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 10, "source": "cm_bulk" }] },
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": {
+        "events": [{ "user_id": "u1", "rule_id": 1, "kind": "move", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": 10, "new_price": 12, "pct": 20, "days": 7, "threshold": null, "day": "2026-09-14" }],
+        "armedUpdates": []
+      }
+    },
+    {
+      "name": "move: 1,99 € unter der €-Grenze trotz 50 %",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 5.97, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 3.98, "source": "cm_bulk" }] },
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": { "events": [], "armedUpdates": [] }
+    },
+    {
+      "name": "move: 19,9 % unter der %-Grenze trotz 3,98 €",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 23.98, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 20, "source": "cm_bulk" }] },
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": { "events": [], "armedUpdates": [] }
+    },
+    {
+      "name": "move: Rückgang löst aus",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 15, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-05", "price": 20, "source": "cloud" }] },
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": {
+        "events": [{ "user_id": "u1", "rule_id": 1, "kind": "move", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": 20, "new_price": 15, "pct": -25, "days": 7, "threshold": null, "day": "2026-09-14" }],
+        "armedUpdates": []
+      }
+    },
+    {
+      "name": "move: Quellenwechsel YGOPRODeck → Cardmarket zählt nicht",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 12, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 10, "source": "ygoprodeck" }] },
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": { "events": [], "armedUpdates": [] }
+    },
+    {
+      "name": "move: manueller Preis zählt nicht",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 12, "price_locked": 2 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 10, "source": "manual" }] },
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": { "events": [], "armedUpdates": [] }
+    },
+    {
+      "name": "move: kein Damals (Referenz jünger als das Fenster)",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 12, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-10", "price": 10, "source": "cm_bulk" }] },
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": { "events": [], "armedUpdates": [] }
+    },
+    {
+      "name": "move: Sperre durch Treffer im Fenster",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 12, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 10, "source": "cm_bulk" }] },
+        "lastBefore": {},
+        "recentEvents": [{ "rule_id": 1, "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-08" }]
+      },
+      "expected": { "events": [], "armedUpdates": [] }
+    },
+    {
+      "name": "move: neuer Treffer, sobald der alte aus dem Fenster fällt",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 12, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 10, "source": "cm_bulk" }] },
+        "lastBefore": {},
+        "recentEvents": [{ "rule_id": 1, "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07" }]
+      },
+      "expected": {
+        "events": [{ "user_id": "u1", "rule_id": 1, "kind": "move", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": 10, "new_price": 12, "pct": 20, "days": 7, "threshold": null, "day": "2026-09-14" }],
+        "armedUpdates": []
+      }
+    },
+    {
+      "name": "move: Treffer einer anderen Regel sperrt nicht",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 12, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 10, "source": "cm_bulk" }] },
+        "lastBefore": {},
+        "recentEvents": [{ "rule_id": 99, "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-10" }]
+      },
+      "expected": {
+        "events": [{ "user_id": "u1", "rule_id": 1, "kind": "move", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": 10, "new_price": 12, "pct": 20, "days": 7, "threshold": null, "day": "2026-09-14" }],
+        "armedUpdates": []
+      }
+    },
+    {
+      "name": "move: 30-Tage-Fenster nutzt die 30er-Referenz",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 30, "threshold": null, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 12, "price_locked": 1 }],
+        "references": {
+          "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 12, "source": "cm_bulk" }],
+          "30": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-08-15", "price": 10, "source": "cloud" }]
+        },
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": {
+        "events": [{ "user_id": "u1", "rule_id": 1, "kind": "move", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": 10, "new_price": 12, "pct": 20, "days": 30, "threshold": null, "day": "2026-09-14" }],
+        "armedUpdates": []
+      }
+    },
+    {
+      "name": "above: erfüllt und scharf löst aus und entschärft",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 2, "user_id": "u1", "kind": "above", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "pct": null, "min_eur": null, "days": null, "threshold": 50, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 50, "price_locked": 1 }],
+        "references": {},
+        "lastBefore": { "1|LOB-DE001|DE|Ultra Rare": 45.5 },
+        "recentEvents": []
+      },
+      "expected": {
+        "events": [{ "user_id": "u1", "rule_id": 2, "kind": "above", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": 45.5, "new_price": 50, "pct": null, "days": null, "threshold": 50, "day": "2026-09-14" }],
+        "armedUpdates": [{ "id": 2, "armed": false }]
+      }
+    },
+    {
+      "name": "above: erfüllt, aber entschärft bleibt still",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 2, "user_id": "u1", "kind": "above", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "pct": null, "min_eur": null, "days": null, "threshold": 50, "armed": false }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 60, "price_locked": 1 }],
+        "references": {},
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": { "events": [], "armedUpdates": [] }
+    },
+    {
+      "name": "above: wieder unter der Schwelle wird scharf",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 2, "user_id": "u1", "kind": "above", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "pct": null, "min_eur": null, "days": null, "threshold": 50, "armed": false }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 49.99, "price_locked": 1 }],
+        "references": {},
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": { "events": [], "armedUpdates": [{ "id": 2, "armed": true }] }
+    },
+    {
+      "name": "above: scharf und nicht erfüllt bleibt still",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 2, "user_id": "u1", "kind": "above", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "pct": null, "min_eur": null, "days": null, "threshold": 50, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 10, "price_locked": 1 }],
+        "references": {},
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": { "events": [], "armedUpdates": [] }
+    },
+    {
+      "name": "below: sofort erfüllt ohne Vorpreis",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 3, "user_id": "u1", "kind": "below", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "pct": null, "min_eur": null, "days": null, "threshold": 5, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 4, "price_locked": 0 }],
+        "references": {},
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": {
+        "events": [{ "user_id": "u1", "rule_id": 3, "kind": "below", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": null, "new_price": 4, "pct": null, "days": null, "threshold": 5, "day": "2026-09-14" }],
+        "armedUpdates": [{ "id": 3, "armed": false }]
+      }
+    },
+    {
+      "name": "below: manueller Preis zählt, Grenze exakt",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 3, "user_id": "u1", "kind": "below", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "pct": null, "min_eur": null, "days": null, "threshold": 5, "armed": true }],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 5, "price_locked": 2 }],
+        "references": {},
+        "lastBefore": { "1|LOB-DE001|DE|Ultra Rare": 7 },
+        "recentEvents": []
+      },
+      "expected": {
+        "events": [{ "user_id": "u1", "rule_id": 3, "kind": "below", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": 7, "new_price": 5, "pct": null, "days": null, "threshold": 5, "day": "2026-09-14" }],
+        "armedUpdates": [{ "id": 3, "armed": false }]
+      }
+    },
+    {
+      "name": "Zielpreis: weggefallenes Printing ändert nichts",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [{ "id": 2, "user_id": "u1", "kind": "above", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "pct": null, "min_eur": null, "days": null, "threshold": 50, "armed": false }],
+        "printings": [],
+        "references": {},
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": { "events": [], "armedUpdates": [] }
+    },
+    {
+      "name": "Bewegung und Zielpreis im selben Lauf, Reihenfolge der Regeln",
+      "input": {
+        "today": "2026-09-14",
+        "rules": [
+          { "id": 1, "user_id": "u1", "kind": "move", "card_id": null, "set_code": null, "language": null, "rarity": null, "pct": 20, "min_eur": 2, "days": 7, "threshold": null, "armed": true },
+          { "id": 2, "user_id": "u1", "kind": "above", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "pct": null, "min_eur": null, "days": null, "threshold": 12, "armed": true }
+        ],
+        "printings": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "price": 12, "price_locked": 1 }],
+        "references": { "7": [{ "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "day": "2026-09-07", "price": 10, "source": "cm_bulk" }] },
+        "lastBefore": {},
+        "recentEvents": []
+      },
+      "expected": {
+        "events": [
+          { "user_id": "u1", "rule_id": 1, "kind": "move", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": 10, "new_price": 12, "pct": 20, "days": 7, "threshold": null, "day": "2026-09-14" },
+          { "user_id": "u1", "rule_id": 2, "kind": "above", "card_id": "1", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "old_price": null, "new_price": 12, "pct": null, "days": null, "threshold": 12, "day": "2026-09-14" }
+        ],
+        "armedUpdates": [{ "id": 2, "armed": false }]
+      }
+    }
+  ]
+}

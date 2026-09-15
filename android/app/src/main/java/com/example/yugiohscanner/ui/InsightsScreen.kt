@@ -24,10 +24,10 @@ import kotlinx.coroutines.withContext
 
 /** Spec G1 §4.7 -- Insights, Unterseite von Start (Route "start/insights"). */
 @Composable
-fun InsightsScreen(onBack: () -> Unit) {
+fun InsightsScreen(initialTab: String = "bewegungen", onBack: () -> Unit) {
     var detailId by rememberSaveable { mutableStateOf<String?>(null) }
     var days by rememberSaveable { mutableStateOf(7) }
-    var tab by rememberSaveable { mutableStateOf("bewegungen") }
+    var tab by rememberSaveable { mutableStateOf(initialTab) }
     var byValue by rememberSaveable { mutableStateOf(false) }
     BackHandler(detailId != null) { detailId = null }
     detailId?.let { id ->
@@ -35,16 +35,22 @@ fun InsightsScreen(onBack: () -> Unit) {
         return
     }
     Surface(Modifier.fillMaxSize(), color = Background) {
-        RefreshableBox(onRefresh = { CollectionStore.awaitSync(); SideStores.reference(days).refreshAndWait() }) {
+        RefreshableBox(onRefresh = {
+            CollectionStore.awaitSync()
+            SideStores.reference(days).refreshAndWait()
+            SideStores.priceAlertEvents.refreshAndWait()
+            SideStores.priceAlertTargets.refreshAndWait()
+        }) {
             Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück") }
                     Text("Insights", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
                 }
-                TabRow(selectedTabIndex = if (tab == "bewegungen") 0 else 1) {
+                TabRow(selectedTabIndex = when (tab) { "aufteilung" -> 1; "alarme" -> 2; else -> 0 }) {
                     Tab(selected = tab == "bewegungen", onClick = { tab = "bewegungen" }, text = { Text("Bewegungen") })
                     Tab(selected = tab == "aufteilung", onClick = { tab = "aufteilung" }, text = { Text("Aufteilung") })
+                    Tab(selected = tab == "alarme", onClick = { tab = "alarme" }, text = { Text("Alarme") })
                 }
                 if (tab == "bewegungen") {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -81,6 +87,9 @@ fun InsightsScreen(onBack: () -> Unit) {
                         StatSection("Nach Attribut", d.byAttribute, byValue)
                         StatSection("Nach Binder", b, byValue)
                     }
+                }
+                if (tab == "alarme") {
+                    PriceAlertsSection(full = true, onOpenCard = { detailId = it }, onOpenAll = null)
                 }
             }
         }

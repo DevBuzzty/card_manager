@@ -2,6 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { totalValue, copyCount } = require('./valuation.cjs');
 const { CONTAINER_COLS, clearContainerLocations } = require('./containers-schema.cjs');
 const { mergeRemotePriceHistory } = require('./price-history.cjs');
+const { nextNotification, openSignature } = require('./alert-notify.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
@@ -182,9 +183,10 @@ function applyPulledContainers(db, rows) {
   return applied;
 }
 
-function startSync(db, getWindow) {
+function startSync(db, getWindow, { onPriceAlerts } = {}) {
   let client = null;
   let running = false;
+  let lastAlertSignature = null;
 
   // One-time backfill (2026-09-02): rows resolved before cm_product_id/price_locked were mirrored
   // were already pushed without them. Touch them once so the normal dirty-row push re-uploads
@@ -406,6 +408,32 @@ function startSync(db, getWindow) {
     }
   }
 
+  // Spec G2 §6.2: die Cloud wertet Preis-Alarme aus, der Desktop liest nur. Neue Treffer meldet
+  // onPriceAlerts (Windows-Benachrichtigung in main.cjs); eine geaenderte Menge offener Treffer
+  // (neu oder anderswo erledigt) bekommt der Renderer als price-alerts-changed. Nie fatal fuer den
+  // Zyklus — die Tabelle kann noch fehlen.
+  async function syncPriceAlerts(c) {
+    try {
+      const { data, error } = await c.from('price_alert_events').select('*')
+        .eq('dismissed', false).order('id', { ascending: false }).limit(200);
+      if (error) return;
+      const events = data || [];
+      const before = getSetting(db, 'price_alerts_notified_until');
+      const r = nextNotification(events, before);
+      // Marke vor dem Melden speichern: scheitert die Benachrichtigung, kommt sie nicht jede 20 s wieder.
+      if (String(r.marker) !== before) setSetting(db, 'price_alerts_notified_until', r.marker);
+      if (r.notify !== 'none' && onPriceAlerts) onPriceAlerts(r);
+      const sig = openSignature(events);
+      if (sig !== lastAlertSignature) {
+        lastAlertSignature = sig;
+        const w = getWindow();
+        if (w) w.webContents.send('price-alerts-changed');
+      }
+    } catch (e) {
+      console.error('[sync] price alerts:', e.message);
+    }
+  }
+
   async function cycle() {
     if (running) return;
     running = true;
@@ -426,6 +454,7 @@ function startSync(db, getWindow) {
       await pullPriceHistory(c);
       await pushPriceHistory(c);
       await syncSnapshot(c);
+      await syncPriceAlerts(c);
       const totalPulled = pulled + pulledContainers + pulledCopies;
       if (totalPulled > 0) { const w = getWindow(); if (w) w.webContents.send('collection-changed'); }
       emit('idle', totalPulled > 0 ? `pulled ${totalPulled}` : 'up to date');

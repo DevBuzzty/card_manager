@@ -36,18 +36,20 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.SupabaseCloud
+import com.example.yugiohscanner.ml.ForegroundTick
 import com.example.yugiohscanner.ml.ModelStore
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 object Routes {
     const val START = "start"
     // Spec G1 §4.7: Unterseite von Start. Erstes Segment "start", damit die untere Leiste Start markiert.
-    const val INSIGHTS = "start/insights"
+    // Spec G2 §7: Reiter als optionales Argument, damit "Alle" auf der Alarm-Karte direkt "Alarme" oeffnet.
+    const val INSIGHTS = "start/insights?tab={tab}"
+    fun insights(tab: String = "bewegungen") = "start/insights?tab=$tab"
     const val SCAN = "scan"
     const val DEALS = "deals"
     const val EINSTELLUNGEN = "einstellungen"
@@ -129,13 +131,19 @@ fun AppNav() {
 
     // Spec §3.4: solange die App sichtbar ist, alle 10 s ein Abgleich; im Hintergrund keiner.
     // repeatOnLifecycle startet den Block beim Zurueckkommen neu -- das ist der sofortige Abgleich.
+    // Spec G2 §7: beim selben Eintritt die Preis-Alarme nachladen (nicht bei Seitenwechseln).
+    // Ziele mit den Treffern zusammen, weil die Cloud dort "armed" aendert (sonst zeigt das Handy
+    // "ausgeloest" erst nach einem Kaltstart).
     LaunchedEffect(cloudReady) {
         if (!cloudReady) return@LaunchedEffect
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                CollectionStore.requestSync()
-                delay(10_000)
-            }
+            ForegroundTick.run(
+                onEnter = {
+                    SideStores.priceAlertEvents.refresh()
+                    SideStores.priceAlertTargets.refresh()
+                },
+                tick = { CollectionStore.requestSync() },
+            )
         }
     }
     // Spec §3.3: nach der Anmeldung erst laden. Der Speicher startet das Laden in seinem eigenen
@@ -193,11 +201,18 @@ fun AppNav() {
                     // Spec B1 Task 10: der Zähler "Nicht einsortiert" springt gezielt in den
                     // Binder-Reiter der Sammlung, nicht in den Standard-Reiter "Karten".
                     onOpenBinder = { nav.navigateTop(Routes.sammlung("binder")) },
-                    onOpenInsights = { nav.navigate(Routes.INSIGHTS) { launchSingleTop = true } },
+                    onOpenInsights = { nav.navigate(Routes.insights()) { launchSingleTop = true } },
+                    onOpenAlerts = { nav.navigate(Routes.insights("alarme")) { launchSingleTop = true } },
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
-            composable(Routes.INSIGHTS) {
-                if (cloudReady) InsightsScreen(onBack = { nav.popBackStack() })
+            composable(
+                Routes.INSIGHTS,
+                arguments = listOf(navArgument("tab") { type = NavType.StringType; defaultValue = "bewegungen" }),
+            ) { backStackEntry ->
+                if (cloudReady) InsightsScreen(
+                    initialTab = backStackEntry.arguments?.getString("tab") ?: "bewegungen",
+                    onBack = { nav.popBackStack() },
+                )
                 else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
