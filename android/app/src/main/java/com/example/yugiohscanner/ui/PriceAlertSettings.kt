@@ -52,52 +52,84 @@ fun PriceAlertSettingsSection() {
         var days by remember(rule) { mutableStateOf(rule?.days ?: 7) }
         var pctText by remember(rule) { mutableStateOf(AlertInput.toInput(rule?.pct ?: 20.0)) }
         var eurText by remember(rule) { mutableStateOf(AlertInput.toInput(rule?.minEur ?: 2.0)) }
-        var error by remember { mutableStateOf<String?>(null) }
+        var pctError by remember { mutableStateOf<String?>(null) }
+        var eurError by remember { mutableStateOf<String?>(null) }
+        var saveError by remember { mutableStateOf<String?>(null) }
 
-        fun save(nextActive: Boolean = active, nextDays: Int = days) {
-            val pct = AlertInput.parsePct(pctText)
-            val eur = AlertInput.parseMinEur(eurText)
-            error = pct.error ?: eur.error
-            if (error != null) return
-            val p = pct.value!!
-            val m = eur.value!!
+        // Speichert eine vollstaendige Regel, wenn sie sich von der zuletzt gespeicherten (`rule`)
+        // unterscheidet -- das erste Speichern (rule == null) legt sie an.
+        fun saveRule(p: Double, m: Double, nextDays: Int, nextActive: Boolean) {
             if (rule != null && rule.active == nextActive && rule.days == nextDays && rule.pct == p && rule.minEur == m) return
-            active = nextActive
-            days = nextDays
             scope.launch {
                 try {
                     PriceAlertsRepository.saveMoveRule(p, m, nextDays, nextActive)
                     cache.refreshAndWait()
                 } catch (e: Exception) {
-                    error = "Speichern fehlgeschlagen"
+                    saveError = "Speichern fehlgeschlagen"
                 }
             }
         }
 
+        // Schalter und Tage-Auswahl speichern unabhaengig von den Textfeldern: sie senden die
+        // zuletzt gespeicherte pct/minEur zusammen mit dem geaenderten Wert, ohne den Feldtext
+        // zu pruefen -- ein ungueltiges/unbestaetigtes Feld blockiert sie nicht.
+        fun saveToggle(nextActive: Boolean = active, nextDays: Int = days) {
+            saveError = null
+            active = nextActive
+            days = nextDays
+            saveRule(rule?.pct ?: 20.0, rule?.minEur ?: 2.0, nextDays, nextActive)
+        }
+
+        // Jedes Zahlenfeld prueft bei "Fertig" nur sich selbst; das jeweils andere Feld bleibt
+        // unangetastet und kann ungueltigen/unvollstaendigen Text behalten, ohne das Speichern zu blockieren.
+        fun savePct() {
+            val parsed = AlertInput.parsePct(pctText)
+            pctError = parsed.error
+            saveError = null
+            if (parsed.error != null) return
+            saveRule(parsed.value!!, rule?.minEur ?: 2.0, rule?.days ?: 7, rule?.active ?: false)
+        }
+
+        fun saveMinEur() {
+            val parsed = AlertInput.parseMinEur(eurText)
+            eurError = parsed.error
+            saveError = null
+            if (parsed.error != null) return
+            saveRule(rule?.pct ?: 20.0, parsed.value!!, rule?.days ?: 7, rule?.active ?: false)
+        }
+
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Bewegungsalarm", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = OnSurface)
-            Switch(checked = active, onCheckedChange = { save(nextActive = it) })
+            Switch(checked = active, onCheckedChange = { saveToggle(nextActive = it) })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = pctText, onValueChange = { pctText = it; error = null },
-                modifier = Modifier.weight(1f), singleLine = true, label = { Text("ab … %") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); save() }),
-            )
-            OutlinedTextField(
-                value = eurText, onValueChange = { eurText = it; error = null },
-                modifier = Modifier.weight(1f), singleLine = true, label = { Text("ab … €") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); save() }),
-            )
+            Column(Modifier.weight(1f)) {
+                OutlinedTextField(
+                    value = pctText, onValueChange = { pctText = it; pctError = null },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("ab … %") },
+                    isError = pctError != null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); savePct() }),
+                )
+                pctError?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = ErrorColor) }
+            }
+            Column(Modifier.weight(1f)) {
+                OutlinedTextField(
+                    value = eurText, onValueChange = { eurText = it; eurError = null },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("ab … €") },
+                    isError = eurError != null,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focus.clearFocus(); saveMinEur() }),
+                )
+                eurError?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = ErrorColor) }
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf(7, 30).forEach { d ->
-                FilterChip(selected = days == d, onClick = { save(nextDays = d) }, label = { Text("$d Tage") })
+                FilterChip(selected = days == d, onClick = { saveToggle(nextDays = d) }, label = { Text("$d Tage") })
             }
         }
-        error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = ErrorColor) }
+        saveError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = ErrorColor) }
         Text("Ausgewertet wird stündlich in der Cloud. Am Handy erscheinen Treffer beim Öffnen.",
             style = MaterialTheme.typography.bodySmall, color = Muted)
     }
