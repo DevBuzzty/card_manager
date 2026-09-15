@@ -193,8 +193,15 @@ fun SealedScreen(onOpenScan: () -> Unit, onOpenSuche: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     confirm = null
-                    if (kind == SealedConfirm.OPEN_LAST) write({ SealedRepository.open(item) }, { showOpened() })
-                    else write({ SealedRepository.delete(item.sealedId) })
+                    // Fix M6 (final-review-report.md): der Dialog stand womoeglich eine Weile offen -- die
+                    // erfasste `item`-Menge kann veraltet sein. Vor dem Bestaetigen die aktuell geladene
+                    // Zeile nachschlagen: gestiegen auf > 1, verringert `open` statt weich zu loeschen;
+                    // existiert die Zeile nicht mehr (anderswo geloescht), nur schliessen und neu laden.
+                    if (kind == SealedConfirm.OPEN_LAST) {
+                        val current = cache.value?.firstOrNull { it.sealedId == item.sealedId }
+                        if (current == null) scope.launch { SideStores.sealedItems.refreshAndWait() }
+                        else write({ SealedRepository.open(current) }, { showOpened() })
+                    } else write({ SealedRepository.delete(item.sealedId) })
                 }) { Text("Entfernen", color = ErrorColor) }
             },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("Abbrechen") } },

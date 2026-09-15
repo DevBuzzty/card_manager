@@ -268,7 +268,10 @@ fun StartScreen(
                             Text("Karten %.2f € · Sealed %.2f €".format(dash.totalValue, sealedTotal),
                                 style = MaterialTheme.typography.bodySmall, color = Muted)
                         }
-                        if (windowSnaps.size >= 2) {
+                        // Fix M2 (final-review-report.md): ohne bekannten Sealed-Wert waere die Basis-Momentaufnahme
+                        // (die Sealed einschliesst) nicht mit `total` (nur Karten) vergleichbar -- die Delta-Zeile
+                        // bliebe irrefuehrend, bis der Sealed-Wert bekannt ist.
+                        if (sealedTotal != null && windowSnaps.size >= 2) {
                             val startVal = windowSnaps.firstOrNull()?.totalValue ?: total
                             val change = total - startVal
                             val changePct = if (startVal > 0) change / startVal * 100 else 0.0
