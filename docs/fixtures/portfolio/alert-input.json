@@ -1,0 +1,38 @@
+{
+  "_comment": "Spec G2 §7/§9 — Eingabepruefung. desktop/src/utils/alertInput.test.js und AlertInputTest.kt lesen diese Datei. value null + error null = leer.",
+  "target": [
+    { "in": "", "value": null, "error": null },
+    { "in": "   ", "value": null, "error": null },
+    { "in": "12,5", "value": 12.5, "error": null },
+    { "in": " 12.50 ", "value": 12.5, "error": null },
+    { "in": "0", "value": null, "error": "Betrag muss größer als 0 sein" },
+    { "in": "0,00", "value": null, "error": "Betrag muss größer als 0 sein" },
+    { "in": "1.234,50", "value": null, "error": "Ungültiger Betrag" },
+    { "in": "3,555", "value": null, "error": "Ungültiger Betrag" },
+    { "in": "-3", "value": null, "error": "Ungültiger Betrag" },
+    { "in": "abc", "value": null, "error": "Ungültiger Betrag" }
+  ],
+  "pct": [
+    { "in": "20", "value": 20, "error": null },
+    { "in": "12,5", "value": 12.5, "error": null },
+    { "in": "500", "value": 500, "error": null },
+    { "in": "1", "value": 1, "error": null },
+    { "in": "0", "value": null, "error": "Prozent zwischen 1 und 500" },
+    { "in": "501", "value": null, "error": "Prozent zwischen 1 und 500" },
+    { "in": "", "value": null, "error": "Ungültige Zahl" },
+    { "in": "1,25", "value": null, "error": "Ungültige Zahl" }
+  ],
+  "minEur": [
+    { "in": "2", "value": 2, "error": null },
+    { "in": "0", "value": 0, "error": null },
+    { "in": "1,5", "value": 1.5, "error": null },
+    { "in": "", "value": null, "error": "Ungültiger Betrag" },
+    { "in": "-1", "value": null, "error": "Ungültiger Betrag" }
+  ],
+  "toInput": [
+    { "in": 12.5, "out": "12,5" },
+    { "in": 2, "out": "2" },
+    { "in": 0.99, "out": "0,99" },
+    { "in": null, "out": "" }
+  ]
+}
