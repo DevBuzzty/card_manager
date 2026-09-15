@@ -27,6 +27,23 @@ const RECOUNT = (pfx) => `
     AND (quantity IS NOT (SELECT COUNT(*) FROM card_copies WHERE ${PRINTING_WHERE(pfx)})
          OR deleted IS NOT CASE WHEN (SELECT COUNT(*) FROM card_copies WHERE ${PRINTING_WHERE(pfx)}) = 0 THEN 1 ELSE 0 END);`;
 
+// Spec G4 §5 — 1st-Ed-Preis = Basispreis x Aufschlagsfaktor, nachgefuehrt per Trigger; kein Preisschreiber
+// muss price_first_ed kennen. ZWILLING: supabase/cards_first_ed_factor.sql (public.cards_price_first_ed).
+// `p` ist 'NEW.' im Trigger und '' im Nachrechnen. Das `+ 1e-7` gleicht die Binaerdarstellung aus:
+// 10 * 1.0005 ist in double 10.004999..., SQLite ROUND ergaebe 10.0, Postgres rechnet in numeric exakt 10.01.
+// Es liegt unter der kleinsten echten Stelle (Preis 2 + Faktor 4 Nachkommastellen = 6). Fixture:
+// docs/fixtures/valuation/first-ed.json, Abschnitt trigger.
+const FIRST_ED_SQL = (p) =>
+  `(CASE WHEN ${p}cm_first_ed_factor IS NOT NULL AND ${p}price IS NOT NULL THEN ROUND(${p}price * ${p}cm_first_ed_factor + 1e-7, 2) END)`;
+// WHEN-Bedingung "nur wenn verschieden" (IS NOT statt != wegen NULL): kein Neuschreiben bei gleichem Wert,
+// also kein erneuter updated_at-Stempel und kein unnoetiger Push.
+const FIRST_ED_TRIGGER_BODY = `
+    WHEN NEW.price_first_ed IS NOT ${FIRST_ED_SQL('NEW.')}
+    BEGIN
+      UPDATE cards SET price_first_ed = ${FIRST_ED_SQL('NEW.')}
+       WHERE id = NEW.id AND set_code = NEW.set_code AND language = NEW.language AND rarity = NEW.rarity;
+    END;`;
+
 function ensureCopiesSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS card_copies (
@@ -80,6 +97,16 @@ function ensureCopiesSchema(db) {
   addColumnIfMissing(db, 'cards', 'price_first_ed', 'REAL');
   addColumnIfMissing(db, 'cards', 'cm_first_ed_updated_at', 'DATETIME');
   addColumnIfMissing(db, 'portfolio_history', 'sealed_value', 'REAL NOT NULL DEFAULT 0');
+  // Spec G4 §5: Aufschlagsfaktor der Ersten Auflage. Trigger bei jedem Start neu (wie die Recount-Trigger),
+  // danach einmal idempotent nachrechnen -- schreibt im Normalfall keine Zeile.
+  addColumnIfMissing(db, 'cards', 'cm_first_ed_factor', 'REAL');
+  db.exec(`
+    DROP TRIGGER IF EXISTS trg_cards_first_ed_ins;
+    DROP TRIGGER IF EXISTS trg_cards_first_ed_upd;
+    CREATE TRIGGER trg_cards_first_ed_ins AFTER INSERT ON cards FOR EACH ROW ${FIRST_ED_TRIGGER_BODY}
+    CREATE TRIGGER trg_cards_first_ed_upd AFTER UPDATE OF price, cm_first_ed_factor ON cards FOR EACH ROW ${FIRST_ED_TRIGGER_BODY}
+  `);
+  db.exec(`UPDATE cards SET price_first_ed = ${FIRST_ED_SQL('')} WHERE price_first_ed IS NOT ${FIRST_ED_SQL('')}`);
 }
 
 // One-time, desktop-only: `quantity` copies per live printing with the defaults. Guarded.

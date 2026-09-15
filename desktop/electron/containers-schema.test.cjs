@@ -8,7 +8,7 @@ function freshDb() {
   const db = new Database(':memory:');
   db.exec(`CREATE TABLE cards (
     id TEXT, set_code TEXT, language TEXT DEFAULT 'DE', rarity TEXT DEFAULT 'Unknown',
-    quantity INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0,
+    quantity INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0, price REAL,
     PRIMARY KEY (id, set_code, language, rarity));
   CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY AUTOINCREMENT, total_value REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);`);
   ensureCopiesSchema(db);

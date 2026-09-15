@@ -2,6 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert');
 const Database = require('better-sqlite3');
 const { ensureCopiesSchema, backfillCopies, reconcileCopies } = require('./copies-schema.cjs');
+const fs = require('fs');
+const path = require('path');
+// Spec G4 §5 — Abschnitt `trigger` der gemeinsamen Fixture. ZWILLING der Cloud-Fassung supabase/cards_first_ed_factor.sql.
+const FIRST_ED = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'fixtures', 'valuation', 'first-ed.json'), 'utf8'));
+const KEY = "id='1' AND set_code='MAMO-DE020' AND language='DE' AND rarity='Ultra Rare'";
+const firstEd = (db) => db.prepare(`SELECT price_first_ed AS pfe, cm_first_ed_factor AS f FROM cards WHERE ${KEY}`).get();
+const insertMamo = (db, price) => db.prepare("INSERT INTO cards (id, set_code, language, rarity, quantity, price) VALUES ('1','MAMO-DE020','DE','Ultra Rare',0,?)").run(price);
 
 // Minimal replica of the live cards/settings tables (4-col PK, as after the rarity migration).
 function freshDb() {
@@ -26,6 +33,7 @@ test('ensureCopiesSchema is idempotent and creates all columns', () => {
   for (const c of ['card_id','set_code','language','rarity','variant','day','price','source','recorded_at']) assert.ok(ph.includes(c), c);
   assert.ok(cols(db, 'cards').includes('price_first_ed'));
   assert.ok(cols(db, 'cards').includes('cm_first_ed_updated_at'));
+  assert.ok(cols(db, 'cards').includes('cm_first_ed_factor'));
   assert.ok(cols(db, 'portfolio_history').includes('sealed_value'));
 });
 
@@ -118,4 +126,62 @@ test('reconcile creates only the missing copies of a printing, once', () => {
   const second = reconcileCopies(db);
   assert.deepStrictEqual(second, { created: 0, skipped: true }, 'guarded: never runs twice');
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM card_copies').get().n, 6);
+});
+
+test('1st-Ed-Trigger: Fixture-Fälle (Faktor setzen)', () => {
+  for (const c of FIRST_ED.trigger) {
+    const db = freshDb(); ensureCopiesSchema(db);
+    insertMamo(db, c.price);
+    db.prepare(`UPDATE cards SET cm_first_ed_factor = ? WHERE ${KEY}`).run(c.factor);
+    assert.strictEqual(firstEd(db).pfe, c.price_first_ed, c.name);
+  }
+});
+
+test('1st-Ed-Trigger: Preis ändern zieht nach, Faktor leeren und Preis NULL leeren', () => {
+  const db = freshDb(); ensureCopiesSchema(db);
+  insertMamo(db, 73.85);
+  db.prepare(`UPDATE cards SET cm_first_ed_factor = 1.0545 WHERE ${KEY}`).run();
+  assert.strictEqual(firstEd(db).pfe, 77.87);
+  db.prepare(`UPDATE cards SET price = 80 WHERE ${KEY}`).run();
+  assert.strictEqual(firstEd(db).pfe, 84.36, 'Preisänderung rechnet neu');
+  db.prepare(`UPDATE cards SET price = NULL WHERE ${KEY}`).run();
+  assert.strictEqual(firstEd(db).pfe, null, 'Preis NULL → price_first_ed NULL');
+  db.prepare(`UPDATE cards SET price = 73.85 WHERE ${KEY}`).run();
+  assert.strictEqual(firstEd(db).pfe, 77.87);
+  db.prepare(`UPDATE cards SET cm_first_ed_factor = NULL WHERE ${KEY}`).run();
+  assert.strictEqual(firstEd(db).pfe, null, 'Faktor leeren → price_first_ed NULL');
+});
+
+test('1st-Ed-Trigger: INSERT mit Faktor', () => {
+  const db = freshDb(); ensureCopiesSchema(db);
+  db.prepare("INSERT INTO cards (id, set_code, language, rarity, quantity, price, cm_first_ed_factor) VALUES ('1','MAMO-DE020','DE','Ultra Rare',0,73.85,1.0545)").run();
+  assert.strictEqual(firstEd(db).pfe, 77.87);
+});
+
+test('1st-Ed-Trigger schreibt price_first_ed nicht neu, wenn der Wert gleich bleibt', () => {
+  const db = freshDb(); ensureCopiesSchema(db);
+  insertMamo(db, 73.85);
+  db.prepare(`UPDATE cards SET cm_first_ed_factor = 1.0545 WHERE ${KEY}`).run();
+  // Test-Zaehler: jede Schreibung auf price_first_ed hinterlaesst eine Zeile.
+  db.exec(`CREATE TABLE first_ed_writes (n INTEGER);
+           CREATE TRIGGER test_first_ed_count AFTER UPDATE OF price_first_ed ON cards
+           BEGIN INSERT INTO first_ed_writes VALUES (1); END;`);
+  const writes = () => db.prepare('SELECT COUNT(*) AS n FROM first_ed_writes').get().n;
+  db.prepare(`UPDATE cards SET price = 73.85 WHERE ${KEY}`).run();
+  db.prepare(`UPDATE cards SET cm_first_ed_factor = 1.0545 WHERE ${KEY}`).run();
+  assert.equal(writes(), 0, 'gleicher Preis und gleicher Faktor dürfen price_first_ed nicht neu schreiben');
+  db.prepare(`UPDATE cards SET price = 80 WHERE ${KEY}`).run();
+  assert.equal(writes(), 1, 'eine echte Änderung schreibt genau einmal');
+});
+
+test('ensureCopiesSchema rechnet price_first_ed beim Start nach und legt die Trigger neu an', () => {
+  const db = freshDb(); ensureCopiesSchema(db);
+  insertMamo(db, 73.85);
+  db.exec('DROP TRIGGER trg_cards_first_ed_upd');
+  db.prepare(`UPDATE cards SET cm_first_ed_factor = 1.0545 WHERE ${KEY}`).run();
+  assert.strictEqual(firstEd(db).pfe, null, 'ohne Trigger bleibt der Wert stehen');
+  ensureCopiesSchema(db);
+  assert.strictEqual(firstEd(db).pfe, 77.87, 'Nachrechnen beim Start');
+  db.prepare(`UPDATE cards SET price = 80 WHERE ${KEY}`).run();
+  assert.strictEqual(firstEd(db).pfe, 84.36, 'Trigger ist wieder da');
 });
