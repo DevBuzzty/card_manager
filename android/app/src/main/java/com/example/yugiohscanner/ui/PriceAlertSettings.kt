@@ -41,7 +41,9 @@ fun PriceAlertSettingsSection() {
         val loaded = st.value
         if (loaded == null) {
             if (st.error != null && !st.loading) {
-                Text("Preis-Alarme nicht verfügbar — Cloud nicht verbunden.", style = MaterialTheme.typography.bodySmall, color = ErrorColor)
+                // Minor 3 (Abschlussreview): REST kann Cloud-nicht-verbunden nicht von anderen Fehlern
+                // unterscheiden, darum ein neutraler Text statt "Cloud nicht verbunden".
+                Text("Preis-Alarme konnten nicht geladen werden.", style = MaterialTheme.typography.bodySmall, color = ErrorColor)
             } else {
                 Text("Wird geladen …", style = MaterialTheme.typography.bodySmall, color = Muted)
             }

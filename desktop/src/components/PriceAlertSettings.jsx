@@ -10,6 +10,7 @@ const inputCls = (bad) => `w-20 bg-obsidian border rounded-lg px-2 py-1 text-ink
 // aus; die Felder zeigen dann die Standardwerte, und das erste Speichern legt die Regel an.
 export default function PriceAlertSettings() {
   const [status, setStatus] = useState(() => (window.api?.getPriceAlertMove ? 'loading' : 'error'));
+  const [loadError, setLoadError] = useState('Preis-Alarme nicht verfügbar — Cloud nicht verbunden.');
   const [rule, setRule] = useState(DEFAULTS);
   const [text, setText] = useState({ pct: toInput(DEFAULTS.pct), min_eur: toInput(DEFAULTS.min_eur) });
   const [errors, setErrors] = useState({ pct: null, min_eur: null, save: null });
@@ -25,7 +26,13 @@ export default function PriceAlertSettings() {
         setText({ pct: toInput(cur.pct), min_eur: toInput(cur.min_eur) });
         setStatus('ready');
       })
-      .catch(() => { if (alive) setStatus('error'); });
+      .catch((e) => {
+        if (!alive) return;
+        setLoadError(String(e?.message || '').includes('Cloud nicht verbunden')
+          ? 'Preis-Alarme nicht verfügbar — Cloud nicht verbunden.'
+          : 'Preis-Alarme konnten nicht geladen werden.');
+        setStatus('error');
+      });
     return () => { alive = false; };
   }, []);
 
@@ -69,7 +76,7 @@ export default function PriceAlertSettings() {
         <BellRing className="w-4 h-4" /> Preis-Alarme
       </div>
       {status === 'loading' && <div className="h-10 rounded-lg bg-obsidian-800 animate-pulse" />}
-      {status === 'error' && <p className="text-sm text-crit">Preis-Alarme nicht verfügbar — Cloud nicht verbunden.</p>}
+      {status === 'error' && <p className="text-sm text-crit">{loadError}</p>}
       {status === 'ready' && (
         <div className="space-y-3">
           <label className="flex items-center gap-3 text-sm text-ink cursor-pointer">
