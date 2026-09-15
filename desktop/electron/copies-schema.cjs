@@ -36,7 +36,9 @@ const RECOUNT = (pfx) => `
 const FIRST_ED_SQL = (p) =>
   `(CASE WHEN ${p}cm_first_ed_factor IS NOT NULL AND ${p}price IS NOT NULL THEN ROUND(${p}price * ${p}cm_first_ed_factor + 1e-7, 2) END)`;
 // WHEN-Bedingung "nur wenn verschieden" (IS NOT statt != wegen NULL): kein Neuschreiben bei gleichem Wert,
-// also kein erneuter updated_at-Stempel und kein unnoetiger Push.
+// also kein erneuter updated_at-Stempel und kein unnoetiger Push. Das verschachtelte UPDATE price_first_ed
+// loest trg_cards_updated (database.cjs) ein zweites Mal aus; beide stempeln im selben Statement denselben
+// CURRENT_TIMESTAMP-Zeitpunkt, also eine schmutzige Zeile, ein Push, kein Echo.
 const FIRST_ED_TRIGGER_BODY = `
     WHEN NEW.price_first_ed IS NOT ${FIRST_ED_SQL('NEW.')}
     BEGIN
