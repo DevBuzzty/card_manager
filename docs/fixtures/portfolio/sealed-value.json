@@ -45,7 +45,9 @@
     { "name": "lokal, 30 Tage und 1 Sekunde", "price_updated_at": "2026-08-16 11:59:59", "stale": true },
     { "name": "Cloud mit Mikrosekunden", "price_updated_at": "2026-08-01T09:30:00.123456+00:00", "stale": true },
     { "name": "Cloud mit einer Nachkommastelle, jung", "price_updated_at": "2026-08-20T10:15:00.5+00:00", "stale": false },
-    { "name": "Zeitzone +02:00 zählt in UTC", "price_updated_at": "2026-08-16T13:00:00+02:00", "stale": true }
+    { "name": "Zeitzone +02:00 zählt in UTC", "price_updated_at": "2026-08-16T13:00:00+02:00", "stale": true },
+    { "name": "Nur Datum, keine Zeit", "price_updated_at": "2026-09-15", "stale": false },
+    { "name": "Nur Stunden und Minuten, keine Sekunden", "price_updated_at": "2026-09-15T05:00", "stale": false }
   ],
   "kinds": [
     { "kind": "display", "label": "Display" },

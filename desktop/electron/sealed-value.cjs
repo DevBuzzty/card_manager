@@ -33,9 +33,13 @@ function sealedValue(items) {
 
 // Liest lokal "2026-09-15 05:00:03" (naive UTC) und Cloud "2026-09-15T05:00:03.123456+00:00".
 // Nachkommastellen werden auf Millisekunden gekuerzt bzw. aufgefuellt, wie toEpochMilli() in Kotlin.
+// ZWILLING: android/app/src/main/java/com/example/yugiohscanner/ml/SealedValue.kt.
+const VALID_TS = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
 function toUtcMillis(ts) {
   if (ts == null || String(ts).trim() === '') return null;
-  let s = String(ts).trim().replace(' ', 'T').replace(/\.(\d+)/, (m, d) => `.${(d + '00').slice(0, 3)}`);
+  let s = String(ts).trim();
+  if (!VALID_TS.test(s)) return null;
+  s = s.replace(' ', 'T').replace(/\.(\d+)/, (m, d) => `.${(d + '00').slice(0, 3)}`);
   if (!ZONE.test(s)) s += 'Z';
   const ms = Date.parse(s);
   return Number.isFinite(ms) ? ms : null;

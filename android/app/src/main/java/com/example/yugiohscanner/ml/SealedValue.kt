@@ -13,6 +13,7 @@ object SealedValue {
     private const val DAY_MS = 86_400_000L
     private const val STALE_DAYS = 30
     private val ZONE = Regex("""(Z|[+-]\d{2}:\d{2})$""")
+    private val VALID_TS = Regex("""^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$""")
 
     /** Reihenfolge = Reihenfolge der Schluessel; die Schluessel sind die Werte der Spalte sealed_items.kind. */
     val KIND_LABELS: Map<String, String> = linkedMapOf(
@@ -40,9 +41,12 @@ object SealedValue {
     }
 
     /** Liest lokal "2026-09-15 05:00:03" (naive UTC) und Cloud "2026-09-15T05:00:03.123456+00:00". */
+    // ZWILLING: desktop/electron/sealed-value.cjs.
     fun toUtcMillis(ts: String?): Long? {
         if (ts.isNullOrBlank()) return null
-        var s = ts.trim().replaceFirst(' ', 'T')
+        var s = ts.trim()
+        if (!VALID_TS.containsMatchIn(s)) return null
+        s = s.replaceFirst(' ', 'T')
         if (!ZONE.containsMatchIn(s)) s += "Z"
         return try {
             OffsetDateTime.parse(s).toInstant().toEpochMilli()
