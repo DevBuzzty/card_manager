@@ -106,8 +106,13 @@ export function parseTextList(text) {
   return { format: 'text', cards, unresolved };
 }
 
+// F6b: ein fuehrendes BOM (U+FEFF, z. B. von Notepad/Excel beim Speichern vorangestellt) muss vor jeder Erkennung
+// und jedem Parsen weg. ZWILLING: DeckFormats.kt#stripBom (Kotlins trim() entfernt U+FEFF nicht, JS' trim() zufaellig
+// schon -- hier trotzdem explizit, damit beide Seiten sichtbar denselben Schutz haben und nicht von der Zufaelligkeit abhaengen).
+const stripBom = (text) => { const s = String(text); return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s; };
+
 export function detectFormat(text) {
-  const body = String(text).trim();
+  const body = stripBom(text).trim();
   if (body.startsWith('ydke://')) return 'ydke';
   const lines = body.split(/\r?\n/).map((l) => l.trim().toLowerCase());
   if (lines.includes('#main') || lines.includes('!side')) return 'ydk';
@@ -116,8 +121,10 @@ export function detectFormat(text) {
 
 // Einstieg fuer Einfuegen/Teilen/YDK-Datei: erkennt (oder nimmt das vorgegebene Format), liest, und meldet
 // "Keine Deckliste erkannt", wenn keine einzige Karte gelesen wurde.
-export function parseDeckText(text, format = detectFormat(text)) {
-  const parsed = format === 'ydke' ? parseYdke(text) : format === 'ydk' ? parseYdk(text) : parseTextList(text);
+export function parseDeckText(text, format) {
+  const body = stripBom(text);
+  const fmt = format || detectFormat(body);
+  const parsed = fmt === 'ydke' ? parseYdke(body) : fmt === 'ydk' ? parseYdk(body) : parseTextList(body);
   if (parsed.error) return parsed;
   if (parsed.cards.length === 0) return { ...parsed, error: NOTHING_RECOGNIZED };
   return parsed;
@@ -125,20 +132,23 @@ export function parseDeckText(text, format = detectFormat(text)) {
 
 const live = (entries) => (entries || []).filter((e) => e && e.count > 0);
 const ofSection = (entries, section) => live(entries).filter((e) => e.section === section);
+// F6a: YDK/YDKE schreiben nur gueltige Passcodes (1..2^32-1) -- sonst schriebe YDK den Rohwert woertlich und
+// YDKE kodierte einen ungueltigen/nicht-numerischen Passcode als 0.
+const withValidPasscode = (entries) => entries.filter((e) => normalizePasscode(e.passcode) != null);
 
 // entries: [{ passcode, name?, count, section }] (mehrere Zeilen je Passcode erlaubt).
 export function buildYdk(entries) {
   const lines = [YDK_HEADER];
   for (const [head, section] of [['#main', 'main'], ['#extra', 'extra'], ['!side', 'side']]) {
     lines.push(head);
-    for (const e of ofSection(entries, section)) for (let i = 0; i < e.count; i++) lines.push(String(e.passcode));
+    for (const e of withValidPasscode(ofSection(entries, section))) for (let i = 0; i < e.count; i++) lines.push(String(e.passcode));
   }
   return `${lines.join('\n')}\n`;
 }
 
 function encodeBlock(entries) {
   let bin = '';
-  for (const e of entries) {
+  for (const e of withValidPasscode(entries)) {
     const n = Number(e.passcode) >>> 0;
     const four = String.fromCharCode(n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255);
     for (let i = 0; i < e.count; i++) bin += four;

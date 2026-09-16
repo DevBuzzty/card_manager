@@ -119,38 +119,46 @@ object DeckFormats {
         return ParsedDeck("text", cards, unresolved)
     }
 
+    // F6b: siehe deckFormats.js#stripBom -- Kotlins trim() entfernt U+FEFF nicht (Character.isWhitespace('\uFEFF')
+    // ist false, anders als JS' trim(), das es zufaellig mitnimmt). Deshalb hier explizit, vor jeder Erkennung/jedem Parsen.
+    private fun stripBom(text: String): String = text.removePrefix("\uFEFF")
+
     fun detectFormat(text: String): String {
-        val body = text.trim()
+        val body = stripBom(text).trim()
         if (body.startsWith("ydke://")) return "ydke"
         val lines = body.split(LINE_BREAK).map { it.trim().lowercase() }
         return if ("#main" in lines || "!side" in lines) "ydk" else "text"
     }
 
     /** Einstieg fuer Einfuegen/Teilen: erkennt (oder nimmt [format]), liest, "Keine Deckliste erkannt" ohne Karte. */
-    fun parseDeckText(text: String, format: String = detectFormat(text)): ParsedDeck {
-        val parsed = when (format) {
-            "ydke" -> parseYdke(text)
-            "ydk" -> parseYdk(text)
-            else -> parseTextList(text)
+    fun parseDeckText(text: String, format: String? = null): ParsedDeck {
+        val body = stripBom(text)
+        val parsed = when (format ?: detectFormat(body)) {
+            "ydke" -> parseYdke(body)
+            "ydk" -> parseYdk(body)
+            else -> parseTextList(body)
         }
         if (parsed.error != null) return parsed
         return if (parsed.cards.isEmpty()) parsed.copy(error = NOTHING_RECOGNIZED) else parsed
     }
 
     private fun ofSection(entries: List<DeckEntry>, section: String) = entries.filter { it.count > 0 && it.section == section }
+    // F6a: siehe deckFormats.js#withValidPasscode -- Kotlins toLong() wirft bei nicht-numerischen Passcodes
+    // (JS kodiert dagegen stillschweigend 0); YDK/YDKE ueberspringen solche Eintraege beim Schreiben.
+    private fun withValidPasscode(entries: List<DeckEntry>) = entries.filter { normalizePasscode(it.passcode) != null }
 
     fun buildYdk(entries: List<DeckEntry>): String {
         val lines = mutableListOf(YDK_HEADER)
         for ((head, section) in listOf("#main" to "main", "#extra" to "extra", "!side" to "side")) {
             lines.add(head)
-            for (e in ofSection(entries, section)) repeat(e.count) { lines.add(e.passcode) }
+            for (e in withValidPasscode(ofSection(entries, section))) repeat(e.count) { lines.add(e.passcode) }
         }
         return lines.joinToString("\n") + "\n"
     }
 
     private fun encodeBlock(entries: List<DeckEntry>): String {
         val out = java.io.ByteArrayOutputStream()
-        for (e in entries) {
+        for (e in withValidPasscode(entries)) {
             val n = e.passcode.toLong()
             repeat(e.count) {
                 out.write((n and 0xFF).toInt()); out.write(((n shr 8) and 0xFF).toInt())

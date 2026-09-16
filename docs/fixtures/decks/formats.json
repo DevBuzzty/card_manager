@@ -138,7 +138,8 @@
     {"text":"14558127\n!SIDE\n","format":"ydk"},
     {"text":"3 Raigeki","format":"text"},
     {"text":"YDKE://ryPeAA==!!!","format":"text"},
-    {"text":"#mainboard\n3 Raigeki","format":"text"}
+    {"text":"#mainboard\n3 Raigeki","format":"text"},
+    {"text":"﻿ydke://!!!","format":"ydke"}
   ],
   "build": [
     {
@@ -172,6 +173,17 @@
       "ydk": "#created by YGO Card Manager\n#main\n#extra\n!side\n",
       "ydke": "ydke://!!!",
       "text": "",
+      "roundtrip": []
+    },
+    {
+      "name": "F6a: ungültiger Passcode wird bei YDK/YDKE übersprungen, bei der Textliste nicht",
+      "entries": [
+        {"passcode":"14558127","name":"Ash Blossom & Joyous Spring","count":1,"section":"main"},
+        {"passcode":"abc","name":"Kaputte Zeile","count":1,"section":"main"}
+      ],
+      "ydk": "#created by YGO Card Manager\n#main\n14558127\n#extra\n!side\n",
+      "ydke": "ydke://ryPeAA==!!!",
+      "text": "Main Deck\n1 Ash Blossom & Joyous Spring\n1 Kaputte Zeile",
       "roundtrip": []
     }
   ]
