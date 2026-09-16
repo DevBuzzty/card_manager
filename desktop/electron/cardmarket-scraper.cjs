@@ -3,7 +3,7 @@
 // (real Chromium on the user's residential IP). Sequential + polite; the user solves the rare
 // Cloudflare/captcha challenge manually, then the run resumes.
 const { BrowserWindow, session } = require('electron');
-const { matchRow, normName, rarityKey, rarityRank } = require('./cardmarket-parse.cjs');
+const { rarityRank, selectVersionRow, productUrl, firstEdUrl, parseFromPrice, firstEdFactor } = require('./cardmarket-parse.cjs');
 const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 const { recordPrice } = require('./price-history.cjs');
@@ -18,11 +18,14 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // Each printing is a `.card-column` in `#ReprintSection` carrying the expansion name + symbol code,
 // the rarity (inside the image alt parenthetical, e.g. "... (V.4 - Secret Rare)"), and the "Ab"
 // (from) price. `trend` here holds that from-price (the user chose the pure-scrape from-price).
+// Spec G4: href = Produkt-Link der Printing-Spalte (/Products/Singles/{Expansion}/{Karte}[-V{n}-{Rarity}]).
 const EXTRACT_JS = `(() => {
   const num = (t) => { const m = (t||'').replace(/\\./g,'').replace(',', '.').match(/[0-9]+(?:\\.[0-9]+)?/); return m ? parseFloat(m[0]) : null; };
   const rows = [];
   document.querySelectorAll('#ReprintSection .card-column').forEach(col => {
-    if (!col.querySelector('a[href*="/Products/Singles/"]')) return;
+    const link = col.querySelector('a[href*="/Products/Singles/"]');
+    if (!link) return;
+    const href = link.getAttribute('href') || '';
     const exp = (col.querySelector('h3 .text-start')?.textContent || '').trim();
     const code = (col.querySelector('.expansion-symbol span')?.textContent || '').trim();
     const imgEl = col.querySelector('img');
@@ -36,9 +39,20 @@ const EXTRACT_JS = `(() => {
     col.querySelectorAll('p').forEach(p => {
       if (/\\b(Ab|From)\\b/i.test(p.textContent)) { const b = p.querySelector('b'); price = num(b ? b.textContent : p.textContent); }
     });
-    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc });
+    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc, href });
   });
   return rows;
+})()`;
+
+// Spec G4 §4 — dt/dd-Paare des Infokastens einer Produktseite; die Auswertung (Label "From"/"Ab") macht
+// der reine Parser parseFromPrice in cardmarket-parse.cjs.
+const INFO_PAIRS_JS = `(() => {
+  const out = [];
+  document.querySelectorAll('.info-list-container dt').forEach(dt => {
+    const dd = dt.nextElementSibling;
+    if (dd && dd.tagName === 'DD') out.push({ label: (dt.textContent || '').trim(), value: (dd.textContent || '').trim() });
+  });
+  return out;
 })()`;
 
 function looksLikeChallenge(html, title) {
@@ -124,20 +138,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
           // "25LP") + rarity — far more reliable than the expansion name. Some expansions list the
           // same rarity twice (alt-art versions we can't tell apart from the set code); take the
           // cheapest of those. Fall back to fuzzy expansion-name matching when no code matches.
-          const codePrefix = (p.set_code || '').split('-')[0];
-          const wantRar = rarityKey(p.rarity), wantCode = normName(codePrefix);
-          const codeRows = rows.filter(r => r.code && r.trend != null && normName(r.code) === wantCode);
-          let hit = null;
-          if (codeRows.length === 1) {
-            hit = codeRows[0];               // one printing in that set -> unambiguous (Cardmarket omits the rarity label)
-          } else if (codeRows.length > 1) {  // multiple in the set -> Cardmarket DOES label rarity; disambiguate, cheapest wins
-            const rarHits = codeRows.filter(r => rarityKey(r.rarity) === wantRar);
-            if (rarHits.length) hit = rarHits.reduce((a, b) => (b.trend < a.trend ? b : a));
-          }
-          if (!hit) {
-            const setName = await setNameFor(cards[i].id, p.set_code);
-            hit = setName ? matchRow(rows, setName, p.rarity) : null;
-          }
+          const hit = await selectVersionRow(rows, p, () => setNameFor(cards[i].id, p.set_code));
           if (hit && hit.trend != null) {
             const pid = idProductFromImageUrl(hit.imgSrc);
             if (!pid) { if (idMissed === 0) console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc); idMissed++; }
@@ -159,6 +160,86 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
   return { updated, noMatch, errors, noMatchList, idMissed };
 }
 
+// Spec G4 §4 — Kandidaten des 1st-Ed-Durchgangs: Printings mit mindestens einem lebenden Exemplar edition = 'first',
+// Rarity ab minRank, nicht manuell gesperrt (price_locked 2), 1st-Ed-Stand aelter als 7 Tage (force ignoriert die Frist),
+// unabhaengig von cm_product_id (Bulk-Printings zaehlen). set_code 'Unknown' ausgeschlossen: dieser Sammelposten
+// findet nie eine Versionszeile, bleibt daher ohne Zeitstempel und wuerde sonst dauerhaft (rarityRank 99, aeltester
+// Stand) die Poller-Plaetze belegen. Aeltester Stand zuerst.
+function firstEdCandidates(db, { minRank = 1, force = false, nowMs = Date.now(), limit = Infinity } = {}) {
+  const rows = db.prepare(`
+    SELECT c.id, c.name, c.set_code, c.language, c.rarity, c.cm_first_ed_updated_at
+      FROM cards c
+     WHERE c.deleted = 0 AND COALESCE(c.price_locked, 0) != 2 AND c.set_code <> 'Unknown'
+       AND EXISTS (SELECT 1 FROM card_copies cp
+                    WHERE cp.card_id = c.id AND cp.set_code = c.set_code AND cp.language = c.language
+                      AND cp.rarity = c.rarity AND cp.deleted = 0 AND cp.edition = 'first')
+     ORDER BY COALESCE(c.cm_first_ed_updated_at, '1970-01-01') ASC, c.id, c.set_code, c.language, c.rarity`).all();
+  return rows
+    .filter(r => rarityRank(r.rarity) >= minRank
+      && (force || !r.cm_first_ed_updated_at || (nowMs - new Date(r.cm_first_ed_updated_at + 'Z').getTime()) > FRESH_MS))
+    .slice(0, limit);
+}
+
+// Spec G4 §4 — zweiter Durchgang: je Kandidat Versions-Seite (Zeile + Produkt-Link), Produktseite ohne Filter
+// (fromAll) und mit ?isFirstEd=Y (fromFirst). Schreibt nur cm_first_ed_factor + cm_first_ed_updated_at;
+// price_first_ed setzt der Trigger (copies-schema.cjs). Keine price_history-Zeile. Ruling des Controllers:
+// bei den deterministischen Fehlschlaegen "keine Versionszeile", "kein Produkt-Link" und "fromAll fehlt" wird
+// NUR der Zeitstempel gesetzt (Faktor unveraendert) — wie der Basis-Durchgang bei "kein Treffer" cm_updated_at
+// stempelt; sonst bliebe so ein Kandidat fuer immer der aelteste und wuerde die Poller-Plaetze dauerhaft belegen.
+// Bei Cloudflare-Pruefung (loadPage false) und bei Exceptions wird weiterhin nichts geschrieben, der naechste
+// Lauf versucht es wieder. `deps` ersetzt im Test Fenster, Netz und Pausen.
+async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infinity, headless = false, onChallenge, shouldAbort, onProgress, deps = {} } = {}) {
+  const d = {
+    makeWindow,
+    loadPage,
+    readRows: (win) => win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []),
+    readInfoPairs: (win) => win.webContents.executeJavaScript(INFO_PAIRS_JS).catch(() => []),
+    sleep: () => sleep(DELAY_MIN_MS + Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS)),
+    setNameFor,
+    cardName: async (c) => c.name || (await fetchCardData(c.id))?.data?.[0]?.name,
+    ...deps,
+  };
+  const list = firstEdCandidates(db, { minRank, force, nowMs: Date.now(), limit: maxCards });
+  const out = { candidates: list.length, updated: 0, noOffers: 0, skipped: 0, errors: 0 };
+  if (list.length === 0) return out;
+  // Already aborted before the loop starts — never open the hidden window for a run that won't do anything.
+  if (shouldAbort && shouldAbort()) return out;
+  const write = db.prepare('UPDATE cards SET cm_first_ed_factor = ?, cm_first_ed_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?');
+  const stamp = db.prepare('UPDATE cards SET cm_first_ed_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?');
+  const win = await d.makeWindow();
+  try {
+    for (let i = 0; i < list.length; i++) {
+      if (shouldAbort && shouldAbort()) break;
+      const p = list[i];
+      onProgress && onProgress({ current: i + 1, total: list.length, name: p.name });
+      try {
+        const name = await d.cardName(p);
+        const versionsUrl = name ? resolveUrl(name) : null;
+        if (!versionsUrl || !(await d.loadPage(win, versionsUrl, onChallenge, headless))) { out.skipped++; continue; }
+        const hit = await selectVersionRow(await d.readRows(win), p, () => d.setNameFor(p.id, p.set_code));
+        const product = hit ? productUrl(hit.href) : null;
+        if (!product) { stamp.run(String(p.id), p.set_code, p.language, p.rarity); out.skipped++; continue; }
+        await d.sleep();
+        if (!(await d.loadPage(win, product, onChallenge, headless))) { out.skipped++; continue; }
+        const fromAll = parseFromPrice(await d.readInfoPairs(win));
+        if (!(fromAll > 0)) { stamp.run(String(p.id), p.set_code, p.language, p.rarity); out.skipped++; continue; }
+        await d.sleep();
+        if (!(await d.loadPage(win, firstEdUrl(product), onChallenge, headless))) { out.skipped++; continue; }
+        const { write: ok, factor } = firstEdFactor(fromAll, parseFromPrice(await d.readInfoPairs(win)));
+        if (!ok) { out.skipped++; continue; }
+        write.run(factor, String(p.id), p.set_code, p.language, p.rarity);
+        out.updated++;
+        if (factor == null) out.noOffers++;
+      } catch (e) {
+        out.errors++;
+      } finally {
+        await d.sleep();
+      }
+    }
+  } finally { win.destroy(); }
+  return out;
+}
+
 // Set NAME for a (passcode, set_code) via YGOPRODeck card_sets (cached in api-handler).
 async function setNameFor(id, setCode) {
   try {
@@ -169,4 +250,4 @@ async function setNameFor(id, setCode) {
   } catch { return null; }
 }
 
-module.exports = { runCardmarketScrape };
+module.exports = { runCardmarketScrape, runFirstEdPass, firstEdCandidates };

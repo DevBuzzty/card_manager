@@ -1,25 +1,31 @@
-const { factorCaseSql, EDITIONS, CONDITIONS } = require('./valuation.cjs');
+const { factorCaseSql, unitPriceCaseSql, EDITIONS, CONDITIONS } = require('./valuation.cjs');
 
 // One row per live printing, plus copy-derived value columns. Params: @def_condition, @def_edition.
+// Spec G4 §6: value = Summe unitPrice x Zustandsfaktor je lebendem Exemplar (1st-Ed-Preis fuer edition = 'first');
+// factor_sum bleibt die reine Faktorsumme.
 function collectionSql() {
-  const f = factorCaseSql('condition');
+  const f = factorCaseSql('cp.condition');
+  const unit = unitPriceCaseSql('pc', 'cp');
   return `
     SELECT c.*,
-      COALESCE(cp.factor_sum, 0)                                     AS factor_sum,
-      ROUND(COALESCE(c.price, 0) * COALESCE(cp.factor_sum, 0), 2)    AS value,
-      COALESCE(cp.nonstandard, 0)                                    AS nonstandard,
-      COALESCE(cp.conditions, '')                                    AS conditions,
-      COALESCE(cp.editions, '')                                      AS editions
+      COALESCE(v.factor_sum, 0)            AS factor_sum,
+      ROUND(COALESCE(v.value_sum, 0), 2)   AS value,
+      COALESCE(v.nonstandard, 0)           AS nonstandard,
+      COALESCE(v.conditions, '')           AS conditions,
+      COALESCE(v.editions, '')             AS editions
     FROM cards c
     LEFT JOIN (
-      SELECT card_id, set_code, language, rarity,
+      SELECT cp.card_id, cp.set_code, cp.language, cp.rarity,
         SUM(${f}) AS factor_sum,
-        SUM(CASE WHEN condition <> @def_condition OR edition <> @def_edition THEN 1 ELSE 0 END) AS nonstandard,
-        GROUP_CONCAT(DISTINCT condition) AS conditions,
-        GROUP_CONCAT(DISTINCT edition) AS editions
-      FROM card_copies WHERE deleted = 0
-      GROUP BY card_id, set_code, language, rarity
-    ) cp ON cp.card_id = c.id AND cp.set_code = c.set_code AND cp.language = c.language AND cp.rarity = c.rarity
+        SUM(${unit} * ${f}) AS value_sum,
+        SUM(CASE WHEN cp.condition <> @def_condition OR cp.edition <> @def_edition THEN 1 ELSE 0 END) AS nonstandard,
+        GROUP_CONCAT(DISTINCT cp.condition) AS conditions,
+        GROUP_CONCAT(DISTINCT cp.edition) AS editions
+      FROM card_copies cp
+      JOIN cards pc ON pc.id = cp.card_id AND pc.set_code = cp.set_code AND pc.language = cp.language AND pc.rarity = cp.rarity
+      WHERE cp.deleted = 0
+      GROUP BY cp.card_id, cp.set_code, cp.language, cp.rarity
+    ) v ON v.card_id = c.id AND v.set_code = c.set_code AND v.language = c.language AND v.rarity = c.rarity
     WHERE c.quantity > 0 AND c.deleted = 0
     ORDER BY c.created_at DESC`;
 }

@@ -7,7 +7,7 @@ db.exec(`CREATE TABLE cards (
   id TEXT, name TEXT, type TEXT, desc TEXT, image_url TEXT, atk INTEGER, def INTEGER,
   level INTEGER, race TEXT, attribute TEXT, quantity INTEGER DEFAULT 1, rarity TEXT,
   set_code TEXT, price REAL, language TEXT DEFAULT 'DE', deleted INTEGER DEFAULT 0,
-  cm_product_id INTEGER, price_locked INTEGER DEFAULT 0, price_first_ed REAL,
+  cm_product_id INTEGER, price_locked INTEGER DEFAULT 0, price_first_ed REAL, cm_first_ed_factor REAL,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id, set_code, language)
 )`);

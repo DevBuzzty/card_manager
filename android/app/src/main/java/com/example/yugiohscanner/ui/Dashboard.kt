@@ -53,9 +53,9 @@ private fun typeGroup(type: String?): String = when {
     else -> "Sonstige"
 }
 
-// Value of one printing, from its cached price and the copies actually owned of it.
+// Value of one printing, from its cached prices and the copies actually owned of it (Spec G4: 1st Ed mit eigenem Preis).
 internal fun printingValue(c: CardRow, byKey: Map<String, List<CopyRow>>): Double =
-    Valuation.valueOf(c.price, byKey[c.printingKey()] ?: emptyList())
+    Valuation.valueOf(c, byKey[c.printingKey()] ?: emptyList())
 
 // Groups cards by a key (skipping null keys and cards failing `include`), summing
 // quantity and copy-based value. Returns label -> (count, value), insertion-ordered.

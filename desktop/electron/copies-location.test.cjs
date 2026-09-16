@@ -4,6 +4,9 @@ const Database = require('better-sqlite3');
 const { ensureCopiesSchema } = require('./copies-schema.cjs');
 const { ensureContainersSchema } = require('./containers-schema.cjs');
 const copies = require('./copies.cjs');
+const fs = require('fs');
+const path = require('path');
+const FIRST_ED = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'fixtures', 'valuation', 'first-ed.json'), 'utf8'));
 
 function freshDb() {
   const db = new Database(':memory:');
@@ -147,6 +150,23 @@ test('listContainers zaehlt nur lebende Exemplare und ueberspringt geloeschte Be
   assert.equal(list.length, 1);
   assert.equal(list[0].container_id, 'c1');
   assert.equal(list[0].copies_count, 2, 'das geloeschte Exemplar zaehlt nicht mit');
+});
+
+test('listContainers bewertet 1st-Ed-Exemplare mit price_first_ed (Fixture valueOf)', () => {
+  for (const c of FIRST_ED.valueOf) {
+    const db = freshDb();
+    addContainer(db, 'c1', 'Blau');
+    // Erst den Preis (der Trigger rechnet price_first_ed aus dem leeren Faktor = NULL), dann price_first_ed
+    // direkt: ein UPDATE nur dieser Spalte loest den 1st-Ed-Trigger nicht aus.
+    db.prepare("UPDATE cards SET price = ? WHERE id = '46986414'").run(c.card.price);
+    db.prepare("UPDATE cards SET price_first_ed = ? WHERE id = '46986414'").run(c.card.price_first_ed);
+    const ins = db.prepare(`INSERT INTO card_copies (copy_id, card_id, set_code, language, rarity, edition, condition, container_id)
+                            VALUES (?, '46986414', 'LOB-DE005', 'DE', 'Common', ?, ?, 'c1')`);
+    let n = 0;
+    for (const cp of c.copies) for (let i = 0; i < (cp.count || 1); i++) ins.run(`k${n++}`, cp.edition, cp.condition);
+    const [row] = copies.listContainers(db);
+    assert.strictEqual(row.value, c.value, c.name);
+  }
 });
 
 test('kein Helfer schreibt jemals cards.quantity oder cards.deleted', () => {

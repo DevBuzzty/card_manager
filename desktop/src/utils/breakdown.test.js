@@ -57,3 +57,14 @@ test('Unbekanntes Set und fehlende Raritaet heissen Unbekannt', () => {
     { label: UNKNOWN_LABEL, count: 2, value: 3 },
   ]);
 });
+
+test('Binder: 1st-Ed-Exemplar zählt mit price_first_ed', () => {
+  const cardsFe = [{ id: '5', set_code: 'MAMO-DE020', language: 'DE', rarity: 'Ultra Rare', type: 'Effect Monster', price: 73.85, price_first_ed: 77.87, quantity: 2, value: 0 }];
+  const copiesFe = [
+    { card_id: '5', set_code: 'MAMO-DE020', language: 'DE', rarity: 'Ultra Rare', edition: 'first', condition: 'NM', container_id: 'b1' },
+    { card_id: '5', set_code: 'MAMO-DE020', language: 'DE', rarity: 'Ultra Rare', edition: 'unknown', condition: 'NM', container_id: 'b1' },
+  ];
+  assert.deepEqual(valueBreakdown({ cards: cardsFe, copies: copiesFe, containers, dimension: 'binder' }), [
+    { label: 'Ordner Blau', count: 2, value: 151.72 },
+  ]);
+});

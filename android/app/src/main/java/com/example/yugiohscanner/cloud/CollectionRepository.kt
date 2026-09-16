@@ -302,7 +302,8 @@ object CollectionRepository {
         SupabaseCloud.http().newCall(buildRequest()).execute()
     }
 
-    private fun parse(arr: JSONArray): List<CardRow> {
+    // internal statt private: CardRowParseTest prueft das Lesen der 1st-Ed-Felder (Spec G4).
+    internal fun parse(arr: JSONArray): List<CardRow> {
         val out = ArrayList<CardRow>(arr.length())
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
@@ -326,6 +327,8 @@ object CollectionRepository {
                     deleted = o.optBoolean("deleted", false),
                     updatedAt = o.strOrNull("updated_at"),
                     priceLocked = if (o.isNull("price_locked")) 0 else o.optInt("price_locked", 0),
+                    priceFirstEd = if (o.isNull("price_first_ed")) null else o.optDouble("price_first_ed"),
+                    cmFirstEdFactor = if (o.isNull("cm_first_ed_factor")) null else o.optDouble("cm_first_ed_factor"),
                 )
             )
         }

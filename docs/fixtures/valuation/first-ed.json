@@ -1,0 +1,44 @@
+{
+  "_comment": "Spec G4 §5/§6 — Bewertung mit 1st-Ed-Preis. Leser: desktop/electron/valuation.test.cjs (JS main + SQL totalValue), desktop/electron/copies-location.test.cjs (SQL listContainers), desktop/src/utils/valuation.test.mjs (Renderer), android ValuationTest.kt (Kotlin), desktop/electron/copies-schema.test.cjs (Abschnitt trigger). Abschnitt trigger prueft der Nutzer in der Cloud per SELECT.",
+  "unitPrice": [
+    { "name": "first mit price_first_ed", "card": { "price": 73.85, "price_first_ed": 77.87 }, "copy": { "edition": "first", "condition": "NM" }, "unit": 77.87 },
+    { "name": "first ohne price_first_ed fällt auf price", "card": { "price": 73.85, "price_first_ed": null }, "copy": { "edition": "first", "condition": "NM" }, "unit": 73.85 },
+    { "name": "unlimited ignoriert price_first_ed", "card": { "price": 73.85, "price_first_ed": 77.87 }, "copy": { "edition": "unlimited", "condition": "NM" }, "unit": 73.85 },
+    { "name": "unknown ignoriert price_first_ed", "card": { "price": 73.85, "price_first_ed": 77.87 }, "copy": { "edition": "unknown", "condition": "NM" }, "unit": 73.85 },
+    { "name": "limited ignoriert price_first_ed", "card": { "price": 73.85, "price_first_ed": 77.87 }, "copy": { "edition": "limited", "condition": "NM" }, "unit": 73.85 },
+    { "name": "price NULL, unknown", "card": { "price": null, "price_first_ed": null }, "copy": { "edition": "unknown", "condition": "NM" }, "unit": 0 },
+    { "name": "price NULL, first ohne price_first_ed", "card": { "price": null, "price_first_ed": null }, "copy": { "edition": "first", "condition": "NM" }, "unit": 0 }
+  ],
+  "valueOf": [
+    {
+      "name": "Zustand mal Edition gemischt",
+      "card": { "price": 10, "price_first_ed": 12.5 },
+      "copies": [
+        { "edition": "first", "condition": "NM" },
+        { "edition": "first", "condition": "GD" },
+        { "edition": "unknown", "condition": "NM" },
+        { "edition": "unlimited", "condition": "EX" }
+      ],
+      "value": 39.75
+    },
+    { "name": "Gruppe mit count", "card": { "price": 10, "price_first_ed": 12.5 }, "copies": [{ "edition": "first", "condition": "NM", "count": 2 }], "value": 25 },
+    { "name": "MAMO-DE020 Beispiel", "card": { "price": 73.85, "price_first_ed": 77.87 }, "copies": [{ "edition": "first", "condition": "NM" }], "value": 77.87 },
+    { "name": "first ohne price_first_ed zählt mit Basispreis", "card": { "price": 73.85, "price_first_ed": null }, "copies": [{ "edition": "first", "condition": "EX" }], "value": 62.77 },
+    { "name": "price NULL", "card": { "price": null, "price_first_ed": null }, "copies": [{ "edition": "first", "condition": "NM" }], "value": 0 },
+    { "name": "keine Exemplare", "card": { "price": 10, "price_first_ed": 12.5 }, "copies": [], "value": 0 },
+    { "name": "Rundungsfall auf Cent", "card": { "price": 11, "price_first_ed": 12.35 }, "copies": [{ "edition": "first", "condition": "EX" }], "value": 10.5 }
+  ],
+  "trigger": [
+    { "name": "MAMO-DE020", "price": 73.85, "factor": 1.0545, "price_first_ed": 77.87 },
+    { "name": "Rundung auf ,xx5 kaufmännisch", "price": 10, "factor": 1.0005, "price_first_ed": 10.01 },
+    { "name": "ohne Faktor", "price": 10, "factor": null, "price_first_ed": null },
+    { "name": "ohne Preis", "price": null, "factor": 1.05, "price_first_ed": null }
+  ],
+  "line": [
+    { "name": "mit Faktor", "card": { "price": 73.85, "price_first_ed": 77.87, "cm_first_ed_factor": 1.0545 }, "line": "Basis 73,85 € · 1st Ed 77,87 € (×1,05)" },
+    { "name": "Tausenderpunkt", "card": { "price": 1234.5, "price_first_ed": 1301.16, "cm_first_ed_factor": 1.054 }, "line": "Basis 1.234,50 € · 1st Ed 1.301,16 € (×1,05)" },
+    { "name": "ohne Faktor keine Klammer", "card": { "price": 73.85, "price_first_ed": 77.87, "cm_first_ed_factor": null }, "line": "Basis 73,85 € · 1st Ed 77,87 €" },
+    { "name": "ohne price_first_ed keine Zeile", "card": { "price": 73.85, "price_first_ed": null, "cm_first_ed_factor": 1.0545 }, "line": null },
+    { "name": "Faktor 1.005 rundet auf beiden Geräten gleich", "card": { "price": 10, "price_first_ed": 10.05, "cm_first_ed_factor": 1.005 }, "line": "Basis 10,00 € · 1st Ed 10,05 € (×1,00)" }
+  ]
+}

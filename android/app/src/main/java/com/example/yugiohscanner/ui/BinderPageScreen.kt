@@ -169,7 +169,7 @@ fun BinderPageScreen(
     val unsorted = remember(copies) { UnsortedCopies.from(copies) }
     fun cardOf(c: CopyRow): CardRow? = cardsByKey[c.printingKey()]
     fun valueOf(list: List<CopyRow>): Double =
-        list.sumOf { c -> (cardOf(c)?.price ?: 0.0) * Valuation.factor(c.condition) }
+        list.sumOf { c -> (cardOf(c)?.let { Valuation.unitPrice(it, c) } ?: 0.0) * Valuation.factor(c.condition) }
 
     // Ein Schreibweg fuer beide Aktionen dieser Seite (aus dem Fach nehmen, in ein Fach legen):
     // Sperre, Schreiben, Abgleichen, Fehler zuruecksetzen. Liefert false, wenn die Sperre den
