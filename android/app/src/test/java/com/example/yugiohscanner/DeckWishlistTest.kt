@@ -64,4 +64,23 @@ class DeckWishlistTest {
         DeckWishlist.addAll(listOf(WishCandidate("2", null)), add = { false }, triggerScrape = { none++ })
         assertEquals(0, none)
     }
+
+    // F3: ZWILLING von decks.test.cjs "ohne echten Namen kein Deal-Watch und keine Cloud-Suche".
+    @Test fun `Deal-Watch nur mit echtem Namen`() {
+        assertEquals(true, DeckWishlist.hasDealWatchName("Maxx \"C\"", "23434538"))
+        assertEquals(false, DeckWishlist.hasDealWatchName("23434538", "23434538"))
+        assertEquals(false, DeckWishlist.hasDealWatchName("", "23434538"))
+        assertEquals(false, DeckWishlist.hasDealWatchName("   ", "23434538"))
+    }
+
+    @Test fun `Name fehlt -- Eintrag ja, Watch nein, keine Cloud-Suche wenn einziger Kandidat`() = runTest {
+        var scrapes = 0
+        val cardId = "12345678"
+        // Simuliert WishlistRepository.addToWishlist: ohne Namen faellt er auf den Passcode zurueck.
+        val res = DeckWishlist.addAll(listOf(WishCandidate(cardId, 5.0)), add = { c ->
+            c.maxPrice != null && DeckWishlist.hasDealWatchName(cardId, c.cardId)
+        }, triggerScrape = { scrapes++ })
+        assertEquals(0, scrapes)
+        assertEquals(WishResult(1, 1, 0, emptyList()), res)
+    }
 }

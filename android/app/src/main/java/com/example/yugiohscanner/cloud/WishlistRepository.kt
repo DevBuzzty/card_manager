@@ -48,7 +48,8 @@ object WishlistRepository {
             }.use { r -> if (!r.isSuccessful) err("Wunschkarte anlegen", r) }
 
             // Also hunt for it as a deal-watch (best-effort — must not fail the wishlist add).
-            if (maxPrice == null) return@withContext false
+            // F3: keine Suche mit dem Passcode als Suchbegriff (etwa "Fehlende auf die Wunschliste" ohne Namen).
+            if (maxPrice == null || !DeckWishlist.hasDealWatchName(name, cardId)) return@withContext false
             try {
                 DealsRepository.addWatch(name, maxPrice)
                 if (triggerScrape) DealsRepository.triggerScrape()

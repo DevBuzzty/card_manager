@@ -10,12 +10,17 @@ data class WishResult(val total: Int, val added: Int, val watches: Int, val fail
 /**
  * Spec E1 §6 -- "Fehlende auf die Wunschliste": Auswahl, Hoechstpreis und Texte.
  * ZWILLING: desktop/src/utils/deckWishlist.js (Regeln/Texte) und desktop/electron/decks.cjs#addMissingToWishlist
- * (eine Cloud-Suche am Ende). Fixture docs/fixtures/decks/wishlist.json. Wer eine Seite aendert, aendert beide.
+ * (eine Cloud-Suche am Ende, F3: hasDealWatchName -- Deal-Watch nur mit echtem Namen). Fixture
+ * docs/fixtures/decks/wishlist.json. Wer eine Seite aendert, aendert beide.
  */
 object DeckWishlist {
     /** max_price = 1,2 x Katalogpreis, auf Cent gerundet; ohne Preis null (dann kein Deal-Watch). */
     fun wishlistMaxPrice(cmPrice: Double?): Double? =
         if (cmPrice == null || !(cmPrice > 0.0)) null else Math.round(cmPrice * 1.2 * 100.0) / 100.0
+
+    /** F3: ein Deal-Watch mit dem Passcode als Suchbegriff faende nichts -- also nur mit einem echten Namen
+     *  (nicht leer, nicht der Passcode-Rueckfall selbst). ZWILLING: decks.cjs#hasDealWatchName. */
+    fun hasDealWatchName(name: String, cardId: String): Boolean = name.trim().isNotEmpty() && name != cardId
 
     fun missingForWishlist(coverage: Coverage, wishlistCardIds: Collection<String>): WishPlan {
         val listed = wishlistCardIds.toHashSet()

@@ -50,6 +50,18 @@ test('Fehlende auf die Wunschliste: ohne Preise keine Cloud-Suche, Teilfehler ge
   assert.equal(c.calls.deal_watches.length, 0, 'gescheiterter Eintrag bekommt keinen Watch');
 });
 
+test('Fehlende auf die Wunschliste: ohne echten Namen kein Deal-Watch und keine Cloud-Suche', async () => {
+  const c = fakeClient();
+  let scrapes = 0;
+  const res = await addMissingToWishlist(c, [
+    { card_id: '12345678', name: '', max_price: 5 },
+  ], () => { scrapes += 1; });
+  assert.equal(scrapes, 0);
+  assert.deepEqual(res, { total: 1, added: 1, watches: 0, failed: [] });
+  assert.deepEqual(c.calls.wishlist, [{ card_id: '12345678', name: '12345678', image_url: null, max_price: 5 }]);
+  assert.equal(c.calls.deal_watches.length, 0, 'Passcode als Name darf keinen Deal-Watch anlegen');
+});
+
 test('Deckbox zuordnen: Unique-Verletzung wird zur deutschen Meldung', async () => {
   assert.equal(deckContainerErrorMessage({ code: '23505', message: 'duplicate key value violates unique constraint "decks_container_unique"' }), DECKBOX_TAKEN);
   assert.equal(deckContainerErrorMessage({ code: '42501', message: 'permission denied' }), 'permission denied');

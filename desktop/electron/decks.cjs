@@ -1,8 +1,17 @@
 // Spec E1 §3/§6/§7 — Hauptprozess-Helfer der Decks: Deckbox zuordnen, Fehlende auf die Wunschliste, Exemplare in die
 // Deckbox. `client` ist der Supabase-Client aus dealsClient(); die Tests reichen eine Attrappe herein.
+// ZWILLING (F3, Deal-Watch nur mit echtem Namen): android/app/src/main/java/com/example/yugiohscanner/ml/DeckWishlist.kt
+// (addAll) bzw. WishlistRepository.addToWishlist. Beide legen den Wunschlisten-Eintrag mit dem Passcode als
+// Namens-Rueckfall an, aber nie einen Deal-Watch dafuer.
 const { ValidationError, setCopyLocation } = require('./copies.cjs');
 
 const DECKBOX_TAKEN = 'Diese Deckbox gehört schon zu einem anderen Deck';
+
+// F3: ein Deal-Watch mit dem Passcode als Suchbegriff faende nichts -- also nur mit einem echten Namen (nicht leer,
+// nicht der Passcode-Rueckfall selbst).
+function hasDealWatchName(name, cardId) {
+  return typeof name === 'string' && name.trim() !== '' && name !== cardId;
+}
 
 // Postgres unique_violation (Index decks_container_unique) -> deutsche Meldung; sonst die Rohmeldung wie bei den
 // uebrigen Cloud-Kanaelen der Decks.
@@ -35,7 +44,7 @@ async function addMissingToWishlist(client, items, triggerScrape) {
     } catch (e) { error = e; }
     if (error) { failed.push(cardId); continue; }
     added += 1;
-    if (maxPrice == null) continue;
+    if (maxPrice == null || !hasDealWatchName(name, cardId)) continue;
     try {
       const { error: watchError } = await client.from('deal_watches').insert({ query: name, max_price: maxPrice });
       if (!watchError) watches += 1;
