@@ -623,7 +623,7 @@ ipcMain.handle('save-deck', async (event, { deckId, cards, notes, format }) => {
 
 ipcMain.handle('get-deck-details', async (event, id) => {
     const c = await dealsClient();
-    const { data, error } = await c.from('deck_cards').select('*').eq('deck_id', id);
+    const { data, error } = await c.from('deck_cards').select('*').eq('deck_id', id).order('id', { ascending: true });
     if (error) throw new Error(error.message);
     const detail = db.prepare(
         'SELECT name, image_url, type AS card_type, desc, atk, def, level, race, attribute, price ' +
