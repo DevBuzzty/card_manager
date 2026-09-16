@@ -293,12 +293,20 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
     var boxError by remember { mutableStateOf<String?>(null) }
     var fill by remember { mutableStateOf<FillProposal?>(null) }
     var wishlistOpen by remember { mutableStateOf(false) }
+    // Spec E2 Task 8 Fix 1: ein Lauf gleichzeitig -- sonst kann ein Doppel-Tipp (+/-, entfernen, verschieben)
+    // DecksRepository zweimal mit demselben, noch nicht aktualisierten Stand aufrufen (Review-Fund).
+    val inFlight = remember { InFlight() }
+    var mutating by remember { mutableStateOf(false) }
 
     LaunchedEffect(deck.id) { deckCache.refresh() }
 
     fun mutate(block: suspend () -> Unit) {
+        if (!inFlight.tryStart()) return
+        mutating = true
         scope.launch {
-            try { block(); deckCache.refreshAndWait(); SideStores.allDeckCards.refresh(); writeError = null } catch (e: Exception) { writeError = e.message }
+            try { block(); deckCache.refreshAndWait(); SideStores.allDeckCards.refresh(); writeError = null }
+            catch (e: Exception) { writeError = e.message }
+            finally { inFlight.finish(); mutating = false }
         }
     }
 
@@ -430,19 +438,19 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
                         SectionHeader("Main · ${main.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(main, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move) { block -> mutate(block) } }
+                    items(main, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move, mutating) { block -> mutate(block) } }
                     item {
                         Spacer(Modifier.height(10.dp))
                         SectionHeader("Extra · ${extra.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(extra, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move) { block -> mutate(block) } }
+                    items(extra, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move, mutating) { block -> mutate(block) } }
                     item {
                         Spacer(Modifier.height(10.dp))
                         SectionHeader("Side · ${side.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(side, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move) { block -> mutate(block) } }
+                    items(side, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move, mutating) { block -> mutate(block) } }
                 }
             }
         }
@@ -663,7 +671,7 @@ private fun SearchResultRow(r: CardRow, onAdd: () -> Unit) {
 }
 
 @Composable
-private fun DeckCardRow(card: DeckCard, numbers: CoverageCard?, onMove: (DeckCard) -> Unit, mutate: ((suspend () -> Unit)) -> Unit) {
+private fun DeckCardRow(card: DeckCard, numbers: CoverageCard?, onMove: (DeckCard) -> Unit, busy: Boolean, mutate: ((suspend () -> Unit)) -> Unit) {
     SpaceCard(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Thumb(card.imageUrl, card.name)
@@ -682,22 +690,22 @@ private fun DeckCardRow(card: DeckCard, numbers: CoverageCard?, onMove: (DeckCar
                 numbers?.let { DeckCoverage.reservedTexts(it) }?.forEach {
                     Text(it, color = Gold, style = MaterialTheme.typography.labelSmall)
                 }
-                TextButton(onClick = { onMove(card) }, contentPadding = PaddingValues(0.dp)) {
+                TextButton(onClick = { onMove(card) }, enabled = !busy, contentPadding = PaddingValues(0.dp)) {
                     Text(DeckImport.moveLabel(card.section), style = MaterialTheme.typography.labelSmall)
                 }
             }
             Spacer(Modifier.width(8.dp))
-            IconButton(onClick = { mutate { DecksRepository.setCount(card.id, card.count - 1) } }) {
+            IconButton(onClick = { mutate { DecksRepository.setCount(card.id, card.count - 1) } }, enabled = !busy) {
                 Text("−", color = OnSurface, style = MaterialTheme.typography.titleLarge.copy(fontFamily = MonoFontFamily))
             }
             Text(
                 card.count.toString(), color = OnSurface,
                 style = MaterialTheme.typography.titleMedium.copy(fontFamily = MonoFontFamily),
             )
-            IconButton(onClick = { mutate { DecksRepository.setCount(card.id, card.count + 1) } }) {
+            IconButton(onClick = { mutate { DecksRepository.setCount(card.id, card.count + 1) } }, enabled = !busy) {
                 Text("+", color = OnSurface, style = MaterialTheme.typography.titleLarge.copy(fontFamily = MonoFontFamily))
             }
-            IconButton(onClick = { mutate { DecksRepository.removeCard(card.id) } }) {
+            IconButton(onClick = { mutate { DecksRepository.removeCard(card.id) } }, enabled = !busy) {
                 Icon(Icons.Default.Delete, "Entfernen", tint = ErrorColor)
             }
         }
