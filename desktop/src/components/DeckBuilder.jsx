@@ -42,6 +42,8 @@ export default function DeckBuilder() {
   const [format, setFormat] = useState('tcg');
   const [legalityData, setLegalityData] = useState(null);
   const [limitMessage, setLimitMessage] = useState(null);
+  // F1: Schutz gegen Doppelklick auf "Save Deck" (verdoppelte Zeilen).
+  const [saving, setSaving] = useState(false);
 
   // Deck Creation State
   const [isCreating, setIsCreating] = useState(false);
@@ -62,7 +64,8 @@ export default function DeckBuilder() {
         window.api.getDecks().then((d) => { setDecks(d); setDecksLoaded(true); });
         window.api.getCollection().then(setCollection);
         fetchCoverageData().then(setCoverageData).catch((e) => setCoverageError(e.message || String(e)));
-        window.api.getCatalogLegality().then(setLegalityData);
+        // F7: ohne .catch bleibt legalityData fuer immer null (Endlos-"…") statt "Katalog fehlt – Banlist unbekannt".
+        window.api.getCatalogLegality().then(setLegalityData).catch(() => setLegalityData({ available: false }));
     }
   }, []);
 
@@ -120,6 +123,8 @@ export default function DeckBuilder() {
           setNotes('');
           setIsCreating(false);
           setNewDeckName('');
+          // F8: Kopien-Grenzen-Meldung des vorherigen Decks darf am neuen nicht stehen bleiben.
+          setLimitMessage(null);
       }
   };
 
@@ -153,31 +158,38 @@ export default function DeckBuilder() {
   };
 
   const handleSaveDeck = async () => {
-      if (!activeDeck || !window.api) return;
-      // F1: name/image_url mitschicken -- sonst loescht "Save Deck" Katalognamen/-bilder nicht besessener
-      // (importierter) Karten, weil save-deck fuer sie nur auf die lokale cards-Tabelle zurueckfallen kann.
-      const allCards = buildSaveDeckCards({ mainDeck, extraDeck, sideDeck });
-      // Spec E2 §5: Notizen nur mitschicken, wenn sie sich geaendert haben.
-      const deckId = activeDeck.id;
-      const notesChanged = notes !== (activeDeck.notes || '');
-      // Spec E3 §4/§8: Format nur mitschicken, wenn es sich geaendert hat (vor decks_format_role.sql zaehlt alles als TCG).
-      const formatChanged = format !== normalizeFormat(activeDeck.format);
+      // F1: Schutz am Anfang, nicht nur ueber `disabled` -- ein zweiter Aufruf waehrend eines laufenden
+      // Speicherns kehrt sofort zurueck (sonst verdoppelt ein Doppelklick die Deckkarten-Zeilen).
+      if (!activeDeck || !window.api || saving) return;
+      setSaving(true);
       try {
-          await window.api.saveDeck(deckId, allCards, notesChanged ? notes : undefined, formatChanged ? format : undefined);
+          // F1: name/image_url mitschicken -- sonst loescht "Save Deck" Katalognamen/-bilder nicht besessener
+          // (importierter) Karten, weil save-deck fuer sie nur auf die lokale cards-Tabelle zurueckfallen kann.
+          const allCards = buildSaveDeckCards({ mainDeck, extraDeck, sideDeck });
+          // Spec E2 §5: Notizen nur mitschicken, wenn sie sich geaendert haben.
+          const deckId = activeDeck.id;
+          const notesChanged = notes !== (activeDeck.notes || '');
+          // Spec E3 §4/§8: Format nur mitschicken, wenn es sich geaendert hat (vor decks_format_role.sql zaehlt alles als TCG).
+          const formatChanged = format !== normalizeFormat(activeDeck.format);
+          // F2: saveDeck wirft bei einem gescheiterten Format-Update nicht mehr -- Karten und Notizen sind
+          // dann schon gespeichert, also werden Notizen-Stand und Abgleich immer aktualisiert; nur das Format
+          // wird bei formatError NICHT uebernommen (es steht ja nicht wirklich in der Cloud).
+          const result = await window.api.saveDeck(deckId, allCards, notesChanged ? notes : undefined, formatChanged ? format : undefined);
+          if (notesChanged) {
+              setDecks((prev) => prev.map((d) => (d.id === deckId ? { ...d, notes } : d)));
+              setActiveDeck((prev) => (prev?.id === deckId ? { ...prev, notes } : prev));
+          }
+          if (formatChanged && !result.formatError) {
+              setDecks((prev) => prev.map((d) => (d.id === deckId ? { ...d, format } : d)));
+              setActiveDeck((prev) => (prev?.id === deckId ? { ...prev, format } : prev));
+          }
+          reloadCoverage();   // Spec E1: die Deck-Liste rechnet mit den gespeicherten Deckkarten
+          alert(result.formatError || "Deck saved!");
       } catch (e) {
           alert(e.message || String(e));
-          return;
+      } finally {
+          setSaving(false);
       }
-      if (notesChanged) {
-          setDecks((prev) => prev.map((d) => (d.id === deckId ? { ...d, notes } : d)));
-          setActiveDeck((prev) => (prev?.id === deckId ? { ...prev, notes } : prev));
-      }
-      if (formatChanged) {
-          setDecks((prev) => prev.map((d) => (d.id === deckId ? { ...d, format } : d)));
-          setActiveDeck((prev) => (prev?.id === deckId ? { ...prev, format } : prev));
-      }
-      reloadCoverage();   // Spec E1: die Deck-Liste rechnet mit den gespeicherten Deckkarten
-      alert("Deck saved!");
   };
 
   // Spec E1 §3/§9: Deckbox zuordnen. Lehnt die Cloud ab (Unique-Index), bleibt alles, wie es war, und die Meldung steht.
@@ -412,7 +424,7 @@ export default function DeckBuilder() {
                         </div>
                         <div className="flex gap-2">
                             <DeckExportMenu deckName={activeDeck.name} entries={exportEntries} />
-                            <button onClick={handleSaveDeck} className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium shadow-lg shadow-space-violet/20">
+                            <button onClick={handleSaveDeck} disabled={saving} className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium shadow-lg shadow-space-violet/20 disabled:opacity-50 disabled:cursor-not-allowed">
                                 <Save className="w-4 h-4 mr-2" />
                                 Save Deck
                             </button>
