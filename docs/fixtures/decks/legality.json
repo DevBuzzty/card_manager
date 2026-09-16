@@ -1,0 +1,246 @@
+{
+  "_comment": "Spec E3 §4/§5 — Legalitaet TCG/OCG/Frei, Badge, Banlist-Stufe, Banlist-Stand, Kopien-Grenze. Leser: desktop/src/utils/deckLegality.test.js und android DeckLegalityTest.kt. legality[].cards = Zeilen der genannten bases (in dieser Reihenfolge) plus cards; catalog false = kein Katalog (null). Passcodes 1000xxxx und 12345678/87654321 sind erfundene Testkarten; 12345678/87654321 fehlen absichtlich im Katalog.",
+  "catalog": {
+    "aliases": {"46986415":"46986414","55144523":"55144522"},
+    "cards": {
+      "46986414": {"name":"Dunkler Magier","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "55144522": {"name":"Topf der Gier","type":"Spell Card","ban_tcg":"forbidden","ban_ocg":"forbidden"},
+      "18144506": {"name":"Harpie's Feather Duster","type":"Spell Card","ban_tcg":"limited","ban_ocg":"semi"},
+      "14558127": {"name":"Asche-Blüte & Freudiger Frühling","type":"Tuner Monster","ban_tcg":null,"ban_ocg":"semi"},
+      "1861629": {"name":"Decode Talker","type":"Link Monster","ban_tcg":null,"ban_ocg":null},
+      "10000099": {"name":"Ohne Typ","type":null,"ban_tcg":null,"ban_ocg":null},
+      "10000001": {"name":"Füller 1","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000002": {"name":"Füller 2","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000003": {"name":"Füller 3","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000004": {"name":"Füller 4","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000005": {"name":"Füller 5","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000006": {"name":"Füller 6","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000007": {"name":"Füller 7","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000008": {"name":"Füller 8","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000009": {"name":"Füller 9","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000010": {"name":"Füller 10","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000011": {"name":"Füller 11","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000012": {"name":"Füller 12","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000013": {"name":"Füller 13","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000014": {"name":"Füller 14","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000015": {"name":"Füller 15","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000016": {"name":"Füller 16","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000017": {"name":"Füller 17","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000018": {"name":"Füller 18","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000019": {"name":"Füller 19","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000020": {"name":"Füller 20","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000021": {"name":"Füller 21","type":"Normal Monster","ban_tcg":null,"ban_ocg":null},
+      "10000101": {"name":"Fusion 1","type":"Fusion Monster","ban_tcg":null,"ban_ocg":null},
+      "10000102": {"name":"Fusion 2","type":"Fusion Monster","ban_tcg":null,"ban_ocg":null},
+      "10000103": {"name":"Fusion 3","type":"Fusion Monster","ban_tcg":null,"ban_ocg":null},
+      "10000104": {"name":"Fusion 4","type":"Fusion Monster","ban_tcg":null,"ban_ocg":null},
+      "10000105": {"name":"Fusion 5","type":"Fusion Monster","ban_tcg":null,"ban_ocg":null}
+    }
+  },
+  "bases": {
+    "main37": [{"card_id":"10000001","name":null,"count":3,"section":"main"},{"card_id":"10000002","name":null,"count":3,"section":"main"},{"card_id":"10000003","name":null,"count":3,"section":"main"},{"card_id":"10000004","name":null,"count":3,"section":"main"},{"card_id":"10000005","name":null,"count":3,"section":"main"},{"card_id":"10000006","name":null,"count":3,"section":"main"},{"card_id":"10000007","name":null,"count":3,"section":"main"},{"card_id":"10000008","name":null,"count":3,"section":"main"},{"card_id":"10000009","name":null,"count":3,"section":"main"},{"card_id":"10000010","name":null,"count":3,"section":"main"},{"card_id":"10000011","name":null,"count":3,"section":"main"},{"card_id":"10000012","name":null,"count":3,"section":"main"},{"card_id":"10000013","name":null,"count":1,"section":"main"}],
+    "main40": [{"card_id":"10000001","name":null,"count":3,"section":"main"},{"card_id":"10000002","name":null,"count":3,"section":"main"},{"card_id":"10000003","name":null,"count":3,"section":"main"},{"card_id":"10000004","name":null,"count":3,"section":"main"},{"card_id":"10000005","name":null,"count":3,"section":"main"},{"card_id":"10000006","name":null,"count":3,"section":"main"},{"card_id":"10000007","name":null,"count":3,"section":"main"},{"card_id":"10000008","name":null,"count":3,"section":"main"},{"card_id":"10000009","name":null,"count":3,"section":"main"},{"card_id":"10000010","name":null,"count":3,"section":"main"},{"card_id":"10000011","name":null,"count":3,"section":"main"},{"card_id":"10000012","name":null,"count":3,"section":"main"},{"card_id":"10000013","name":null,"count":3,"section":"main"},{"card_id":"10000014","name":null,"count":1,"section":"main"}],
+    "main60": [{"card_id":"10000001","name":null,"count":3,"section":"main"},{"card_id":"10000002","name":null,"count":3,"section":"main"},{"card_id":"10000003","name":null,"count":3,"section":"main"},{"card_id":"10000004","name":null,"count":3,"section":"main"},{"card_id":"10000005","name":null,"count":3,"section":"main"},{"card_id":"10000006","name":null,"count":3,"section":"main"},{"card_id":"10000007","name":null,"count":3,"section":"main"},{"card_id":"10000008","name":null,"count":3,"section":"main"},{"card_id":"10000009","name":null,"count":3,"section":"main"},{"card_id":"10000010","name":null,"count":3,"section":"main"},{"card_id":"10000011","name":null,"count":3,"section":"main"},{"card_id":"10000012","name":null,"count":3,"section":"main"},{"card_id":"10000013","name":null,"count":3,"section":"main"},{"card_id":"10000014","name":null,"count":3,"section":"main"},{"card_id":"10000015","name":null,"count":3,"section":"main"},{"card_id":"10000016","name":null,"count":3,"section":"main"},{"card_id":"10000017","name":null,"count":3,"section":"main"},{"card_id":"10000018","name":null,"count":3,"section":"main"},{"card_id":"10000019","name":null,"count":3,"section":"main"},{"card_id":"10000020","name":null,"count":3,"section":"main"}],
+    "extra15": [{"card_id":"10000101","name":null,"count":3,"section":"extra"},{"card_id":"10000102","name":null,"count":3,"section":"extra"},{"card_id":"10000103","name":null,"count":3,"section":"extra"},{"card_id":"10000104","name":null,"count":3,"section":"extra"},{"card_id":"10000105","name":null,"count":3,"section":"extra"}],
+    "side15": [{"card_id":"10000016","name":null,"count":3,"section":"side"},{"card_id":"10000017","name":null,"count":3,"section":"side"},{"card_id":"10000018","name":null,"count":3,"section":"side"},{"card_id":"10000019","name":null,"count":3,"section":"side"},{"card_id":"10000020","name":null,"count":3,"section":"side"}]
+  },
+  "legality": [
+    {
+      "name": "TCG: 40 Main-Deck-Karten sind legal", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [],
+      "expected": {"legal":true,"violations":[],"warnings":[],"badge":"Legal","badgeKind":"legal"}
+    },
+    {
+      "name": "Regel 1: 39 Main-Deck-Karten", "format": "tcg", "catalog": true, "base": ["main37"],
+      "cards": [{"card_id":"10000014","name":null,"count":2,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":1,"cardId":null,"text":"Main Deck: 39 Karten (erlaubt 40–60)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 1: 60 Main-Deck-Karten sind legal", "format": "tcg", "catalog": true, "base": ["main60"],
+      "cards": [],
+      "expected": {"legal":true,"violations":[],"warnings":[],"badge":"Legal","badgeKind":"legal"}
+    },
+    {
+      "name": "Regel 1: 61 Main-Deck-Karten", "format": "tcg", "catalog": true, "base": ["main60"],
+      "cards": [{"card_id":"10000021","name":null,"count":1,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":1,"cardId":null,"text":"Main Deck: 61 Karten (erlaubt 40–60)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 2/3: Extra 15 und Side 15 sind legal", "format": "tcg", "catalog": true, "base": ["main40","extra15","side15"],
+      "cards": [],
+      "expected": {"legal":true,"violations":[],"warnings":[],"badge":"Legal","badgeKind":"legal"}
+    },
+    {
+      "name": "Regel 2/3: Extra 16 und Side 16", "format": "tcg", "catalog": true, "base": ["main40","extra15","side15"],
+      "cards": [{"card_id":"1861629","name":null,"count":1,"section":"extra"},{"card_id":"10000021","name":null,"count":1,"section":"side"}],
+      "expected": {"legal":false,"violations":[{"rule":2,"cardId":null,"text":"Extra Deck: 16 Karten (höchstens 15)"},{"rule":3,"cardId":null,"text":"Side Deck: 16 Karten (höchstens 15)"}],"warnings":[],"badge":"2 Verstöße","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 5: 3 Kopien über Main und Side sind legal", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"14558127","name":"Asche-Blüte","count":2,"section":"main"},{"card_id":"14558127","name":"Asche-Blüte","count":1,"section":"side"}],
+      "expected": {"legal":true,"violations":[],"warnings":[],"badge":"Legal","badgeKind":"legal"}
+    },
+    {
+      "name": "Regel 5: 4 Kopien über Main und Side", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"14558127","name":"Asche-Blüte","count":2,"section":"main"},{"card_id":"14558127","name":"Asche-Blüte","count":2,"section":"side"}],
+      "expected": {"legal":false,"violations":[{"rule":5,"cardId":"14558127","text":"Asche-Blüte: 4 Kopien (höchstens 3)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 5: Doppelzeilen desselben Passcodes zählen zusammen", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"14558127","name":"Asche-Blüte","count":1,"section":"main"},{"card_id":"14558127","name":"Asche-Blüte","count":3,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":5,"cardId":"14558127","text":"Asche-Blüte: 4 Kopien (höchstens 3)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 5: Artwork und Normalversion zählen zusammen (Name der ersten Zeile)", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"46986414","name":"Dunkler Magier","count":2,"section":"main"},{"card_id":"46986415","name":"Dark Magician","count":2,"section":"side"}],
+      "expected": {"legal":false,"violations":[{"rule":5,"cardId":"46986414","text":"Dunkler Magier: 4 Kopien (höchstens 3)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 6: verboten", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"55144522","name":"Pot of Greed","count":1,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":6,"cardId":"55144522","text":"Pot of Greed ist verboten"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 6: limitiert 1 legal, 2 Kopien Verstoß (über Abschnitte)", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"18144506","name":"Harpie's Feather Duster","count":1,"section":"main"},{"card_id":"18144506","name":"Harpie's Feather Duster","count":1,"section":"side"}],
+      "expected": {"legal":false,"violations":[{"rule":6,"cardId":"18144506","text":"Harpie's Feather Duster: 2 Kopien (limitiert 1)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 6: limitiert mit 1 Kopie ist legal", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"18144506","name":"Harpie's Feather Duster","count":1,"section":"main"}],
+      "expected": {"legal":true,"violations":[],"warnings":[],"badge":"Legal","badgeKind":"legal"}
+    },
+    {
+      "name": "OCG: dieselbe Karte ist semi-limitiert, 2 Kopien legal", "format": "ocg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"18144506","name":"Harpie's Feather Duster","count":2,"section":"main"}],
+      "expected": {"legal":true,"violations":[],"warnings":[],"badge":"Legal","badgeKind":"legal"}
+    },
+    {
+      "name": "OCG: semi-limitiert mit 3 Kopien", "format": "ocg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"18144506","name":"Harpie's Feather Duster","count":3,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":6,"cardId":"18144506","text":"Harpie's Feather Duster: 3 Kopien (semi-limitiert 2)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "OCG gegen TCG: in TCG uneingeschränkt, in OCG semi-limitiert", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"14558127","name":"Asche-Blüte","count":3,"section":"main"}],
+      "expected": {"legal":true,"violations":[],"warnings":[],"badge":"Legal","badgeKind":"legal"}
+    },
+    {
+      "name": "OCG gegen TCG: dieselben 3 Kopien in OCG", "format": "ocg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"14558127","name":"Asche-Blüte","count":3,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":6,"cardId":"14558127","text":"Asche-Blüte: 3 Kopien (semi-limitiert 2)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Vorrang: verboten mit 4 Kopien zeigt nur Regel 6", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"55144522","name":"Pot of Greed","count":4,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":6,"cardId":"55144522","text":"Pot of Greed ist verboten"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Vorrang: limitiert mit 4 Kopien zeigt nur Regel 6", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"18144506","name":"Harpie's Feather Duster","count":4,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":6,"cardId":"18144506","text":"Harpie's Feather Duster: 4 Kopien (limitiert 1)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 4: Link im Main, Monster im Extra (Katalogname), ohne Typ und Side ungeprüft", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"1861629","name":"Decode Talker","count":1,"section":"main"},{"card_id":"14558127","name":null,"count":1,"section":"extra"},{"card_id":"10000099","name":"Ohne Typ","count":1,"section":"extra"},{"card_id":"1861629","name":"Decode Talker","count":1,"section":"side"}],
+      "expected": {"legal":false,"violations":[{"rule":4,"cardId":"1861629","text":"Decode Talker im Main Deck gehört ins Extra Deck"},{"rule":4,"cardId":"14558127","text":"Asche-Blüte & Freudiger Frühling im Extra Deck gehört ins Main Deck"}],"warnings":[],"badge":"2 Verstöße","badgeKind":"crit"}
+    },
+    {
+      "name": "Reihenfolge: Regeln nacheinander, innerhalb erstes Auftreten in Main, Extra, Side", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"55144522","name":"Pot of Greed","count":1,"section":"side"},{"card_id":"14558127","name":"Asche-Blüte","count":1,"section":"extra"},{"card_id":"18144506","name":"Harpie's Feather Duster","count":2,"section":"main"},{"card_id":"1861629","name":"Decode Talker","count":1,"section":"main"},{"card_id":"46986414","name":"Dunkler Magier","count":4,"section":"side"}],
+      "expected": {"legal":false,"violations":[{"rule":4,"cardId":"1861629","text":"Decode Talker im Main Deck gehört ins Extra Deck"},{"rule":4,"cardId":"14558127","text":"Asche-Blüte im Extra Deck gehört ins Main Deck"},{"rule":5,"cardId":"46986414","text":"Dunkler Magier: 4 Kopien (höchstens 3)"},{"rule":6,"cardId":"18144506","text":"Harpie's Feather Duster: 2 Kopien (limitiert 1)"},{"rule":6,"cardId":"55144522","text":"Pot of Greed ist verboten"}],"warnings":[],"badge":"5 Verstöße","badgeKind":"crit"}
+    },
+    {
+      "name": "Unbekannte Karte: eine Warnung je Haupt-Passcode", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"12345678","name":"Unbekannte Karte","count":1,"section":"main"},{"card_id":"12345678","name":"Unbekannte Karte","count":1,"section":"side"}],
+      "expected": {"legal":true,"violations":[],"warnings":[{"cardId":"12345678","text":"Banlist unbekannt: Passcode 12345678"}],"badge":"Legal · 1 Warnung","badgeKind":"warn"}
+    },
+    {
+      "name": "Unbekannte Karten: zwei Warnungen, Regel 5 gilt trotzdem (Name fällt auf den Passcode zurück)", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"12345678","name":"Unbekannte Karte","count":1,"section":"main"},{"card_id":"87654321","name":null,"count":4,"section":"side"}],
+      "expected": {"legal":false,"violations":[{"rule":5,"cardId":"87654321","text":"87654321: 4 Kopien (höchstens 3)"}],"warnings":[{"cardId":"12345678","text":"Banlist unbekannt: Passcode 12345678"},{"cardId":"87654321","text":"Banlist unbekannt: Passcode 87654321"}],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Unbekannte Karten ohne Verstoß: Plural der Warnungen", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"12345678","name":null,"count":1,"section":"main"},{"card_id":"87654321","name":null,"count":1,"section":"side"}],
+      "expected": {"legal":true,"violations":[],"warnings":[{"cardId":"12345678","text":"Banlist unbekannt: Passcode 12345678"},{"cardId":"87654321","text":"Banlist unbekannt: Passcode 87654321"}],"badge":"Legal · 2 Warnungen","badgeKind":"warn"}
+    },
+    {
+      "name": "Katalog fehlt: eine Warnung, Regeln 1–3 und 5 laufen (5 ohne Zuordnung), 4 und 6 entfallen", "format": "tcg", "catalog": false, "base": ["main37"],
+      "cards": [{"card_id":"55144522","name":"Pot of Greed","count":1,"section":"main"},{"card_id":"1861629","name":"Decode Talker","count":1,"section":"main"},{"card_id":"46986414","name":"Dunkler Magier","count":2,"section":"side"},{"card_id":"46986415","name":"Dark Magician","count":2,"section":"side"}],
+      "expected": {"legal":false,"violations":[{"rule":1,"cardId":null,"text":"Main Deck: 39 Karten (erlaubt 40–60)"}],"warnings":[{"cardId":null,"text":"Katalog fehlt – Banlist unbekannt"}],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Katalog fehlt: Regel 5 ohne Zuordnung", "format": "ocg", "catalog": false, "base": ["main40"],
+      "cards": [{"card_id":"14558127","name":"Asche-Blüte","count":4,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":5,"cardId":"14558127","text":"Asche-Blüte: 4 Kopien (höchstens 3)"}],"warnings":[{"cardId":null,"text":"Katalog fehlt – Banlist unbekannt"}],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Katalog fehlt und sonst nichts: Legal mit einer Warnung", "format": "tcg", "catalog": false, "base": ["main40"],
+      "cards": [],
+      "expected": {"legal":true,"violations":[],"warnings":[{"cardId":null,"text":"Katalog fehlt – Banlist unbekannt"}],"badge":"Legal · 1 Warnung","badgeKind":"warn"}
+    },
+    {
+      "name": "Frei: keine Regeln, keine Warnungen", "format": "free", "catalog": true, "base": ["main60"],
+      "cards": [{"card_id":"10000021","name":null,"count":1,"section":"main"},{"card_id":"55144522","name":"Pot of Greed","count":4,"section":"main"},{"card_id":"1861629","name":"Decode Talker","count":1,"section":"main"},{"card_id":"12345678","name":null,"count":1,"section":"side"}],
+      "expected": {"legal":true,"violations":[],"warnings":[],"badge":"Frei","badgeKind":"free"}
+    },
+    {
+      "name": "Frei ohne Katalog: keine Warnung", "format": "free", "catalog": false, "base": [],
+      "cards": [],
+      "expected": {"legal":true,"violations":[],"warnings":[],"badge":"Frei","badgeKind":"free"}
+    },
+    {
+      "name": "Unbekanntes Format zählt als TCG", "format": "goat", "catalog": true, "base": ["main37"],
+      "cards": [],
+      "expected": {"legal":false,"violations":[{"rule":1,"cardId":null,"text":"Main Deck: 37 Karten (erlaubt 40–60)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Leeres Deck", "format": "tcg", "catalog": true, "base": [],
+      "cards": [],
+      "expected": {"legal":false,"violations":[{"rule":1,"cardId":null,"text":"Main Deck: 0 Karten (erlaubt 40–60)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    }
+  ],
+  "formats": [
+    {"format":"tcg","normalized":"tcg","label":"TCG"},
+    {"format":"ocg","normalized":"ocg","label":"OCG"},
+    {"format":"free","normalized":"free","label":"Frei"},
+    {"format":null,"normalized":"tcg","label":"TCG"},
+    {"format":"goat","normalized":"tcg","label":"TCG"}
+  ],
+  "ban": [
+    {"passcode":"55144522","format":"tcg","catalog":true,"expected":"forbidden","label":"Verboten"},
+    {"passcode":"55144523","format":"ocg","catalog":true,"expected":"forbidden","label":"Verboten"},
+    {"passcode":"18144506","format":"tcg","catalog":true,"expected":"limited","label":"1"},
+    {"passcode":"18144506","format":"ocg","catalog":true,"expected":"semi","label":"2"},
+    {"passcode":"14558127","format":"tcg","catalog":true,"expected":null,"label":null},
+    {"passcode":"14558127","format":"ocg","catalog":true,"expected":"semi","label":"2"},
+    {"passcode":"55144522","format":"free","catalog":true,"expected":null,"label":null},
+    {"passcode":"55144522","format":"tcg","catalog":false,"expected":null,"label":null},
+    {"passcode":"12345678","format":"tcg","catalog":true,"expected":null,"label":null}
+  ],
+  "banlistDate": [
+    {"builtAt":"2026-09-16T03:12:45.123Z","text":"Banlist-Stand: 16.09.2026"},
+    {"builtAt":"2026-01-02","text":"Banlist-Stand: 02.01.2026"},
+    {"builtAt":null,"text":null},
+    {"builtAt":"kaputt","text":null}
+  ],
+  "violationCount": [
+    {"n":0,"text":"0 Verstöße"},
+    {"n":1,"text":"1 Verstoß"},
+    {"n":3,"text":"3 Verstöße"}
+  ],
+  "canAddCopy": [
+    {"name":"2 Kopien, eine dazu","format":"tcg","aliases":true,"cards":[{"card_id":"46986414","name":null,"count":2,"section":"main"}],"passcode":"46986414","expected":true},
+    {"name":"3 Kopien, vierte blockiert","format":"tcg","aliases":true,"cards":[{"card_id":"46986414","name":null,"count":3,"section":"main"}],"passcode":"46986414","expected":false},
+    {"name":"über Abschnitte gezählt","format":"tcg","aliases":true,"cards":[{"card_id":"46986414","name":null,"count":2,"section":"main"},{"card_id":"46986414","name":null,"count":1,"section":"side"}],"passcode":"46986414","expected":false},
+    {"name":"Doppelzeilen im selben Abschnitt","format":"tcg","aliases":true,"cards":[{"card_id":"46986414","name":null,"count":1,"section":"main"},{"card_id":"46986414","name":null,"count":2,"section":"main"}],"passcode":"46986414","expected":false},
+    {"name":"Artwork über die Zuordnung","format":"tcg","aliases":true,"cards":[{"card_id":"46986414","name":null,"count":2,"section":"main"},{"card_id":"46986415","name":null,"count":1,"section":"side"}],"passcode":"46986415","expected":false},
+    {"name":"Artwork ohne Zuordnung zählt einzeln","format":"tcg","aliases":false,"cards":[{"card_id":"46986414","name":null,"count":2,"section":"main"},{"card_id":"46986415","name":null,"count":1,"section":"side"}],"passcode":"46986415","expected":true},
+    {"name":"OCG wie TCG","format":"ocg","aliases":true,"cards":[{"card_id":"46986414","name":null,"count":3,"section":"main"}],"passcode":"46986414","expected":false},
+    {"name":"Frei immer","format":"free","aliases":true,"cards":[{"card_id":"46986414","name":null,"count":3,"section":"main"}],"passcode":"46986414","expected":true},
+    {"name":"unbekanntes Format zählt als TCG","format":null,"aliases":true,"cards":[{"card_id":"46986414","name":null,"count":3,"section":"main"}],"passcode":"46986414","expected":false},
+    {"name":"Banlist blockiert nie","format":"tcg","aliases":true,"cards":[{"card_id":"55144522","name":null,"count":2,"section":"main"}],"passcode":"55144522","expected":true},
+    {"name":"leeres Deck","format":"tcg","aliases":true,"cards":[],"passcode":"55144522","expected":true}
+  ]
+}
