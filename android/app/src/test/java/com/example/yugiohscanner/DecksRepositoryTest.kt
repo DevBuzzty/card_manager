@@ -4,7 +4,12 @@ import com.example.yugiohscanner.cloud.Deck
 import com.example.yugiohscanner.cloud.DeckCard
 import com.example.yugiohscanner.cloud.DecksRepository
 import com.example.yugiohscanner.ml.ImportCard
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -69,6 +74,25 @@ class DecksRepositoryTest {
         }.exceptionOrNull()
         assertEquals("Karten anlegen fehlgeschlagen (400): kaputt", error?.message)
         assertEquals(listOf(42L), deleted)
+    }
+
+    // F5: bricht der Nutzer waehrend "Anlegen" ab (System-Zurueck), ist der umgebende Scope schon abgebrochen,
+    // wenn der Rueckbau anlaeuft -- ohne NonCancellable wuerde `delete` an seinem eigenen Suspension-Punkt
+    // (hier withContext) sofort abgebrochen und nie ausgefuehrt; das leere Deck bliebe stehen.
+    @Test fun `Abbruch nach dem Insert -- Rueckbau laeuft trotzdem`() = runTest {
+        val deleted = mutableListOf<Long>()
+        val job = launch {
+            DecksRepository.createWithRollback(
+                create = { 9L },
+                insertCards = {
+                    coroutineContext[Job]?.cancel()
+                    throw CancellationException("abgebrochen")
+                },
+                delete = { id -> withContext(Dispatchers.Default) { deleted.add(id) } },
+            )
+        }
+        job.join()
+        assertEquals(listOf(9L), deleted)
     }
 
     @Test fun `Import gelingt, nichts geloescht`() = runTest {

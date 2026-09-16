@@ -3,6 +3,7 @@ package com.example.yugiohscanner.cloud
 import com.example.yugiohscanner.ml.DeckImport
 import com.example.yugiohscanner.ml.ImportCard
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -137,7 +138,12 @@ object DecksRepository {
         try {
             insertCards(id)
         } catch (e: Exception) {
-            try { delete(id) } catch (_: Exception) { /* der eigentliche Fehler zaehlt */ }
+            // F5: bricht der Nutzer waehrend "Anlegen" ab (System-Zurueck), ist der umgebende Scope bereits
+            // abgebrochen -- ohne NonCancellable wuerde der Rueckbau selbst am ersten Suspension-Punkt sofort
+            // abgebrochen und das leere Deck bliebe stehen.
+            withContext(NonCancellable) {
+                try { delete(id) } catch (_: Exception) { /* der eigentliche Fehler zaehlt */ }
+            }
             throw e
         }
         return id
