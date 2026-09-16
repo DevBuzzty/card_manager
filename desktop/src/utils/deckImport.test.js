@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   normalizeName, levenshtein, deckSectionFor, moveTarget, moveLabel, resolveImport, importPlan, countsText, skippedText,
-  failedText, deckNameFor, suggestionText, ambiguousOptionText, unknownPasscodeText, prepareImport,
+  failedText, deckNameFor, suggestionText, ambiguousOptionText, unknownPasscodeText, prepareImport, canonicalPasscode,
 } from './deckImport.js';
 
 // ZWILLING: android/app/src/test/java/com/example/yugiohscanner/DeckImportTest.kt liest dieselbe Fixture.
@@ -27,7 +27,7 @@ test('Fixture: Abschnitt per Typ und Zeilenaktion', () => {
 
 for (const c of FIX.resolve) {
   test(`Fixture auflösen: ${c.name}`, () => {
-    const resolved = resolveImport(c.parsed, c.catalog ? FIX.catalog : null);
+    const resolved = resolveImport(c.parsed, c.catalog ? FIX.catalog : null, c.aliases ? FIX.aliases : null);
     assert.equal(resolved.catalogMissing, c.expected.catalogMissing);
     assert.deepEqual(resolved.rows.map((r) => ({ ...r, candidates: r.candidates.map((x) => x.passcode) })), c.expected.rows);
     for (const p of c.plans) {
@@ -39,6 +39,15 @@ for (const c of FIX.resolve) {
     }
   });
 }
+
+// Spec E3 §3 -- aliases[p] ?? p; ohne Zuordnung (kein Katalog) steht jeder Passcode fuer sich.
+test('Fixture: Haupt-Passcode über die Artwork-Zuordnung', () => {
+  for (const c of FIX.canonical) {
+    assert.equal(canonicalPasscode(c.passcode, c.aliases ? FIX.aliases : null), c.expected, JSON.stringify(c));
+  }
+  assert.equal(canonicalPasscode(46986415, FIX.aliases), '46986414', 'Zahl als Passcode');
+  assert.equal(canonicalPasscode('toString', {}), 'toString', 'nur eigene Schlüssel');
+});
 
 test('Fixture: Texte', () => {
   for (const t of FIX.texts.failed) assert.equal(failedText(t.message), t.text);
@@ -62,4 +71,14 @@ test('Vorschau vorbereiten: YDKE lädt nur die gelesenen Passcodes, Textliste al
   assert.equal(calls.length, 2, 'ohne gelesene Karte kein Katalogzugriff');
   const missing = await prepareImport('3 Raigeki', undefined, async () => ({ available: false, cards: [] }));
   assert.equal(missing.resolved.catalogMissing, true);
+});
+
+// Spec E3 §3 -- der Lader liefert fuer Artwork-Passcodes die Hauptkarte und die Zuordnung; die Deckkarte behaelt den
+// Artwork-Passcode.
+test('Vorschau vorbereiten: Artwork-Passcode über aliases des Laders aufgelöst', async () => {
+  const main = FIX.catalog.find((c) => c.id === 46986414);
+  const ydk = await prepareImport('#main\n46986415\n', undefined, async () => ({ available: true, cards: [main], aliases: { 46986415: '46986414' } }));
+  assert.deepEqual(ydk.resolved.rows[0].candidates, [{ passcode: '46986415', name: 'Dunkler Magier', type: 'Normal Monster' }]);
+  const old = await prepareImport('#main\n46986415\n', undefined, async () => ({ available: true, cards: [main] }));
+  assert.equal(old.resolved.rows[0].status, 'unknownPasscode', 'Lader ohne aliases (alter Katalog)');
 });
