@@ -11,6 +11,7 @@ import DeckNewMenu from './DeckNewMenu';
 import DeckImportDialog from './DeckImportDialog';
 import DeckExportMenu from './DeckExportMenu';
 import { deckSectionFor, moveLabel, moveTarget } from '../utils/deckImport';
+import { buildSaveDeckCards } from '../utils/saveDeckPayload';
 
 // Spec E1 §4: alles, was der Abgleich braucht, in einem Rutsch -- lokale Exemplare und Behaelter, alle Deckkarten
 // aus der Cloud, Katalogpreise. Die Decks selbst kommen wie bisher ueber getDecks.
@@ -127,15 +128,18 @@ export default function DeckBuilder() {
 
   const handleSaveDeck = async () => {
       if (!activeDeck || !window.api) return;
-      const allCards = [
-          ...mainDeck.map(c => ({ id: c.card_id, type: 'main', quantity: c.quantity })),
-          ...extraDeck.map(c => ({ id: c.card_id, type: 'extra', quantity: c.quantity })),
-          ...sideDeck.map(c => ({ id: c.card_id, type: 'side', quantity: c.quantity }))
-      ];
+      // F1: name/image_url mitschicken -- sonst loescht "Save Deck" Katalognamen/-bilder nicht besessener
+      // (importierter) Karten, weil save-deck fuer sie nur auf die lokale cards-Tabelle zurueckfallen kann.
+      const allCards = buildSaveDeckCards({ mainDeck, extraDeck, sideDeck });
       // Spec E2 §5: Notizen nur mitschicken, wenn sie sich geaendert haben.
       const deckId = activeDeck.id;
       const notesChanged = notes !== (activeDeck.notes || '');
-      await window.api.saveDeck(deckId, allCards, notesChanged ? notes : undefined);
+      try {
+          await window.api.saveDeck(deckId, allCards, notesChanged ? notes : undefined);
+      } catch (e) {
+          alert(e.message || String(e));
+          return;
+      }
       if (notesChanged) {
           setDecks((prev) => prev.map((d) => (d.id === deckId ? { ...d, notes } : d)));
           setActiveDeck((prev) => (prev?.id === deckId ? { ...prev, notes } : prev));
