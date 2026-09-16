@@ -10,10 +10,12 @@ import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Deck(val id: Long, val name: String)
+data class Deck(val id: Long, val name: String, val containerId: String? = null)
 data class DeckCard(
     val id: Long, val cardId: String, val name: String?, val imageUrl: String?,
     val count: Int, val section: String,
+    // Spec E1 §4: nur bei loadAllCards gesetzt (Deck-Liste mit Zahlen); loadCards(deckId) kennt das Deck ohnehin.
+    val deckId: Long = 0L,
 )
 
 // Reads/writes the Supabase decks / deck_cards tables over REST, so the phone's

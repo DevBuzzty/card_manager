@@ -126,6 +126,18 @@
       "deckId": 5,
       "deckCards": [],
       "expected": {"boxId":null,"cards":[],"totals":{"needed":0,"owned":0,"boxed":0,"missing":0,"missingCards":0,"cost":0,"unpriced":0},"texts":{"box":"keine Box","header":"vorhanden 0/0 · in der Box 0/0 · fehlen 0","list":"0/0 vorhanden","cost":null,"rows":[],"reserved":[]}}
+    },
+    {
+      "name": "Rundung bei genau halbem Cent",
+      "deckId": 5,
+      "deckCards": [{"card_id":"55555555","count":1,"section":"main"}],
+      "prices": {"55555555":0.125},
+      "expected": {
+        "boxId": null,
+        "cards": [{"card_id":"55555555","needed":1,"inBox":0,"available":0,"missing":1,"price":0.125,"missingCost":0.13,"reservedElsewhere":[]}],
+        "totals": {"needed":1,"owned":0,"boxed":0,"missing":1,"missingCards":1,"cost":0.13,"unpriced":0},
+        "texts": {"box":"keine Box","header":"vorhanden 0/1 · in der Box 0/1 · fehlen 1 · ca. 0,13 €","list":"0/1 vorhanden · ca. 0,13 €","cost":"ca. 0,13 €","rows":["Box 0 · verfügbar 0 · gebraucht 1"],"reserved":[[]]}
+      }
     }
   ],
   "choices": [{"deckId":1,"container_ids":["box-rot","box-frei"]},{"deckId":2,"container_ids":["box-gruen","box-frei"]},{"deckId":3,"container_ids":["box-frei"]},{"deckId":5,"container_ids":["box-frei"]}]
