@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Save, Upload, FileUp, Download, BarChart2, PieChart as PieChartIcon, Play } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
-import { LOADING, boxLabel, deckBoxId, deckCoverage, listText } from '../utils/deckCoverage';
+import { LOADING, boxLabel, deckCoverage, listText } from '../utils/deckCoverage';
 import { fillBoxProposal } from '../utils/fillBoxProposal';
 import DeckCoverageHeader from './DeckCoverageHeader';
 import DeckCardNumbers from './DeckCardNumbers';
@@ -129,12 +129,15 @@ export default function DeckBuilder() {
   // Spec E1 §3/§9: Deckbox zuordnen. Lehnt die Cloud ab (Unique-Index), bleibt alles, wie es war, und die Meldung steht.
   const handleChangeBox = async (containerId) => {
       if (!activeDeck || !window.api) return;
+      const deckId = activeDeck.id;
       setBoxError(null);
       try {
-          const res = await window.api.setDeckContainer({ deckId: activeDeck.id, containerId: containerId || null });
+          const res = await window.api.setDeckContainer({ deckId, containerId: containerId || null });
           if (!res.success) { setBoxError(res.error); return; }
-          setDecks((prev) => prev.map((d) => (d.id === activeDeck.id ? { ...d, container_id: containerId || null } : d)));
-          setActiveDeck((prev) => ({ ...prev, container_id: containerId || null }));
+          setDecks((prev) => prev.map((d) => (d.id === deckId ? { ...d, container_id: containerId || null } : d)));
+          // F2: waehrend des Netzwegs kann der Nutzer ein anderes Deck geoeffnet haben -- dessen activeDeck darf
+          // nicht die Box-ID dieses (fremden) Aufrufs bekommen.
+          setActiveDeck((prev) => (prev?.id === deckId ? { ...prev, container_id: containerId || null } : prev));
       } catch (e) {
           setBoxError(e.message || String(e));
       }
@@ -464,7 +467,7 @@ export default function DeckBuilder() {
 
         {dialog && dialog.kind === 'fill' && activeCoverage && (
             <FillBoxDialog
-                boxId={deckBoxId(activeDeck, coverageData.containers)}
+                boxId={activeCoverage.boxId}
                 boxName={boxLabel(activeDeck, coverageData.containers)}
                 proposal={dialog.proposal} copiesById={copiesById} containersById={containersById}
                 onClose={() => setDialog(null)} onMoved={reloadCoverage}
