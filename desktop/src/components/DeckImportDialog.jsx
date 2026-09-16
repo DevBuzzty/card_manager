@@ -19,10 +19,12 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
   const [choices, setChoices] = useState({});
   const [name, setName] = useState(deckNameFor(source.name));
   const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(!!source.text);
+  // F7: source.text ist bei einer leeren YDK-Datei "" (falsy) -- die Truthy-Pruefung fiel dann faelschlich in den
+  // Einfuegen-Modus statt "Keine Deckliste erkannt" zu zeigen. != null unterscheidet "keine Datei" von "leere Datei".
+  const [busy, setBusy] = useState(source.text != null);
 
   useEffect(() => {
-    if (!source.text) return undefined;
+    if (source.text == null) return undefined;
     let alive = true;
     prepareImport(source.text, source.format, loadCatalog)
       .then((r) => { if (!alive) return; setBusy(false); if (r.error) setError(r.error); else setResolved(r.resolved); })
@@ -74,7 +76,7 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
           <button type="button" onClick={onClose} disabled={busy} className="text-ink-faint hover:text-ink"><X className="w-4 h-4" /></button>
         </div>
 
-        {!resolved && !source.text && (
+        {!resolved && source.text == null && (
           <textarea
             autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={10}
             placeholder="ydke://… oder eine Deckliste, z. B. 3 Ash Blossom & Joyous Spring"
