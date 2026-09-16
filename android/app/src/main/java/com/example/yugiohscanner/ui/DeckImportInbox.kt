@@ -21,8 +21,12 @@ object DeckImportInbox {
     /**
      * Nur ACTION_SEND mit text/plain und nicht leerem EXTRA_TEXT; keine Dateien. Reine Funktion mit den Intent-Werten,
      * damit ohne Geraet testbar ("android.intent.action.SEND" = Intent.ACTION_SEND).
+     * F3: `launchedFromHistory` = Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY gesetzt (Neuaufruf aus "Zuletzt
+     * verwendet") -- dann nie ins Postfach legen, sonst spielt jeder Blick in "Zuletzt verwendet" den zuletzt
+     * geteilten Text erneut ab.
      */
-    fun sharedText(action: String?, mimeType: String?, extraText: CharSequence?): String? {
+    fun sharedText(action: String?, mimeType: String?, extraText: CharSequence?, launchedFromHistory: Boolean = false): String? {
+        if (launchedFromHistory) return null
         if (action != "android.intent.action.SEND") return null
         if (mimeType == null || !mimeType.startsWith("text/plain")) return null
         return extraText?.toString()?.takeIf { it.isNotBlank() }

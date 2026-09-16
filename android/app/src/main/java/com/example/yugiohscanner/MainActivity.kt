@@ -30,7 +30,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun offerSharedText(intent: Intent?) {
-        DeckImportInbox.sharedText(intent?.action, intent?.type, intent?.getCharSequenceExtra(Intent.EXTRA_TEXT))
+        // F3: ein Neuaufruf aus "Zuletzt verwendet" traegt dasselbe Intent-Extra weiter -- ohne diese Sperre
+        // spielte jeder Blick in die Uebersicht den zuletzt geteilten Text erneut ab.
+        val launchedFromHistory = (intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
+        DeckImportInbox.sharedText(intent?.action, intent?.type, intent?.getCharSequenceExtra(Intent.EXTRA_TEXT), launchedFromHistory)
             ?.let { DeckImportInbox.offer(it) }
     }
 }

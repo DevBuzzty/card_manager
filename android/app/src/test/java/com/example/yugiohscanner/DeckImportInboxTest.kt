@@ -17,6 +17,13 @@ class DeckImportInboxTest {
         assertEquals(null, DeckImportInbox.sharedText(send, "text/plain", null))
     }
 
+    // F3: Neuaufruf aus "Zuletzt verwendet" (FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) darf den Text nie erneut anbieten.
+    @Test fun `launchedFromHistory liefert nie Text, auch bei sonst gueltigem Intent`() {
+        val send = "android.intent.action.SEND"
+        assertEquals(null, DeckImportInbox.sharedText(send, "text/plain", "ydke://!!!", launchedFromHistory = true))
+        assertEquals("ydke://!!!", DeckImportInbox.sharedText(send, "text/plain", "ydke://!!!", launchedFromHistory = false))
+    }
+
     @Test fun `Postfach haelt den Text bis zum Herausnehmen, genau einmal`() {
         DeckImportInbox.take()
         DeckImportInbox.offer("ydke://!!!")
