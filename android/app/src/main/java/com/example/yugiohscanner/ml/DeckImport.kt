@@ -75,6 +75,10 @@ object DeckImport {
     fun suggestionText(name: String) = "Meintest du $name?"
     fun ambiguousOptionText(c: ImportCandidate) = "${c.name} (${c.passcode})"
     fun failedText(message: String?) = "Import fehlgeschlagen: $message"
+
+    // F8: e.message ist bei vielen Exceptions null -- ohne Rueckfall auf den Klassennamen zeigte "Anlegen" woertlich
+    // "Import fehlgeschlagen: null". Kotlin-seitig, kein JS-Zwilling: dort faellt der Aufrufer schon auf String(e) zurueck.
+    fun failedTextFor(e: Throwable): String = failedText(e.message ?: e.javaClass.simpleName)
     fun countsText(counts: ImportCounts) = "Main ${counts.main} · Extra ${counts.extra} · Side ${counts.side}"
     fun skippedText(n: Int): String? = if (n > 0) "$n nicht übernommen" else null
     fun deckNameFor(fileName: String?): String = fileName?.trim()?.takeIf { it.isNotEmpty() } ?: DEFAULT_DECK_NAME

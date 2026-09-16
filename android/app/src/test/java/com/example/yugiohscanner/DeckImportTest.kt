@@ -86,6 +86,13 @@ class DeckImportTest {
         for (x in t.getJSONArray("unknownPasscode").objects()) assertEquals(x.getString("text"), DeckImport.unknownPasscodeText(x.getString("passcode")))
     }
 
+    // F8: ohne e.message ("Anlegen" scheitert mit z. B. IllegalStateException()) faellt die Meldung auf den
+    // Klassennamen zurueck statt woertlich "Import fehlgeschlagen: null" zu zeigen.
+    @Test fun `failedTextFor faellt ohne Nachricht auf den Klassennamen zurueck`() {
+        assertEquals("Import fehlgeschlagen: kaputt", DeckImport.failedTextFor(RuntimeException("kaputt")))
+        assertEquals("Import fehlgeschlagen: IllegalStateException", DeckImport.failedTextFor(IllegalStateException()))
+    }
+
     @Test fun `Vorschau vorbereiten laedt fuer YDKE nur die Passcodes, fuer Text alle, bei Lesefehler nichts`() {
         val calls = mutableListOf<List<String>?>()
         val load = { ids: List<String>? -> calls.add(ids); catalog }
