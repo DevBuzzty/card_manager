@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.DeckImport
+import com.example.yugiohscanner.ml.ImportCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -10,7 +12,8 @@ import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Deck(val id: Long, val name: String, val containerId: String? = null)
+// Spec E2 §5: notes = "Nicht übernommen beim Import:" …, am Handy nur Anzeige.
+data class Deck(val id: Long, val name: String, val containerId: String? = null, val notes: String? = null)
 data class DeckCard(
     val id: Long, val cardId: String, val name: String?, val imageUrl: String?,
     val count: Int, val section: String,
@@ -31,8 +34,9 @@ object DecksRepository {
         getArray(url).let { arr -> (0 until arr.length()).map { parseDeck(arr.getJSONObject(it)) } }
     }
 
-    suspend fun createDeck(name: String): Long = withContext(Dispatchers.IO) {
-        val body = JSONObject().put("name", name).toString()
+    /** Spec E2 §5: [notes] nur mitsenden, wenn es welche gibt (ein Import ohne Nicht-Uebernommenes klappt so auch vor decks_notes.sql). */
+    suspend fun createDeck(name: String, notes: String? = null): Long = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("name", name).apply { if (notes != null) put("notes", notes) }.toString()
         executeWithReauth {
             base("${SupabaseCloud.base()}/rest/v1/decks".toHttpUrl())
                 .addHeader("Content-Type", "application/json")
@@ -119,6 +123,64 @@ object DecksRepository {
             .use { r -> if (!r.isSuccessful) err("Karte entfernen", r) }
     }
 
+    /**
+     * Spec E2 §5: Rueckbau beim Import -- scheitert das Einfuegen der Karten, wird das eben angelegte (leere) Deck wieder
+     * geloescht und der Fehler weitergereicht. Rein, damit ohne Netz testbar.
+     * ZWILLING (Rueckbau): desktop/electron/decks.cjs#createImportedDeck.
+     */
+    internal suspend fun createWithRollback(
+        create: suspend () -> Long,
+        insertCards: suspend (Long) -> Unit,
+        delete: suspend (Long) -> Unit,
+    ): Long {
+        val id = create()
+        try {
+            insertCards(id)
+        } catch (e: Exception) {
+            try { delete(id) } catch (_: Exception) { /* der eigentliche Fehler zaehlt */ }
+            throw e
+        }
+        return id
+    }
+
+    /** Spec E2 §5: alle Deckkarten eines Imports als ein JSON-Array (ein Insert), Bild aus dem Katalog. */
+    internal fun importCardsJson(deckId: Long, cards: List<ImportCard>, imageOf: Map<String, String?>): JSONArray =
+        JSONArray().apply {
+            for (c in cards) put(
+                JSONObject().put("deck_id", deckId).put("card_id", c.cardId).put("name", c.name)
+                    .put("image_url", imageOf[c.cardId] ?: JSONObject.NULL).put("count", c.count).put("section", c.section)
+            )
+        }
+
+    /** Spec E2 §5: Import legt immer ein neues Deck an -- Deck mit Notizen, dann alle Karten in einem Insert, sonst Rueckbau. */
+    suspend fun createImportedDeck(name: String, notes: String?, cards: List<ImportCard>, imageOf: Map<String, String?>): Long =
+        createWithRollback(
+            create = { createDeck(name, notes) },
+            insertCards = { id -> if (cards.isNotEmpty()) insertCards(importCardsJson(id, cards, imageOf)) },
+            delete = { id -> deleteDeck(id) },
+        )
+
+    private suspend fun insertCards(rows: JSONArray) = withContext(Dispatchers.IO) {
+        executeWithReauth {
+            base("${SupabaseCloud.base()}/rest/v1/deck_cards".toHttpUrl())
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=minimal")
+                .post(rows.toString().toRequestBody(SupabaseCloud.jsonMedia)).build()
+        }.use { r -> if (!r.isSuccessful) err("Karten anlegen", r) }
+    }
+
+    /**
+     * Spec E2 §6: eine Kopie verschieben ("→ Side" / "→ Deck", Ziel per DeckImport.moveTarget). Erst das Ziel erhoehen,
+     * dann die Quelle senken -- scheitert der zweite Schritt, ist eine Kopie zu viel da statt eine verloren.
+     */
+    suspend fun moveOne(deckId: Long, card: DeckCard, deckCards: List<DeckCard>, type: String?) {
+        val to = DeckImport.moveTarget(card.section, type)
+        val target = deckCards.firstOrNull { it.cardId == card.cardId && it.section == to }
+        if (target != null) setCount(target.id, target.count + 1)
+        else addCard(deckId, card.cardId, card.name, card.imageUrl, to)
+        setCount(card.id, card.count - 1)
+    }
+
     private fun base(url: HttpUrl): Request.Builder =
         Request.Builder().url(url)
             .addHeader("apikey", SupabaseCloud.key())
@@ -148,6 +210,7 @@ object DecksRepository {
     internal fun parseDeck(o: JSONObject) = Deck(
         id = o.optLong("id"), name = o.optString("name"),
         containerId = if (o.isNull("container_id")) null else o.optString("container_id"),
+        notes = if (o.isNull("notes")) null else o.optString("notes"),
     )
 
     internal fun parseCard(o: JSONObject) = DeckCard(
