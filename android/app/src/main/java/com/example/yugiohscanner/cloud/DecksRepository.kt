@@ -1,7 +1,9 @@
 package com.example.yugiohscanner.cloud
 
 import com.example.yugiohscanner.ml.DeckImport
+import com.example.yugiohscanner.ml.DeckLegality
 import com.example.yugiohscanner.ml.ImportCard
+import com.example.yugiohscanner.ml.LegalityCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -14,7 +16,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 // Spec E2 §5: notes = "Nicht übernommen beim Import:" …, am Handy nur Anzeige.
-data class Deck(val id: Long, val name: String, val containerId: String? = null, val notes: String? = null)
+// Spec E3 §4: format tcg | ocg | free; fehlt die Spalte (SQL nicht eingespielt) -> tcg.
+data class Deck(val id: Long, val name: String, val containerId: String? = null, val notes: String? = null, val format: String = "tcg")
+
+/** Spec E3 §5: Ergebnis der Pruefung vor "Hinzufügen" -- blockiert, bestehende Zeile erhoehen oder neue Zeile anlegen. */
+sealed interface AddCopyPlan {
+    object Blocked : AddCopyPlan
+    data class Increment(val deckCardId: Long, val count: Int) : AddCopyPlan
+    object Insert : AddCopyPlan
+}
 data class DeckCard(
     val id: Long, val cardId: String, val name: String?, val imageUrl: String?,
     val count: Int, val section: String,
@@ -90,6 +100,49 @@ object DecksRepository {
             base(url).addHeader("Content-Type", "application/json")
                 .patch(body.toRequestBody(SupabaseCloud.jsonMedia)).build()
         }.use { r -> if (!r.isSuccessful) throw RuntimeException(containerErrorMessage(r.code, r.body?.string() ?: "")) }
+    }
+
+    /** Spec E3 §4/§7: Format sofort speichern. Lehnt die Cloud ab (z. B. Spalte fehlt), "Format konnte nicht gespeichert werden". */
+    suspend fun setFormat(deckId: Long, format: String) = withContext(Dispatchers.IO) {
+        val url = "${SupabaseCloud.base()}/rest/v1/decks".toHttpUrl().newBuilder()
+            .addQueryParameter("id", "eq.$deckId").build()
+        val body = JSONObject().put("format", DeckLegality.normalizeFormat(format)).toString()
+        executeWithReauth {
+            base(url).addHeader("Content-Type", "application/json")
+                .patch(body.toRequestBody(SupabaseCloud.jsonMedia)).build()
+        }.use { r -> if (!r.isSuccessful) throw RuntimeException(DeckLegality.FORMAT_SAVE_FAILED) }
+    }
+
+    private fun legalityCards(cards: List<DeckCard>) = cards.map { LegalityCard(it.cardId, it.name, it.count, it.section) }
+
+    /**
+     * Spec E3 §5 -- rein, damit ohne Netz testbar: TCG/OCG blockiert die 4. Kopie (Haupt-Passcode, alle Abschnitte), Frei nie.
+     * Sonst erhoeht "Hinzufügen" die bestehende Zeile desselben Passcodes im selben Abschnitt (bei Doppelzeilen die erste)
+     * statt eine neue anzulegen. [cards] = frischer Stand des Decks.
+     */
+    internal fun addCopyPlan(cards: List<DeckCard>, cardId: String, section: String, format: String, aliases: Map<String, String>?): AddCopyPlan {
+        if (!DeckLegality.canAddCopy(legalityCards(cards), cardId, format, aliases)) return AddCopyPlan.Blocked
+        val existing = cards.firstOrNull { it.cardId == cardId && it.section == section }
+        return if (existing != null) AddCopyPlan.Increment(existing.id, existing.count + 1) else AddCopyPlan.Insert
+    }
+
+    /** Spec E3 §5: "Hinzufügen" aus der Suche. Blockiert -> Fehler "Höchstens 3 Kopien je Karte" (die Oberflaeche zeigt ihn). */
+    suspend fun addCopy(
+        deckId: Long, cards: List<DeckCard>, cardId: String, name: String?, imageUrl: String?, section: String,
+        format: String, aliases: Map<String, String>?,
+    ) {
+        when (val plan = addCopyPlan(cards, cardId, section, format, aliases)) {
+            AddCopyPlan.Blocked -> throw IllegalStateException(DeckLegality.COPY_LIMIT)
+            is AddCopyPlan.Increment -> setCount(plan.deckCardId, plan.count)
+            AddCopyPlan.Insert -> addCard(deckId, cardId, name, imageUrl, section)
+        }
+    }
+
+    /** Spec E3 §5: "+" an einer Zeile -- dieselbe Grenze; gezaehlt wird mit dem frischen Stand [cards]. */
+    suspend fun incrementCopy(card: DeckCard, cards: List<DeckCard>, format: String, aliases: Map<String, String>?) {
+        if (!DeckLegality.canAddCopy(legalityCards(cards), card.cardId, format, aliases)) throw IllegalStateException(DeckLegality.COPY_LIMIT)
+        val current = cards.firstOrNull { it.id == card.id } ?: card
+        setCount(current.id, current.count + 1)
     }
 
     suspend fun addCard(deckId: Long, cardId: String, name: String?, imageUrl: String?, section: String) =
@@ -217,6 +270,7 @@ object DecksRepository {
         id = o.optLong("id"), name = o.optString("name"),
         containerId = if (o.isNull("container_id")) null else o.optString("container_id"),
         notes = if (o.isNull("notes")) null else o.optString("notes"),
+        format = DeckLegality.normalizeFormat(if (o.isNull("format")) null else o.optString("format")),
     )
 
     internal fun parseCard(o: JSONObject) = DeckCard(
