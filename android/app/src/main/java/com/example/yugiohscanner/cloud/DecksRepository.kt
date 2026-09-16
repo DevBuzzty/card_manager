@@ -24,7 +24,8 @@ object DecksRepository {
 
     suspend fun loadDecks(): List<Deck> = withContext(Dispatchers.IO) {
         val url = "${SupabaseCloud.base()}/rest/v1/decks".toHttpUrl().newBuilder()
-            .addQueryParameter("select", "id,name")
+            // Spec E1: select=* liefert container_id mit, sobald decks_container.sql eingespielt ist.
+            .addQueryParameter("select", "*")
             .addQueryParameter("order", "created_at.desc")
             .build()
         getArray(url).let { arr -> (0 until arr.length()).map { parseDeck(arr.getJSONObject(it)) } }
@@ -58,6 +59,32 @@ object DecksRepository {
             .addQueryParameter("order", "id.asc")
             .build()
         getArray(url).let { arr -> (0 until arr.length()).map { parseCard(arr.getJSONObject(it)) } }
+    }
+
+    /** Spec E1 §4: alle Deckkarten aller Decks in einer Abfrage (Deck-Liste mit Zahlen, "in Deck X"). */
+    suspend fun loadAllCards(): List<DeckCard> = withContext(Dispatchers.IO) {
+        val url = "${SupabaseCloud.base()}/rest/v1/deck_cards".toHttpUrl().newBuilder()
+            .addQueryParameter("select", "id,deck_id,card_id,name,image_url,count,section")
+            .addQueryParameter("order", "id.asc")
+            .build()
+        getArray(url).let { arr -> (0 until arr.length()).map { parseCard(arr.getJSONObject(it)) } }
+    }
+
+    const val DECKBOX_TAKEN = "Diese Deckbox gehört schon zu einem anderen Deck"
+
+    /** Spec E1 §9: PostgREST meldet die Unique-Verletzung (decks_container_unique) als 409 mit code 23505. */
+    internal fun containerErrorMessage(code: Int, body: String): String =
+        if (body.contains("\"23505\"")) DECKBOX_TAKEN else "Deckbox zuordnen fehlgeschlagen ($code): $body"
+
+    /** Spec E1 §3: Deckbox zuordnen (null = keine Box). Lehnt die Cloud ab, bleibt die Zeile unveraendert. */
+    suspend fun setContainer(deckId: Long, containerId: String?) = withContext(Dispatchers.IO) {
+        val url = "${SupabaseCloud.base()}/rest/v1/decks".toHttpUrl().newBuilder()
+            .addQueryParameter("id", "eq.$deckId").build()
+        val body = JSONObject().put("container_id", containerId ?: JSONObject.NULL).toString()
+        executeWithReauth {
+            base(url).addHeader("Content-Type", "application/json")
+                .patch(body.toRequestBody(SupabaseCloud.jsonMedia)).build()
+        }.use { r -> if (!r.isSuccessful) throw RuntimeException(containerErrorMessage(r.code, r.body?.string() ?: "")) }
     }
 
     suspend fun addCard(deckId: Long, cardId: String, name: String?, imageUrl: String?, section: String) =
@@ -117,12 +144,17 @@ object DecksRepository {
         SupabaseCloud.http().newCall(build()).execute()
     }
 
-    private fun parseDeck(o: JSONObject) = Deck(id = o.optLong("id"), name = o.optString("name"))
+    // internal statt private: DecksRepositoryTest prueft container_id und deck_id (Spec E1).
+    internal fun parseDeck(o: JSONObject) = Deck(
+        id = o.optLong("id"), name = o.optString("name"),
+        containerId = if (o.isNull("container_id")) null else o.optString("container_id"),
+    )
 
-    private fun parseCard(o: JSONObject) = DeckCard(
+    internal fun parseCard(o: JSONObject) = DeckCard(
         id = o.optLong("id"), cardId = o.optString("card_id"),
         name = if (o.isNull("name")) null else o.optString("name"),
         imageUrl = if (o.isNull("image_url")) null else o.optString("image_url"),
         count = o.optInt("count", 1), section = o.optString("section", "main"),
+        deckId = o.optLong("deck_id"),
     )
 }

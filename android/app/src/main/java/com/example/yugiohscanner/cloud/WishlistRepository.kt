@@ -1,5 +1,8 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.DeckWishlist
+import com.example.yugiohscanner.ml.WishCandidate
+import com.example.yugiohscanner.ml.WishResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -28,7 +31,9 @@ object WishlistRepository {
         getArray(url).let { arr -> (0 until arr.length()).map { parseItem(arr.getJSONObject(it)) } }
     }
 
-    suspend fun addToWishlist(cardId: String, name: String, imageUrl: String?, maxPrice: Double?) =
+    // Spec E1 §6: triggerScrape = false beim Massen-Hinzufuegen (die Cloud-Suche laeuft dort einmal am Ende).
+    // Rueckgabe: true, wenn zusaetzlich ein Deal-Watch entstand.
+    suspend fun addToWishlist(cardId: String, name: String, imageUrl: String?, maxPrice: Double?, triggerScrape: Boolean = true): Boolean =
         withContext(Dispatchers.IO) {
             val body = JSONObject()
                 .put("card_id", cardId).put("name", name)
@@ -43,13 +48,21 @@ object WishlistRepository {
             }.use { r -> if (!r.isSuccessful) err("Wunschkarte anlegen", r) }
 
             // Also hunt for it as a deal-watch (best-effort — must not fail the wishlist add).
-            if (maxPrice != null) {
-                try {
-                    DealsRepository.addWatch(name, maxPrice)
-                    DealsRepository.triggerScrape()
-                } catch (_: Exception) { /* non-fatal */ }
-            }
+            if (maxPrice == null) return@withContext false
+            try {
+                DealsRepository.addWatch(name, maxPrice)
+                if (triggerScrape) DealsRepository.triggerScrape()
+                true
+            } catch (_: Exception) { false /* non-fatal */ }
         }
+
+    /** Spec E1 §6: "Fehlende auf die Wunschliste" -- Eintrag fuer Eintrag, die Cloud-Suche hoechstens einmal (DeckWishlist.addAll). */
+    suspend fun addMissing(candidates: List<WishCandidate>, nameOf: (String) -> String, imageOf: (String) -> String?): WishResult =
+        DeckWishlist.addAll(
+            candidates,
+            add = { c -> addToWishlist(c.cardId, nameOf(c.cardId), imageOf(c.cardId), c.maxPrice, triggerScrape = false) },
+            triggerScrape = { DealsRepository.triggerScrape() },
+        )
 
     suspend fun removeFromWishlist(id: Long) = withContext(Dispatchers.IO) {
         val url = "${SupabaseCloud.base()}/rest/v1/wishlist".toHttpUrl().newBuilder()
