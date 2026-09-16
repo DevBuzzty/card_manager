@@ -1,0 +1,20 @@
+{
+  "_comment": "Spec E1 §6 — wishlistMaxPrice, missingForWishlist, Bestaetigungs- und Rueckmeldungstext. Leser: desktop/src/utils/deckWishlist.test.js und android DeckWishlistTest.kt. confirm.candidates ist die Anzahl der Kandidaten.",
+  "maxPrice": [{"cm_price":35.71,"max_price":42.85},{"cm_price":0.04,"max_price":0.05},{"cm_price":12.5,"max_price":15},{"cm_price":0.125,"max_price":0.15},{"cm_price":2.675,"max_price":3.21},{"cm_price":1.005,"max_price":1.21},{"cm_price":null,"max_price":null},{"cm_price":0,"max_price":null}],
+  "missing": [
+    {
+      "name": "vorhandene Einträge übersprungen, ohne Preis mitgenommen, nichts Fehlendes ausgelassen",
+      "coverage": {"cards":[{"card_id":"14558127","missing":0,"price":4.5},{"card_id":"23434538","missing":2,"price":8.99},{"card_id":"86066372","missing":1,"price":12.5},{"card_id":"10045474","missing":2,"price":null},{"card_id":"24224830","missing":1,"price":0.35}]},
+      "wishlist": ["86066372","46986414"],
+      "expected": {"candidates":[{"card_id":"23434538","max_price":10.79},{"card_id":"10045474","max_price":null},{"card_id":"24224830","max_price":0.42}],"alreadyListed":1,"withoutPrice":1}
+    },
+    {"name":"alles schon drauf","coverage":{"cards":[{"card_id":"1","missing":1,"price":1}]},"wishlist":["1"],"expected":{"candidates":[],"alreadyListed":1,"withoutPrice":0}}
+  ],
+  "confirm": [
+    {"candidates":8,"alreadyListed":2,"withoutPrice":1,"text":"8 fehlende Karten auf die Wunschliste setzen? 2 stehen schon drauf, 1 hat keinen Preis und bekommt keine Deal-Suche."},
+    {"candidates":1,"alreadyListed":0,"withoutPrice":0,"text":"1 fehlende Karte auf die Wunschliste setzen?"},
+    {"candidates":3,"alreadyListed":1,"withoutPrice":2,"text":"3 fehlende Karten auf die Wunschliste setzen? 1 steht schon drauf, 2 haben keinen Preis und bekommen keine Deal-Suche."},
+    {"candidates":0,"alreadyListed":4,"withoutPrice":0,"text":"Alle fehlenden Karten stehen schon auf der Wunschliste."}
+  ],
+  "result": [{"total":8,"added":8,"watches":7,"text":"8 Karten auf der Wunschliste, Deal-Suche läuft."},{"total":1,"added":1,"watches":0,"text":"1 Karte auf der Wunschliste."},{"total":8,"added":5,"watches":4,"text":"5 von 8 hinzugefügt, 3 fehlgeschlagen"}]
+}
