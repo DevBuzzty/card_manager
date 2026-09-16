@@ -34,6 +34,8 @@ import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CardSearchRepository
 import com.example.yugiohscanner.cloud.CatalogRepository
+import com.example.yugiohscanner.cloud.CatalogState
+import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.ContainerRow
@@ -91,10 +93,18 @@ private fun rememberCatalogPrices(ids: Set<String>?): Map<String, Double?>? {
  */
 private data class LegalityLoad(val ids: Set<String>, val catalog: LegalityCatalog?)
 
-/** Spec E3 §4/§7: Legalitaetsdaten der Deckkarten-Passcodes, abseits des Hauptthreads gelesen; null = laedt ("…"). */
+/**
+ * Spec E3 §4/§7: Legalitaetsdaten der Deckkarten-Passcodes, abseits des Hauptthreads gelesen; null = laedt ("…").
+ * F4: zusaetzlich auf die fertig geladene Katalogversion geschluesselt (aus dem vorhandenen [CatalogSync.state]),
+ * damit ein offener Deck-Bildschirm nach "Jetzt pruefen" (SettingsScreen) neu laedt, statt am alten Katalog-Index
+ * haengen zu bleiben. Nur [CatalogState.Ready] zaehlt -- die haeufigen Downloading(percent)-Ticks sollen keine
+ * eigene DB-Lesung anstossen.
+ */
 @Composable
 private fun rememberLegalityCatalog(ids: Set<String>?): LegalityLoad? {
-    val load by produceState<LegalityLoad?>(initialValue = null, ids) {
+    val catalogState by CatalogSync.state.collectAsState()
+    val catalogVersion = (catalogState as? CatalogState.Ready)?.version
+    val load by produceState<LegalityLoad?>(initialValue = null, ids, catalogVersion) {
         if (ids != null) value = withContext(Dispatchers.IO) { LegalityLoad(ids, runCatching { CatalogRepository.legalityCatalog(ids) }.getOrNull()) }
     }
     return load?.takeIf { it.ids == ids }
@@ -426,10 +436,18 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
 
             DeckLegalityHead(
                 format = deck.format, legality = legality, builtAt = legalityLoad?.catalog?.builtAt, error = formatError,
+                busy = mutating,
+                // F5: dasselbe InFlight-Gatter wie mutate() -- ein laufender Formatwechsel sperrt Hinzufuegen/+
+                // (mutate() kehrt bei laufendem inFlight sofort zurueck, ohne etwas zu tun) und umgekehrt blockiert
+                // eine laufende Kartenaenderung hier den Formatwechsel (tryStart liefert dann false).
                 onPickFormat = { f ->
-                    scope.launch {
-                        try { DecksRepository.setFormat(deck.id, f); SideStores.decks.refreshAndWait(); formatError = null }
-                        catch (e: Exception) { formatError = e.message ?: DeckLegality.FORMAT_SAVE_FAILED }
+                    if (inFlight.tryStart()) {
+                        mutating = true
+                        scope.launch {
+                            try { DecksRepository.setFormat(deck.id, f); SideStores.decks.refreshAndWait(); formatError = null }
+                            catch (e: Exception) { formatError = e.message ?: DeckLegality.FORMAT_SAVE_FAILED }
+                            finally { inFlight.finish(); mutating = false }
+                        }
                     }
                 },
             )
@@ -580,13 +598,14 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
  * "Banlist-Stand". Im Format "Frei" gibt es keine Liste.
  */
 @Composable
-private fun DeckLegalityHead(format: String, legality: LegalityResult?, builtAt: String?, error: String?, onPickFormat: (String) -> Unit) {
+private fun DeckLegalityHead(format: String, legality: LegalityResult?, builtAt: String?, error: String?, busy: Boolean, onPickFormat: (String) -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
     var issuesOpen by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box {
-                Row(Modifier.clickable { menuOpen = true }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                // F5: waehrend eines laufenden Formatwechsels (oder einer laufenden Kartenaenderung) nicht oeffnen.
+                Row(Modifier.clickable(enabled = !busy) { menuOpen = true }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Format: ${DeckLegality.FORMAT_LABELS[format] ?: "TCG"}", color = OnSurface, style = MaterialTheme.typography.bodyMedium)
                     Icon(Icons.Default.ArrowDropDown, "Format wählen", tint = Muted)
                 }
