@@ -1,0 +1,54 @@
+{
+  "_comment": "Spec E1 §7 — fillBoxProposal, Ortstext, Hinweistexte. Leser: desktop/src/utils/fillBoxProposal.test.js und android FillBoxProposalTest.kt. rows in Vorschlagsreihenfolge; group 1 unsortiert, 2 Box/freie Deckbox, 3 Ordner. expected null = kein Vorschlag (keine gueltige Deckbox).",
+  "world": {
+    "containers": [
+      {"container_id":"box-rot","name":"Deckbox Rot","kind":"deckbox","deleted":false},
+      {"container_id":"box-gruen","name":"Deckbox Grün","kind":"deckbox","deleted":false},
+      {"container_id":"box-frei","name":"Deckbox Frei","kind":"deckbox","deleted":false},
+      {"container_id":"box-tausch","name":"Box Tausch","kind":"box","deleted":false},
+      {"container_id":"ordner-blau","name":"Ordner Blau","kind":"binder","deleted":false}
+    ],
+    "decks": [{"id":1,"name":"Labrynth","container_id":"box-rot"},{"id":2,"name":"Tenpai","container_id":"box-gruen"},{"id":3,"name":"Ohne Box","container_id":null}],
+    "copies": [
+      {"copy_id":"p1a","card_id":"11111111","set_code":"AAA-DE001","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"box-rot","page":null,"slot":null,"price":1,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p1b","card_id":"11111111","set_code":"AAA-DE002","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"ordner-blau","page":3,"slot":2,"price":2,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p1c","card_id":"11111111","set_code":"AAA-DE003","rarity":"Common","edition":"unlimited","condition":"NM","container_id":null,"page":null,"slot":null,"price":5,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p1d","card_id":"11111111","set_code":"AAA-DE004","rarity":"Common","edition":"unlimited","condition":"EX","container_id":"box-tausch","page":null,"slot":null,"price":5,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p1e","card_id":"11111111","set_code":"AAA-DE005","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"box-frei","page":null,"slot":null,"price":1,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p1f","card_id":"11111111","set_code":"AAA-DE006","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"box-gruen","page":null,"slot":null,"price":1,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p1g","card_id":"11111111","set_code":"AAA-DE003","rarity":"Common","edition":"unlimited","condition":"NM","container_id":null,"page":null,"slot":null,"price":5,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p2a","card_id":"22222222","set_code":"BBB-DE001","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"box-tausch","page":null,"slot":null,"price":3,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p2b","card_id":"22222222","set_code":"BBB-DE002","rarity":"Common","edition":"unlimited","condition":"PO","container_id":"box-frei","page":null,"slot":null,"price":3,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p2c","card_id":"22222222","set_code":"BBB-DE003","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"ordner-blau","page":1,"slot":1,"price":0.1,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p2d","card_id":"22222222","set_code":"BBB-DE004","rarity":"Common","edition":"first","condition":"NM","container_id":"box-tausch","page":null,"slot":null,"price":3,"price_first_ed":1,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p3a","card_id":"33333333","set_code":"CCC-DE001","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"ordner-blau","page":2,"slot":5,"price":1,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p3b","card_id":"33333333","set_code":"CCC-DE001","rarity":"Common","edition":"unlimited","condition":"NM","container_id":null,"page":null,"slot":null,"price":1,"price_first_ed":null,"deleted":true,"printing_deleted":false},
+      {"copy_id":"p4a","card_id":"44444444","set_code":"DDD-DE001","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"box-rot","page":null,"slot":null,"price":1,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"p4b","card_id":"44444444","set_code":"DDD-DE001","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"box-rot","page":null,"slot":null,"price":1,"price_first_ed":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"z1","card_id":"99999999","set_code":"ZZZ-DE001","rarity":"Common","edition":"unlimited","condition":"NM","container_id":"box-rot","page":null,"slot":null,"price":1,"price_first_ed":null,"deleted":false,"printing_deleted":false}
+    ]
+  },
+  "cases": [
+    {
+      "name": "Labrynth: Gruppen, günstigstes zuerst, 1st-Ed-Preis, Gleichstand nach copy_id, Lücke, Box-Exemplare nicht erneut, überzählig",
+      "deckId": 1,
+      "deckCards": [{"card_id":"11111111","count":3,"section":"main"},{"card_id":"22222222","count":2,"section":"main"},{"card_id":"33333333","count":3,"section":"extra"},{"card_id":"44444444","count":1,"section":"side"}],
+      "expected": {"rows":[{"copy_id":"p1c","card_id":"11111111","group":1},{"copy_id":"p1g","card_id":"11111111","group":1},{"copy_id":"p2b","card_id":"22222222","group":2},{"copy_id":"p2d","card_id":"22222222","group":2},{"copy_id":"p3a","card_id":"33333333","group":3}],"short":2,"surplus":2}
+    },
+    {"name":"Tenpai: fremde Deckbox nicht vorgeschlagen","deckId":2,"deckCards":[{"card_id":"11111111","count":2,"section":"main"}],"expected":{"rows":[{"copy_id":"p1c","card_id":"11111111","group":1}],"short":0,"surplus":0}},
+    {"name":"ohne Deckbox kein Vorschlag","deckId":3,"deckCards":[{"card_id":"11111111","count":1,"section":"main"}],"expected":null}
+  ],
+  "location": [
+    {"name":"unsortiert","copy":{"container_id":null,"page":null,"slot":null},"text":"unsortiert"},
+    {"name":"Ordner mit Seite und Fach","copy":{"container_id":"ordner-blau","page":3,"slot":2},"text":"Ordner Blau · S. 3 · Fach 2"},
+    {"name":"Ordner ohne Fach","copy":{"container_id":"ordner-blau","page":null,"slot":null},"text":"Ordner Blau"},
+    {"name":"Box","copy":{"container_id":"box-tausch","page":null,"slot":null},"text":"Box Tausch"},
+    {"name":"unbekannter Behälter","copy":{"container_id":"weg","page":null,"slot":null},"text":"unsortiert"}
+  ],
+  "texts": [
+    {"n":0,"short":null,"surplus":null},
+    {"n":1,"short":"1 fehlt noch – nicht in der Sammlung","surplus":"1 überzählig in der Box"},
+    {"n":2,"short":"2 fehlen noch – nicht in der Sammlung","surplus":"2 überzählig in der Box"},
+    {"n":3,"short":"3 fehlen noch – nicht in der Sammlung","surplus":"3 überzählig in der Box"}
+  ]
+}

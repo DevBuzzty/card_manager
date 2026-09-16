@@ -15,6 +15,8 @@ object SideStores {
 
     val wishlist = ListCache(scope) { WishlistRepository.loadWishlist() }
     val decks = ListCache(scope) { DecksRepository.loadDecks() }
+    // Spec E1 §8: alle Deckkarten fuer die Zahlen der Deck-Liste. Klein, voll neu laden wie decks.
+    val allDeckCards = ListCache(scope) { DecksRepository.loadAllCards() }
     val dealWatches = ListCache(scope) { DealsRepository.loadWatches() }
     val dealAlerts = ListCache(scope) { DealsRepository.loadAlerts() }
     val sets = ListCache(scope) { SetsRepository.loadSets() }
@@ -51,7 +53,7 @@ object SideStores {
 
     /** Beim Abmelden und Kontowechsel (Spec §4.4). */
     fun clearAll() {
-        wishlist.clear(); decks.clear(); dealWatches.clear(); dealAlerts.clear(); sets.clear()
+        wishlist.clear(); decks.clear(); allDeckCards.clear(); dealWatches.clear(); dealAlerts.clear(); sets.clear()
         reference7.clear(); reference30.clear(); snapshots.clear()
         priceAlertEvents.clear(); priceAlertMoveRule.clear(); priceAlertTargets.clear()
         sealedItems.clear()

@@ -1,6 +1,7 @@
 package com.example.yugiohscanner
 
 import com.example.yugiohscanner.cloud.CatalogParser
+import com.example.yugiohscanner.cloud.CatalogRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -67,5 +68,29 @@ class CatalogParserTest {
         assertEquals(3, p.version)
         assertEquals(1, p.cards.size)
         assertEquals("2", p.cards[0].id)
+    }
+
+    // Spec E1 §5: Katalog ab Version 6 traegt cm_price; fehlt oder <= 0 -> null.
+    @Test fun `liest cm_price ab Katalog 6, null und 0 werden null`() {
+        val json = """{"version":6,"built_at":"x","cards":[
+          {"id":1,"name_de":"A","name_en":"A","type":"t","desc_de":"d","image":"i","image_small":"s","printings":[],"printings_verified":[],"cm_price":35.71},
+          {"id":2,"name_de":"B","name_en":"B","type":"t","desc_de":"d","image":"i","image_small":"s","printings":[],"printings_verified":[],"cm_price":null},
+          {"id":3,"name_de":"C","name_en":"C","type":"t","desc_de":"d","image":"i","image_small":"s","printings":[],"printings_verified":[],"cm_price":0}]}"""
+        val cards = CatalogParser.parse(gz(json)).cards
+        assertEquals(35.71, cards[0].cmPrice!!, 1e-9)
+        assertEquals(null, cards[1].cmPrice)
+        assertEquals(null, cards[2].cmPrice)
+    }
+
+    @Test fun `Katalog 5 ohne cm_price bleibt lesbar`() {
+        val c = CatalogParser.parse(gz(sample)).cards[0]
+        assertEquals("Dunkler Magier", c.nameDe)
+        assertEquals(null, c.cmPrice)
+    }
+
+    @Test fun `Preisabfrage hat einen Platzhalter je Passcode`() {
+        val (sql, args) = CatalogRepository.cmPriceQuery(listOf("14558127", "23434538"))
+        assertEquals("SELECT id, cm_price FROM cards WHERE id IN (?,?)", sql)
+        assertEquals(listOf("14558127", "23434538"), args.toList())
     }
 }

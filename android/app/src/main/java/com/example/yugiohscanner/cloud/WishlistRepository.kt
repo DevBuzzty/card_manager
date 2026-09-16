@@ -1,5 +1,8 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.DeckWishlist
+import com.example.yugiohscanner.ml.WishCandidate
+import com.example.yugiohscanner.ml.WishResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
@@ -28,7 +31,14 @@ object WishlistRepository {
         getArray(url).let { arr -> (0 until arr.length()).map { parseItem(arr.getJSONObject(it)) } }
     }
 
-    suspend fun addToWishlist(cardId: String, name: String, imageUrl: String?, maxPrice: Double?) =
+    // Spec E1 §6: triggerScrape = false beim Massen-Hinzufuegen (die Cloud-Suche laeuft dort einmal am Ende).
+    // requireRealName = true NUR fuer diesen Massen-Pfad (F3-Folgefix): ein Einzel-Eintrag (WishlistScreen,
+    // CardDetailScreen) legt wie vor E1 bei jedem vorhandenen Preis einen Deal-Watch an, egal ob Name und
+    // cardId zufaellig gleich sind. Rueckgabe: true, wenn zusaetzlich ein Deal-Watch entstand.
+    suspend fun addToWishlist(
+        cardId: String, name: String, imageUrl: String?, maxPrice: Double?,
+        triggerScrape: Boolean = true, requireRealName: Boolean = false,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             val body = JSONObject()
                 .put("card_id", cardId).put("name", name)
@@ -43,13 +53,22 @@ object WishlistRepository {
             }.use { r -> if (!r.isSuccessful) err("Wunschkarte anlegen", r) }
 
             // Also hunt for it as a deal-watch (best-effort — must not fail the wishlist add).
-            if (maxPrice != null) {
-                try {
-                    DealsRepository.addWatch(name, maxPrice)
-                    DealsRepository.triggerScrape()
-                } catch (_: Exception) { /* non-fatal */ }
-            }
+            if (!DeckWishlist.shouldCreateDealWatch(maxPrice, name, cardId, requireRealName)) return@withContext false
+            try {
+                // shouldCreateDealWatch==true garantiert maxPrice != null.
+                DealsRepository.addWatch(name, maxPrice!!)
+                if (triggerScrape) DealsRepository.triggerScrape()
+                true
+            } catch (_: Exception) { false /* non-fatal */ }
         }
+
+    /** Spec E1 §6: "Fehlende auf die Wunschliste" -- Eintrag fuer Eintrag, die Cloud-Suche hoechstens einmal (DeckWishlist.addAll). */
+    suspend fun addMissing(candidates: List<WishCandidate>, nameOf: (String) -> String, imageOf: (String) -> String?): WishResult =
+        DeckWishlist.addAll(
+            candidates,
+            add = { c -> addToWishlist(c.cardId, nameOf(c.cardId), imageOf(c.cardId), c.maxPrice, triggerScrape = false, requireRealName = true) },
+            triggerScrape = { DealsRepository.triggerScrape() },
+        )
 
     suspend fun removeFromWishlist(id: Long) = withContext(Dispatchers.IO) {
         val url = "${SupabaseCloud.base()}/rest/v1/wishlist".toHttpUrl().newBuilder()

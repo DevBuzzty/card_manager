@@ -21,6 +21,8 @@ const { deleteContainer } = require('./containers-schema.cjs');
 const sealed = require('./sealed-items.cjs');
 const { readSealedProducts, searchSealedProducts, sealedProductsAvailable } = require('./sealed-products.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
+const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer } = require('./decks.cjs');
+const { catalogPrices } = require('./catalog-prices.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -713,6 +715,39 @@ ipcMain.handle('export-deck-ydk', async (event, { name, content }) => {
 
     fs.writeFileSync(result.filePath, ydk);
     return { success: true };
+});
+
+// --- Spec E1: Sammlungsabgleich & Deckbox ---
+// Lebende Exemplare lebender Printings mit Standort und Preisfeldern, dazu die Behaelterliste (lokal, SQLite).
+ipcMain.handle('list-deck-copies', () => {
+    try { return { copies: copies.listDeckCopies(db), containers: copies.listContainers(db) }; }
+    catch (e) { console.error('[list-deck-copies]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
+});
+// Alle Deckkarten aller Decks in einer Abfrage (Deck-Liste mit Zahlen, "in Deck X").
+ipcMain.handle('get-all-deck-cards', async () => {
+    const c = await dealsClient();
+    const { data, error } = await c.from('deck_cards').select('deck_id, card_id, name, count, section').order('id', { ascending: true });
+    if (error) throw new Error(error.message);
+    return data || [];
+});
+// Deckbox zuordnen; die Unique-Verletzung kommt als deutsche Meldung zurueck, nichts wird geaendert.
+ipcMain.handle('set-deck-container', async (event, { deckId, containerId } = {}) => {
+    const c = await dealsClient();
+    return setDeckContainer(c, { deckId, containerId });
+});
+// Katalogpreise (cm_price) aus der zuletzt gebauten Katalogdatei; ohne Datei available = false.
+ipcMain.handle('get-catalog-prices', () => catalogPrices(userDataPath));
+// Fehlende auf die Wunschliste: Eintrag fuer Eintrag, die Cloud-Suche hoechstens einmal am Ende.
+ipcMain.handle('deck-missing-to-wishlist', async (event, items) => {
+    const c = await dealsClient();
+    return addMissingToWishlist(c, items, triggerCloudScrape);
+});
+// Box befuellen: Exemplar fuer Exemplar in die Deckbox, Fehlschlaege je Zeile.
+ipcMain.handle('move-copies-to-container', (event, { copyIds, containerId } = {}) => {
+    try {
+        const results = moveCopiesToContainer(db, { copyIds, containerId }, (e) => containerCopyErrorMessage(e, 'move-copies-to-container'));
+        return { success: true, results };
+    } catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'move-copies-to-container') }; }
 });
 
 // --- Other Handlers ---

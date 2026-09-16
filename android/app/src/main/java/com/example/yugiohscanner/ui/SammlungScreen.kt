@@ -54,7 +54,7 @@ fun SammlungScreen(
             onRefresh = {
                 when (segment) {
                     "wunschliste" -> SideStores.wishlist.refreshAndWait()
-                    "decks" -> SideStores.decks.refreshAndWait()
+                    "decks" -> { SideStores.decks.refreshAndWait(); SideStores.allDeckCards.refreshAndWait(); CollectionStore.awaitSync() }
                     "sets" -> { CollectionStore.awaitSync(); SideStores.sets.refreshAndWait() }
                     "sealed" -> SideStores.sealedItems.refreshAndWait()
                     else -> CollectionStore.awaitSync()

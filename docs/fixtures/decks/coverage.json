@@ -1,0 +1,144 @@
+{
+  "_comment": "Spec E1 §4/§5/§8 — deckCoverage und Texte. Leser: desktop/src/utils/deckCoverage.test.js und android DeckCoverageTest.kt. copies[].printing_deleted = Printing geloescht (Kotlin: keine CardRow). Fehlt ein Passcode in prices, hat er keinen Katalogpreis.",
+  "world": {
+    "containers": [
+      {"container_id":"box-rot","name":"Deckbox Rot","kind":"deckbox","deleted":false},
+      {"container_id":"box-gruen","name":"Deckbox Grün","kind":"deckbox","deleted":false},
+      {"container_id":"box-frei","name":"Deckbox Frei","kind":"deckbox","deleted":false},
+      {"container_id":"box-tausch","name":"Box Tausch","kind":"box","deleted":false},
+      {"container_id":"ordner-blau","name":"Ordner Blau","kind":"binder","deleted":false},
+      {"container_id":"box-alt","name":"Deckbox Alt","kind":"deckbox","deleted":true},
+      {"container_id":"box-umgestellt","name":"Ex-Deckbox","kind":"box","deleted":false}
+    ],
+    "decks": [{"id":1,"name":"Labrynth","container_id":"box-rot"},{"id":2,"name":"Tenpai","container_id":"box-gruen"},{"id":3,"name":"Snake-Eye","container_id":"box-alt"},{"id":4,"name":"Kashtira","container_id":"box-umgestellt"},{"id":5,"name":"Ohne Box","container_id":null}],
+    "copies": [
+      {"copy_id":"a1","card_id":"14558127","set_code":"RA01-DE008","container_id":"box-rot","deleted":false,"printing_deleted":false},
+      {"copy_id":"a2","card_id":"14558127","set_code":"RA01-DE008","container_id":"box-gruen","deleted":false,"printing_deleted":false},
+      {"copy_id":"a3","card_id":"14558127","set_code":"RA01-DE008","container_id":null,"deleted":false,"printing_deleted":false},
+      {"copy_id":"a4","card_id":"14558127","set_code":"RA01-DE008","container_id":"box-frei","deleted":false,"printing_deleted":false},
+      {"copy_id":"a5","card_id":"14558127","set_code":"RA01-DE008","container_id":"ordner-blau","deleted":true,"printing_deleted":false},
+      {"copy_id":"a6","card_id":"14558127","set_code":"MP23-DE150","container_id":null,"deleted":false,"printing_deleted":true},
+      {"copy_id":"b1","card_id":"23434538","set_code":"RA01-DE010","container_id":"box-tausch","deleted":false,"printing_deleted":false},
+      {"copy_id":"b2","card_id":"23434538","set_code":"RA01-DE010","container_id":"box-alt","deleted":false,"printing_deleted":false},
+      {"copy_id":"b3","card_id":"23434538","set_code":"Unknown","container_id":"box-umgestellt","deleted":false,"printing_deleted":false},
+      {"copy_id":"d1","card_id":"10045474","set_code":"TAMA-DE060","container_id":"ordner-blau","deleted":false,"printing_deleted":false},
+      {"copy_id":"e1","card_id":"73642296","set_code":"RA01-DE009","container_id":"box-rot","deleted":false,"printing_deleted":false},
+      {"copy_id":"e2","card_id":"73642296","set_code":"RA01-DE009","container_id":"box-rot","deleted":false,"printing_deleted":false},
+      {"copy_id":"e3","card_id":"73642296","set_code":"RA01-DE009","container_id":"box-rot","deleted":false,"printing_deleted":false},
+      {"copy_id":"f1","card_id":"24224830","set_code":"RA01-DE074","container_id":"box-gruen","deleted":false,"printing_deleted":false},
+      {"copy_id":"z1","card_id":"46986414","set_code":"LOB-DE005","container_id":"box-rot","deleted":false,"printing_deleted":false}
+    ],
+    "prices": {"14558127":4.5,"23434538":8.99,"24224830":0.35,"73642296":1.1,"86066372":12.5}
+  },
+  "cases": [
+    {
+      "name": "Labrynth: andere Deckbox reserviert, freie Deckbox und unsortiert verfügbar, Abschnitte summiert, gelöscht zählt nicht, Kosten mit und ohne Preis",
+      "deckId": 1,
+      "deckCards": [
+        {"card_id":"14558127","count":2,"section":"main"},
+        {"card_id":"14558127","count":1,"section":"side"},
+        {"card_id":"23434538","count":3,"section":"main"},
+        {"card_id":"86066372","count":1,"section":"extra"},
+        {"card_id":"10045474","count":2,"section":"main"},
+        {"card_id":"10045474","count":1,"section":"main"},
+        {"card_id":"73642296","count":2,"section":"side"},
+        {"card_id":"24224830","count":1,"section":"main"}
+      ],
+      "expected": {
+        "boxId": "box-rot",
+        "cards": [
+          {"card_id":"14558127","needed":3,"inBox":1,"available":3,"missing":0,"price":4.5,"missingCost":0,"reservedElsewhere":[{"deck_id":2,"name":"Tenpai","count":1}]},
+          {"card_id":"23434538","needed":3,"inBox":0,"available":3,"missing":0,"price":8.99,"missingCost":0,"reservedElsewhere":[]},
+          {"card_id":"86066372","needed":1,"inBox":0,"available":0,"missing":1,"price":12.5,"missingCost":12.5,"reservedElsewhere":[]},
+          {"card_id":"10045474","needed":3,"inBox":0,"available":1,"missing":2,"price":null,"missingCost":null,"reservedElsewhere":[]},
+          {"card_id":"73642296","needed":2,"inBox":3,"available":3,"missing":0,"price":1.1,"missingCost":0,"reservedElsewhere":[]},
+          {"card_id":"24224830","needed":1,"inBox":0,"available":0,"missing":1,"price":0.35,"missingCost":0.35,"reservedElsewhere":[{"deck_id":2,"name":"Tenpai","count":1}]}
+        ],
+        "totals": {"needed":13,"owned":9,"boxed":3,"missing":4,"missingCards":3,"cost":12.85,"unpriced":1},
+        "texts": {
+          "box": "Deckbox Rot",
+          "header": "vorhanden 9/13 · in der Box 3/13 · fehlen 4 · ca. 12,85 € + 1 ohne Preis",
+          "list": "9/13 vorhanden · ca. 12,85 € + 1 ohne Preis",
+          "cost": "ca. 12,85 € + 1 ohne Preis",
+          "rows": ["Box 1 · verfügbar 3 · gebraucht 3","Box 0 · verfügbar 3 · gebraucht 3","Box 0 · verfügbar 0 · gebraucht 1","Box 0 · verfügbar 1 · gebraucht 3","Box 3 · verfügbar 3 · gebraucht 2","Box 0 · verfügbar 0 · gebraucht 1"],
+          "reserved": [["1 in Deck Tenpai"],[],[],[],[],["1 in Deck Tenpai"]]
+        }
+      }
+    },
+    {
+      "name": "Tenpai sieht die Labrynth-Box als reserviert",
+      "deckId": 2,
+      "deckCards": [{"card_id":"14558127","count":1,"section":"main"},{"card_id":"24224830","count":1,"section":"main"}],
+      "expected": {
+        "boxId": "box-gruen",
+        "cards": [{"card_id":"14558127","needed":1,"inBox":1,"available":3,"missing":0,"price":4.5,"missingCost":0,"reservedElsewhere":[{"deck_id":1,"name":"Labrynth","count":1}]},{"card_id":"24224830","needed":1,"inBox":1,"available":1,"missing":0,"price":0.35,"missingCost":0,"reservedElsewhere":[]}],
+        "totals": {"needed":2,"owned":2,"boxed":2,"missing":0,"missingCards":0,"cost":0,"unpriced":0},
+        "texts": {"box":"Deckbox Grün","header":"vorhanden 2/2 · in der Box 2/2 · fehlen 0","list":"2/2 vorhanden","cost":null,"rows":["Box 1 · verfügbar 3 · gebraucht 1","Box 1 · verfügbar 1 · gebraucht 1"],"reserved":[["1 in Deck Labrynth"],[]]}
+      }
+    },
+    {
+      "name": "gelöschte Deckbox = keine Box",
+      "deckId": 3,
+      "deckCards": [{"card_id":"73642296","count":2,"section":"main"}],
+      "expected": {
+        "boxId": null,
+        "cards": [{"card_id":"73642296","needed":2,"inBox":0,"available":0,"missing":2,"price":1.1,"missingCost":2.2,"reservedElsewhere":[{"deck_id":1,"name":"Labrynth","count":3}]}],
+        "totals": {"needed":2,"owned":0,"boxed":0,"missing":2,"missingCards":1,"cost":2.2,"unpriced":0},
+        "texts": {"box":"keine Box","header":"vorhanden 0/2 · in der Box 0/2 · fehlen 2 · ca. 2,20 €","list":"0/2 vorhanden · ca. 2,20 €","cost":"ca. 2,20 €","rows":["Box 0 · verfügbar 0 · gebraucht 2"],"reserved":[["3 in Deck Labrynth"]]}
+      }
+    },
+    {
+      "name": "umgestellte Deckbox = keine Box, Unknown-Printing zählt",
+      "deckId": 4,
+      "deckCards": [{"card_id":"23434538","count":3,"section":"main"}],
+      "expected": {
+        "boxId": null,
+        "cards": [{"card_id":"23434538","needed":3,"inBox":0,"available":3,"missing":0,"price":8.99,"missingCost":0,"reservedElsewhere":[]}],
+        "totals": {"needed":3,"owned":3,"boxed":0,"missing":0,"missingCards":0,"cost":0,"unpriced":0},
+        "texts": {"box":"keine Box","header":"vorhanden 3/3 · in der Box 0/3 · fehlen 0","list":"3/3 vorhanden","cost":null,"rows":["Box 0 · verfügbar 3 · gebraucht 3"],"reserved":[[]]}
+      }
+    },
+    {
+      "name": "nur Fehlende ohne Preis",
+      "deckId": 5,
+      "deckCards": [{"card_id":"10045474","count":3,"section":"main"}],
+      "expected": {
+        "boxId": null,
+        "cards": [{"card_id":"10045474","needed":3,"inBox":0,"available":1,"missing":2,"price":null,"missingCost":null,"reservedElsewhere":[]}],
+        "totals": {"needed":3,"owned":1,"boxed":0,"missing":2,"missingCards":1,"cost":0,"unpriced":1},
+        "texts": {"box":"keine Box","header":"vorhanden 1/3 · in der Box 0/3 · fehlen 2 · Preis unbekannt","list":"1/3 vorhanden · Preis unbekannt","cost":"Preis unbekannt","rows":["Box 0 · verfügbar 1 · gebraucht 3"],"reserved":[[]]}
+      }
+    },
+    {
+      "name": "Tausenderpunkt",
+      "deckId": 5,
+      "deckCards": [{"card_id":"99999999","count":3,"section":"main"}],
+      "prices": {"99999999":411.5},
+      "expected": {
+        "boxId": null,
+        "cards": [{"card_id":"99999999","needed":3,"inBox":0,"available":0,"missing":3,"price":411.5,"missingCost":1234.5,"reservedElsewhere":[]}],
+        "totals": {"needed":3,"owned":0,"boxed":0,"missing":3,"missingCards":1,"cost":1234.5,"unpriced":0},
+        "texts": {"box":"keine Box","header":"vorhanden 0/3 · in der Box 0/3 · fehlen 3 · ca. 1.234,50 €","list":"0/3 vorhanden · ca. 1.234,50 €","cost":"ca. 1.234,50 €","rows":["Box 0 · verfügbar 0 · gebraucht 3"],"reserved":[[]]}
+      }
+    },
+    {
+      "name": "leeres Deck",
+      "deckId": 5,
+      "deckCards": [],
+      "expected": {"boxId":null,"cards":[],"totals":{"needed":0,"owned":0,"boxed":0,"missing":0,"missingCards":0,"cost":0,"unpriced":0},"texts":{"box":"keine Box","header":"vorhanden 0/0 · in der Box 0/0 · fehlen 0","list":"0/0 vorhanden","cost":null,"rows":[],"reserved":[]}}
+    },
+    {
+      "name": "Rundung bei genau halbem Cent",
+      "deckId": 5,
+      "deckCards": [{"card_id":"55555555","count":1,"section":"main"}],
+      "prices": {"55555555":0.125},
+      "expected": {
+        "boxId": null,
+        "cards": [{"card_id":"55555555","needed":1,"inBox":0,"available":0,"missing":1,"price":0.125,"missingCost":0.13,"reservedElsewhere":[]}],
+        "totals": {"needed":1,"owned":0,"boxed":0,"missing":1,"missingCards":1,"cost":0.13,"unpriced":0},
+        "texts": {"box":"keine Box","header":"vorhanden 0/1 · in der Box 0/1 · fehlen 1 · ca. 0,13 €","list":"0/1 vorhanden · ca. 0,13 €","cost":"ca. 0,13 €","rows":["Box 0 · verfügbar 0 · gebraucht 1"],"reserved":[[]]}
+      }
+    }
+  ],
+  "choices": [{"deckId":1,"container_ids":["box-rot","box-frei"]},{"deckId":2,"container_ids":["box-gruen","box-frei"]},{"deckId":3,"container_ids":["box-frei"]},{"deckId":5,"container_ids":["box-frei"]}]
+}

@@ -469,3 +469,30 @@ test('listContainers zaehlt nur lebende Exemplare als Seite', () => {
   const [row] = copies.listContainers(db);
   assert.equal(row.max_page, 2);
 });
+
+// Spec E1 §4: Exemplare fuer den Deck-Abgleich -- nur lebende Exemplare lebender Printings, mit Standort und Preisfeldern.
+test('listDeckCopies liefert lebende Exemplare lebender Printings mit Standort und Preisen', () => {
+  const db = freshDb();
+  addContainer(db, 'c1', 'Ordner Blau', 'binder', 9);
+  db.prepare("UPDATE cards SET name = 'Dunkler Magier', price = 2.5, cm_first_ed_factor = 1.2 WHERE id = '46986414'").run();
+  db.prepare("INSERT INTO cards (id, set_code, language, rarity, price) VALUES ('46986414','Unknown','DE','Unknown', 0)").run();
+  db.prepare("INSERT INTO cards (id, set_code, language, rarity, price) VALUES ('46986414','SDY-DE006','DE','Common', 1)").run();
+  addCopy(db, 'lebt', { container_id: 'c1', page: 3, slot: 2 });
+  addCopy(db, 'weg', { deleted: 1 });
+  db.prepare(`INSERT INTO card_copies (copy_id, card_id, set_code, language, rarity) VALUES
+              ('unknown','46986414','Unknown','DE','Unknown'), ('printing-weg','46986414','SDY-DE006','DE','Common')`).run();
+  // Erst nach dem Exemplar tombstonen: der Recount-Trigger belebt ein Printing beim Einfuegen eines Exemplars wieder.
+  // Das JOIN auf c.deleted = 0 bleibt der Schutz fuer einen Pull, der das Printing geloescht herunterbringt.
+  db.prepare("UPDATE cards SET deleted = 1 WHERE id = '46986414' AND set_code = 'SDY-DE006'").run();
+  const rows = copies.listDeckCopies(db);
+  assert.deepEqual(rows.map((r) => r.copy_id), ['lebt', 'unknown']);
+  const [lebt] = rows;
+  assert.equal(lebt.container_id, 'c1');
+  assert.equal(lebt.page, 3);
+  assert.equal(lebt.slot, 2);
+  assert.equal(lebt.card_name, 'Dunkler Magier');
+  assert.equal(lebt.price, 2.5);
+  assert.equal(lebt.price_first_ed, 3);
+  assert.equal(lebt.edition, 'unknown');
+  assert.equal(lebt.condition, 'NM');
+});

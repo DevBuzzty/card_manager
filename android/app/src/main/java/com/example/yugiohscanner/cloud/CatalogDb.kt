@@ -17,8 +17,11 @@ import android.database.sqlite.SQLiteOpenHelper
 class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext, "catalog.db", null, VERSION) {
 
     companion object {
-        /** Spec G3 §3: v2 bringt `sealed_products`. onUpgrade verwirft den alten Katalog, CatalogSync laedt neu. */
-        const val VERSION = 2
+        /**
+         * Spec G3 §3: v2 bringt `sealed_products`. Spec E1 §5: v3 bringt `cards.cm_price`.
+         * onUpgrade verwirft den alten Katalog, CatalogSync laedt neu (ein Katalog v5 ohne cm_price bleibt lesbar).
+         */
+        const val VERSION = 3
     }
 
     init {
@@ -36,7 +39,7 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
             CREATE TABLE cards (
               id TEXT PRIMARY KEY, name_de TEXT, name_en TEXT, type TEXT, desc_de TEXT,
               atk INTEGER, def INTEGER, level INTEGER, race TEXT, attribute TEXT,
-              image TEXT, image_small TEXT)
+              image TEXT, image_small TEXT, cm_price REAL)
             """.trimIndent()
         )
         db.execSQL(
@@ -93,6 +96,7 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
                 cardValues.put("attribute", card.attribute)
                 cardValues.put("image", card.image)
                 cardValues.put("image_small", card.imageSmall)
+                if (card.cmPrice == null) cardValues.putNull("cm_price") else cardValues.put("cm_price", card.cmPrice)
                 db.insertOrThrow("cards", null, cardValues)
 
                 card.printings.forEachIndexed { index, printing ->

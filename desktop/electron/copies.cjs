@@ -217,6 +217,21 @@ function listAllCopies(db) {
      ORDER BY created_at, copy_id`).all();
 }
 
+// Spec E1 §4/§7: lebende Exemplare LEBENDER Printings mit Standort und den Preisfeldern, die der Abgleich und
+// "Box befüllen" brauchen (unitPrice x Zustandsfaktor, G4). Ausgeschriebene Spaltenliste wie listUnsortedCopies:
+// cards und card_copies teilen sich created_at/updated_at/deleted. Ein Exemplar eines Unknown-Printings zaehlt mit.
+function listDeckCopies(db) {
+  return db.prepare(`
+    SELECT cp.copy_id, cp.card_id, cp.set_code, cp.language, cp.rarity, cp.edition, cp.condition,
+           cp.container_id, cp.page, cp.slot,
+           c.name AS card_name, c.price AS price, c.price_first_ed AS price_first_ed
+      FROM card_copies cp
+      JOIN cards c ON c.id = cp.card_id AND c.set_code = cp.set_code
+                  AND c.language = cp.language AND c.rarity = cp.rarity
+     WHERE cp.deleted = 0 AND c.deleted = 0
+     ORDER BY cp.card_id, cp.copy_id`).all();
+}
+
 // Vorschlagsliste ueber alle lebenden Exemplare: entdoppelt (ohne Ruecksicht auf
 // Gross-/Kleinschreibung, erste Schreibweise gewinnt), alphabetisch sortiert. Eine kaputte
 // tags-Zelle wird uebersprungen statt zu werfen -- der Inhalt kann aus der Cloud stammen.
@@ -335,5 +350,5 @@ function saveContainer(db, { container_id, name, kind, pockets_per_page, color, 
 module.exports = {
   ValidationError,
   defaults, listCopies, listAllCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting,
-  setCopyLocation, deleteCopy, setCopyTagsNote, listUnsortedCopies, listTags, listContainers, saveContainer,
+  setCopyLocation, deleteCopy, setCopyTagsNote, listUnsortedCopies, listDeckCopies, listTags, listContainers, saveContainer,
 };

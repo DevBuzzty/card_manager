@@ -4,6 +4,14 @@
 const zlib = require('node:zlib');
 const { trendById } = require('./sealed-prices.cjs');
 
+// Spec E1 §5 — Cardmarket-Preis je Passcode aus card_prices[0].cardmarket_price. YGOPRODeck liefert ihn als
+// Zeichenkette ("4.50"); > 0 wird Zahl, alles andere (fehlt, "0.00", unlesbar) null. Ab Katalog Version 6.
+function cmPriceOf(c) {
+  const raw = Array.isArray(c.card_prices) && c.card_prices[0] ? c.card_prices[0].cardmarket_price : null;
+  const n = raw == null || raw === '' ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 // Die Kartenliste des englischen Dumps ist das Gerüst (vollständige Printings, Stats, Bilder);
 // aus dem deutschen Dump kommen nur Name und Text, mit Rückfall auf Englisch.
 function mergeCards(enCards, deCards) {
@@ -37,6 +45,7 @@ function mergeCards(enCards, deCards) {
         .filter(s => s && s.set_code)
         .map(s => ({ code: s.set_code, rarity: s.set_rarity || 'Common' })),
       printings_verified: [],
+      cm_price: cmPriceOf(c),
     });
   }
   return out;
@@ -94,4 +103,4 @@ function packCatalog(cards, version, sealedProducts = []) {
   return { buffer, json, bytes: buffer.length };
 }
 
-module.exports = { mergeCards, attachVerified, sealedKindOf, buildSealedProducts, packCatalog };
+module.exports = { cmPriceOf, mergeCards, attachVerified, sealedKindOf, buildSealedProducts, packCatalog };

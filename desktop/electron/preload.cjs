@@ -77,6 +77,13 @@ contextBridge.exposeInMainWorld('api', {
   getDeckDetails: (deckId) => ipcRenderer.invoke('get-deck-details', deckId),
   importDeckYdk: () => ipcRenderer.invoke('import-deck-ydk'),
   exportDeckYdk: (data) => ipcRenderer.invoke('export-deck-ydk', data),
+  // Spec E1: Sammlungsabgleich & Deckbox
+  listDeckCopies: () => ipcRenderer.invoke('list-deck-copies'),
+  getAllDeckCards: () => ipcRenderer.invoke('get-all-deck-cards'),
+  setDeckContainer: (data) => ipcRenderer.invoke('set-deck-container', data),
+  getCatalogPrices: () => ipcRenderer.invoke('get-catalog-prices'),
+  addMissingToWishlist: (items) => ipcRenderer.invoke('deck-missing-to-wishlist', items),
+  moveCopiesToContainer: (data) => ipcRenderer.invoke('move-copies-to-container', data),
 
   // Wishlist
   getWishlist: () => ipcRenderer.invoke('get-wishlist'),
