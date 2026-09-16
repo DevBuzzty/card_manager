@@ -3,6 +3,9 @@ package com.example.yugiohscanner.cloud
 import android.content.Context
 import android.database.Cursor
 import com.example.yugiohscanner.ml.CatalogNameRow
+import com.example.yugiohscanner.ml.DeckImport
+import com.example.yugiohscanner.ml.LegalityCatalog
+import com.example.yugiohscanner.ml.LegalityInfo
 
 /**
  * Read-only access to the local offline catalog ([CatalogDb]). This is the only way the rest of
@@ -150,6 +153,51 @@ object CatalogRepository {
             }
         }
         return out
+    }
+
+    /** Spec E3 §3: SQL der Artwork-Zuordnung mehrerer Passcodes -- rein, damit ohne SQLite testbar. */
+    internal fun aliasesQuery(ids: List<String>): Pair<String, Array<String>> =
+        "SELECT alt_id, card_id FROM card_aliases WHERE alt_id IN (${ids.joinToString(",") { "?" }})" to ids.toTypedArray()
+
+    /** Spec E3 §4: SQL der Legalitaetsdaten mehrerer Haupt-Passcodes -- rein, damit ohne SQLite testbar. */
+    internal fun legalityQuery(ids: List<String>): Pair<String, Array<String>> =
+        "SELECT id, name_de, name_en, type, ban_tcg, ban_ocg FROM cards WHERE id IN (${ids.joinToString(",") { "?" }})" to ids.toTypedArray()
+
+    /** Spec E3 §3: Artwork-Passcode -> Haupt-Passcode fuer die [ids], die Artworks sind (Bloecke zu 500). Ohne Katalog leer. */
+    fun aliases(ids: Collection<String>): Map<String, String> {
+        val database = db?.readableDatabase ?: return emptyMap()
+        val out = HashMap<String, String>()
+        for (chunk in ids.distinct().chunked(500)) {
+            val (sql, args) = aliasesQuery(chunk)
+            database.rawQuery(sql, args).use { c -> while (c.moveToNext()) out[c.getString(0)] = c.getString(1) }
+        }
+        return out
+    }
+
+    /** Spec E3 §7: Baudatum des importierten Katalogs ("Banlist-Stand"), null ohne Katalog. */
+    fun builtAt(): String? = db?.meta("built_at")
+
+    /**
+     * Spec E3 §4: Legalitaetsdaten fuer die Deckkarten-Passcodes [ids] -- Zuordnung und die Hauptkarten mit Name, Typ und
+     * Banlist. null ohne Katalog oder mit einem Katalog von vor E3 (meta.legality != "1") -> "Katalog fehlt – Banlist
+     * unbekannt". Aufrufer lesen abseits des Hauptthreads.
+     */
+    fun legalityCatalog(ids: Collection<String>): LegalityCatalog? {
+        val helper = db ?: return null
+        if (!isReady() || helper.meta("legality") != "1") return null
+        val database = helper.readableDatabase
+        val aliases = aliases(ids)
+        val cards = HashMap<String, LegalityInfo>()
+        for (chunk in ids.map { DeckImport.canonicalPasscode(it, aliases) }.distinct().chunked(500)) {
+            val (sql, args) = legalityQuery(chunk)
+            database.rawQuery(sql, args).use { c ->
+                while (c.moveToNext()) {
+                    fun s(i: Int) = if (c.isNull(i)) null else c.getString(i)
+                    cards[c.getString(0)] = LegalityInfo(s(1)?.takeIf { it.isNotEmpty() } ?: s(2)?.takeIf { it.isNotEmpty() }, s(3), s(4), s(5))
+                }
+            }
+        }
+        return LegalityCatalog(aliases, cards, helper.meta("built_at"))
     }
 
     private fun escapeLike(input: String): String =

@@ -19,9 +19,39 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
     companion object {
         /**
          * Spec G3 §3: v2 bringt `sealed_products`. Spec E1 §5: v3 bringt `cards.cm_price`.
+         * Spec E3 §3: v4 bringt `cards.ban_tcg`/`ban_ocg` und `card_aliases` (Artwork-Passcode -> Haupt-Passcode).
          * onUpgrade verwirft den alten Katalog, CatalogSync laedt neu (ein Katalog v5 ohne cm_price bleibt lesbar).
          */
-        const val VERSION = 3
+        const val VERSION = 4
+
+        /** Schema als Liste, damit ohne Geraet pruefbar ist, dass onUpgrade jede angelegte Tabelle verwirft. */
+        internal val CREATE_STATEMENTS = listOf(
+            """
+            CREATE TABLE cards (
+              id TEXT PRIMARY KEY, name_de TEXT, name_en TEXT, type TEXT, desc_de TEXT,
+              atk INTEGER, def INTEGER, level INTEGER, race TEXT, attribute TEXT,
+              image TEXT, image_small TEXT, cm_price REAL, ban_tcg TEXT, ban_ocg TEXT)
+            """.trimIndent(),
+            """
+            CREATE TABLE printings (
+              card_id TEXT NOT NULL, code TEXT NOT NULL, rarity TEXT NOT NULL,
+              lang TEXT, verified INTEGER NOT NULL DEFAULT 0, ord INTEGER NOT NULL)
+            """.trimIndent(),
+            "CREATE INDEX printings_card_idx ON printings(card_id)",
+            "CREATE INDEX cards_name_de_idx ON cards(name_de)",
+            "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)",
+            "CREATE TABLE sealed_products (cm_product_id INTEGER PRIMARY KEY, name TEXT, kind TEXT, trend REAL)",
+            "CREATE INDEX sealed_products_name_idx ON sealed_products(name)",
+            "CREATE TABLE card_aliases (alt_id TEXT PRIMARY KEY, card_id TEXT NOT NULL)",
+        )
+
+        internal val DROP_STATEMENTS = listOf(
+            "DROP TABLE IF EXISTS printings",
+            "DROP TABLE IF EXISTS cards",
+            "DROP TABLE IF EXISTS meta",
+            "DROP TABLE IF EXISTS sealed_products",
+            "DROP TABLE IF EXISTS card_aliases",
+        )
     }
 
     init {
@@ -34,33 +64,11 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
     }
 
     override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL(
-            """
-            CREATE TABLE cards (
-              id TEXT PRIMARY KEY, name_de TEXT, name_en TEXT, type TEXT, desc_de TEXT,
-              atk INTEGER, def INTEGER, level INTEGER, race TEXT, attribute TEXT,
-              image TEXT, image_small TEXT, cm_price REAL)
-            """.trimIndent()
-        )
-        db.execSQL(
-            """
-            CREATE TABLE printings (
-              card_id TEXT NOT NULL, code TEXT NOT NULL, rarity TEXT NOT NULL,
-              lang TEXT, verified INTEGER NOT NULL DEFAULT 0, ord INTEGER NOT NULL)
-            """.trimIndent()
-        )
-        db.execSQL("CREATE INDEX printings_card_idx ON printings(card_id)")
-        db.execSQL("CREATE INDEX cards_name_de_idx ON cards(name_de)")
-        db.execSQL("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
-        db.execSQL("CREATE TABLE sealed_products (cm_product_id INTEGER PRIMARY KEY, name TEXT, kind TEXT, trend REAL)")
-        db.execSQL("CREATE INDEX sealed_products_name_idx ON sealed_products(name)")
+        CREATE_STATEMENTS.forEach { db.execSQL(it) }
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS printings")
-        db.execSQL("DROP TABLE IF EXISTS cards")
-        db.execSQL("DROP TABLE IF EXISTS meta")
-        db.execSQL("DROP TABLE IF EXISTS sealed_products")
+        DROP_STATEMENTS.forEach { db.execSQL(it) }
         onCreate(db)
     }
 
@@ -79,6 +87,7 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
             db.delete("printings", null, null)
             db.delete("cards", null, null)
             db.delete("sealed_products", null, null)
+            db.delete("card_aliases", null, null)
 
             val cardValues = ContentValues()
             val printingValues = ContentValues()
@@ -97,6 +106,9 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
                 cardValues.put("image", card.image)
                 cardValues.put("image_small", card.imageSmall)
                 if (card.cmPrice == null) cardValues.putNull("cm_price") else cardValues.put("cm_price", card.cmPrice)
+                // Spec E3 §3: Banlist je Karte (null = uneingeschraenkt).
+                if (card.banTcg == null) cardValues.putNull("ban_tcg") else cardValues.put("ban_tcg", card.banTcg)
+                if (card.banOcg == null) cardValues.putNull("ban_ocg") else cardValues.put("ban_ocg", card.banOcg)
                 db.insertOrThrow("cards", null, cardValues)
 
                 card.printings.forEachIndexed { index, printing ->
@@ -122,7 +134,25 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
                 db.insertWithOnConflict("sealed_products", null, sealedValues, SQLiteDatabase.CONFLICT_REPLACE)
             }
 
+            // Spec E3 §3: Artwork-Zuordnung in derselben Transaktion.
+            val aliasValues = ContentValues()
+            for ((alt, main) in parsed.aliases) {
+                aliasValues.clear()
+                aliasValues.put("alt_id", alt)
+                aliasValues.put("card_id", main)
+                db.insertWithOnConflict("card_aliases", null, aliasValues, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+
+            // Spec E3 §3/§7: Baudatum ("Banlist-Stand") und ob der Katalog Ban-/Artwork-Felder traegt; version zuletzt.
             val metaValues = ContentValues()
+            metaValues.put("key", "built_at")
+            metaValues.put("value", parsed.builtAt)
+            db.insertWithOnConflict("meta", null, metaValues, SQLiteDatabase.CONFLICT_REPLACE)
+            metaValues.clear()
+            metaValues.put("key", "legality")
+            metaValues.put("value", if (parsed.hasLegality) "1" else "0")
+            db.insertWithOnConflict("meta", null, metaValues, SQLiteDatabase.CONFLICT_REPLACE)
+            metaValues.clear()
             metaValues.put("key", "version")
             metaValues.put("value", parsed.version.toString())
             db.insertWithOnConflict("meta", null, metaValues, SQLiteDatabase.CONFLICT_REPLACE)
@@ -134,11 +164,14 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
     }
 
     /** The version of the currently-imported catalog, or 0 if none has ever been imported. */
-    fun version(): Int {
-        readableDatabase.query("meta", arrayOf("value"), "key = ?", arrayOf("version"), null, null, null).use { c ->
-            if (c.moveToFirst()) return c.getString(0).toIntOrNull() ?: 0
+    fun version(): Int = meta("version")?.toIntOrNull() ?: 0
+
+    /** Spec E3: Wert aus `meta` (z. B. "built_at", "legality"), null ohne Eintrag. */
+    fun meta(key: String): String? {
+        readableDatabase.query("meta", arrayOf("value"), "key = ?", arrayOf(key), null, null, null).use { c ->
+            if (c.moveToFirst()) return c.getString(0)
         }
-        return 0
+        return null
     }
 
     fun cardCount(): Int {
