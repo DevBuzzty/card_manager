@@ -229,6 +229,15 @@
       "plans": [
         {"choices":{},"expected":{"cards":[],"counts":{"main":0,"extra":0,"side":0},"skipped":["Raigeki"],"skippedLabels":["Raigeki · Nicht gefunden"],"notes":"Nicht übernommen beim Import:\nRaigeki","countsText":"Main 0 · Extra 0 · Side 0","skippedText":"1 nicht übernommen"}}
       ]
+    },
+    {
+      "name": "Textliste: normalisierte Anfrage gleich lang wie Katalogname, Levenshtein-Abstand genau 3 -> Nicht gefunden (prueft die Grenze <= 2 direkt, nicht ueber den Laengen-Vorfilter)",
+      "catalog": true,
+      "parsed": {"format":"text","cards":[{"name":"rune wine","count":1,"section":"main","line":"rune wine"}],"unresolved":[]},
+      "expected": {"catalogMissing":false,"rows":[{"status":"notFound","count":1,"section":"main","source":"rune wine","candidates":[]}]},
+      "plans": [
+        {"choices":{},"expected":{"cards":[],"counts":{"main":0,"extra":0,"side":0},"skipped":["rune wine"],"skippedLabels":["rune wine · Nicht gefunden"],"notes":"Nicht übernommen beim Import:\nrune wine","countsText":"Main 0 · Extra 0 · Side 0","skippedText":"1 nicht übernommen"}}
+      ]
     }
   ],
   "texts": {

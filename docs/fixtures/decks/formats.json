@@ -117,6 +117,19 @@
       "name": "leerer Text: Keine Deckliste erkannt",
       "text": "  \n\n// nur Kommentar\n",
       "expected": {"format":"text","cards":[],"unresolved":[],"error":"Keine Deckliste erkannt"}
+    },
+    {
+      "name": "Textliste: echtes geschütztes Leerzeichen (U+00A0) zwischen Anzahl und Name sowie Name und x2",
+      "text": "Main Deck\n3 Raigeki\nRaigeki x2\n",
+      "expected": {"format":"text","cards":[
+        {"name":"Raigeki","count":3,"section":"main","line":"3 Raigeki"},
+        {"name":"Raigeki","count":2,"section":"main","line":"Raigeki x2"}
+      ],"unresolved":[],"error":null}
+    },
+    {
+      "name": "Textliste: Anzahl 99 ist die gültige Obergrenze",
+      "text": "99 Raigeki\n",
+      "expected": {"format":"text","cards":[{"name":"Raigeki","count":99,"section":"unknown","line":"99 Raigeki"}],"unresolved":[],"error":null}
     }
   ],
   "detect": [
