@@ -22,6 +22,19 @@ object DeckWishlist {
      *  (nicht leer, nicht der Passcode-Rueckfall selbst). ZWILLING: decks.cjs#hasDealWatchName. */
     fun hasDealWatchName(name: String, cardId: String): Boolean = name.trim().isNotEmpty() && name != cardId
 
+    /**
+     * F3-Folgefix: ob WishlistRepository.addToWishlist bei vorhandenem Preis einen Deal-Watch anlegt.
+     * [requireRealName] gilt NUR fuer den Massen-Pfad (addMissing/"Fehlende auf die Wunschliste"), wo der
+     * Name auf den Passcode zurueckfallen kann. Der Einzel-Pfad (WishlistScreen, CardDetailScreen) ruft mit
+     * requireRealName = false und verhaelt sich wie vor E1: jeder vorhandene Preis legt einen Watch an, auch
+     * wenn Name und cardId zufaellig gleich sind (z.B. ein von Hand eingetippter Name "ash").
+     */
+    fun shouldCreateDealWatch(maxPrice: Double?, name: String, cardId: String, requireRealName: Boolean): Boolean {
+        if (maxPrice == null) return false
+        if (requireRealName && !hasDealWatchName(name, cardId)) return false
+        return true
+    }
+
     fun missingForWishlist(coverage: Coverage, wishlistCardIds: Collection<String>): WishPlan {
         val listed = wishlistCardIds.toHashSet()
         val candidates = ArrayList<WishCandidate>()

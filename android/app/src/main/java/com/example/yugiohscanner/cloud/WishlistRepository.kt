@@ -32,8 +32,13 @@ object WishlistRepository {
     }
 
     // Spec E1 §6: triggerScrape = false beim Massen-Hinzufuegen (die Cloud-Suche laeuft dort einmal am Ende).
-    // Rueckgabe: true, wenn zusaetzlich ein Deal-Watch entstand.
-    suspend fun addToWishlist(cardId: String, name: String, imageUrl: String?, maxPrice: Double?, triggerScrape: Boolean = true): Boolean =
+    // requireRealName = true NUR fuer diesen Massen-Pfad (F3-Folgefix): ein Einzel-Eintrag (WishlistScreen,
+    // CardDetailScreen) legt wie vor E1 bei jedem vorhandenen Preis einen Deal-Watch an, egal ob Name und
+    // cardId zufaellig gleich sind. Rueckgabe: true, wenn zusaetzlich ein Deal-Watch entstand.
+    suspend fun addToWishlist(
+        cardId: String, name: String, imageUrl: String?, maxPrice: Double?,
+        triggerScrape: Boolean = true, requireRealName: Boolean = false,
+    ): Boolean =
         withContext(Dispatchers.IO) {
             val body = JSONObject()
                 .put("card_id", cardId).put("name", name)
@@ -48,10 +53,10 @@ object WishlistRepository {
             }.use { r -> if (!r.isSuccessful) err("Wunschkarte anlegen", r) }
 
             // Also hunt for it as a deal-watch (best-effort — must not fail the wishlist add).
-            // F3: keine Suche mit dem Passcode als Suchbegriff (etwa "Fehlende auf die Wunschliste" ohne Namen).
-            if (maxPrice == null || !DeckWishlist.hasDealWatchName(name, cardId)) return@withContext false
+            if (!DeckWishlist.shouldCreateDealWatch(maxPrice, name, cardId, requireRealName)) return@withContext false
             try {
-                DealsRepository.addWatch(name, maxPrice)
+                // shouldCreateDealWatch==true garantiert maxPrice != null.
+                DealsRepository.addWatch(name, maxPrice!!)
                 if (triggerScrape) DealsRepository.triggerScrape()
                 true
             } catch (_: Exception) { false /* non-fatal */ }
@@ -61,7 +66,7 @@ object WishlistRepository {
     suspend fun addMissing(candidates: List<WishCandidate>, nameOf: (String) -> String, imageOf: (String) -> String?): WishResult =
         DeckWishlist.addAll(
             candidates,
-            add = { c -> addToWishlist(c.cardId, nameOf(c.cardId), imageOf(c.cardId), c.maxPrice, triggerScrape = false) },
+            add = { c -> addToWishlist(c.cardId, nameOf(c.cardId), imageOf(c.cardId), c.maxPrice, triggerScrape = false, requireRealName = true) },
             triggerScrape = { DealsRepository.triggerScrape() },
         )
 

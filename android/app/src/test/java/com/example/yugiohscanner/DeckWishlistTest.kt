@@ -76,11 +76,29 @@ class DeckWishlistTest {
     @Test fun `Name fehlt -- Eintrag ja, Watch nein, keine Cloud-Suche wenn einziger Kandidat`() = runTest {
         var scrapes = 0
         val cardId = "12345678"
-        // Simuliert WishlistRepository.addToWishlist: ohne Namen faellt er auf den Passcode zurueck.
+        // Simuliert WishlistRepository.addToWishlist im Massen-Pfad (requireRealName = true): ohne Namen
+        // faellt er auf den Passcode zurueck.
         val res = DeckWishlist.addAll(listOf(WishCandidate(cardId, 5.0)), add = { c ->
-            c.maxPrice != null && DeckWishlist.hasDealWatchName(cardId, c.cardId)
+            DeckWishlist.shouldCreateDealWatch(c.maxPrice, name = cardId, cardId = c.cardId, requireRealName = true)
         }, triggerScrape = { scrapes++ })
         assertEquals(0, scrapes)
         assertEquals(WishResult(1, 1, 0, emptyList()), res)
+    }
+
+    // F3-Folgefix: die Re-Review fand, dass der Namens-Schutz faelschlich im geteilten addToWishlist sass und
+    // damit auch den Einzel-Pfad (WishlistScreen, CardDetailScreen) traf -- ein von Hand eingetippter, bereits
+    // kleingeschriebener Name (z.B. "ash") wird dort als cardId UND als Name verwendet, bekam also keinen Watch
+    // mehr, obwohl ein echter Preis vorlag. Die Entscheidung wandert in shouldCreateDealWatch: requireRealName
+    // gilt nur fuer den Massen-Pfad (addMissing), der Einzel-Pfad ruft mit requireRealName = false.
+    @Test fun `Einzel-Pfad legt Watch an, auch wenn Name gleich cardId ist`() {
+        // Regressionsfall aus der Re-Review: WishlistScreen erzeugt cardId = name.lowercase(); bei einem
+        // bereits kleingeschriebenen Namen wie "ash" sind Name und cardId identisch.
+        assertEquals(true, DeckWishlist.shouldCreateDealWatch(5.0, name = "ash", cardId = "ash", requireRealName = false))
+        // Massen-Pfad (requireRealName = true) unterdrueckt denselben Fall weiterhin.
+        assertEquals(false, DeckWishlist.shouldCreateDealWatch(5.0, name = "ash", cardId = "ash", requireRealName = true))
+        // Ohne Preis nie ein Watch, unabhaengig vom Pfad (unveraendert seit vor E1).
+        assertEquals(false, DeckWishlist.shouldCreateDealWatch(null, name = "Ash Blossom", cardId = "14558127", requireRealName = false))
+        // Massen-Pfad mit echtem Namen legt weiterhin einen Watch an.
+        assertEquals(true, DeckWishlist.shouldCreateDealWatch(5.0, name = "Ash Blossom", cardId = "14558127", requireRealName = true))
     }
 }
