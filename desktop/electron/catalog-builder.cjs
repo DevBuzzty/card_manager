@@ -5,7 +5,7 @@
 const fs = require('fs');
 const crypto = require('crypto');
 const { cachedFetch } = require('./api-handler.cjs');
-const { mergeCards, attachVerified, packCatalog } = require('./catalog-build.cjs');
+const { mergeCards, buildAliases, attachVerified, packCatalog } = require('./catalog-build.cjs');
 const { sealedProductsForCatalog } = require('./sealed-products.cjs');
 const { saveCatalogFile } = require('./catalog-prices.cjs');
 
@@ -193,7 +193,8 @@ async function runCatalogBuild(db, { ensureClient, force = false, userDataPath =
     const version = (await seedVersion(client, 'catalog', localVersion)) + 1;
     // Spec G3 §3: Sealed-Produktliste aus dem Cardmarket-Cache; ohne Cache [].
     const sealedProducts = sealedProductsForCatalog(userDataPath);
-    const { buffer, bytes } = packCatalog(cards, version, sealedProducts);
+    // Spec E3 §3: Artwork-Zuordnung aus dem englischen Dump (card_images[].id), nur fuer Karten im Katalog.
+    const { buffer, bytes } = packCatalog(cards, version, sealedProducts, buildAliases(dumps.en, cards));
 
     const fileName = `catalog.v${version}.json.gz`;
     const { error: upErr } = await client.storage.from(BUCKET).upload(fileName, buffer, { contentType: 'application/gzip', upsert: true });

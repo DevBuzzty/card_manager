@@ -12,6 +12,15 @@ function cmPriceOf(c) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+// Spec E3 §3 — Banlist-Stufe aus banlist_info.ban_tcg/ban_ocg. YGOPRODeck schreibt "Forbidden" (im Dump vom
+// 2026-09-16 gemessen: 117x TCG, 91x OCG; nie "Banned"); "Banned" steht in der Spec und wird ebenso verstanden.
+// Fehlt banlist_info oder der Schluessel, oder ist der Wert unbekannt -> null = uneingeschraenkt.
+const BAN_LEVELS = { Forbidden: 'forbidden', Banned: 'forbidden', Limited: 'limited', 'Semi-Limited': 'semi' };
+function banOf(c, key) {
+  const raw = c && c.banlist_info ? c.banlist_info[key] : null;
+  return raw != null && Object.hasOwn(BAN_LEVELS, raw) ? BAN_LEVELS[raw] : null;
+}
+
 // Die Kartenliste des englischen Dumps ist das Gerüst (vollständige Printings, Stats, Bilder);
 // aus dem deutschen Dump kommen nur Name und Text, mit Rückfall auf Englisch.
 function mergeCards(enCards, deCards) {
@@ -46,9 +55,29 @@ function mergeCards(enCards, deCards) {
         .map(s => ({ code: s.set_code, rarity: s.set_rarity || 'Common' })),
       printings_verified: [],
       cm_price: cmPriceOf(c),
+      ban_tcg: banOf(c, 'ban_tcg'),
+      ban_ocg: banOf(c, 'ban_ocg'),
     });
   }
   return out;
+}
+
+// Spec E3 §3 — Artwork-Zuordnung { "<Artwork-Passcode>": "<Haupt-Passcode>" } aus card_images[].id. Nur fuer Karten,
+// die im Katalog stehen (`cards` = Ergebnis von mergeCards); die Haupt-ID selbst und IDs, die selbst Haupt-ID einer
+// Katalogkarte sind, werden nie aufgenommen (im Dump vom 2026-09-16: 164 Artworks, keine Kollision).
+function buildAliases(enCards, cards) {
+  const mains = new Set((cards || []).map((c) => String(c.id)));
+  const aliases = {};
+  for (const c of enCards || []) {
+    if (!c || c.id == null || !mains.has(String(c.id))) continue;
+    for (const img of Array.isArray(c.card_images) ? c.card_images : []) {
+      if (!img || img.id == null) continue;
+      const alt = String(Number(img.id));
+      if (alt === String(c.id) || mains.has(alt) || Object.hasOwn(aliases, alt)) continue;
+      aliases[alt] = String(c.id);
+    }
+  }
+  return aliases;
 }
 
 // `verifiedByPasscode` kommt aus dem api_cache des Desktops und enthält AUSSCHLIESSLICH Codes,
@@ -97,10 +126,12 @@ function buildSealedProducts(nonsingles, priceGuides) {
   return out;
 }
 
-function packCatalog(cards, version, sealedProducts = []) {
-  const json = JSON.stringify({ version, built_at: new Date().toISOString(), cards, sealed_products: sealedProducts });
+// Spec E3 §3: `aliases` steht immer im Katalog (auch leer) -- sein Fehlen kennzeichnet einen Katalog von vor E3
+// ("Katalog fehlt – Banlist unbekannt").
+function packCatalog(cards, version, sealedProducts = [], aliases = {}) {
+  const json = JSON.stringify({ version, built_at: new Date().toISOString(), cards, sealed_products: sealedProducts, aliases });
   const buffer = zlib.gzipSync(Buffer.from(json, 'utf8'), { level: 9 });
   return { buffer, json, bytes: buffer.length };
 }
 
-module.exports = { cmPriceOf, mergeCards, attachVerified, sealedKindOf, buildSealedProducts, packCatalog };
+module.exports = { cmPriceOf, banOf, mergeCards, buildAliases, attachVerified, sealedKindOf, buildSealedProducts, packCatalog };

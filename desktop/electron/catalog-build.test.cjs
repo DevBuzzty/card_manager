@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const zlib = require('node:zlib');
-const { cmPriceOf, mergeCards, attachVerified, packCatalog, sealedKindOf, buildSealedProducts } = require('./catalog-build.cjs');
+const { cmPriceOf, banOf, mergeCards, buildAliases, attachVerified, packCatalog, sealedKindOf, buildSealedProducts } = require('./catalog-build.cjs');
 
 const EN = [{
   id: 46986414, name: 'Dark Magician', type: 'Normal Monster', desc: 'The ultimate wizard.',
@@ -173,4 +173,53 @@ test('mergeCards schreibt cm_price, der gepackte Katalog Version 6 trägt ihn', 
   const back = JSON.parse(zlib.gunzipSync(packCatalog(mergeCards(withPrice, DE), 6).buffer).toString('utf8'));
   assert.equal(back.version, 6);
   assert.equal(back.cards[0].cm_price, 35.71);
+});
+
+// Spec E3 §3 -- Banlist aus banlist_info. Echte Werte im YGOPRODeck-Dump: "Forbidden", "Limited", "Semi-Limited".
+test('banOf: Forbidden/Banned -> forbidden, Limited -> limited, Semi-Limited -> semi, sonst null', () => {
+  const c = { banlist_info: { ban_tcg: 'Forbidden', ban_ocg: 'Semi-Limited', ban_goat: 'Limited' } };
+  assert.equal(banOf(c, 'ban_tcg'), 'forbidden');
+  assert.equal(banOf(c, 'ban_ocg'), 'semi');
+  assert.equal(banOf({ banlist_info: { ban_tcg: 'Banned' } }, 'ban_tcg'), 'forbidden');
+  assert.equal(banOf({ banlist_info: { ban_tcg: 'Limited' } }, 'ban_tcg'), 'limited');
+  assert.equal(banOf({ banlist_info: { ban_tcg: 'Limited' } }, 'ban_ocg'), null, 'Schlüssel fehlt');
+  assert.equal(banOf({ banlist_info: { ban_tcg: 'Unlimited' } }, 'ban_tcg'), null, 'unbekannter Wert');
+  assert.equal(banOf({ banlist_info: { ban_tcg: 'toString' } }, 'ban_tcg'), null);
+  assert.equal(banOf({}, 'ban_tcg'), null, 'banlist_info fehlt');
+});
+
+test('mergeCards schreibt ban_tcg und ban_ocg, ohne banlist_info null', () => {
+  const pot = [{ ...EN[0], id: 55144522, name: 'Pot of Greed', banlist_info: { ban_tcg: 'Forbidden', ban_ocg: 'Limited', ban_goat: 'Limited' } }];
+  const [c] = mergeCards(pot, []);
+  assert.equal(c.ban_tcg, 'forbidden');
+  assert.equal(c.ban_ocg, 'limited');
+  const [plain] = mergeCards(EN, DE);
+  assert.equal(plain.ban_tcg, null);
+  assert.equal(plain.ban_ocg, null);
+});
+
+test('buildAliases: alle abweichenden card_images[].id, Haupt-ID nie, nur Karten im Katalog', () => {
+  const en = [
+    { ...EN[0], card_images: [{ id: 46986414, image_url: 'a' }, { id: 46986415, image_url: 'b' }, { id: 36996508, image_url: 'c' }] },
+    { id: 89631139, name: 'Blue-Eyes White Dragon', type: 'Normal Monster', card_images: [{ id: 89631139, image_url: 'd' }, { id: 89631140, image_url: 'e' }] },
+    { id: 12345678, name: 'ohne Bild', card_images: [{ id: 12345679 }] },
+  ];
+  const cards = mergeCards(en, []);
+  assert.deepEqual(buildAliases(en, cards), { 46986415: '46986414', 36996508: '46986414', 89631140: '89631139' });
+  assert.deepEqual(buildAliases(en, cards.filter((c) => c.id !== 89631139)), { 46986415: '46986414', 36996508: '46986414' });
+});
+
+test('buildAliases: eine Artwork-ID, die selbst Haupt-ID ist, wird nicht umgebogen', () => {
+  const en = [
+    { id: 1, name: 'A', card_images: [{ id: 1, image_url: 'a' }, { id: 2, image_url: 'b' }] },
+    { id: 2, name: 'B', card_images: [{ id: 2, image_url: 'b' }] },
+  ];
+  assert.deepEqual(buildAliases(en, mergeCards(en, [])), {});
+});
+
+test('packCatalog schreibt aliases, ohne Angabe leer', () => {
+  const plain = JSON.parse(zlib.gunzipSync(packCatalog(mergeCards(EN, DE), 14).buffer).toString('utf8'));
+  assert.deepEqual(plain.aliases, {});
+  const withAliases = JSON.parse(zlib.gunzipSync(packCatalog(mergeCards(EN, DE), 15, [], { 46986415: '46986414' }).buffer).toString('utf8'));
+  assert.deepEqual(withAliases.aliases, { 46986415: '46986414' });
 });
