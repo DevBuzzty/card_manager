@@ -110,4 +110,55 @@ async function createImportedDeck(client, { name, notes, cards } = {}, imageOf =
   return { success: false, error: error.message || String(error) };
 }
 
-module.exports = { DECKBOX_TAKEN, deckContainerErrorMessage, setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck };
+const FORMAT_SAVE_FAILED = 'Format konnte nicht gespeichert werden';
+
+// Spec E3 §6 -- Zeilen fuer "Save Deck". role steht nur an Starter-Zeilen des Main Decks: so bleibt ein Deck ohne Sterne
+// auch vor decks_format_role.sql speicherbar (supabase-js nennt im Insert nur Spalten, die in einer Zeile vorkommen).
+// detailOf(passcode) -> { name, image_url } aus der lokalen Sammlung (Rueckfall, wenn der Renderer nichts mitschickt).
+function saveDeckRows(deckId, cards, detailOf = () => null) {
+  return (Array.isArray(cards) ? cards : []).map((card) => {
+    const det = detailOf(String(card.id)) || {};
+    const row = {
+      deck_id: deckId, card_id: String(card.id),
+      name: card.name || det.name || null,
+      image_url: card.image_url || det.image_url || null,
+      count: card.quantity || 1,
+      section: card.type || 'main',
+    };
+    if (card.role === 'starter' && row.section === 'main') row.role = 'starter';
+    return row;
+  });
+}
+
+// "Save Deck" (bisher direkt in main.cjs): alle Deckkarten loeschen und neu einfuegen, dann Notizen (Spec E2 §5) und
+// Format (Spec E3 §4), jeweils nur, wenn der Renderer sie mitschickt (er tut es nur bei einer Aenderung).
+// Spec E3 §8: scheitert der Insert mit Sternen (Spalte role fehlt noch), werden dieselben Zeilen ohne role eingefuegt --
+// sonst waeren die Deckkarten nach dem Loeschen verloren; roleSaved = false. Ein gescheitertes Format meldet
+// "Format konnte nicht gespeichert werden".
+async function saveDeck(client, { deckId, cards, notes, format } = {}, detailOf = () => null) {
+  await client.from('deck_cards').delete().eq('deck_id', deckId);
+  let roleSaved = true;
+  const rows = saveDeckRows(deckId, cards, detailOf);
+  if (rows.length) {
+    let { error } = await client.from('deck_cards').insert(rows);
+    if (error && rows.some((r) => r.role)) {
+      ({ error } = await client.from('deck_cards').insert(rows.map(({ role: _role, ...rest }) => rest)));
+      if (!error) roleSaved = false;
+    }
+    if (error) throw new Error(error.message);
+  }
+  if (notes !== undefined) {
+    const { error } = await client.from('decks').update({ notes: notes || null }).eq('id', deckId);
+    if (error) throw new Error(error.message);
+  }
+  if (format !== undefined) {
+    const { error } = await client.from('decks').update({ format }).eq('id', deckId);
+    if (error) throw new Error(FORMAT_SAVE_FAILED);
+  }
+  return { success: true, roleSaved };
+}
+
+module.exports = {
+  DECKBOX_TAKEN, deckContainerErrorMessage, setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck,
+  FORMAT_SAVE_FAILED, saveDeckRows, saveDeck,
+};

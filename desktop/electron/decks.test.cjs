@@ -4,7 +4,10 @@ const Database = require('better-sqlite3');
 const { ensureCopiesSchema } = require('./copies-schema.cjs');
 const { ensureContainersSchema } = require('./containers-schema.cjs');
 const copies = require('./copies.cjs');
-const { DECKBOX_TAKEN, deckContainerErrorMessage, setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck } = require('./decks.cjs');
+const {
+  DECKBOX_TAKEN, deckContainerErrorMessage, setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck,
+  FORMAT_SAVE_FAILED, saveDeckRows, saveDeck,
+} = require('./decks.cjs');
 
 // Attrappe des Supabase-Clients: merkt sich jede Schreibung; `fail` bestimmt je Tabelle, welche card_id/query scheitert.
 function fakeClient({ fail = {}, updateError = null } = {}) {
@@ -175,4 +178,78 @@ test('YDK-Datei: Antwortform { canceled, name, text } für den gemeinsamen Parse
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ydk-')), 'Tenpai Dragon.ydk');
   fs.writeFileSync(file, '#main\n14558127\n!side\n');
   assert.deepEqual(readYdkFile(file), { canceled: false, name: 'Tenpai Dragon', text: '#main\n14558127\n!side\n' });
+});
+
+// Spec E3 §6/§8 -- Attrappe fuer "Save Deck": deck_cards.delete().eq(), deck_cards.insert(rows), decks.update().eq().
+// insertErrors: Fehler je Insert-Aufruf in Reihenfolge; updateErrors: Fehler je Update-Feld (notes/format).
+function saveClient({ insertErrors = [], updateErrors = {} } = {}) {
+  const calls = { deleted: [], inserts: [], updates: [] };
+  return {
+    calls,
+    from(table) {
+      return {
+        delete: () => ({ eq: async (col, val) => { calls.deleted.push({ table, col, val }); return { error: null }; } }),
+        insert: async (rows) => { calls.inserts.push(rows); return { error: insertErrors[calls.inserts.length - 1] || null }; },
+        update: (patch) => ({
+          eq: async (col, val) => {
+            calls.updates.push({ table, patch, col, val });
+            return { error: updateErrors[Object.keys(patch)[0]] || null };
+          },
+        }),
+      };
+    },
+  };
+}
+
+const SAVE_CARDS = [
+  { id: '14558127', type: 'main', quantity: 3, name: 'Asche-Blüte', image_url: 'a.jpg', role: 'starter' },
+  { id: '1861629', type: 'extra', quantity: 1, name: 'Decode Talker', image_url: null, role: 'starter' },
+  { id: '27204311', type: 'side', quantity: 2, name: null, image_url: null, role: null },
+];
+
+test('Save Deck: role nur an Starter-Zeilen des Main Decks, Name/Bild mit lokalem Rückfall', () => {
+  const rows = saveDeckRows(7, SAVE_CARDS, (id) => (id === '27204311' ? { name: 'Nibiru', image_url: 'n.jpg' } : null));
+  assert.deepEqual(rows, [
+    { deck_id: 7, card_id: '14558127', name: 'Asche-Blüte', image_url: 'a.jpg', count: 3, section: 'main', role: 'starter' },
+    { deck_id: 7, card_id: '1861629', name: 'Decode Talker', image_url: null, count: 1, section: 'extra' },
+    { deck_id: 7, card_id: '27204311', name: 'Nibiru', image_url: 'n.jpg', count: 2, section: 'side' },
+  ]);
+});
+
+test('Save Deck: löscht, fügt mit role ein und schreibt das geänderte Format', async () => {
+  const c = saveClient();
+  const res = await saveDeck(c, { deckId: 7, cards: SAVE_CARDS, notes: undefined, format: 'ocg' });
+  assert.deepEqual(res, { success: true, roleSaved: true });
+  assert.deepEqual(c.calls.deleted, [{ table: 'deck_cards', col: 'deck_id', val: 7 }]);
+  assert.equal(c.calls.inserts.length, 1);
+  assert.equal(c.calls.inserts[0][0].role, 'starter');
+  assert.deepEqual(c.calls.updates, [{ table: 'decks', patch: { format: 'ocg' }, col: 'id', val: 7 }]);
+});
+
+test('Save Deck: ohne Format- und Notizänderung kein Update, ohne Sterne keine role-Spalte', async () => {
+  const c = saveClient();
+  await saveDeck(c, { deckId: 7, cards: [{ ...SAVE_CARDS[0], role: null }] });
+  assert.deepEqual(c.calls.updates, []);
+  assert.equal('role' in c.calls.inserts[0][0], false);
+});
+
+test('Save Deck: fehlt die Spalte role, landen die Karten ohne Sterne statt verloren zu gehen', async () => {
+  const c = saveClient({ insertErrors: [{ message: "Could not find the 'role' column of 'deck_cards'" }] });
+  const res = await saveDeck(c, { deckId: 7, cards: SAVE_CARDS });
+  assert.deepEqual(res, { success: true, roleSaved: false });
+  assert.equal(c.calls.inserts.length, 2);
+  assert.equal(c.calls.inserts[1].some((r) => 'role' in r), false);
+  assert.equal(c.calls.inserts[1].length, 3);
+});
+
+test('Save Deck: scheitert auch der Insert ohne role, kommt die Rohmeldung', async () => {
+  const c = saveClient({ insertErrors: [{ message: 'kaputt' }, { message: 'immer noch kaputt' }] });
+  await assert.rejects(saveDeck(c, { deckId: 7, cards: SAVE_CARDS }), { message: 'immer noch kaputt' });
+});
+
+test('Save Deck: fehlt die Spalte format, meldet es "Format konnte nicht gespeichert werden"', async () => {
+  const c = saveClient({ updateErrors: { format: { message: "Could not find the 'format' column of 'decks'" } } });
+  await assert.rejects(saveDeck(c, { deckId: 7, cards: [], notes: 'Notiz', format: 'free' }), { message: FORMAT_SAVE_FAILED });
+  assert.equal(FORMAT_SAVE_FAILED, 'Format konnte nicht gespeichert werden');
+  assert.deepEqual(c.calls.updates.map((u) => u.patch), [{ notes: 'Notiz' }, { format: 'free' }]);
 });

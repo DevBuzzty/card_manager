@@ -21,8 +21,8 @@ const { deleteContainer } = require('./containers-schema.cjs');
 const sealed = require('./sealed-items.cjs');
 const { readSealedProducts, searchSealedProducts, sealedProductsAvailable } = require('./sealed-products.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
-const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck } = require('./decks.cjs');
-const { catalogPrices, catalogCards, readCatalogCards } = require('./catalog-prices.cjs');
+const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck, saveDeck } = require('./decks.cjs');
+const { catalogPrices, catalogCards, readCatalogCards, catalogMainId, catalogLegality } = require('./catalog-prices.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -613,30 +613,12 @@ ipcMain.handle('delete-deck', async (event, id) => {
     return { success: true };
 });
 
-ipcMain.handle('save-deck', async (event, { deckId, cards, notes }) => {
+// Spec E3 §6: die Regeln (role an Starter-Zeilen, Rueckfall ohne role, Notizen und Format nur bei Aenderung) wohnen
+// in decks.cjs#saveDeck; hier nur Client und lokaler Namens-/Bild-Rueckfall.
+ipcMain.handle('save-deck', async (event, { deckId, cards, notes, format }) => {
     const c = await dealsClient();
-    await c.from('deck_cards').delete().eq('deck_id', deckId);
-    if (cards && cards.length) {
-        const lookup = db.prepare('SELECT name, image_url FROM cards WHERE id = ? LIMIT 1');
-        const rows = cards.map(card => {
-            const det = lookup.get(String(card.id)) || {};
-            return {
-                deck_id: deckId, card_id: String(card.id),
-                name: card.name || det.name || null,
-                image_url: card.image_url || det.image_url || null,
-                count: card.quantity || 1,
-                section: card.type || 'main',
-            };
-        });
-        const { error } = await c.from('deck_cards').insert(rows);
-        if (error) throw new Error(error.message);
-    }
-    // Spec E2 §5: Notizen nur schreiben, wenn der Renderer sie mitschickt (er tut es nur bei einer Aenderung).
-    if (notes !== undefined) {
-        const { error } = await c.from('decks').update({ notes: notes || null }).eq('id', deckId);
-        if (error) throw new Error(error.message);
-    }
-    return { success: true };
+    const lookup = db.prepare('SELECT name, image_url FROM cards WHERE id = ? LIMIT 1');
+    return saveDeck(c, { deckId, cards, notes, format }, (id) => lookup.get(id));
 });
 
 ipcMain.handle('get-deck-details', async (event, id) => {
@@ -647,13 +629,16 @@ ipcMain.handle('get-deck-details', async (event, id) => {
         'SELECT name, image_url, type AS card_type, desc, atk, def, level, race, attribute, price ' +
         'FROM cards WHERE id = ? AND deleted = 0 LIMIT 1'
     );
-    // Spec E2 §6: "→ Deck" braucht den Kartentyp auch fuer nicht besessene Karten -- Rueckfall auf den Katalog.
+    // Spec E2 §6: "→ Deck" braucht den Kartentyp auch fuer nicht besessene Karten -- Rueckfall auf den Katalog
+    // (Spec E3 §3: fuer Artwork-Passcodes ueber die Hauptkarte).
     const catalog = readCatalogCards(userDataPath);
     return (data || []).map(dc => {
         const d = detail.get(String(dc.card_id)) || {};
-        const cat = (catalog && catalog.get(String(dc.card_id))) || {};
+        const cat = (catalog && catalog.get(catalogMainId(userDataPath, dc.card_id))) || {};
         return {
             deck_id: dc.deck_id, card_id: dc.card_id, type: dc.section, quantity: dc.count,
+            // Spec E3 §6: Starter-Stern; ohne Spalte role (SQL fehlt) undefined -> null.
+            role: dc.role === 'starter' ? 'starter' : null,
             name: dc.name || d.name || null, image_url: dc.image_url || d.image_url || null,
             card_type: d.card_type || cat.type || null, desc: d.desc || null,
             atk: d.atk ?? null, def: d.def ?? null, level: d.level ?? null,
@@ -725,8 +710,14 @@ ipcMain.handle('get-catalog-cards', (event, ids) => catalogCards(userDataPath, A
 ipcMain.handle('create-imported-deck', async (event, input) => {
     const c = await dealsClient();
     const catalog = readCatalogCards(userDataPath);
-    return createImportedDeck(c, input, (id) => (catalog && catalog.get(id) ? catalog.get(id).image : null));
+    // Spec E3 §3: Artwork-Passcodes bekommen das Bild der Hauptkarte; die Deckkarte behaelt den Artwork-Passcode.
+    const imageOf = (id) => { const cat = catalog && catalog.get(catalogMainId(userDataPath, id)); return cat ? cat.image : null; };
+    return createImportedDeck(c, input, imageOf);
 });
+
+// --- Spec E3: Legalitaet & Simulation ---
+// Name, Typ und Banlist aller Katalogkarten, Artwork-Zuordnung und Baudatum; ohne (E3-)Katalog available = false.
+ipcMain.handle('get-catalog-legality', () => catalogLegality(userDataPath));
 
 // --- Other Handlers ---
 
