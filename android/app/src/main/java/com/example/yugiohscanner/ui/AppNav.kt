@@ -190,6 +190,12 @@ fun AppNav() {
     // The camera owns the whole screen; every other destination keeps the bar. Der Einsortier-Modus
     // (Spec B2 §6) ist ebenfalls eine Kamera und bekommt denselben ganzen Schirm.
     val showBar = route != Routes.SCAN && route != Routes.EINSORTIEREN
+    // Spec E2 §6: geteilter Text fuehrt zu den Decks -- erst hier, nach Login und Laden (der Text wartet im Postfach);
+    // DecksScreen nimmt ihn heraus und oeffnet die Import-Vorschau.
+    val sharedDeckText by DeckImportInbox.text.collectAsState()
+    LaunchedEffect(sharedDeckText != null, cloudReady) {
+        if (sharedDeckText != null && cloudReady) nav.navigateTop(Routes.sammlung("decks"))
+    }
 
     Scaffold(bottomBar = { if (showBar) AppBottomBar(nav) }) { padding ->
         NavHost(
