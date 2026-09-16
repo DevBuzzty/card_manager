@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -50,13 +51,23 @@ fun DeckImportScreen(sharedText: String?, onBack: () -> Unit, onCreated: (Long) 
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    // F5: waehrend "Anlegen" System-Zurueck sperren -- sonst verlaesst DecksScreens eigener BackHandler diesen
+    // Bildschirm, der rememberCoroutineScope() wird abgebrochen und der laufende Import bricht mitten im Insert ab.
+    BackHandler(enabled = busy) {}
+
     LaunchedEffect(previewText) {
         val text = previewText ?: return@LaunchedEffect
         prepared = null
         choices = emptyMap()
         prepared = withContext(Dispatchers.IO) {
             // Namen nur waehrend des Imports im Speicher; ohne Katalog (z. B. direkt nach einem Katalog-Upgrade) null.
-            DeckImport.prepare(text, null) { ids -> if (CatalogRepository.isReady()) CatalogRepository.importRows(ids) else null }
+            // F4: ein Fehler hier (z. B. Katalogzugriff) darf die Vorschau nicht abstuerzen lassen -- als
+            // PreparedImport-Fehler zeigen, genau wie ein ungueltiger YDKE-Link oder unerkannter Text.
+            try {
+                DeckImport.prepare(text, null) { ids -> if (CatalogRepository.isReady()) CatalogRepository.importRows(ids) else null }
+            } catch (e: Exception) {
+                PreparedImport(e.message ?: e.javaClass.simpleName, null)
+            }
         }
     }
     val resolved = prepared?.resolved
@@ -147,7 +158,7 @@ fun DeckImportScreen(sharedText: String?, onBack: () -> Unit, onCreated: (Long) 
                                         SideStores.allDeckCards.refresh()
                                         onCreated(id)
                                     } catch (e: Exception) {
-                                        error = DeckImport.failedText(e.message)
+                                        error = DeckImport.failedTextFor(e)
                                     }
                                     busy = false
                                 }
