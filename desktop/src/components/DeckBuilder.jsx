@@ -1,9 +1,28 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Save, Upload, FileUp, AlertTriangle, Download, BarChart2, PieChart as PieChartIcon, Play } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Trash2, Save, Upload, FileUp, Download, BarChart2, PieChart as PieChartIcon, Play } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import { LOADING, boxLabel, deckBoxId, deckCoverage, listText } from '../utils/deckCoverage';
+import { fillBoxProposal } from '../utils/fillBoxProposal';
+import DeckCoverageHeader from './DeckCoverageHeader';
+import DeckCardNumbers from './DeckCardNumbers';
+import FillBoxDialog from './FillBoxDialog';
+import DeckWishlistDialog from './DeckWishlistDialog';
+
+// Spec E1 §4: alles, was der Abgleich braucht, in einem Rutsch -- lokale Exemplare und Behaelter, alle Deckkarten
+// aus der Cloud, Katalogpreise. Die Decks selbst kommen wie bisher ueber getDecks.
+function fetchCoverageData() {
+  return Promise.all([window.api.listDeckCopies(), window.api.getAllDeckCards(), window.api.getCatalogPrices()])
+    .then(([local, deckCards, catalog]) => ({ copies: local.copies, containers: local.containers, deckCards: deckCards || [], prices: catalog.prices }));
+}
 
 export default function DeckBuilder() {
   const [decks, setDecks] = useState([]);
+  // Spec E1 §8: bis Decks UND Abgleichsdaten da sind, zeigen alle Zahlen "…" -- nie 0/40.
+  const [decksLoaded, setDecksLoaded] = useState(false);
+  const [coverageData, setCoverageData] = useState(null);
+  const [coverageError, setCoverageError] = useState(null);
+  const [boxError, setBoxError] = useState(null);
+  const [dialog, setDialog] = useState(null); // { kind: 'fill', proposal } | { kind: 'wishlist' } | null
   const [activeDeck, setActiveDeck] = useState(null); // { id, name, cards: [] }
   const [collection, setCollection] = useState([]);
   const [filter, setFilter] = useState('');
@@ -22,10 +41,36 @@ export default function DeckBuilder() {
 
   useEffect(() => {
     if (window.api) {
-        window.api.getDecks().then(setDecks);
+        window.api.getDecks().then((d) => { setDecks(d); setDecksLoaded(true); });
         window.api.getCollection().then(setCollection);
+        fetchCoverageData().then(setCoverageData).catch((e) => setCoverageError(e.message || String(e)));
     }
   }, []);
+
+  // Spec E1 §12.4: zieht der Sync Exemplar-Aenderungen vom Handy herein, stimmen Ort und Zahlen auch hier.
+  useEffect(() => window.api?.onCollectionChanged?.(() => {
+      fetchCoverageData().then(setCoverageData).catch((e) => setCoverageError(e.message || String(e)));
+  }), []);
+
+  const reloadCoverage = () => fetchCoverageData()
+      .then((d) => { setCoverageData(d); setCoverageError(null); })
+      .catch((e) => setCoverageError(e.message || String(e)));
+
+  const ready = decksLoaded && !!coverageData;
+
+  // Deck-Liste: gespeicherte Deckkarten je Deck (nicht die ungespeicherten Aenderungen im Editor).
+  const listCoverage = useMemo(() => {
+      if (!ready) return null;
+      const byDeck = new Map();
+      for (const dc of coverageData.deckCards) {
+          if (!byDeck.has(dc.deck_id)) byDeck.set(dc.deck_id, []);
+          byDeck.get(dc.deck_id).push(dc);
+      }
+      return new Map(decks.map((d) => [d.id, deckCoverage({
+          deckId: d.id, deckCards: byDeck.get(d.id) || [], copies: coverageData.copies,
+          decks, containers: coverageData.containers, prices: coverageData.prices,
+      })]));
+  }, [ready, coverageData, decks]);
 
   const handleCreateDeck = async (e) => {
       e.preventDefault();
@@ -77,7 +122,22 @@ export default function DeckBuilder() {
           ...sideDeck.map(c => ({ id: c.card_id, type: 'side', quantity: c.quantity }))
       ];
       await window.api.saveDeck(activeDeck.id, allCards);
+      reloadCoverage();   // Spec E1: die Deck-Liste rechnet mit den gespeicherten Deckkarten
       alert("Deck saved!");
+  };
+
+  // Spec E1 §3/§9: Deckbox zuordnen. Lehnt die Cloud ab (Unique-Index), bleibt alles, wie es war, und die Meldung steht.
+  const handleChangeBox = async (containerId) => {
+      if (!activeDeck || !window.api) return;
+      setBoxError(null);
+      try {
+          const res = await window.api.setDeckContainer({ deckId: activeDeck.id, containerId: containerId || null });
+          if (!res.success) { setBoxError(res.error); return; }
+          setDecks((prev) => prev.map((d) => (d.id === activeDeck.id ? { ...d, container_id: containerId || null } : d)));
+          setActiveDeck((prev) => ({ ...prev, container_id: containerId || null }));
+      } catch (e) {
+          setBoxError(e.message || String(e));
+      }
   };
 
   const handleImportYdk = async () => {
@@ -182,6 +242,27 @@ export default function DeckBuilder() {
 
   const filteredCollection = collection.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
 
+  // Spec E1 §4/§8: Abgleich des geoeffneten Decks mit den Karten, wie sie gerade im Editor stehen.
+  const activeCards = useMemo(() => [
+      ...mainDeck.map((c) => ({ card_id: String(c.card_id), count: c.quantity, section: 'main' })),
+      ...extraDeck.map((c) => ({ card_id: String(c.card_id), count: c.quantity, section: 'extra' })),
+      ...sideDeck.map((c) => ({ card_id: String(c.card_id), count: c.quantity, section: 'side' })),
+  ], [mainDeck, extraDeck, sideDeck]);
+  const activeCoverage = useMemo(() => (ready && activeDeck ? deckCoverage({
+      deckId: activeDeck.id, deckCards: activeCards, copies: coverageData.copies,
+      decks, containers: coverageData.containers, prices: coverageData.prices,
+  }) : null), [ready, activeDeck, activeCards, coverageData, decks]);
+  const coverageByCard = useMemo(() => new Map((activeCoverage ? activeCoverage.cards : []).map((c) => [c.card_id, c])), [activeCoverage]);
+  const deckCardInfo = useMemo(() => new Map([...mainDeck, ...extraDeck, ...sideDeck].map((c) => [String(c.card_id), c])), [mainDeck, extraDeck, sideDeck]);
+  const copiesById = useMemo(() => new Map((coverageData ? coverageData.copies : []).map((c) => [c.copy_id, c])), [coverageData]);
+  const containersById = useMemo(() => new Map((coverageData ? coverageData.containers : []).map((c) => [c.container_id, c])), [coverageData]);
+  const numbersFor = (cardId) => (activeCoverage ? coverageByCard.get(String(cardId)) : null);
+
+  const openFillBox = () => setDialog({
+      kind: 'fill',
+      proposal: fillBoxProposal({ deckId: activeDeck.id, deckCards: activeCards, copies: coverageData.copies, decks, containers: coverageData.containers }),
+  });
+
   // Stats Components
   const deckStatsProps = { mainDeck, extraDeck, sideDeck };
 
@@ -238,7 +319,12 @@ export default function DeckBuilder() {
                             onClick={() => handleLoadDeck(deck)}
                             className={`flex justify-between items-center p-2 rounded cursor-pointer ${activeDeck?.id === deck.id ? 'bg-space-violet/20 border border-space-violet/50 text-white' : 'hover:bg-gray-800 text-gray-400'}`}
                         >
-                            <span className="truncate">{deck.name}</span>
+                            <div className="min-w-0">
+                                <span className="block truncate">{deck.name}</span>
+                                <span className="block truncate text-[11px] font-mono text-gray-500">
+                                    {listCoverage ? `${boxLabel(deck, coverageData.containers)} · ${listText(listCoverage.get(deck.id))}` : LOADING}
+                                </span>
+                            </div>
                             {activeDeck?.id === deck.id && (
                                 <button onClick={(e) => { e.stopPropagation(); handleDeleteDeck(deck.id); }} className="text-gray-500 hover:text-red-400">
                                     <Trash2 className="w-4 h-4" />
@@ -302,6 +388,15 @@ export default function DeckBuilder() {
                         </div>
                     </div>
 
+                    <DeckCoverageHeader
+                        deck={activeDeck} decks={decks} coverage={activeCoverage}
+                        containers={coverageData ? coverageData.containers : null}
+                        error={coverageError} boxError={boxError}
+                        onChangeBox={handleChangeBox}
+                        onOpenWishlist={() => setDialog({ kind: 'wishlist' })}
+                        onOpenFillBox={openFillBox}
+                    />
+
                     {showStats && <DeckStats {...deckStatsProps} />}
 
                     {showTestHand && (
@@ -332,7 +427,7 @@ export default function DeckBuilder() {
                             </div>
                             <div className="space-y-1">
                                 {mainDeck.length === 0 && <p className="text-gray-600 text-sm italic">Drag or click cards to add.</p>}
-                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" collection={collection} removeFromDeck={removeFromDeck} />)}
+                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} />)}
                             </div>
                         </div>
 
@@ -343,7 +438,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{extraDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" collection={collection} removeFromDeck={removeFromDeck} />)}
+                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} />)}
                             </div>
                         </div>
 
@@ -354,7 +449,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{sideDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" collection={collection} removeFromDeck={removeFromDeck} />)}
+                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} />)}
                             </div>
                         </div>
                     </div>
@@ -366,16 +461,27 @@ export default function DeckBuilder() {
                 </div>
             )}
         </div>
+
+        {dialog && dialog.kind === 'fill' && activeCoverage && (
+            <FillBoxDialog
+                boxId={deckBoxId(activeDeck, coverageData.containers)}
+                boxName={boxLabel(activeDeck, coverageData.containers)}
+                proposal={dialog.proposal} copiesById={copiesById} containersById={containersById}
+                onClose={() => setDialog(null)} onMoved={reloadCoverage}
+                onOpenWishlist={() => setDialog({ kind: 'wishlist' })}
+            />
+        )}
+        {dialog && dialog.kind === 'wishlist' && activeCoverage && (
+            <DeckWishlistDialog coverage={activeCoverage} cardInfo={deckCardInfo} onClose={() => setDialog(null)} />
+        )}
     </div>
   );
 }
 
 // Sub-component for a card row in deck list
-const DeckCardRow = ({ card, type, collection, removeFromDeck }) => {
-    // Check ownership
-    const owned = collection.find(c => c.id === card.card_id);
-    const ownedQty = owned ? owned.quantity : 0;
-    const missing = card.quantity > ownedQty;
+// Spec E1 §8: statt des roten "fehlt" die drei Zahlen aus dem Abgleich (numbers null = noch nicht geladen).
+const DeckCardRow = ({ card, type, numbers, removeFromDeck }) => {
+    const missing = !!numbers && numbers.missing > 0;
 
     return (
         <div
@@ -389,12 +495,7 @@ const DeckCardRow = ({ card, type, collection, removeFromDeck }) => {
                 </div>
                 <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
             </div>
-            {missing && (
-                <div className="flex items-center text-xs text-red-500" title={`You own ${ownedQty}, need ${card.quantity}`}>
-                    <AlertTriangle className="w-3 h-3 mr-1" />
-                    {ownedQty}/{card.quantity}
-                </div>
-            )}
+            <DeckCardNumbers card={numbers} />
         </div>
     );
 };
