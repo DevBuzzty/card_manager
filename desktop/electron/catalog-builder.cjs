@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { cachedFetch } = require('./api-handler.cjs');
 const { mergeCards, attachVerified, packCatalog } = require('./catalog-build.cjs');
 const { sealedProductsForCatalog } = require('./sealed-products.cjs');
+const { saveCatalogFile } = require('./catalog-prices.cjs');
 
 const EN_URL = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
 const DE_URL = 'https://db.ygoprodeck.com/api/v7/cardinfo.php?language=de';
@@ -212,6 +213,13 @@ async function runCatalogBuild(db, { ensureClient, force = false, userDataPath =
     setSetting(db, 'catalog_version', version);
     setSetting(db, 'catalog_last_run', built_at);
     setSetting(db, 'catalog_bytes', bytes);
+
+    // Spec E1 §5: dieselbe Datei lokal ablegen -- der Desktop liest cm_price daraus und rechnet so mit denselben
+    // Preisen wie das Handy. Erst nach dem erfolgreichen Hochladen; ein Fehler hier ist nie fatal fuer den Bau.
+    if (userDataPath) {
+      try { saveCatalogFile(userDataPath, buffer); }
+      catch (e) { console.error('[catalog-builder] Katalogdatei nicht gespeichert:', e.message); }
+    }
 
     return { version, bytes, url, cards: cards.length, verified: verifiedByPasscode.size, sealed: sealedProducts.length };
   } catch (e) {

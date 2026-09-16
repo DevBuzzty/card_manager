@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const zlib = require('node:zlib');
-const { mergeCards, attachVerified, packCatalog, sealedKindOf, buildSealedProducts } = require('./catalog-build.cjs');
+const { cmPriceOf, mergeCards, attachVerified, packCatalog, sealedKindOf, buildSealedProducts } = require('./catalog-build.cjs');
 
 const EN = [{
   id: 46986414, name: 'Dark Magician', type: 'Normal Monster', desc: 'The ultimate wizard.',
@@ -152,4 +152,25 @@ test('packCatalog schreibt sealed_products, ohne Angabe leer', () => {
   const withSealed = JSON.parse(zlib.gunzipSync(packCatalog(mergeCards(EN, DE), 13, products).buffer).toString('utf8'));
   assert.deepEqual(withSealed.sealed_products, products);
   assert.equal(withSealed.cards.length, 1);
+});
+
+// Spec E1 §5 — cm_price aus card_prices[0].cardmarket_price; 0 oder fehlend wird null. Katalog Version 6.
+test('cmPriceOf liest den Cardmarket-Preis, 0/leer/fehlend wird null', () => {
+  assert.equal(cmPriceOf({ card_prices: [{ cardmarket_price: '4.50', tcgplayer_price: '9.99' }] }), 4.5);
+  assert.equal(cmPriceOf({ card_prices: [{ cardmarket_price: 12.5 }] }), 12.5);
+  assert.equal(cmPriceOf({ card_prices: [{ cardmarket_price: '0.00' }] }), null);
+  assert.equal(cmPriceOf({ card_prices: [{ cardmarket_price: '' }] }), null);
+  assert.equal(cmPriceOf({ card_prices: [{ cardmarket_price: 'n/a' }] }), null);
+  assert.equal(cmPriceOf({ card_prices: [{}] }), null);
+  assert.equal(cmPriceOf({ card_prices: [] }), null);
+  assert.equal(cmPriceOf({}), null);
+});
+
+test('mergeCards schreibt cm_price, der gepackte Katalog Version 6 trägt ihn', () => {
+  const withPrice = [{ ...EN[0], card_prices: [{ cardmarket_price: '35.71' }] }];
+  assert.equal(mergeCards(withPrice, DE)[0].cm_price, 35.71);
+  assert.equal(mergeCards(EN, DE)[0].cm_price, null, 'EN ohne card_prices');
+  const back = JSON.parse(zlib.gunzipSync(packCatalog(mergeCards(withPrice, DE), 6).buffer).toString('utf8'));
+  assert.equal(back.version, 6);
+  assert.equal(back.cards[0].cm_price, 35.71);
 });
