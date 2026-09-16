@@ -193,8 +193,20 @@ fun AppNav() {
     // Spec E2 §6: geteilter Text fuehrt zu den Decks -- erst hier, nach Login und Laden (der Text wartet im Postfach);
     // DecksScreen nimmt ihn heraus und oeffnet die Import-Vorschau.
     val sharedDeckText by DeckImportInbox.text.collectAsState()
+    // F2: navigateTop() poppt mit saveState=true/restoreState=true -- das stellt fuer "sammlung/{segment}"
+    // einen GESPEICHERTEN Rueckstapeleintrag mit seinem EIGENEN Segment-Argument wieder her (z. B. "karten"
+    // oder "binder", je nachdem, was der Nutzer zuletzt in der Sammlung offen hatte) und ignoriert dabei
+    // unser "decks"-Argument -- SammlungScreen wird dann gar nicht mit segment=decks zusammengesetzt, die
+    // Vorschau oeffnet nie. Deshalb ohne restoreState: zum Start-Ziel poppen (ohne dessen Zustand zu retten)
+    // und gezielt sammlung/decks oeffnen, damit der Reiter sicher steht -- unabhaengig davon, ob zuvor
+    // Karten/Binder offen waren oder die App kalt gestartet ist.
     LaunchedEffect(sharedDeckText != null, cloudReady) {
-        if (sharedDeckText != null && cloudReady) nav.navigateTop(Routes.sammlung("decks"))
+        if (sharedDeckText != null && cloudReady) {
+            nav.navigate(Routes.sammlung("decks")) {
+                popUpTo(nav.graph.findStartDestination().id) { saveState = false }
+                launchSingleTop = true
+            }
+        }
     }
 
     Scaffold(bottomBar = { if (showBar) AppBottomBar(nav) }) { padding ->
