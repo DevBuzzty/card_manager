@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Trash2, Save, FileUp, BarChart2, PieChart as PieChartIcon, Play } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
+import { Trash2, Save, FileUp, Star } from 'lucide-react';
 import { LOADING, boxLabel, deckCoverage, listText } from '../utils/deckCoverage';
 import { fillBoxProposal } from '../utils/fillBoxProposal';
 import DeckCoverageHeader from './DeckCoverageHeader';
@@ -12,6 +11,13 @@ import DeckImportDialog from './DeckImportDialog';
 import DeckExportMenu from './DeckExportMenu';
 import { deckSectionFor, moveLabel, moveTarget } from '../utils/deckImport';
 import { buildSaveDeckCards } from '../utils/saveDeckPayload';
+import CustomSelect from './CustomSelect';
+import DeckSidebar from './DeckSidebar';
+import DeckLegalityBadge from './DeckLegalityBadge';
+import DeckBanIcon from './DeckBanIcon';
+import { COPY_LIMIT, FORMATS, FORMAT_LABELS, banOf, canAddCopy, deckLegality, normalizeFormat } from '../utils/deckLegality';
+
+const FORMAT_OPTIONS = FORMATS.map((f) => ({ value: f, label: FORMAT_LABELS[f] }));
 
 // Spec E1 §4: alles, was der Abgleich braucht, in einem Rutsch -- lokale Exemplare und Behaelter, alle Deckkarten
 // aus der Cloud, Katalogpreise. Die Decks selbst kommen wie bisher ueber getDecks.
@@ -31,9 +37,11 @@ export default function DeckBuilder() {
   const [activeDeck, setActiveDeck] = useState(null); // { id, name, cards: [] }
   const [collection, setCollection] = useState([]);
   const [filter, setFilter] = useState('');
-  const [showStats, setShowStats] = useState(false);
-  const [testHand, setTestHand] = useState([]);
-  const [showTestHand, setShowTestHand] = useState(false);
+  // Spec E3: Format des offenen Decks (gespeichert mit "Save Deck"), Katalog-Index fuer die Legalitaet (null = laedt),
+  // Meldung der Kopien-Grenze beim Hinzufuegen.
+  const [format, setFormat] = useState('tcg');
+  const [legalityData, setLegalityData] = useState(null);
+  const [limitMessage, setLimitMessage] = useState(null);
 
   // Deck Creation State
   const [isCreating, setIsCreating] = useState(false);
@@ -54,6 +62,7 @@ export default function DeckBuilder() {
         window.api.getDecks().then((d) => { setDecks(d); setDecksLoaded(true); });
         window.api.getCollection().then(setCollection);
         fetchCoverageData().then(setCoverageData).catch((e) => setCoverageError(e.message || String(e)));
+        window.api.getCatalogLegality().then(setLegalityData);
     }
   }, []);
 
@@ -67,6 +76,9 @@ export default function DeckBuilder() {
       .catch((e) => setCoverageError(e.message || String(e)));
 
   const ready = decksLoaded && !!coverageData;
+  // Spec E3 §3/§8: ohne (E3-)Katalog null -> "Katalog fehlt – Banlist unbekannt", keine Icons, Artworks einzeln.
+  const legalityCatalog = useMemo(() => (legalityData && legalityData.available
+      ? { aliases: legalityData.aliases, cards: legalityData.cards } : null), [legalityData]);
 
   // Deck-Liste: gespeicherte Deckkarten je Deck (nicht die ungespeicherten Aenderungen im Editor).
   const listCoverage = useMemo(() => {
@@ -82,6 +94,17 @@ export default function DeckBuilder() {
       })]));
   }, [ready, coverageData, decks]);
 
+  // Spec E3 §7: Badge der Deck-Liste aus den gespeicherten Deckkarten und dem gespeicherten Format.
+  const listLegality = useMemo(() => {
+      if (!ready || !legalityData) return null;
+      const byDeck = new Map();
+      for (const dc of coverageData.deckCards) {
+          if (!byDeck.has(dc.deck_id)) byDeck.set(dc.deck_id, []);
+          byDeck.get(dc.deck_id).push(dc);
+      }
+      return new Map(decks.map((d) => [d.id, deckLegality(byDeck.get(d.id) || [], d.format, legalityCatalog)]));
+  }, [ready, coverageData, decks, legalityData, legalityCatalog]);
+
   const handleCreateDeck = async (e) => {
       e.preventDefault();
       if (!newDeckName.trim()) return;
@@ -90,6 +113,7 @@ export default function DeckBuilder() {
           const newDeck = await window.api.createDeck(newDeckName);
           setDecks([newDeck, ...decks]);
           setActiveDeck(newDeck);
+          setFormat(normalizeFormat(newDeck.format));
           setMainDeck([]);
           setExtraDeck([]);
           setSideDeck([]);
@@ -104,6 +128,8 @@ export default function DeckBuilder() {
           const details = await window.api.getDeckDetails(deck.id);
           setActiveDeck(deck);
           setNotes(deck.notes || '');
+          setFormat(normalizeFormat(deck.format));
+          setLimitMessage(null);
 
           const main = [], extra = [], side = [];
           details.forEach(c => {
@@ -134,8 +160,10 @@ export default function DeckBuilder() {
       // Spec E2 §5: Notizen nur mitschicken, wenn sie sich geaendert haben.
       const deckId = activeDeck.id;
       const notesChanged = notes !== (activeDeck.notes || '');
+      // Spec E3 §4/§8: Format nur mitschicken, wenn es sich geaendert hat (vor decks_format_role.sql zaehlt alles als TCG).
+      const formatChanged = format !== normalizeFormat(activeDeck.format);
       try {
-          await window.api.saveDeck(deckId, allCards, notesChanged ? notes : undefined);
+          await window.api.saveDeck(deckId, allCards, notesChanged ? notes : undefined, formatChanged ? format : undefined);
       } catch (e) {
           alert(e.message || String(e));
           return;
@@ -143,6 +171,10 @@ export default function DeckBuilder() {
       if (notesChanged) {
           setDecks((prev) => prev.map((d) => (d.id === deckId ? { ...d, notes } : d)));
           setActiveDeck((prev) => (prev?.id === deckId ? { ...prev, notes } : prev));
+      }
+      if (formatChanged) {
+          setDecks((prev) => prev.map((d) => (d.id === deckId ? { ...d, format } : d)));
+          setActiveDeck((prev) => (prev?.id === deckId ? { ...prev, format } : prev));
       }
       reloadCoverage();   // Spec E1: die Deck-Liste rechnet mit den gespeicherten Deckkarten
       alert("Deck saved!");
@@ -187,24 +219,6 @@ export default function DeckBuilder() {
       ...sideDeck.map((c) => ({ passcode: String(c.card_id), name: c.name, count: c.quantity, section: 'side' })),
   ], [mainDeck, extraDeck, sideDeck]);
 
-  const drawTestHand = () => {
-      // Create a flat array of all main deck cards based on quantity
-      const deck = [];
-      mainDeck.forEach(c => {
-          for (let i = 0; i < c.quantity; i++) deck.push(c);
-      });
-
-      if (deck.length < 5) {
-          alert("Main deck must have at least 5 cards.");
-          return;
-      }
-
-      // Shuffle and pick 5
-      const shuffled = [...deck].sort(() => 0.5 - Math.random());
-      setTestHand(shuffled.slice(0, 5));
-      setShowTestHand(true);
-  };
-
   const addToDeck = (card) => {
       if (!activeDeck) {
           alert("Please select or create a deck first.");
@@ -215,10 +229,15 @@ export default function DeckBuilder() {
       const targetDeck = section === 'side' ? sideDeck : section === 'extra' ? extraDeck : mainDeck;
       const setTarget = section === 'side' ? setSideDeck : section === 'extra' ? setExtraDeck : setMainDeck;
 
-      // Check limit (3 copies)
+      // Spec E3 §5: hoechstens 3 Kopien je Karte ueber alle Abschnitte (Haupt-Passcode), im Format "Frei" ohne Grenze.
+      const current = [...mainDeck, ...extraDeck, ...sideDeck].map((c) => ({ card_id: String(c.card_id), count: c.quantity }));
+      if (!canAddCopy(current, card.id, format, legalityCatalog ? legalityCatalog.aliases : null)) {
+          setLimitMessage(COPY_LIMIT);
+          return;
+      }
+      setLimitMessage(null);
       const existing = targetDeck.find(c => c.card_id === card.id);
       if (existing) {
-          if (existing.quantity >= 3) return;
           setTarget(prev => prev.map(c => c.card_id === card.id ? { ...c, quantity: c.quantity + 1 } : c));
       } else {
           setTarget(prev => [...prev, { ...card, card_id: card.id, card_type: card.type, quantity: 1 }]);
@@ -241,10 +260,15 @@ export default function DeckBuilder() {
       const to = moveTarget(from, card.card_type);
       const setTo = to === 'side' ? setSideDeck : to === 'extra' ? setExtraDeck : setMainDeck;
       removeFromDeck(card.card_id, from);
+      // Spec E3 §6: Starter gibt es nur im Main Deck -- eine verschobene Kopie nimmt den Stern nicht mit.
       setTo((prev) => (prev.some((c) => c.card_id === card.card_id)
           ? prev.map((c) => (c.card_id === card.card_id ? { ...c, quantity: c.quantity + 1 } : c))
-          : [...prev, { ...card, quantity: 1 }]));
+          : [...prev, { ...card, quantity: 1, role: null }]));
   };
+
+  // Spec E3 §6: Starter-Stern an Main-Deck-Zeilen (gespeichert mit "Save Deck").
+  const toggleStarter = (cardId) => setMainDeck((prev) => prev.map((c) => (
+      c.card_id === cardId ? { ...c, role: c.role === 'starter' ? null : 'starter' } : c)));
 
   const filteredCollection = collection.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
 
@@ -264,13 +288,20 @@ export default function DeckBuilder() {
   const containersById = useMemo(() => new Map((coverageData ? coverageData.containers : []).map((c) => [c.container_id, c])), [coverageData]);
   const numbersFor = (cardId) => (activeCoverage ? coverageByCard.get(String(cardId)) : null);
 
+  // Spec E3 §7: Legalitaet aus dem UNGESPEICHERTEN Editor-Stand; null, solange der Katalog-Index laedt.
+  const legalityCards = useMemo(() => [
+      ...mainDeck.map((c) => ({ card_id: String(c.card_id), name: c.name, count: c.quantity, section: 'main' })),
+      ...extraDeck.map((c) => ({ card_id: String(c.card_id), name: c.name, count: c.quantity, section: 'extra' })),
+      ...sideDeck.map((c) => ({ card_id: String(c.card_id), name: c.name, count: c.quantity, section: 'side' })),
+  ], [mainDeck, extraDeck, sideDeck]);
+  const activeLegality = useMemo(() => (legalityData ? deckLegality(legalityCards, format, legalityCatalog) : null),
+      [legalityCards, format, legalityData, legalityCatalog]);
+  const banFor = (cardId) => banOf(cardId, format, legalityCatalog);
+
   const openFillBox = () => setDialog({
       kind: 'fill',
       proposal: fillBoxProposal({ deckId: activeDeck.id, deckCards: activeCards, copies: coverageData.copies, decks, containers: coverageData.containers }),
   });
-
-  // Stats Components
-  const deckStatsProps = { mainDeck, extraDeck, sideDeck };
 
   return (
     <div className="flex h-full gap-6">
@@ -319,7 +350,10 @@ export default function DeckBuilder() {
                             className={`flex justify-between items-center p-2 rounded cursor-pointer ${activeDeck?.id === deck.id ? 'bg-space-violet/20 border border-space-violet/50 text-white' : 'hover:bg-gray-800 text-gray-400'}`}
                         >
                             <div className="min-w-0">
-                                <span className="block truncate">{deck.name}</span>
+                                <span className="flex items-center gap-2 min-w-0">
+                                    <span className="truncate">{deck.name}</span>
+                                    <DeckLegalityBadge showFormat format={deck.format} result={listLegality ? listLegality.get(deck.id) : null} />
+                                </span>
                                 <span className="block truncate text-[11px] font-mono text-gray-500">
                                     {listCoverage ? `${boxLabel(deck, coverageData.containers)} · ${listText(listCoverage.get(deck.id))}` : LOADING}
                                 </span>
@@ -343,6 +377,7 @@ export default function DeckBuilder() {
                             {label}
                         </button>
                     ))}
+                    {limitMessage && <span className="text-crit">{limitMessage}</span>}
                 </div>
                 <div className="mb-4">
                     <input
@@ -372,19 +407,10 @@ export default function DeckBuilder() {
                     <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-3">
                             <h2 className="text-2xl font-bold text-white">{activeDeck.name}</h2>
-                            <button
-                                onClick={() => setShowStats(!showStats)}
-                                className={`p-1.5 rounded-lg transition-colors ${showStats ? 'bg-space-violet text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-                                title="Toggle Stats"
-                            >
-                                {showStats ? <PieChartIcon className="w-4 h-4" /> : <BarChart2 className="w-4 h-4" />}
-                            </button>
+                            <CustomSelect className="w-24" value={format} onChange={(f) => { setFormat(normalizeFormat(f)); setLimitMessage(null); }} options={FORMAT_OPTIONS} />
+                            <DeckLegalityBadge format={format} result={activeLegality} />
                         </div>
                         <div className="flex gap-2">
-                             <button onClick={drawTestHand} className="flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors text-sm font-medium border border-gray-700">
-                                <Play className="w-4 h-4 mr-2" />
-                                Test Hand
-                            </button>
                             <DeckExportMenu deckName={activeDeck.name} entries={exportEntries} />
                             <button onClick={handleSaveDeck} className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium shadow-lg shadow-space-violet/20">
                                 <Save className="w-4 h-4 mr-2" />
@@ -407,27 +433,6 @@ export default function DeckBuilder() {
                         className="w-full mb-4 bg-black/30 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 font-mono focus:outline-none focus:border-space-violet"
                     />
 
-                    {showStats && <DeckStats {...deckStatsProps} />}
-
-                    {showTestHand && (
-                        <div className="mb-6 p-4 bg-black/40 rounded-xl border border-gray-800 animate-in fade-in slide-in-from-top-4">
-                            <div className="flex justify-between items-center mb-3">
-                                <h3 className="text-sm font-bold text-white">Opening Hand (5 Cards)</h3>
-                                <div className="flex gap-2">
-                                    <button onClick={drawTestHand} className="text-xs text-space-violet hover:underline">Redraw</button>
-                                    <button onClick={() => setShowTestHand(false)} className="text-xs text-gray-500 hover:text-white">Close</button>
-                                </div>
-                            </div>
-                            <div className="flex gap-2 justify-center">
-                                {testHand.map((card, idx) => (
-                                    <div key={idx} className="w-20 aspect-[2/3] relative group animate-in zoom-in duration-300" style={{ animationDelay: `${idx * 50}ms` }}>
-                                        <img src={card.image_url} alt="" className="w-full h-full object-cover rounded border border-gray-700 shadow-lg" />
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pr-2">
                         {/* Main Deck */}
                         <div>
@@ -437,7 +442,7 @@ export default function DeckBuilder() {
                             </div>
                             <div className="space-y-1">
                                 {mainDeck.length === 0 && <p className="text-gray-600 text-sm italic">Drag or click cards to add.</p>}
-                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} />)}
+                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} onToggleStarter={toggleStarter} />)}
                             </div>
                         </div>
 
@@ -448,7 +453,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{extraDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} />)}
+                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} />)}
                             </div>
                         </div>
 
@@ -459,7 +464,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{sideDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} />)}
+                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} />)}
                             </div>
                         </div>
                     </div>
@@ -471,6 +476,11 @@ export default function DeckBuilder() {
                 </div>
             )}
         </div>
+
+        {activeDeck && (
+            <DeckSidebar mainDeck={mainDeck} extraDeck={extraDeck} sideDeck={sideDeck} legality={activeLegality}
+                builtAt={legalityData && legalityData.available ? legalityData.builtAt : null} />
+        )}
 
         {dialog && dialog.kind === 'fill' && activeCoverage && (
             <FillBoxDialog
@@ -493,7 +503,8 @@ export default function DeckBuilder() {
 
 // Sub-component for a card row in deck list
 // Spec E1 §8: statt des roten "fehlt" die drei Zahlen aus dem Abgleich (numbers null = noch nicht geladen).
-const DeckCardRow = ({ card, type, numbers, removeFromDeck, onMove }) => {
+// Spec E3 §7: Banlist-Icon nach Format; Main-Deck-Zeilen mit Starter-Stern (onToggleStarter nur dort).
+const DeckCardRow = ({ card, type, numbers, removeFromDeck, onMove, ban, onToggleStarter }) => {
     const missing = !!numbers && numbers.missing > 0;
 
     return (
@@ -507,68 +518,20 @@ const DeckCardRow = ({ card, type, numbers, removeFromDeck, onMove }) => {
                     <img src={card.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
                 <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
+                <DeckBanIcon ban={ban} />
             </div>
             <div className="flex items-center gap-2">
                 <DeckCardNumbers card={numbers} />
+                {onToggleStarter && (
+                    <button type="button" title="Starter" onClick={(e) => { e.stopPropagation(); onToggleStarter(card.card_id); }}
+                        className={card.role === 'starter' ? 'text-warn' : 'text-gray-600 hover:text-gray-300'}>
+                        <Star className="w-4 h-4" fill={card.role === 'starter' ? 'currentColor' : 'none'} />
+                    </button>
+                )}
                 <button type="button" onClick={(e) => { e.stopPropagation(); onMove(card, type); }}
                     className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:text-white">
                     {moveLabel(type)}
                 </button>
-            </div>
-        </div>
-    );
-};
-
-const DeckStats = ({ mainDeck, extraDeck, sideDeck }) => {
-    const allCards = [...mainDeck, ...extraDeck, ...sideDeck];
-    // Type breakdown (Monster, Spell, Trap) - Main Deck Only usually matters for ratios
-    let monsters = 0, spells = 0, traps = 0;
-    mainDeck.forEach(c => {
-        if (c.type && c.type.includes('Monster')) monsters += c.quantity;
-        else if (c.type && c.type.includes('Spell')) spells += c.quantity;
-        else if (c.type && c.type.includes('Trap')) traps += c.quantity;
-    });
-
-    const typeData = [
-        { name: 'Monster', value: monsters, color: '#A68349' }, // Orange/Brown
-        { name: 'Spell', value: spells, color: '#1D9E74' },   // Green
-        { name: 'Trap', value: traps, color: '#BC5A84' }     // Pink
-    ].filter(d => d.value > 0);
-
-    // Attribute breakdown (All cards)
-    const attrCounts = {};
-    allCards.forEach(c => {
-        if (c.attribute) {
-            attrCounts[c.attribute] = (attrCounts[c.attribute] || 0) + c.quantity;
-        }
-    });
-    const attrData = Object.keys(attrCounts).map(k => ({ name: k, value: attrCounts[k] }));
-
-    return (
-        <div className="grid grid-cols-2 gap-4 h-64 mb-4">
-            <div className="bg-black/30 p-4 rounded-xl border border-gray-800">
-                <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Card Types (Main)</h4>
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <Pie data={typeData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={60}>
-                            {typeData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
-                            ))}
-                        </Pie>
-                        <RechartsTooltip contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
-                    </PieChart>
-                </ResponsiveContainer>
-            </div>
-            <div className="bg-black/30 p-4 rounded-xl border border-gray-800">
-                <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Attributes</h4>
-                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={attrData}>
-                        <XAxis dataKey="name" stroke="#666" fontSize={10} />
-                        <YAxis stroke="#666" fontSize={10} />
-                        <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
-                        <Bar dataKey="value" fill="#9D00FF" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
             </div>
         </div>
     );
