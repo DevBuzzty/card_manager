@@ -15,7 +15,10 @@ const E1_CHANNELS = [
 // Spec E2 §9: neue Kanaele plus die umgebauten Deck-Kanaele (YDK lesen/schreiben, Notizen).
 const E2_CHANNELS = ['get-catalog-cards', 'create-imported-deck', 'import-deck-ydk', 'export-deck-ydk', 'save-deck'];
 
-for (const ch of [...E1_CHANNELS, ...E2_CHANNELS]) {
+// Spec E3 §10: neuer Kanal fuer die Legalitaet plus die umgebauten Deck-Kanaele (Format, Starter).
+const E3_CHANNELS = ['get-catalog-legality', 'get-deck-details'];
+
+for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS]) {
   test(`Kanal ${ch} steht in main.cjs und preload.cjs`, () => {
     assert.ok(MAIN.includes(`ipcMain.handle('${ch}'`), `main.cjs fehlt ipcMain.handle('${ch}'`);
     assert.ok(PRELOAD.includes(`ipcRenderer.invoke('${ch}'`), `preload.cjs fehlt ipcRenderer.invoke('${ch}'`);

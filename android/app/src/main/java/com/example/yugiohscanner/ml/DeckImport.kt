@@ -52,6 +52,12 @@ object DeckImport {
 
     fun moveLabel(section: String): String = if (section == "side") "→ Deck" else "→ Side"
 
+    /**
+     * Spec E3 §3: Haupt-Passcode eines (Artwork-)Passcodes -- aliases[p] ?: p. [aliases] null = kein Katalog (jeder Passcode
+     * steht fuer sich). Gilt fuer Import-Aufloesung, Legalitaet und Kopien-Grenze.
+     */
+    fun canonicalPasscode(passcode: String, aliases: Map<String, String>?): String = aliases?.get(passcode) ?: passcode
+
     fun normalizeName(s: String?): String {
         val lower = (s ?: "").lowercase()
         val stripped = MARKS.replace(Normalizer.normalize(lower, Normalizer.Form.NFKD), "")
@@ -84,7 +90,9 @@ object DeckImport {
     fun deckNameFor(fileName: String?): String = fileName?.trim()?.takeIf { it.isNotEmpty() } ?: DEFAULT_DECK_NAME
 
     private fun displayName(c: CatalogNameRow) = c.nameDe?.takeIf { it.isNotEmpty() } ?: c.nameEn?.takeIf { it.isNotEmpty() } ?: c.id
-    private fun candidate(c: CatalogNameRow) = ImportCandidate(c.id, displayName(c), c.type ?: "")
+    // passcode: bei einem Artwork-Passcode bleibt der importierte Passcode stehen (Export bleibt artwork-treu), Name und
+    // Typ kommen von der Hauptkarte (Spec E3 §3).
+    private fun candidate(c: CatalogNameRow, passcode: String = c.id) = ImportCandidate(passcode, displayName(c), c.type ?: "")
     // Codeeinheiten-Vergleich wie "<" im JS-Zwilling (kein Locale-Vergleich).
     private val byNameThenPasscode = compareBy<ImportCandidate>({ it.name }, { it.passcode })
 
@@ -130,13 +138,16 @@ object DeckImport {
             .take(3).map { it.first }
     }
 
-    /** [catalog] null = kein Katalog. Fuer YDK/YDKE reichen die Zeilen der gelesenen Passcodes, fuer Text alle. */
-    fun resolve(parsed: ParsedDeck, catalog: List<CatalogNameRow>?): ResolvedImport {
+    /**
+     * [catalog] null = kein Katalog. Fuer YDK/YDKE reichen die Zeilen der gelesenen Passcodes, fuer Text alle.
+     * [aliases] (Spec E3 §3): Passcodes laufen ueber [canonicalPasscode].
+     */
+    fun resolve(parsed: ParsedDeck, catalog: List<CatalogNameRow>?, aliases: Map<String, String>? = null): ResolvedImport {
         val index = Index(catalog ?: emptyList())
         val rows = parsed.cards.map { card ->
             if (card.passcode != null) {
-                val c = index.byId[card.passcode]
-                if (c != null) ImportRow("ok", card.count, card.section, card.passcode, listOf(candidate(c)))
+                val c = index.byId[canonicalPasscode(card.passcode, aliases)]
+                if (c != null) ImportRow("ok", card.count, card.section, card.passcode, listOf(candidate(c, card.passcode)))
                 else ImportRow("unknownPasscode", card.count, card.section, card.passcode, emptyList())
             } else {
                 val source = card.line ?: card.name ?: ""
@@ -190,11 +201,21 @@ object DeckImport {
      * Einstieg der Vorschau (Einfuegen, Teilen): lesen mit dem gemeinsamen Parser, dann den Katalog laden -- fuer
      * YDK/YDKE nur die gelesenen Passcodes, fuer die Textliste alle Karten -- und aufloesen. [loadCatalog] liefert
      * null ohne Katalog. Laeuft abseits des Hauptthreads (Katalogzugriff, Fuzzy-Suche).
+     * Spec E3 §3: fuer YDK/YDKE liefert [loadAliases] zuerst die Artwork-Zuordnung der gelesenen Passcodes; geladen werden
+     * dann die Hauptkarten. (Der Desktop-Lader erledigt beides in einem Aufruf; die Aufloesung ist dieselbe.)
+     * [loadAliases] steht vor [loadCatalog], damit `prepare(text, format) { ids -> … }` weiter den Katalog-Lader meint.
      */
-    fun prepare(text: String, format: String?, loadCatalog: (List<String>?) -> List<CatalogNameRow>?): PreparedImport {
+    fun prepare(
+        text: String,
+        format: String?,
+        loadAliases: (List<String>) -> Map<String, String> = { emptyMap() },
+        loadCatalog: (List<String>?) -> List<CatalogNameRow>?,
+    ): PreparedImport {
         val parsed = if (format != null) DeckFormats.parseDeckText(text, format) else DeckFormats.parseDeckText(text)
         if (parsed.error != null) return PreparedImport(parsed.error, null)
         val ids = if (parsed.format == "text") null else parsed.cards.mapNotNull { it.passcode }
-        return PreparedImport(null, resolve(parsed, loadCatalog(ids)))
+        val aliases = if (ids != null) loadAliases(ids) else emptyMap()
+        val catalog = loadCatalog(ids?.map { canonicalPasscode(it, aliases) })
+        return PreparedImport(null, resolve(parsed, catalog, if (catalog != null) aliases else null))
     }
 }

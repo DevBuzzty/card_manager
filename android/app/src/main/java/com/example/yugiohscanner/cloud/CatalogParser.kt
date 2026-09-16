@@ -21,6 +21,9 @@ data class CatalogCard(
     val printings: List<CatalogPrinting>,
     // Spec E1 §5: Cardmarket-Preis je Passcode (Katalog ab Version 6), sonst null.
     val cmPrice: Double? = null,
+    // Spec E3 §3: Banlist "forbidden" | "limited" | "semi", null = uneingeschraenkt (oder Katalog von vor E3).
+    val banTcg: String? = null,
+    val banOcg: String? = null,
 )
 
 data class CatalogPrinting(
@@ -43,6 +46,9 @@ data class ParsedCatalog(
     val builtAt: String,
     val cards: List<CatalogCard>,
     val sealedProducts: List<CatalogSealedProduct> = emptyList(),
+    // Spec E3 §3: Artwork-Passcode -> Haupt-Passcode; hasLegality = der Katalog traegt `aliases` (also auch Ban-Felder).
+    val aliases: Map<String, String> = emptyMap(),
+    val hasLegality: Boolean = false,
 )
 
 object CatalogParser {
@@ -97,6 +103,10 @@ object CatalogParser {
                 val cmPrice = if (cardJson.has("cm_price") && !cardJson.isNull("cm_price"))
                     cardJson.optDouble("cm_price").takeIf { it > 0.0 } else null
 
+                // Spec E3 §3: fehlt (Katalog von vor E3), null oder unbekannt -> null.
+                val banTcg = banOf(cardJson, "ban_tcg")
+                val banOcg = banOf(cardJson, "ban_ocg")
+
                 // Parse printings and printings_verified
                 val printings = mutableListOf<CatalogPrinting>()
 
@@ -139,6 +149,8 @@ object CatalogParser {
                     imageSmall = imageSmall,
                     printings = printings,
                     cmPrice = cmPrice,
+                    banTcg = banTcg,
+                    banOcg = banOcg,
                 )
                 cards.add(card)
             } catch (e: Exception) {
@@ -147,12 +159,32 @@ object CatalogParser {
             }
         }
 
+        val aliasesJson = rootJson.optJSONObject("aliases")
         return ParsedCatalog(
             version = version,
             builtAt = builtAt,
             cards = cards,
             sealedProducts = parseSealedProducts(rootJson),
+            aliases = parseAliases(aliasesJson, cards.mapTo(HashSet()) { it.id }),
+            hasLegality = aliasesJson != null,
         )
+    }
+
+    private val BAN_LEVELS = setOf("forbidden", "limited", "semi")
+
+    private fun banOf(card: JSONObject, key: String): String? =
+        if (card.has(key) && !card.isNull(key)) card.optString(key).takeIf { it in BAN_LEVELS } else null
+
+    /** Spec E3 §3: nur Zuordnungen auf Karten, die im Katalog stehen (gleiche Regel wie catalog-prices.cjs am Desktop). */
+    internal fun parseAliases(aliases: JSONObject?, cardIds: Set<String>): Map<String, String> {
+        if (aliases == null) return emptyMap()
+        val out = LinkedHashMap<String, String>()
+        for (key in aliases.keys()) {
+            val alt = key.toString()
+            val main = aliases.optString(alt)
+            if (main in cardIds) out[alt] = main
+        }
+        return out
     }
 
     /**

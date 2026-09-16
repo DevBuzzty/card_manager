@@ -15,6 +15,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -23,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +34,8 @@ import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CardSearchRepository
 import com.example.yugiohscanner.cloud.CatalogRepository
+import com.example.yugiohscanner.cloud.CatalogState
+import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.ContainerRow
@@ -45,6 +50,10 @@ import com.example.yugiohscanner.ml.Coverage
 import com.example.yugiohscanner.ml.DeckEntry
 import com.example.yugiohscanner.ml.DeckFormats
 import com.example.yugiohscanner.ml.DeckImport
+import com.example.yugiohscanner.ml.DeckLegality
+import com.example.yugiohscanner.ml.LegalityCard
+import com.example.yugiohscanner.ml.LegalityCatalog
+import com.example.yugiohscanner.ml.LegalityResult
 import com.example.yugiohscanner.ml.CoverageCard
 import com.example.yugiohscanner.ml.DeckCoverage
 import com.example.yugiohscanner.ml.DeckWishlist
@@ -76,6 +85,56 @@ private fun rememberCatalogPrices(ids: Set<String>?): Map<String, Double?>? {
         if (ids != null) value = withContext(Dispatchers.IO) { runCatching { CatalogRepository.cmPrices(ids) }.getOrDefault(emptyMap()) }
     }
     return prices
+}
+
+/**
+ * Spec E3 §4: gelesener Legalitaets-Katalog fuer genau diese [ids]; catalog null = kein (E3-)Katalog.
+ * ids gehoert dazu, damit eine neu hinzugefuegte Karte nie kurz als "Banlist unbekannt" erscheint.
+ */
+private data class LegalityLoad(val ids: Set<String>, val catalog: LegalityCatalog?)
+
+/**
+ * Spec E3 §4/§7: Legalitaetsdaten der Deckkarten-Passcodes, abseits des Hauptthreads gelesen; null = laedt ("…").
+ * F4: zusaetzlich auf die fertig geladene Katalogversion geschluesselt (aus dem vorhandenen [CatalogSync.state]),
+ * damit ein offener Deck-Bildschirm nach "Jetzt pruefen" (SettingsScreen) neu laedt, statt am alten Katalog-Index
+ * haengen zu bleiben. Nur [CatalogState.Ready] zaehlt -- die haeufigen Downloading(percent)-Ticks sollen keine
+ * eigene DB-Lesung anstossen.
+ */
+@Composable
+private fun rememberLegalityCatalog(ids: Set<String>?): LegalityLoad? {
+    val catalogState by CatalogSync.state.collectAsState()
+    val catalogVersion = (catalogState as? CatalogState.Ready)?.version
+    val load by produceState<LegalityLoad?>(initialValue = null, ids, catalogVersion) {
+        if (ids != null) value = withContext(Dispatchers.IO) { LegalityLoad(ids, runCatching { CatalogRepository.legalityCatalog(ids) }.getOrNull()) }
+    }
+    return load?.takeIf { it.ids == ids }
+}
+
+private fun legalityCardsOf(cards: List<DeckCard>) = cards.map { LegalityCard(it.cardId, it.name, it.count, it.section) }
+
+private val BanOrange = Color(0xFFFF9800)
+
+/** Spec E3 §7: Format-Chip und Badge (gruen "Legal", gelb "Legal · n Warnungen", rot "n Verstöße", grau "Frei"); null = "…". */
+@Composable
+private fun LegalityBadge(format: String, result: LegalityResult?) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(DeckLegality.FORMAT_LABELS[format] ?: "TCG", color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+        if (result == null) Text(DeckCoverage.LOADING, color = Muted, style = MaterialTheme.typography.labelSmall)
+        else {
+            val color = when (DeckLegality.badgeKind(result, format)) { "legal" -> Good; "warn" -> Gold; "crit" -> ErrorColor; else -> Muted }
+            Text(DeckLegality.badgeText(result, format), color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+/** Spec E3 §7: Banlist-Icon rot "Verboten", orange "1", gelb "2"; uneingeschraenkt kein Icon. */
+@Composable
+private fun BanIcon(ban: String?) {
+    val label = ban?.let { DeckLegality.BAN_LABELS[it] } ?: return
+    val bg = when (ban) { "forbidden" -> ErrorColor; "limited" -> BanOrange; else -> Gold }
+    Box(Modifier.clip(RoundedCornerShape(4.dp)).background(bg).padding(horizontal = 5.dp)) {
+        Text(label, color = Color.Black, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+    }
 }
 
 @Composable
@@ -131,6 +190,16 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
         else {
             val byDeck = allCards.groupBy { it.deckId }
             decks.associate { d -> d.id to DeckCoverage.compute(d.id, byDeck[d.id] ?: emptyList(), r.copies, r.cards, decks, r.containers, prices) }
+        }
+    }
+    // Spec E3 §7: Badge der Deck-Liste aus dem gespeicherten Stand; null, solange Deckkarten oder Katalog laden.
+    val legalityLoad = rememberLegalityCatalog(priceIds)
+    val legalities: Map<Long, LegalityResult>? = remember(cache.value, allCards, legalityLoad) {
+        val load = legalityLoad
+        if (cache.value == null || allCards == null || load == null) null
+        else {
+            val byDeck = allCards.groupBy { it.deckId }
+            decks.associate { d -> d.id to DeckLegality.check(legalityCardsOf(byDeck[d.id] ?: emptyList()), d.format, load.catalog) }
         }
     }
 
@@ -209,7 +278,7 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
                             "${DeckCoverage.boxLabel(deck, ready?.containers ?: emptyList())} · ${DeckCoverage.listText(cov)}"
                         } ?: DeckCoverage.LOADING
                         DeckRow(
-                            deck, summary,
+                            deck, summary, legalities?.get(deck.id),
                             onOpen = { openDeckId = deck.id },
                             onDelete = {
                                 scope.launch {
@@ -226,7 +295,7 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun DeckRow(deck: Deck, summary: String, onOpen: () -> Unit, onDelete: () -> Unit) {
+private fun DeckRow(deck: Deck, summary: String, legality: LegalityResult?, onOpen: () -> Unit, onDelete: () -> Unit) {
     SpaceCard(Modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(12.dp),
@@ -237,6 +306,7 @@ private fun DeckRow(deck: Deck, summary: String, onOpen: () -> Unit, onDelete: (
                     deck.name, color = OnSurface, fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.titleMedium,
                 )
+                LegalityBadge(deck.format, legality)
                 Text(summary, color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall, maxLines = 1)
             }
             IconButton(onClick = onDelete) {
@@ -293,12 +363,28 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
     var boxError by remember { mutableStateOf<String?>(null) }
     var fill by remember { mutableStateOf<FillProposal?>(null) }
     var wishlistOpen by remember { mutableStateOf(false) }
+    // Spec E3 §7: Legalitaet aus dem GESPEICHERTEN Stand; Format speichert sofort.
+    val legalityLoad = rememberLegalityCatalog(priceIds)
+    val legality: LegalityResult? = remember(deck.format, cache.value, legalityLoad) {
+        val dc = cache.value
+        val load = legalityLoad
+        if (dc == null || load == null) null else DeckLegality.check(legalityCardsOf(dc), deck.format, load.catalog)
+    }
+    var formatError by remember { mutableStateOf<String?>(null) }
     // Spec E2 Task 8 Fix 1: ein Lauf gleichzeitig -- sonst kann ein Doppel-Tipp (+/-, entfernen, verschieben)
     // DecksRepository zweimal mit demselben, noch nicht aktualisierten Stand aufrufen (Review-Fund).
     val inFlight = remember { InFlight() }
     var mutating by remember { mutableStateOf(false) }
 
     LaunchedEffect(deck.id) { deckCache.refresh() }
+
+    // Spec E3 §5: frischer Stand und Artwork-Zuordnung fuer die Kopien-Grenze -- innerhalb von mutate gelesen, damit ein
+    // Tipp direkt nach einer Aenderung nicht mit dem Stand von vor der Aenderung zaehlt.
+    suspend fun freshCardsAndAliases(extraId: String): Pair<List<DeckCard>, Map<String, String>> {
+        val fresh = deckCache.state.value.value ?: cards
+        val aliases = withContext(Dispatchers.IO) { runCatching { CatalogRepository.aliases(fresh.map { it.cardId } + extraId) }.getOrDefault(emptyMap()) }
+        return fresh to aliases
+    }
 
     fun mutate(block: suspend () -> Unit) {
         if (!inFlight.tryStart()) return
@@ -348,6 +434,23 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
                 }
             }
 
+            DeckLegalityHead(
+                format = deck.format, legality = legality, builtAt = legalityLoad?.catalog?.builtAt, error = formatError,
+                busy = mutating,
+                // F5: dasselbe InFlight-Gatter wie mutate() -- ein laufender Formatwechsel sperrt Hinzufuegen/+
+                // (mutate() kehrt bei laufendem inFlight sofort zurueck, ohne etwas zu tun) und umgekehrt blockiert
+                // eine laufende Kartenaenderung hier den Formatwechsel (tryStart liefert dann false).
+                onPickFormat = { f ->
+                    if (inFlight.tryStart()) {
+                        mutating = true
+                        scope.launch {
+                            try { DecksRepository.setFormat(deck.id, f); SideStores.decks.refreshAndWait(); formatError = null }
+                            catch (e: Exception) { formatError = e.message ?: DeckLegality.FORMAT_SAVE_FAILED }
+                            finally { inFlight.finish(); mutating = false }
+                        }
+                    }
+                },
+            )
             DeckCoverageHead(
                 deck = deck, decks = decks, containers = ready?.containers, coverage = coverage, boxError = boxError,
                 onPickBox = { containerId ->
@@ -399,9 +502,12 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
                     results.forEach { r ->
                         SearchResultRow(r, onAdd = {
                             mutate {
-                                DecksRepository.addCard(
-                                    deck.id, cardId = r.id, name = r.name,
-                                    imageUrl = r.imageUrl, section = if (addToSide) "side" else DeckImport.deckSectionFor(r.type),
+                                // Spec E3 §5: bestehende Zeile erhoehen, 4. Kopie blockiert ("Höchstens 3 Kopien je Karte").
+                                val (fresh, aliases) = freshCardsAndAliases(r.id)
+                                DecksRepository.addCopy(
+                                    deck.id, fresh, cardId = r.id, name = r.name, imageUrl = r.imageUrl,
+                                    section = if (addToSide) "side" else DeckImport.deckSectionFor(r.type),
+                                    format = deck.format, aliases = aliases,
                                 )
                             }
                         })
@@ -425,32 +531,42 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
                 val extra = cards.filter { it.section == "extra" }
                 val side = cards.filter { it.section == "side" }
                 // Spec E2 §6: eine Kopie verschieben; fuer "→ Deck" den Typ aus dem Katalog (ohne Katalog: Main).
+                // Spec E3 §3: Typ ueber den Haupt-Passcode; frischer Stand (Verschieben aendert die Summe nicht, nie blockiert).
                 val move: (DeckCard) -> Unit = { card ->
                     mutate {
+                        val (fresh, aliases) = freshCardsAndAliases(card.cardId)
                         val type = if (card.section == "side") withContext(Dispatchers.IO) {
-                            CatalogRepository.importRows(listOf(card.cardId)).firstOrNull()?.type
+                            CatalogRepository.importRows(listOf(DeckImport.canonicalPasscode(card.cardId, aliases))).firstOrNull()?.type
                         } else null
-                        DecksRepository.moveOne(deck.id, card, cards, type)
+                        DecksRepository.moveOne(deck.id, fresh.firstOrNull { it.id == card.id } ?: card, fresh, type)
                     }
                 }
+                // Spec E3 §5: "+" an einer Zeile mit derselben Grenze wie "Hinzufügen".
+                val plusOne: (DeckCard) -> Unit = { card ->
+                    mutate {
+                        val (fresh, aliases) = freshCardsAndAliases(card.cardId)
+                        DecksRepository.incrementCopy(card, fresh, deck.format, aliases)
+                    }
+                }
+                val banOf: (DeckCard) -> String? = { card -> DeckLegality.banOf(card.cardId, deck.format, legalityLoad?.catalog) }
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
                         SectionHeader("Main · ${main.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(main, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move, mutating) { block -> mutate(block) } }
+                    items(main, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), banOf(it), move, plusOne, mutating) { block -> mutate(block) } }
                     item {
                         Spacer(Modifier.height(10.dp))
                         SectionHeader("Extra · ${extra.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(extra, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move, mutating) { block -> mutate(block) } }
+                    items(extra, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), banOf(it), move, plusOne, mutating) { block -> mutate(block) } }
                     item {
                         Spacer(Modifier.height(10.dp))
                         SectionHeader("Side · ${side.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(side, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move, mutating) { block -> mutate(block) } }
+                    items(side, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), banOf(it), move, plusOne, mutating) { block -> mutate(block) } }
                 }
             }
         }
@@ -474,6 +590,49 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
             imageOf = { id -> cards.firstOrNull { it.cardId == id }?.imageUrl },
             onDismiss = { wishlistOpen = false },
         )
+    }
+}
+
+/**
+ * Spec E3 §7: Format-Auswahl (speichert sofort) und Badge; darunter aufklappbar "n Verstöße" mit Warnungen und
+ * "Banlist-Stand". Im Format "Frei" gibt es keine Liste.
+ */
+@Composable
+private fun DeckLegalityHead(format: String, legality: LegalityResult?, builtAt: String?, error: String?, busy: Boolean, onPickFormat: (String) -> Unit) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var issuesOpen by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box {
+                // F5: waehrend eines laufenden Formatwechsels (oder einer laufenden Kartenaenderung) nicht oeffnen.
+                Row(Modifier.clickable(enabled = !busy) { menuOpen = true }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Format: ${DeckLegality.FORMAT_LABELS[format] ?: "TCG"}", color = OnSurface, style = MaterialTheme.typography.bodyMedium)
+                    Icon(Icons.Default.ArrowDropDown, "Format wählen", tint = Muted)
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DeckLegality.FORMATS.forEach { f ->
+                        DropdownMenuItem(text = { Text(DeckLegality.FORMAT_LABELS.getValue(f)) }, onClick = { menuOpen = false; if (f != format) onPickFormat(f) })
+                    }
+                }
+            }
+            if (legality == null) Text(DeckCoverage.LOADING, color = Muted, style = MaterialTheme.typography.labelMedium)
+            else {
+                val color = when (DeckLegality.badgeKind(legality, format)) { "legal" -> Good; "warn" -> Gold; "crit" -> ErrorColor; else -> Muted }
+                Text(DeckLegality.badgeText(legality, format), color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        if (legality != null && DeckLegality.normalizeFormat(format) != "free") {
+            Row(Modifier.clickable { issuesOpen = !issuesOpen }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(DeckLegality.violationCountText(legality.violations.size), color = if (legality.legal) Muted else ErrorColor, style = MaterialTheme.typography.labelMedium)
+                Icon(if (issuesOpen) Icons.Default.ExpandLess else Icons.Default.ExpandMore, null, tint = Muted)
+            }
+            if (issuesOpen) {
+                legality.violations.forEach { Text(it.text, color = ErrorColor, style = MaterialTheme.typography.labelSmall) }
+                legality.warnings.forEach { Text(it.text, color = Gold, style = MaterialTheme.typography.labelSmall) }
+                DeckLegality.banlistDateText(builtAt)?.let { Text(it, color = Muted, style = MaterialTheme.typography.labelSmall) }
+            }
+        }
+        error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.labelSmall) }
     }
 }
 
@@ -671,16 +830,23 @@ private fun SearchResultRow(r: CardRow, onAdd: () -> Unit) {
 }
 
 @Composable
-private fun DeckCardRow(card: DeckCard, numbers: CoverageCard?, onMove: (DeckCard) -> Unit, busy: Boolean, mutate: ((suspend () -> Unit)) -> Unit) {
+private fun DeckCardRow(
+    card: DeckCard, numbers: CoverageCard?, ban: String?, onMove: (DeckCard) -> Unit, onPlus: (DeckCard) -> Unit, busy: Boolean,
+    mutate: ((suspend () -> Unit)) -> Unit,
+) {
     SpaceCard(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Thumb(card.imageUrl, card.name)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    card.name ?: card.cardId, color = OnSurface, maxLines = 2,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        card.name ?: card.cardId, color = OnSurface, maxLines = 2,
+                        style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f, fill = false),
+                    )
+                    // Spec E3 §7: Banlist-Icon nach Format, kein Stern am Handy.
+                    BanIcon(ban)
+                }
                 // Spec E1 §8: "Box 1 · verfügbar 2 · gebraucht 3" (rot bei Fehlenden) und gelb "1 in Deck Tenpai".
                 Text(
                     numbers?.let { DeckCoverage.rowText(it) } ?: DeckCoverage.LOADING,
@@ -702,7 +868,7 @@ private fun DeckCardRow(card: DeckCard, numbers: CoverageCard?, onMove: (DeckCar
                 card.count.toString(), color = OnSurface,
                 style = MaterialTheme.typography.titleMedium.copy(fontFamily = MonoFontFamily),
             )
-            IconButton(onClick = { mutate { DecksRepository.setCount(card.id, card.count + 1) } }, enabled = !busy) {
+            IconButton(onClick = { onPlus(card) }, enabled = !busy) {
                 Text("+", color = OnSurface, style = MaterialTheme.typography.titleLarge.copy(fontFamily = MonoFontFamily))
             }
             IconButton(onClick = { mutate { DecksRepository.removeCard(card.id) } }, enabled = !busy) {

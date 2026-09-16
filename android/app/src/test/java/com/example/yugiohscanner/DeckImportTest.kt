@@ -22,6 +22,7 @@ class DeckImportTest {
     private val catalog = fix.getJSONArray("catalog").objects().map {
         CatalogNameRow(it.get("id").toString(), str(it, "name_de"), str(it, "name_en"), str(it, "type"))
     }
+    private val aliases: Map<String, String> = fix.getJSONObject("aliases").let { o -> o.keys().asSequence().associateWith { o.getString(it) } }
 
     @Test fun `Fixture Normalisierung und Levenshtein`() {
         for (c in fix.getJSONArray("normalize").objects()) assertEquals(c.getString("in"), c.getString("out"), DeckImport.normalizeName(c.getString("in")))
@@ -47,7 +48,7 @@ class DeckImportTest {
                 p.getJSONArray("cards").objects().map { ParsedCard(str(it, "passcode"), str(it, "name"), it.getInt("count"), it.getString("section"), str(it, "line")) },
                 strings(p.getJSONArray("unresolved")),
             )
-            val resolved = DeckImport.resolve(parsed, if (c.getBoolean("catalog")) catalog else null)
+            val resolved = DeckImport.resolve(parsed, if (c.getBoolean("catalog")) catalog else null, if (c.optBoolean("aliases")) aliases else null)
             val e = c.getJSONObject("expected")
             assertEquals("$name catalogMissing", e.getBoolean("catalogMissing"), resolved.catalogMissing)
             val expectedRows = e.getJSONArray("rows").objects().map {
@@ -75,6 +76,13 @@ class DeckImportTest {
         }
     }
 
+    // Spec E3 §3 -- aliases[p] ?: p; ohne Zuordnung (kein Katalog) steht jeder Passcode fuer sich.
+    @Test fun `Fixture Haupt-Passcode ueber die Artwork-Zuordnung`() {
+        for (c in fix.getJSONArray("canonical").objects()) {
+            assertEquals(c.toString(), c.getString("expected"), DeckImport.canonicalPasscode(c.getString("passcode"), if (c.getBoolean("aliases")) aliases else null))
+        }
+    }
+
     @Test fun `Fixture Texte`() {
         val t = fix.getJSONObject("texts")
         for (x in t.getJSONArray("failed").objects()) assertEquals(x.getString("text"), DeckImport.failedText(x.getString("message")))
@@ -96,15 +104,25 @@ class DeckImportTest {
     @Test fun `Vorschau vorbereiten laedt fuer YDKE nur die Passcodes, fuer Text alle, bei Lesefehler nichts`() {
         val calls = mutableListOf<List<String>?>()
         val load = { ids: List<String>? -> calls.add(ids); catalog }
-        val ydke = DeckImport.prepare("ydke://ryPeAA==!!!", null, load)
+        val ydke = DeckImport.prepare("ydke://ryPeAA==!!!", null, loadCatalog = load)
         assertEquals(listOf(listOf("14558127")), calls)
         assertEquals("ok", ydke.resolved!!.rows[0].status)
-        val text = DeckImport.prepare("3 Raigeki", null, load)
+        val text = DeckImport.prepare("3 Raigeki", null, loadCatalog = load)
         assertEquals(null, calls[1])
         assertEquals(listOf("12580477"), text.resolved!!.rows[0].candidates.map { it.passcode })
-        assertEquals("Kein gültiger YDKE-Link", DeckImport.prepare("ydke://kaputt", null, load).error)
-        assertEquals("Keine Deckliste erkannt", DeckImport.prepare("3 Raigeki", "ydk", load).error)
+        assertEquals("Kein gültiger YDKE-Link", DeckImport.prepare("ydke://kaputt", null, loadCatalog = load).error)
+        assertEquals("Keine Deckliste erkannt", DeckImport.prepare("3 Raigeki", "ydk", loadCatalog = load).error)
         assertEquals("ohne gelesene Karte kein Katalogzugriff", 2, calls.size)
         assertEquals(true, DeckImport.prepare("3 Raigeki", null) { null }.resolved!!.catalogMissing)
+    }
+
+    // Spec E3 §3 -- erst die Zuordnung der gelesenen Passcodes, dann die Hauptkarten; die Deckkarte behaelt den Artwork-Passcode.
+    @Test fun `Vorschau vorbereiten loest Artwork-Passcodes ueber die Zuordnung auf`() {
+        val loaded = mutableListOf<List<String>?>()
+        val prepared = DeckImport.prepare("#main\n46986415\n", null, { ids -> aliases.filterKeys { it in ids } }) { ids -> loaded.add(ids); catalog }
+        assertEquals(listOf(listOf("46986414")), loaded)
+        assertEquals(listOf(ImportCandidate("46986415", "Dunkler Magier", "Normal Monster")), prepared.resolved!!.rows[0].candidates)
+        val old = DeckImport.prepare("#main\n46986415\n", null) { catalog }
+        assertEquals("ohne Zuordnung (alter Katalog)", "unknownPasscode", old.resolved!!.rows[0].status)
     }
 }

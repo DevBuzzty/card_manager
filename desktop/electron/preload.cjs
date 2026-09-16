@@ -73,7 +73,7 @@ contextBridge.exposeInMainWorld('api', {
   getDecks: () => ipcRenderer.invoke('get-decks'),
   createDeck: (name) => ipcRenderer.invoke('create-deck', name),
   deleteDeck: (id) => ipcRenderer.invoke('delete-deck', id),
-  saveDeck: (deckId, cards, notes) => ipcRenderer.invoke('save-deck', { deckId, cards, notes }),
+  saveDeck: (deckId, cards, notes, format) => ipcRenderer.invoke('save-deck', { deckId, cards, notes, format }),
   getDeckDetails: (deckId) => ipcRenderer.invoke('get-deck-details', deckId),
   importDeckYdk: () => ipcRenderer.invoke('import-deck-ydk'),
   exportDeckYdk: (data) => ipcRenderer.invoke('export-deck-ydk', data),
@@ -87,6 +87,8 @@ contextBridge.exposeInMainWorld('api', {
   // Spec E2: Import & Export
   getCatalogCards: (ids) => ipcRenderer.invoke('get-catalog-cards', ids),
   createImportedDeck: (data) => ipcRenderer.invoke('create-imported-deck', data),
+  // Spec E3: Legalitaet & Simulation
+  getCatalogLegality: () => ipcRenderer.invoke('get-catalog-legality'),
 
   // Wishlist
   getWishlist: () => ipcRenderer.invoke('get-wishlist'),

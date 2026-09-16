@@ -25,6 +25,13 @@ export function moveTarget(section, type) {
 
 export const moveLabel = (section) => (section === 'side' ? '→ Deck' : '→ Side');
 
+// Spec E3 §3: Haupt-Passcode eines (Artwork-)Passcodes -- aliases[p] ?? p. aliases: { "<Artwork>": "<Haupt>" } oder
+// null/undefined (kein Katalog: jeder Passcode steht fuer sich). Gilt fuer Import-Aufloesung, Legalitaet und Kopien-Grenze.
+export function canonicalPasscode(passcode, aliases) {
+  const p = String(passcode);
+  return aliases && Object.hasOwn(aliases, p) ? String(aliases[p]) : p;
+}
+
 // Stufe 2: klein, NFKD, Akzente/Umlaut-Punkte weg, ß -> ss, alles ausser Buchstaben/Ziffern -> ein Leerzeichen, getrimmt.
 export function normalizeName(s) {
   return String(s || '')
@@ -60,7 +67,9 @@ export const skippedText = (n) => (n > 0 ? `${n} nicht übernommen` : null);
 export const deckNameFor = (fileName) => (fileName && String(fileName).trim() ? String(fileName).trim() : DEFAULT_DECK_NAME);
 
 const displayName = (c) => c.name_de || c.name_en || String(c.id);
-const candidate = (c) => ({ passcode: String(c.id), name: displayName(c), type: c.type || '' });
+// passcode: bei einem Artwork-Passcode bleibt der importierte Passcode stehen (Export bleibt artwork-treu), Name und
+// Typ kommen von der Hauptkarte (Spec E3 §3).
+const candidate = (c, passcode = String(c.id)) => ({ passcode, name: displayName(c), type: c.type || '' });
 const byNameThenPasscode = (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.passcode < b.passcode ? -1 : a.passcode > b.passcode ? 1 : 0);
 
 function addTo(map, key, id) {
@@ -112,15 +121,15 @@ const candidatesOf = (index, ids) => ids.map((id) => candidate(index.byId.get(id
 
 // parsed: Ergebnis von parseDeckText (ohne error). Ergebnis-Zeilen:
 // { status: ok|ambiguous|suggest|notFound|unknownPasscode, count, section, source, candidates: [{passcode,name,type}] }
-// source = Passcode (YDK/YDKE) bzw. Rohzeile (Textliste).
-export function resolveImport(parsed, catalogCards) {
+// source = Passcode (YDK/YDKE) bzw. Rohzeile (Textliste). aliases (Spec E3 §3): Passcodes laufen ueber canonicalPasscode.
+export function resolveImport(parsed, catalogCards, aliases = null) {
   const index = buildIndex(catalogCards);
   const rows = parsed.cards.map((card) => {
     const base = { count: card.count, section: card.section };
     if (card.passcode != null) {
-      const c = index.byId.get(String(card.passcode));
+      const c = index.byId.get(canonicalPasscode(card.passcode, aliases));
       return c
-        ? { status: 'ok', ...base, source: card.passcode, candidates: [candidate(c)] }
+        ? { status: 'ok', ...base, source: card.passcode, candidates: [candidate(c, String(card.passcode))] }
         : { status: 'unknownPasscode', ...base, source: card.passcode, candidates: [] };
     }
     const source = card.line;
@@ -167,11 +176,13 @@ export function importPlan(resolved, choices = {}) {
 
 // Einstieg der Vorschau (Einfuegen, YDK-Datei; Handy auch Teilen): lesen mit dem gemeinsamen Parser, dann den Katalog
 // laden -- fuer YDK/YDKE nur die gelesenen Passcodes, fuer die Textliste alle Karten -- und aufloesen.
-// loadCatalog(ids | null) -> { available, cards }. Ergebnis { error } oder { resolved }.
+// loadCatalog(ids | null) -> { available, cards, aliases? }; mit ids liefert der Lader fuer Artwork-Passcodes die
+// Hauptkarte und die Zuordnung in `aliases` (Spec E3 §3). Ergebnis { error } oder { resolved }.
 export async function prepareImport(text, format, loadCatalog) {
   const parsed = format ? parseDeckText(text, format) : parseDeckText(text);
   if (parsed.error) return { error: parsed.error };
   const ids = parsed.format === 'text' ? null : parsed.cards.map((c) => c.passcode);
   const catalog = await loadCatalog(ids);
-  return { resolved: resolveImport(parsed, catalog && catalog.available ? catalog.cards : null) };
+  const available = !!(catalog && catalog.available);
+  return { resolved: resolveImport(parsed, available ? catalog.cards : null, available ? catalog.aliases || null : null) };
 }

@@ -1,5 +1,5 @@
 {
-  "_comment": "Spec E2 §4/§5 — Namensaufloesung, Abschnittsregel, Vorschau-Plan, Texte. Leser: desktop/src/utils/deckImport.test.js und android DeckImportTest.kt. resolve[].catalog false = kein Katalog (null). expected.rows[].candidates sind Passcodes; plans[].choices: Zeilenindex -> Passcode. Passcodes 1000xxxx sind erfundene Testkarten.",
+  "_comment": "Spec E2 §4/§5 — Namensaufloesung, Abschnittsregel, Vorschau-Plan, Texte. Leser: desktop/src/utils/deckImport.test.js und android DeckImportTest.kt. resolve[].catalog false = kein Katalog (null). expected.rows[].candidates sind Passcodes; plans[].choices: Zeilenindex -> Passcode. Passcodes 1000xxxx sind erfundene Testkarten. Spec E3 §3: aliases = Artwork-Zuordnung; resolve[].aliases true = mit Zuordnung (sonst null); canonical[] prueft canonicalPasscode.",
   "catalog": [
     {"id":14558127,"name_de":"Asche-Blüte & Freudiger Frühling","name_en":"Ash Blossom & Joyous Spring","type":"Tuner Monster"},
     {"id":23434538,"name_de":"Maxx „C“","name_en":"Maxx \"C\"","type":"Effect Monster"},
@@ -22,6 +22,13 @@
     {"id":10000035,"name_de":"Rune Bxte","name_en":"Rune Bxte","type":"Spell Card"},
     {"id":10000041,"name_de":"Elfen-Fusion","name_en":"Élan Fusion","type":"Spell Card"},
     {"id":10000051,"name_de":"","name_en":"Only English","type":"Spell Card"}
+  ],
+  "aliases": {"46986415":"46986414","46986416":"46986414","90448280":"90448279"},
+  "canonical": [
+    {"passcode":"46986415","aliases":true,"expected":"46986414"},
+    {"passcode":"46986414","aliases":true,"expected":"46986414"},
+    {"passcode":"12345678","aliases":true,"expected":"12345678"},
+    {"passcode":"46986415","aliases":false,"expected":"46986415"}
   ],
   "normalize": [
     {"in":"Asche-Blüte & Freudiger Frühling","out":"asche blute freudiger fruhling"},
@@ -210,6 +217,41 @@
           "countsText":"Main 4 · Extra 4 · Side 0",
           "skippedText":null
         }}
+      ]
+    },
+    {
+      "name": "per Passcode mit Artwork-Zuordnung: Name und Typ der Hauptkarte, Deckkarte behält den Artwork-Passcode",
+      "catalog": true,
+      "aliases": true,
+      "parsed": {"format":"ydk","cards":[{"passcode":"46986415","count":1,"section":"main"},{"passcode":"46986414","count":2,"section":"main"},{"passcode":"90448280","count":1,"section":"extra"},{"passcode":"46986416","count":1,"section":"side"}],"unresolved":[]},
+      "expected": {"catalogMissing":false,"rows":[
+        {"status":"ok","count":1,"section":"main","source":"46986415","candidates":["46986415"]},
+        {"status":"ok","count":2,"section":"main","source":"46986414","candidates":["46986414"]},
+        {"status":"ok","count":1,"section":"extra","source":"90448280","candidates":["90448280"]},
+        {"status":"ok","count":1,"section":"side","source":"46986416","candidates":["46986416"]}
+      ]},
+      "plans": [
+        {"choices":{},"expected":{
+          "cards":[{"card_id":"46986415","name":"Dunkler Magier","count":1,"section":"main"},{"card_id":"46986414","name":"Dunkler Magier","count":2,"section":"main"},{"card_id":"90448280","name":"Göttliches Arsenal AA-ZEUS – Himmelsdonner","count":1,"section":"extra"},{"card_id":"46986416","name":"Dunkler Magier","count":1,"section":"side"}],
+          "counts":{"main":3,"extra":1,"side":1},
+          "skipped":[],
+          "skippedLabels":[],
+          "notes":null,
+          "countsText":"Main 3 · Extra 1 · Side 1",
+          "skippedText":null
+        }}
+      ]
+    },
+    {
+      "name": "per Passcode ohne Zuordnung: Artwork-Passcodes sind unbekannt",
+      "catalog": true,
+      "parsed": {"format":"ydke","cards":[{"passcode":"46986415","count":1,"section":"main"},{"passcode":"46986414","count":2,"section":"main"}],"unresolved":[]},
+      "expected": {"catalogMissing":false,"rows":[
+        {"status":"unknownPasscode","count":1,"section":"main","source":"46986415","candidates":[]},
+        {"status":"ok","count":2,"section":"main","source":"46986414","candidates":["46986414"]}
+      ]},
+      "plans": [
+        {"choices":{},"expected":{"cards":[{"card_id":"46986414","name":"Dunkler Magier","count":2,"section":"main"}],"counts":{"main":2,"extra":0,"side":0},"skipped":["Unbekannter Passcode 46986415"],"skippedLabels":["Unbekannter Passcode 46986415"],"notes":"Nicht übernommen beim Import:\nUnbekannter Passcode 46986415","countsText":"Main 2 · Extra 0 · Side 0","skippedText":"1 nicht übernommen"}}
       ]
     },
     {

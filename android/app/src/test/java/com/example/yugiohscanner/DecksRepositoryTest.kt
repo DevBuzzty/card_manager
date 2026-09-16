@@ -1,5 +1,6 @@
 package com.example.yugiohscanner
 
+import com.example.yugiohscanner.cloud.AddCopyPlan
 import com.example.yugiohscanner.cloud.Deck
 import com.example.yugiohscanner.cloud.DeckCard
 import com.example.yugiohscanner.cloud.DecksRepository
@@ -43,6 +44,35 @@ class DecksRepositoryTest {
         )
         assertEquals(null, DecksRepository.parseDeck(JSONObject("""{"id":5,"name":"Leer","notes":null}""")).notes)
         assertEquals(null, DecksRepository.parseDeck(JSONObject("""{"id":6,"name":"Alt"}""")).notes)
+    }
+
+    // Spec E3 §4/§8: fehlt die Spalte format (SQL nicht eingespielt) oder steht Unbekanntes darin -> TCG.
+    @Test fun `Deck liest format, fehlend und unbekannt werden tcg`() {
+        assertEquals("ocg", DecksRepository.parseDeck(JSONObject("""{"id":1,"name":"A","format":"ocg"}""")).format)
+        assertEquals("free", DecksRepository.parseDeck(JSONObject("""{"id":1,"name":"A","format":"free"}""")).format)
+        assertEquals("tcg", DecksRepository.parseDeck(JSONObject("""{"id":1,"name":"A"}""")).format)
+        assertEquals("tcg", DecksRepository.parseDeck(JSONObject("""{"id":1,"name":"A","format":null}""")).format)
+        assertEquals("tcg", DecksRepository.parseDeck(JSONObject("""{"id":1,"name":"A","format":"goat"}""")).format)
+    }
+
+    private fun dc(id: Long, cardId: String, count: Int, section: String) = DeckCard(id, cardId, null, null, count, section)
+
+    // Spec E3 §5: "Hinzufügen" erhoeht die bestehende Zeile statt eine neue anzulegen; die 4. Kopie ist blockiert.
+    @Test fun `Hinzufuegen erhoeht die bestehende Zeile im selben Abschnitt`() {
+        val cards = listOf(dc(7, "46986414", 1, "main"), dc(8, "46986414", 1, "side"))
+        assertEquals(AddCopyPlan.Increment(7, 2), DecksRepository.addCopyPlan(cards, "46986414", "main", "tcg", null))
+        assertEquals(AddCopyPlan.Increment(8, 2), DecksRepository.addCopyPlan(cards, "46986414", "side", "tcg", null))
+        assertEquals(AddCopyPlan.Insert, DecksRepository.addCopyPlan(cards, "55144522", "main", "tcg", null))
+        assertEquals(AddCopyPlan.Insert, DecksRepository.addCopyPlan(listOf(dc(9, "46986414", 1, "side")), "46986414", "main", "tcg", null))
+    }
+
+    @Test fun `Hinzufuegen blockiert die vierte Kopie ueber Abschnitte und Artworks, im Format Frei nie`() {
+        val cards = listOf(dc(7, "46986414", 2, "main"), dc(8, "46986415", 1, "side"))
+        val aliases = mapOf("46986415" to "46986414")
+        assertEquals(AddCopyPlan.Blocked, DecksRepository.addCopyPlan(cards, "46986414", "main", "tcg", aliases))
+        assertEquals(AddCopyPlan.Blocked, DecksRepository.addCopyPlan(cards, "46986415", "side", "ocg", aliases))
+        assertEquals(AddCopyPlan.Increment(7, 3), DecksRepository.addCopyPlan(cards, "46986414", "main", "tcg", null))
+        assertEquals(AddCopyPlan.Increment(7, 3), DecksRepository.addCopyPlan(cards, "46986414", "main", "free", aliases))
     }
 
     @Test fun `Import-Karten als ein JSON-Array mit Katalogbild`() {
