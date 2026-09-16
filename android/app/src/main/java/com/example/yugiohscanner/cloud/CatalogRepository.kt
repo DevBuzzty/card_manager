@@ -107,6 +107,26 @@ object CatalogRepository {
         return results
     }
 
+    /** Spec E1 §5: SQL und Argumente fuer die Katalogpreise mehrerer Passcodes -- rein, damit ohne SQLite testbar. */
+    internal fun cmPriceQuery(ids: List<String>): Pair<String, Array<String>> =
+        "SELECT id, cm_price FROM cards WHERE id IN (${ids.joinToString(",") { "?" }})" to ids.toTypedArray()
+
+    /**
+     * Katalogpreis je Passcode; fehlt der Passcode, steht er nicht in der Map (gilt als "ohne Preis"). In Bloecken zu
+     * 500, weil SQLite hoechstens 999 Parameter annimmt. Aufrufer lesen abseits des Hauptthreads.
+     */
+    fun cmPrices(ids: Collection<String>): Map<String, Double?> {
+        val database = db?.readableDatabase ?: return emptyMap()
+        val out = HashMap<String, Double?>()
+        for (chunk in ids.distinct().chunked(500)) {
+            val (sql, args) = cmPriceQuery(chunk)
+            database.rawQuery(sql, args).use { c ->
+                while (c.moveToNext()) out[c.getString(0)] = if (c.isNull(1)) null else c.getDouble(1)
+            }
+        }
+        return out
+    }
+
     private fun escapeLike(input: String): String =
         input.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
@@ -133,7 +153,8 @@ object CatalogRepository {
             attribute = strOrNull("attribute"),
             image = c.getString(idx("image")),
             imageSmall = c.getString(idx("image_small")),
-            printings = emptyList()
+            printings = emptyList(),
+            cmPrice = c.getColumnIndex("cm_price").takeIf { it >= 0 && !c.isNull(it) }?.let { c.getDouble(it) },
         )
     }
 }

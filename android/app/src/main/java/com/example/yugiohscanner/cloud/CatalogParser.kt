@@ -18,7 +18,9 @@ data class CatalogCard(
     val attribute: String?,
     val image: String,
     val imageSmall: String,
-    val printings: List<CatalogPrinting>
+    val printings: List<CatalogPrinting>,
+    // Spec E1 §5: Cardmarket-Preis je Passcode (Katalog ab Version 6), sonst null.
+    val cmPrice: Double? = null,
 )
 
 data class CatalogPrinting(
@@ -91,6 +93,10 @@ object CatalogParser {
                 val attribute = if (cardJson.has("attribute") && !cardJson.isNull("attribute"))
                     cardJson.getString("attribute") else null
 
+                // Spec E1 §5: cm_price ab Katalog 6; fehlt (Katalog 5), null oder <= 0 -> null.
+                val cmPrice = if (cardJson.has("cm_price") && !cardJson.isNull("cm_price"))
+                    cardJson.optDouble("cm_price").takeIf { it > 0.0 } else null
+
                 // Parse printings and printings_verified
                 val printings = mutableListOf<CatalogPrinting>()
 
@@ -131,7 +137,8 @@ object CatalogParser {
                     attribute = attribute,
                     image = image,
                     imageSmall = imageSmall,
-                    printings = printings
+                    printings = printings,
+                    cmPrice = cmPrice,
                 )
                 cards.add(card)
             } catch (e: Exception) {

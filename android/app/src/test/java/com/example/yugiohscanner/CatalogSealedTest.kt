@@ -22,8 +22,9 @@ class CatalogSealedTest {
         return bos.toByteArray()
     }
 
-    @Test fun `Katalog-Schema ist Version 2`() {
-        assertEquals(2, CatalogDb.VERSION)
+    @Test fun `Katalog-Schema ist Version 3`() {
+        // Spec E1 §5: v3 bringt cards.cm_price (v2 brachte sealed_products).
+        assertEquals(3, CatalogDb.VERSION)
     }
 
     @Test fun `liest sealed_products, unbekannte Art wird other, Trend 0 wird null, kaputte Eintraege fallen weg`() {
