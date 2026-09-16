@@ -181,14 +181,15 @@ test('YDK-Datei: Antwortform { canceled, name, text } für den gemeinsamen Parse
 });
 
 // Spec E3 §6/§8 -- Attrappe fuer "Save Deck": deck_cards.delete().eq(), deck_cards.insert(rows), decks.update().eq().
-// insertErrors: Fehler je Insert-Aufruf in Reihenfolge; updateErrors: Fehler je Update-Feld (notes/format).
-function saveClient({ insertErrors = [], updateErrors = {} } = {}) {
+// insertErrors: Fehler je Insert-Aufruf in Reihenfolge; updateErrors: Fehler je Update-Feld (notes/format);
+// deleteError (F6): Fehler des deck_cards.delete().
+function saveClient({ insertErrors = [], updateErrors = {}, deleteError = null } = {}) {
   const calls = { deleted: [], inserts: [], updates: [] };
   return {
     calls,
     from(table) {
       return {
-        delete: () => ({ eq: async (col, val) => { calls.deleted.push({ table, col, val }); return { error: null }; } }),
+        delete: () => ({ eq: async (col, val) => { calls.deleted.push({ table, col, val }); return { error: deleteError }; } }),
         insert: async (rows) => { calls.inserts.push(rows); return { error: insertErrors[calls.inserts.length - 1] || null }; },
         update: (patch) => ({
           eq: async (col, val) => {
@@ -219,11 +220,18 @@ test('Save Deck: role nur an Starter-Zeilen des Main Decks, Name/Bild mit lokale
 test('Save Deck: löscht, fügt mit role ein und schreibt das geänderte Format', async () => {
   const c = saveClient();
   const res = await saveDeck(c, { deckId: 7, cards: SAVE_CARDS, notes: undefined, format: 'ocg' });
-  assert.deepEqual(res, { success: true, roleSaved: true });
+  assert.deepEqual(res, { success: true, roleSaved: true, formatError: null });
   assert.deepEqual(c.calls.deleted, [{ table: 'deck_cards', col: 'deck_id', val: 7 }]);
   assert.equal(c.calls.inserts.length, 1);
   assert.equal(c.calls.inserts[0][0].role, 'starter');
   assert.deepEqual(c.calls.updates, [{ table: 'decks', patch: { format: 'ocg' }, col: 'id', val: 7 }]);
+});
+
+// F6 -- scheitert schon das Loeschen, wird nichts eingefuegt (kein Insert-Aufruf) und der Fehler kommt hoch.
+test('Save Deck: scheitert das Löschen, wird nichts eingefügt und der Fehler kommt', async () => {
+  const c = saveClient({ deleteError: { message: 'permission denied' } });
+  await assert.rejects(saveDeck(c, { deckId: 7, cards: SAVE_CARDS }), { message: 'permission denied' });
+  assert.equal(c.calls.inserts.length, 0);
 });
 
 test('Save Deck: ohne Format- und Notizänderung kein Update, ohne Sterne keine role-Spalte', async () => {
@@ -236,7 +244,7 @@ test('Save Deck: ohne Format- und Notizänderung kein Update, ohne Sterne keine 
 test('Save Deck: fehlt die Spalte role, landen die Karten ohne Sterne statt verloren zu gehen', async () => {
   const c = saveClient({ insertErrors: [{ message: "Could not find the 'role' column of 'deck_cards'" }] });
   const res = await saveDeck(c, { deckId: 7, cards: SAVE_CARDS });
-  assert.deepEqual(res, { success: true, roleSaved: false });
+  assert.deepEqual(res, { success: true, roleSaved: false, formatError: null });
   assert.equal(c.calls.inserts.length, 2);
   assert.equal(c.calls.inserts[1].some((r) => 'role' in r), false);
   assert.equal(c.calls.inserts[1].length, 3);
@@ -247,9 +255,19 @@ test('Save Deck: scheitert auch der Insert ohne role, kommt die Rohmeldung', asy
   await assert.rejects(saveDeck(c, { deckId: 7, cards: SAVE_CARDS }), { message: 'immer noch kaputt' });
 });
 
-test('Save Deck: fehlt die Spalte format, meldet es "Format konnte nicht gespeichert werden"', async () => {
+// F2 -- ein gescheitertes Format-Update wirft nicht mehr: Karten und Notizen sind schon gespeichert, formatError
+// traegt die deutsche Meldung statt eines Electron-praefixierten Auswurfs.
+test('Save Deck: fehlt die Spalte format, kommen Karten und Notizen trotzdem an, formatError gesetzt', async () => {
   const c = saveClient({ updateErrors: { format: { message: "Could not find the 'format' column of 'decks'" } } });
-  await assert.rejects(saveDeck(c, { deckId: 7, cards: [], notes: 'Notiz', format: 'free' }), { message: FORMAT_SAVE_FAILED });
+  const res = await saveDeck(c, { deckId: 7, cards: SAVE_CARDS, notes: 'Notiz', format: 'free' });
+  assert.deepEqual(res, { success: true, roleSaved: true, formatError: FORMAT_SAVE_FAILED });
   assert.equal(FORMAT_SAVE_FAILED, 'Format konnte nicht gespeichert werden');
+  assert.equal(c.calls.inserts.length, 1, 'Karten wurden trotz gescheitertem Format eingefügt');
   assert.deepEqual(c.calls.updates.map((u) => u.patch), [{ notes: 'Notiz' }, { format: 'free' }]);
+});
+
+test('Save Deck: klappt das Format-Update, ist formatError null', async () => {
+  const c = saveClient();
+  const res = await saveDeck(c, { deckId: 7, cards: [], format: 'free' });
+  assert.equal(res.formatError, null);
 });

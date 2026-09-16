@@ -132,11 +132,14 @@ function saveDeckRows(deckId, cards, detailOf = () => null) {
 
 // "Save Deck" (bisher direkt in main.cjs): alle Deckkarten loeschen und neu einfuegen, dann Notizen (Spec E2 §5) und
 // Format (Spec E3 §4), jeweils nur, wenn der Renderer sie mitschickt (er tut es nur bei einer Aenderung).
+// F6: scheitert schon das Loeschen, wird nichts eingefuegt -- sonst haette man alte und neue Zeilen nebeneinander.
 // Spec E3 §8: scheitert der Insert mit Sternen (Spalte role fehlt noch), werden dieselben Zeilen ohne role eingefuegt --
-// sonst waeren die Deckkarten nach dem Loeschen verloren; roleSaved = false. Ein gescheitertes Format meldet
-// "Format konnte nicht gespeichert werden".
+// sonst waeren die Deckkarten nach dem Loeschen verloren; roleSaved = false.
+// F2: ein gescheitertes Format-Update wirft NICHT mehr (Karten und Notizen sind zu dem Zeitpunkt schon gespeichert) --
+// stattdessen formatError = "Format konnte nicht gespeichert werden" in der Rueckgabe, sonst null.
 async function saveDeck(client, { deckId, cards, notes, format } = {}, detailOf = () => null) {
-  await client.from('deck_cards').delete().eq('deck_id', deckId);
+  const { error: deleteError } = await client.from('deck_cards').delete().eq('deck_id', deckId);
+  if (deleteError) throw new Error(deleteError.message);
   let roleSaved = true;
   const rows = saveDeckRows(deckId, cards, detailOf);
   if (rows.length) {
@@ -151,11 +154,12 @@ async function saveDeck(client, { deckId, cards, notes, format } = {}, detailOf 
     const { error } = await client.from('decks').update({ notes: notes || null }).eq('id', deckId);
     if (error) throw new Error(error.message);
   }
+  let formatError = null;
   if (format !== undefined) {
     const { error } = await client.from('decks').update({ format }).eq('id', deckId);
-    if (error) throw new Error(FORMAT_SAVE_FAILED);
+    if (error) formatError = FORMAT_SAVE_FAILED;
   }
-  return { success: true, roleSaved };
+  return { success: true, roleSaved, formatError };
 }
 
 module.exports = {
