@@ -1,0 +1,165 @@
+{
+  "_comment": "Spec E2 §3 — YDK, YDKE, Textliste lesen/schreiben/erkennen. Leser: desktop/src/utils/deckFormats.test.js und android DeckFormatsTest.kt. parse[].format fehlt = Erkennung (parseDeckText ohne Format). YDKE-Bloecke unabhaengig mit Node Buffer.writeUInt32LE + base64 erzeugt. cards: YDK/YDKE {passcode,count,section}, Textliste {name,count,section,line}.",
+  "parse": [
+    {
+      "name": "YDK: Abschnitte, Kommentare, Summen je Abschnitt, führende Nullen, ungültige Zeilen",
+      "text": "#created by someone\n#main\n14558127\n14558127\n04031928\n\n14558127\n#extra\n90448279\n01861629\n!side\n27204311\nabc\n27204311\n0\n",
+      "expected": {"format":"ydk","cards":[{"passcode":"14558127","count":3,"section":"main"},{"passcode":"4031928","count":1,"section":"main"},{"passcode":"90448279","count":1,"section":"extra"},{"passcode":"1861629","count":1,"section":"extra"},{"passcode":"27204311","count":2,"section":"side"}],"unresolved":["abc","0"],"error":null}
+    },
+    {
+      "name": "YDK: vor dem ersten Kopf gilt main, Köpfe Groß/Klein egal, CRLF",
+      "text": "23434538\r\n#EXTRA\r\n90448279\r\n!Side\r\n23434538\r\n#Main\r\n23434538\r\n",
+      "expected": {"format":"ydk","cards":[{"passcode":"23434538","count":2,"section":"main"},{"passcode":"90448279","count":1,"section":"extra"},{"passcode":"23434538","count":1,"section":"side"}],"unresolved":[],"error":null}
+    },
+    {
+      "name": "YDK ohne gültige Karte: Keine Deckliste erkannt",
+      "text": "#main\nfoo\n#extra\n!side\n",
+      "expected": {"format":"ydk","cards":[],"unresolved":["foo"],"error":"Keine Deckliste erkannt"}
+    },
+    {
+      "name": "YDK-Datei mit vorgegebenem Format liest keine Textliste",
+      "format": "ydk",
+      "text": "3 Raigeki\n",
+      "expected": {"format":"ydk","cards":[],"unresolved":["3 Raigeki"],"error":"Keine Deckliste erkannt"}
+    },
+    {
+      "name": "YDKE: drei Blöcke mit Schluss-!, Leerzeichen und Zeilenumbruch drumherum",
+      "text": "  ydke://ryPeAK8j3gCvI94AKpVlAbiFPQA=!lyFkBf1nHAA=!1xqfAdcanwE=!\n",
+      "expected": {"format":"ydke","cards":[{"passcode":"14558127","count":3,"section":"main"},{"passcode":"23434538","count":1,"section":"main"},{"passcode":"4031928","count":1,"section":"main"},{"passcode":"90448279","count":1,"section":"extra"},{"passcode":"1861629","count":1,"section":"extra"},{"passcode":"27204311","count":2,"section":"side"}],"unresolved":[],"error":null}
+    },
+    {
+      "name": "YDKE: letztes ! optional, leere Blöcke sind leere Abschnitte",
+      "text": "ydke://!!ryPeAA==",
+      "expected": {"format":"ydke","cards":[{"passcode":"14558127","count":1,"section":"side"}],"unresolved":[],"error":null}
+    },
+    {
+      "name": "YDKE: Zeilenumbruch zwischen den Blöcken",
+      "text": "ydke://ryPeAA==!\n!!",
+      "expected": {"format":"ydke","cards":[{"passcode":"14558127","count":1,"section":"main"}],"unresolved":[],"error":null}
+    },
+    {
+      "name": "YDKE: Passcode 0 wird nicht übernommen",
+      "text": "ydke://AAAAAK8j3gA=!!!",
+      "expected": {"format":"ydke","cards":[{"passcode":"14558127","count":1,"section":"main"}],"unresolved":["0"],"error":null}
+    },
+    {
+      "name": "YDKE: ungültiges Base64",
+      "text": "ydke://ryPe*A==!!!",
+      "expected": {"format":"ydke","cards":[],"unresolved":[],"error":"Kein gültiger YDKE-Link"}
+    },
+    {
+      "name": "YDKE: fehlende Auffüllung ist ungültig",
+      "text": "ydke://ryPeAA!!!",
+      "expected": {"format":"ydke","cards":[],"unresolved":[],"error":"Kein gültiger YDKE-Link"}
+    },
+    {
+      "name": "YDKE: Bytelänge nicht durch 4 teilbar",
+      "text": "ydke://AQIDBAU=!!!",
+      "expected": {"format":"ydke","cards":[],"unresolved":[],"error":"Kein gültiger YDKE-Link"}
+    },
+    {
+      "name": "YDKE: weniger als drei Blöcke",
+      "text": "ydke://ryPeAA==!",
+      "expected": {"format":"ydke","cards":[],"unresolved":[],"error":"Kein gültiger YDKE-Link"}
+    },
+    {
+      "name": "YDKE: mehr als drei Blöcke",
+      "text": "ydke://!!!ryPeAA==!",
+      "expected": {"format":"ydke","cards":[],"unresolved":[],"error":"Kein gültiger YDKE-Link"}
+    },
+    {
+      "name": "YDKE: gültig, aber leer",
+      "text": "ydke://!!!",
+      "expected": {"format":"ydke","cards":[],"unresolved":[],"error":"Keine Deckliste erkannt"}
+    },
+    {
+      "name": "Textliste: alle Zeilenformen, Überschriften mit (n) und :, Kommentare, Anzahl außerhalb 1–99",
+      "text": "Main Deck (40)\n3 Ash Blossom & Joyous Spring\n2x Maxx \"C\"\n1 x Pot of Greed\nNibiru, the Primal Being x2\nDark Magician\n// Kommentar\n# auch Kommentar\n\nExtra Deck:\n1 Divine Arsenal AA-ZEUS - Sky Thunder\nside\n3 Nibiru, the Primal Being\n0 Pot of Greed\n100 Raigeki\n",
+      "expected": {"format":"text","cards":[
+        {"name":"Ash Blossom & Joyous Spring","count":3,"section":"main","line":"3 Ash Blossom & Joyous Spring"},
+        {"name":"Maxx \"C\"","count":2,"section":"main","line":"2x Maxx \"C\""},
+        {"name":"Pot of Greed","count":1,"section":"main","line":"1 x Pot of Greed"},
+        {"name":"Nibiru, the Primal Being","count":2,"section":"main","line":"Nibiru, the Primal Being x2"},
+        {"name":"Dark Magician","count":1,"section":"main","line":"Dark Magician"},
+        {"name":"Divine Arsenal AA-ZEUS - Sky Thunder","count":1,"section":"extra","line":"1 Divine Arsenal AA-ZEUS - Sky Thunder"},
+        {"name":"Nibiru, the Primal Being","count":3,"section":"side","line":"3 Nibiru, the Primal Being"}
+      ],"unresolved":["0 Pot of Greed","100 Raigeki"],"error":null}
+    },
+    {
+      "name": "Textliste ohne Überschrift: Abschnitt unknown, gleiche Zeilen nicht zusammengefasst",
+      "text": "3 Ash Blossom & Joyous Spring\nDecode Talker\nDecode Talker\n",
+      "expected": {"format":"text","cards":[
+        {"name":"Ash Blossom & Joyous Spring","count":3,"section":"unknown","line":"3 Ash Blossom & Joyous Spring"},
+        {"name":"Decode Talker","count":1,"section":"unknown","line":"Decode Talker"},
+        {"name":"Decode Talker","count":1,"section":"unknown","line":"Decode Talker"}
+      ],"unresolved":[],"error":null}
+    },
+    {
+      "name": "Textliste: Überschriften MAIN:, Extra (15), Side Deck:; x im Namen",
+      "text": "MAIN:\n3 Xyz Dragon\nMaxx x2\nRaigeki x\nExtra (15)\n1 Decode Talker\nSide Deck:\nRaigeki x3\n",
+      "expected": {"format":"text","cards":[
+        {"name":"Xyz Dragon","count":3,"section":"main","line":"3 Xyz Dragon"},
+        {"name":"Maxx","count":2,"section":"main","line":"Maxx x2"},
+        {"name":"Raigeki x","count":1,"section":"main","line":"Raigeki x"},
+        {"name":"Decode Talker","count":1,"section":"extra","line":"1 Decode Talker"},
+        {"name":"Raigeki","count":3,"section":"side","line":"Raigeki x3"}
+      ],"unresolved":[],"error":null}
+    },
+    {
+      "name": "Textliste: geschütztes Leerzeichen aus Webseiten zählt als Leerzeichen",
+      "text": "Main Deck\n3 Raigeki\nRaigeki x2\n",
+      "expected": {"format":"text","cards":[
+        {"name":"Raigeki","count":3,"section":"main","line":"3 Raigeki"},
+        {"name":"Raigeki","count":2,"section":"main","line":"Raigeki x2"}
+      ],"unresolved":[],"error":null}
+    },
+    {
+      "name": "leerer Text: Keine Deckliste erkannt",
+      "text": "  \n\n// nur Kommentar\n",
+      "expected": {"format":"text","cards":[],"unresolved":[],"error":"Keine Deckliste erkannt"}
+    }
+  ],
+  "detect": [
+    {"text":"  ydke://!!!","format":"ydke"},
+    {"text":"#created by x\n#main\n14558127","format":"ydk"},
+    {"text":"14558127\n!SIDE\n","format":"ydk"},
+    {"text":"3 Raigeki","format":"text"},
+    {"text":"YDKE://ryPeAA==!!!","format":"text"},
+    {"text":"#mainboard\n3 Raigeki","format":"text"}
+  ],
+  "build": [
+    {
+      "name": "alle Abschnitte, mehrere Zeilen je Passcode, Name fehlt, Anzahl 0 entfällt",
+      "entries": [
+        {"passcode":"14558127","name":"Ash Blossom & Joyous Spring","count":2,"section":"main"},
+        {"passcode":"23434538","name":"Maxx \"C\"","count":1,"section":"main"},
+        {"passcode":"14558127","name":"Ash Blossom & Joyous Spring","count":1,"section":"main"},
+        {"passcode":"4031928","name":null,"count":1,"section":"main"},
+        {"passcode":"90448279","name":"Divine Arsenal AA-ZEUS - Sky Thunder","count":1,"section":"extra"},
+        {"passcode":"1861629","name":"Decode Talker","count":1,"section":"extra"},
+        {"passcode":"27204311","name":"Nibiru, the Primal Being","count":2,"section":"side"},
+        {"passcode":"55144522","name":"Pot of Greed","count":0,"section":"side"}
+      ],
+      "ydk": "#created by YGO Card Manager\n#main\n14558127\n14558127\n23434538\n14558127\n4031928\n#extra\n90448279\n1861629\n!side\n27204311\n27204311\n",
+      "ydke": "ydke://ryPeAK8j3gAqlWUBryPeALiFPQA=!lyFkBf1nHAA=!1xqfAdcanwE=!",
+      "text": "Main Deck\n3 Ash Blossom & Joyous Spring\n1 Maxx \"C\"\n1 4031928\nExtra Deck\n1 Divine Arsenal AA-ZEUS - Sky Thunder\n1 Decode Talker\nSide Deck\n2 Nibiru, the Primal Being",
+      "roundtrip": [{"passcode":"14558127","count":3,"section":"main"},{"passcode":"23434538","count":1,"section":"main"},{"passcode":"4031928","count":1,"section":"main"},{"passcode":"90448279","count":1,"section":"extra"},{"passcode":"1861629","count":1,"section":"extra"},{"passcode":"27204311","count":2,"section":"side"}]
+    },
+    {
+      "name": "nur Side",
+      "entries": [{"passcode":"55144522","name":"Pot of Greed","count":1,"section":"side"}],
+      "ydk": "#created by YGO Card Manager\n#main\n#extra\n!side\n55144522\n",
+      "ydke": "ydke://!!SnBJAw==!",
+      "text": "Side Deck\n1 Pot of Greed",
+      "roundtrip": [{"passcode":"55144522","count":1,"section":"side"}]
+    },
+    {
+      "name": "leeres Deck",
+      "entries": [],
+      "ydk": "#created by YGO Card Manager\n#main\n#extra\n!side\n",
+      "ydke": "ydke://!!!",
+      "text": "",
+      "roundtrip": []
+    }
+  ]
+}
