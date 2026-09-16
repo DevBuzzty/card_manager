@@ -42,6 +42,9 @@ import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.WishlistRepository
 import com.example.yugiohscanner.ml.Coverage
+import com.example.yugiohscanner.ml.DeckEntry
+import com.example.yugiohscanner.ml.DeckFormats
+import com.example.yugiohscanner.ml.DeckImport
 import com.example.yugiohscanner.ml.CoverageCard
 import com.example.yugiohscanner.ml.DeckCoverage
 import com.example.yugiohscanner.ml.DeckWishlist
@@ -80,8 +83,23 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
     var openDeckId by remember { mutableStateOf<Long?>(null) }
     val cache by SideStores.decks.state.collectAsState()
     val decks = cache.value ?: emptyList()
+    // Spec E2 §5/§6: offener Import -- null = keiner; text null = Einfuegen (Zwischenablage), sonst geteilter Text.
+    var importRequest by remember { mutableStateOf<ImportRequest?>(null) }
+    val sharedText by DeckImportInbox.text.collectAsState()
+    LaunchedEffect(sharedText) {
+        if (sharedText != null) DeckImportInbox.take()?.let { importRequest = ImportRequest(it); openDeckId = null }
+    }
 
     // The editor is a sub-view of this destination — system back closes it, not the destination.
+    BackHandler(importRequest != null) { importRequest = null }
+    importRequest?.let { request ->
+        DeckImportScreen(
+            sharedText = request.text,
+            onBack = { importRequest = null },
+            onCreated = { id -> importRequest = null; openDeckId = id },
+        )
+        return
+    }
     BackHandler(openDeckId != null) { openDeckId = null }
     openDeckId?.let { id ->
         // Spec E1: der Editor liest das Deck aus dem Speicher, damit eine neu zugeordnete Deckbox sofort erscheint.
@@ -94,6 +112,7 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
 
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
+    var newMenuOpen by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var writeError by remember { mutableStateOf<String?>(null) }
     val loading = busy || (cache.value == null && cache.error == null)
@@ -149,7 +168,14 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(8.dp))
-                FilledIconButton(onClick = create) { Icon(Icons.Default.Add, "Anlegen") }
+                // Spec E2 §5: Plus-Menue Leer · Einfügen (YDKE/Text).
+                Box {
+                    FilledIconButton(onClick = { newMenuOpen = true }) { Icon(Icons.Default.Add, "Neues Deck") }
+                    DropdownMenu(expanded = newMenuOpen, onDismissRequest = { newMenuOpen = false }) {
+                        DropdownMenuItem(text = { Text("Leer") }, onClick = { newMenuOpen = false; create() })
+                        DropdownMenuItem(text = { Text("Einfügen (YDKE/Text)") }, onClick = { newMenuOpen = false; importRequest = ImportRequest(null) })
+                    }
+                }
             }
 
             error?.let {
@@ -220,23 +246,17 @@ private fun DeckRow(deck: Deck, summary: String, onOpen: () -> Unit, onDelete: (
     }
 }
 
-// "extra" for Extra-Deck monster types, else "main".
-private fun extraOrMain(type: String?): String {
-    val t = type?.lowercase() ?: return "main"
-    return if (listOf("fusion", "synchro", "xyz", "link").any { t.contains(it) }) "extra" else "main"
-}
+/** Spec E2 §5/§6: offener Import; text null = Einfuegen (Zwischenablage), sonst geteilter Text direkt in die Vorschau. */
+private data class ImportRequest(val text: String?)
 
-private fun buildYdk(cards: List<DeckCard>): String {
-    fun section(name: String) = cards.filter { it.section == name }
-        .flatMap { c -> List(c.count.coerceAtLeast(0)) { c.cardId } }
-    val sb = StringBuilder()
-    sb.append("#created by Card Scanner\n")
-    sb.append("#main\n")
-    section("main").forEach { sb.append(it).append("\n") }
-    sb.append("#extra\n")
-    section("extra").forEach { sb.append(it).append("\n") }
-    sb.append("!side\n")
-    return sb.toString()
+/** Spec E2 §6: Deckliste als Text ueber den Android-Teilen-Dialog. */
+private fun shareText(context: android.content.Context, title: String, text: String) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TITLE, title)
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(send, "Deck teilen"))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -252,6 +272,9 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
     val error = writeError ?: cache.error
 
     var query by remember { mutableStateOf("") }
+    // Spec E2 §6: Ziel beim Hinzufuegen -- false = Deck (Main/Extra per deckSectionFor), true = Side.
+    var addToSide by remember { mutableStateOf(false) }
+    var shareMenuOpen by remember { mutableStateOf(false) }
     val results = remember { mutableStateListOf<CardRow>() }
     var searching by remember { mutableStateOf(false) }
 
@@ -270,12 +293,20 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
     var boxError by remember { mutableStateOf<String?>(null) }
     var fill by remember { mutableStateOf<FillProposal?>(null) }
     var wishlistOpen by remember { mutableStateOf(false) }
+    // Spec E2 Task 8 Fix 1: ein Lauf gleichzeitig -- sonst kann ein Doppel-Tipp (+/-, entfernen, verschieben)
+    // DecksRepository zweimal mit demselben, noch nicht aktualisierten Stand aufrufen (Review-Fund).
+    val inFlight = remember { InFlight() }
+    var mutating by remember { mutableStateOf(false) }
 
     LaunchedEffect(deck.id) { deckCache.refresh() }
 
     fun mutate(block: suspend () -> Unit) {
+        if (!inFlight.tryStart()) return
+        mutating = true
         scope.launch {
-            try { block(); deckCache.refreshAndWait(); SideStores.allDeckCards.refresh(); writeError = null } catch (e: Exception) { writeError = e.message }
+            try { block(); deckCache.refreshAndWait(); SideStores.allDeckCards.refresh(); writeError = null }
+            catch (e: Exception) { writeError = e.message }
+            finally { inFlight.finish(); mutating = false }
         }
     }
 
@@ -305,15 +336,16 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
                     deck.name, style = MaterialTheme.typography.headlineSmall,
                     color = OnSurface, modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = {
-                    val ydk = buildYdk(cards)
-                    val send = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TITLE, "${deck.name}.ydk")
-                        putExtra(Intent.EXTRA_TEXT, ydk)
+                // Spec E2 §6: Teilen-Menue YDKE · Textliste · YDK (als Text; YDK jetzt mit Side-Deck).
+                Box {
+                    IconButton(onClick = { shareMenuOpen = true }) { Icon(Icons.Default.Share, "Teilen", tint = Primary) }
+                    DropdownMenu(expanded = shareMenuOpen, onDismissRequest = { shareMenuOpen = false }) {
+                        val entries = cards.map { DeckEntry(it.cardId, it.name, it.count, it.section) }
+                        DropdownMenuItem(text = { Text("YDKE") }, onClick = { shareMenuOpen = false; shareText(context, deck.name, DeckFormats.buildYdke(entries)) })
+                        DropdownMenuItem(text = { Text("Textliste") }, onClick = { shareMenuOpen = false; shareText(context, deck.name, DeckFormats.buildTextList(entries)) })
+                        DropdownMenuItem(text = { Text("YDK") }, onClick = { shareMenuOpen = false; shareText(context, "${deck.name}.ydk", DeckFormats.buildYdk(entries)) })
                     }
-                    context.startActivity(Intent.createChooser(send, "Deck exportieren"))
-                }) { Icon(Icons.Default.Share, "Exportieren", tint = Primary) }
+                }
             }
 
             DeckCoverageHead(
@@ -331,6 +363,11 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
                     if (r != null && dc != null) fill = FillBoxProposal.compute(deck.id, dc, r.copies, r.cards, decks, r.containers)
                 },
             )
+            // Spec E2 §5: Notizen am Handy nur anzeigen, wenn vorhanden.
+            deck.notes?.takeIf { it.isNotBlank() }?.let {
+                Spacer(Modifier.height(6.dp))
+                Text(it, color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+            }
 
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -341,6 +378,11 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
                 )
                 Spacer(Modifier.width(8.dp))
                 FilledIconButton(onClick = search) { Icon(Icons.Default.Search, "Suchen") }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Ziel:", color = Muted, style = MaterialTheme.typography.labelMedium)
+                FilterChip(selected = !addToSide, onClick = { addToSide = false }, label = { Text("Deck") })
+                FilterChip(selected = addToSide, onClick = { addToSide = true }, label = { Text("Side") })
             }
 
             error?.let {
@@ -359,7 +401,7 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
                             mutate {
                                 DecksRepository.addCard(
                                     deck.id, cardId = r.id, name = r.name,
-                                    imageUrl = r.imageUrl, section = extraOrMain(r.type),
+                                    imageUrl = r.imageUrl, section = if (addToSide) "side" else DeckImport.deckSectionFor(r.type),
                                 )
                             }
                         })
@@ -381,18 +423,34 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
             } else {
                 val main = cards.filter { it.section == "main" }
                 val extra = cards.filter { it.section == "extra" }
+                val side = cards.filter { it.section == "side" }
+                // Spec E2 §6: eine Kopie verschieben; fuer "→ Deck" den Typ aus dem Katalog (ohne Katalog: Main).
+                val move: (DeckCard) -> Unit = { card ->
+                    mutate {
+                        val type = if (card.section == "side") withContext(Dispatchers.IO) {
+                            CatalogRepository.importRows(listOf(card.cardId)).firstOrNull()?.type
+                        } else null
+                        DecksRepository.moveOne(deck.id, card, cards, type)
+                    }
+                }
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
                         SectionHeader("Main · ${main.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(main, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId)) { block -> mutate(block) } }
+                    items(main, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move, mutating) { block -> mutate(block) } }
                     item {
                         Spacer(Modifier.height(10.dp))
                         SectionHeader("Extra · ${extra.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(extra, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId)) { block -> mutate(block) } }
+                    items(extra, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move, mutating) { block -> mutate(block) } }
+                    item {
+                        Spacer(Modifier.height(10.dp))
+                        SectionHeader("Side · ${side.sumOf { it.count }}")
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    items(side, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), move, mutating) { block -> mutate(block) } }
                 }
             }
         }
@@ -613,7 +671,7 @@ private fun SearchResultRow(r: CardRow, onAdd: () -> Unit) {
 }
 
 @Composable
-private fun DeckCardRow(card: DeckCard, numbers: CoverageCard?, mutate: ((suspend () -> Unit)) -> Unit) {
+private fun DeckCardRow(card: DeckCard, numbers: CoverageCard?, onMove: (DeckCard) -> Unit, busy: Boolean, mutate: ((suspend () -> Unit)) -> Unit) {
     SpaceCard(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Thumb(card.imageUrl, card.name)
@@ -632,19 +690,22 @@ private fun DeckCardRow(card: DeckCard, numbers: CoverageCard?, mutate: ((suspen
                 numbers?.let { DeckCoverage.reservedTexts(it) }?.forEach {
                     Text(it, color = Gold, style = MaterialTheme.typography.labelSmall)
                 }
+                TextButton(onClick = { onMove(card) }, enabled = !busy, contentPadding = PaddingValues(0.dp)) {
+                    Text(DeckImport.moveLabel(card.section), style = MaterialTheme.typography.labelSmall)
+                }
             }
             Spacer(Modifier.width(8.dp))
-            IconButton(onClick = { mutate { DecksRepository.setCount(card.id, card.count - 1) } }) {
+            IconButton(onClick = { mutate { DecksRepository.setCount(card.id, card.count - 1) } }, enabled = !busy) {
                 Text("−", color = OnSurface, style = MaterialTheme.typography.titleLarge.copy(fontFamily = MonoFontFamily))
             }
             Text(
                 card.count.toString(), color = OnSurface,
                 style = MaterialTheme.typography.titleMedium.copy(fontFamily = MonoFontFamily),
             )
-            IconButton(onClick = { mutate { DecksRepository.setCount(card.id, card.count + 1) } }) {
+            IconButton(onClick = { mutate { DecksRepository.setCount(card.id, card.count + 1) } }, enabled = !busy) {
                 Text("+", color = OnSurface, style = MaterialTheme.typography.titleLarge.copy(fontFamily = MonoFontFamily))
             }
-            IconButton(onClick = { mutate { DecksRepository.removeCard(card.id) } }) {
+            IconButton(onClick = { mutate { DecksRepository.removeCard(card.id) } }, enabled = !busy) {
                 Icon(Icons.Default.Delete, "Entfernen", tint = ErrorColor)
             }
         }

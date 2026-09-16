@@ -2,6 +2,7 @@ package com.example.yugiohscanner.cloud
 
 import android.content.Context
 import android.database.Cursor
+import com.example.yugiohscanner.ml.CatalogNameRow
 
 /**
  * Read-only access to the local offline catalog ([CatalogDb]). This is the only way the rest of
@@ -122,6 +123,30 @@ object CatalogRepository {
             val (sql, args) = cmPriceQuery(chunk)
             database.rawQuery(sql, args).use { c ->
                 while (c.moveToNext()) out[c.getString(0)] = if (c.isNull(1)) null else c.getDouble(1)
+            }
+        }
+        return out
+    }
+
+    /** Spec E2 §4: SQL fuer den Import -- rein, damit ohne SQLite testbar. ids null = alle Karten, ohne Bild. */
+    internal fun importRowsQuery(ids: List<String>?): Pair<String, Array<String>> =
+        if (ids == null) "SELECT id, name_de, name_en, type, NULL FROM cards" to emptyArray()
+        else "SELECT id, name_de, name_en, type, image FROM cards WHERE id IN (${ids.joinToString(",") { "?" }})" to ids.toTypedArray()
+
+    /**
+     * Spec E2 §4: Namen und Typ fuer die Namensaufloesung -- mit [ids] nur diese Passcodes (samt Bild, in Bloecken zu 500),
+     * mit null alle Karten ohne Bild. Die Liste lebt nur waehrend des Imports. Aufrufer lesen abseits des Hauptthreads.
+     */
+    fun importRows(ids: Collection<String>?): List<CatalogNameRow> {
+        val database = db?.readableDatabase ?: return emptyList()
+        val out = ArrayList<CatalogNameRow>()
+        val chunks: List<List<String>?> = ids?.distinct()?.chunked(500) ?: listOf(null)
+        for (chunk in chunks) {
+            val (sql, args) = importRowsQuery(chunk)
+            database.rawQuery(sql, args).use { c ->
+                while (c.moveToNext()) {
+                    out.add(CatalogNameRow(c.getString(0), c.getString(1), c.getString(2), c.getString(3), if (c.isNull(4)) null else c.getString(4)))
+                }
             }
         }
         return out

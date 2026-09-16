@@ -35,10 +35,18 @@
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="portrait"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Spec E2 §6: Share-Ziel fuer Decklisten (YDKE/Textliste) als Text, keine Dateien. singleTask, damit ein
+                 Teilen die laufende App (onNewIntent) statt einer zweiten Instanz im Task der teilenden App erreicht. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
     </application>

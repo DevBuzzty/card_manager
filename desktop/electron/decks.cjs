@@ -3,6 +3,8 @@
 // ZWILLING (F3, Deal-Watch nur mit echtem Namen): android/app/src/main/java/com/example/yugiohscanner/ml/DeckWishlist.kt
 // (addAll) bzw. WishlistRepository.addToWishlist. Beide legen den Wunschlisten-Eintrag mit dem Passcode als
 // Namens-Rueckfall an, aber nie einen Deal-Watch dafuer.
+const fs = require('fs');
+const path = require('path');
 const { ValidationError, setCopyLocation } = require('./copies.cjs');
 
 const DECKBOX_TAKEN = 'Diese Deckbox gehört schon zu einem anderen Deck';
@@ -71,4 +73,41 @@ function moveCopiesToContainer(db, { copyIds, containerId } = {}, messageOf) {
   });
 }
 
-module.exports = { DECKBOX_TAKEN, deckContainerErrorMessage, setDeckContainer, addMissingToWishlist, moveCopiesToContainer };
+// Spec E2 §5 -- YDK-Datei fuer den Import: nur lesen, das Parsen macht der Renderer mit dem gemeinsamen Parser
+// (deckFormats.js). Antwortform { canceled: false, name, text }; name = Dateiname ohne .ydk.
+function readYdkFile(filePath) {
+  return { canceled: false, name: path.basename(filePath, path.extname(filePath)), text: fs.readFileSync(filePath, 'utf8') };
+}
+
+// Spec E2 §5 -- Import legt immer ein NEUES Deck an: erst das Deck (mit Notizen), dann alle Deckkarten in einem Insert.
+// Scheitert das Einfuegen der Karten, wird das leere Deck wieder geloescht. `imageOf(passcode)` liefert das Katalogbild.
+// Rueckgabe { success: true, deck } oder { success: false, error } (Rohmeldung; "Import fehlgeschlagen: …" setzt der
+// Renderer ueber deckImport.js#failedText).
+// ZWILLING (Rueckbau): android/app/src/main/java/com/example/yugiohscanner/cloud/DecksRepository.kt#createWithRollback.
+async function createImportedDeck(client, { name, notes, cards } = {}, imageOf = () => null) {
+  // notes nur mitsenden, wenn es welche gibt: ein Import ohne Nicht-Uebernommenes klappt so auch vor decks_notes.sql.
+  const deckRow = notes ? { name, notes } : { name };
+  let deck;
+  try {
+    const { data, error } = await client.from('decks').insert(deckRow).select('*').single();
+    if (error) return { success: false, error: error.message || 'Deck anlegen fehlgeschlagen.' };
+    deck = data;
+  } catch (e) {
+    return { success: false, error: e.message || String(e) };
+  }
+  const rows = (Array.isArray(cards) ? cards : []).map((c) => ({
+    deck_id: deck.id, card_id: String(c.card_id), name: c.name || null,
+    image_url: imageOf(String(c.card_id)) || null, count: c.count, section: c.section,
+  }));
+  if (rows.length === 0) return { success: true, deck };
+  let error;
+  try { ({ error } = await client.from('deck_cards').insert(rows)); } catch (e) { error = e; }
+  if (!error) return { success: true, deck };
+  try {
+    const { error: deleteError } = await client.from('decks').delete().eq('id', deck.id);
+    if (deleteError) console.error('[create-imported-deck] leeres Deck nicht geloescht:', deleteError.message);
+  } catch (e) { console.error('[create-imported-deck] leeres Deck nicht geloescht:', e.message); }
+  return { success: false, error: error.message || String(error) };
+}
+
+module.exports = { DECKBOX_TAKEN, deckContainerErrorMessage, setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck };

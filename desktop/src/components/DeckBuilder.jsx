@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Save, Upload, FileUp, Download, BarChart2, PieChart as PieChartIcon, Play } from 'lucide-react';
+import { Trash2, Save, FileUp, BarChart2, PieChart as PieChartIcon, Play } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { LOADING, boxLabel, deckCoverage, listText } from '../utils/deckCoverage';
 import { fillBoxProposal } from '../utils/fillBoxProposal';
@@ -7,6 +7,11 @@ import DeckCoverageHeader from './DeckCoverageHeader';
 import DeckCardNumbers from './DeckCardNumbers';
 import FillBoxDialog from './FillBoxDialog';
 import DeckWishlistDialog from './DeckWishlistDialog';
+import DeckNewMenu from './DeckNewMenu';
+import DeckImportDialog from './DeckImportDialog';
+import DeckExportMenu from './DeckExportMenu';
+import { deckSectionFor, moveLabel, moveTarget } from '../utils/deckImport';
+import { buildSaveDeckCards } from '../utils/saveDeckPayload';
 
 // Spec E1 §4: alles, was der Abgleich braucht, in einem Rutsch -- lokale Exemplare und Behaelter, alle Deckkarten
 // aus der Cloud, Katalogpreise. Die Decks selbst kommen wie bisher ueber getDecks.
@@ -33,6 +38,11 @@ export default function DeckBuilder() {
   // Deck Creation State
   const [isCreating, setIsCreating] = useState(false);
   const [newDeckName, setNewDeckName] = useState('');
+
+  // Spec E2: Import-Dialog ({ text, name, format } fuer die YDK-Datei, {} fuer Einfuegen), Ziel beim Hinzufuegen, Notizen.
+  const [importSource, setImportSource] = useState(null);
+  const [addTarget, setAddTarget] = useState('deck');
+  const [notes, setNotes] = useState('');
 
   // Deck State
   const [mainDeck, setMainDeck] = useState([]);
@@ -83,6 +93,7 @@ export default function DeckBuilder() {
           setMainDeck([]);
           setExtraDeck([]);
           setSideDeck([]);
+          setNotes('');
           setIsCreating(false);
           setNewDeckName('');
       }
@@ -92,6 +103,7 @@ export default function DeckBuilder() {
       if (window.api) {
           const details = await window.api.getDeckDetails(deck.id);
           setActiveDeck(deck);
+          setNotes(deck.notes || '');
 
           const main = [], extra = [], side = [];
           details.forEach(c => {
@@ -116,12 +128,22 @@ export default function DeckBuilder() {
 
   const handleSaveDeck = async () => {
       if (!activeDeck || !window.api) return;
-      const allCards = [
-          ...mainDeck.map(c => ({ id: c.card_id, type: 'main', quantity: c.quantity })),
-          ...extraDeck.map(c => ({ id: c.card_id, type: 'extra', quantity: c.quantity })),
-          ...sideDeck.map(c => ({ id: c.card_id, type: 'side', quantity: c.quantity }))
-      ];
-      await window.api.saveDeck(activeDeck.id, allCards);
+      // F1: name/image_url mitschicken -- sonst loescht "Save Deck" Katalognamen/-bilder nicht besessener
+      // (importierter) Karten, weil save-deck fuer sie nur auf die lokale cards-Tabelle zurueckfallen kann.
+      const allCards = buildSaveDeckCards({ mainDeck, extraDeck, sideDeck });
+      // Spec E2 §5: Notizen nur mitschicken, wenn sie sich geaendert haben.
+      const deckId = activeDeck.id;
+      const notesChanged = notes !== (activeDeck.notes || '');
+      try {
+          await window.api.saveDeck(deckId, allCards, notesChanged ? notes : undefined);
+      } catch (e) {
+          alert(e.message || String(e));
+          return;
+      }
+      if (notesChanged) {
+          setDecks((prev) => prev.map((d) => (d.id === deckId ? { ...d, notes } : d)));
+          setActiveDeck((prev) => (prev?.id === deckId ? { ...prev, notes } : prev));
+      }
       reloadCoverage();   // Spec E1: die Deck-Liste rechnet mit den gespeicherten Deckkarten
       alert("Deck saved!");
   };
@@ -143,56 +165,27 @@ export default function DeckBuilder() {
       }
   };
 
+  // Spec E2 §5: YDK-Datei lesen (Hauptprozess), parsen und aufloesen im Import-Dialog.
   const handleImportYdk = async () => {
-      if (window.api) {
-          const result = await window.api.importDeckYdk();
-          if (result && !result.canceled && result.deck) {
-              const newDeck = await window.api.createDeck(result.name || "Imported Deck");
-              setDecks([newDeck, ...decks]);
-              setActiveDeck(newDeck);
-
-              // Sort into buckets
-              const main = [], extra = [], side = [];
-              result.deck.forEach(c => {
-                  // Find details in collection to show images immediately if owned, else placeholder
-                  const cardInfo = collection.find(col => col.id === c.id) || { id: c.id, name: 'Unknown / Not Owned', image_url: `https://images.ygoprodeck.com/images/cards/${c.id}.jpg` };
-                  const deckCard = { ...cardInfo, card_id: c.id, quantity: 1 };
-
-                  if (c.type === 'extra') extra.push(deckCard);
-                  else if (c.type === 'side') side.push(deckCard);
-                  else main.push(deckCard);
-              });
-              setMainDeck(main);
-              setExtraDeck(extra);
-              setSideDeck(side);
-
-              // Auto-save initial structure
-              const allCards = result.deck.map(c => ({ id: c.id, type: c.type, quantity: 1 }));
-              await window.api.saveDeck(newDeck.id, allCards);
-          }
-      }
+      if (!window.api) return;
+      const result = await window.api.importDeckYdk();
+      if (result && !result.canceled) setImportSource({ text: result.text, name: result.name, format: 'ydk' });
   };
 
-  const handleExportYdk = async () => {
-      if (!activeDeck || !window.api) return;
-
-      let content = '#created by YuGiOhCardManager\n#main\n';
-      mainDeck.forEach(c => {
-          for(let i=0; i<c.quantity; i++) content += `${c.card_id}\n`;
-      });
-      content += '#extra\n';
-      extraDeck.forEach(c => {
-          for(let i=0; i<c.quantity; i++) content += `${c.card_id}\n`;
-      });
-      content += '!side\n';
-      sideDeck.forEach(c => {
-          for(let i=0; i<c.quantity; i++) content += `${c.card_id}\n`;
-      });
-
-      const res = await window.api.exportDeckYdk({ name: activeDeck.name, content });
-      if (res.success) alert("Deck exported!");
-      else if (!res.canceled) alert("Export failed: " + res.error);
+  // Spec E2 §5: das neue Deck steht vorn in der Liste und ist im Editor offen.
+  const handleImported = (deck) => {
+      setImportSource(null);
+      setDecks((prev) => [deck, ...prev]);
+      handleLoadDeck(deck);
+      reloadCoverage();
   };
+
+  // Spec E2 §6: Export aus dem Editor-Stand (auch ungespeichert).
+  const exportEntries = useMemo(() => [
+      ...mainDeck.map((c) => ({ passcode: String(c.card_id), name: c.name, count: c.quantity, section: 'main' })),
+      ...extraDeck.map((c) => ({ passcode: String(c.card_id), name: c.name, count: c.quantity, section: 'extra' })),
+      ...sideDeck.map((c) => ({ passcode: String(c.card_id), name: c.name, count: c.quantity, section: 'side' })),
+  ], [mainDeck, extraDeck, sideDeck]);
 
   const drawTestHand = () => {
       // Create a flat array of all main deck cards based on quantity
@@ -217,10 +210,10 @@ export default function DeckBuilder() {
           alert("Please select or create a deck first.");
           return;
       }
-      // Determine destination based on type
-      const isExtra = card.type && (card.type.includes('Fusion') || card.type.includes('Synchro') || card.type.includes('XYZ') || card.type.includes('Link'));
-      const targetDeck = isExtra ? extraDeck : mainDeck;
-      const setTarget = isExtra ? setExtraDeck : setMainDeck;
+      // Spec E2 §6: Ziel "Side" oder "Deck" (Main/Extra per deckSectionFor).
+      const section = addTarget === 'side' ? 'side' : deckSectionFor(card.type);
+      const targetDeck = section === 'side' ? sideDeck : section === 'extra' ? extraDeck : mainDeck;
+      const setTarget = section === 'side' ? setSideDeck : section === 'extra' ? setExtraDeck : setMainDeck;
 
       // Check limit (3 copies)
       const existing = targetDeck.find(c => c.card_id === card.id);
@@ -228,7 +221,7 @@ export default function DeckBuilder() {
           if (existing.quantity >= 3) return;
           setTarget(prev => prev.map(c => c.card_id === card.id ? { ...c, quantity: c.quantity + 1 } : c));
       } else {
-          setTarget(prev => [...prev, { ...card, card_id: card.id, quantity: 1 }]);
+          setTarget(prev => [...prev, { ...card, card_id: card.id, card_type: card.type, quantity: 1 }]);
       }
   };
 
@@ -241,6 +234,16 @@ export default function DeckBuilder() {
           }
           return prev.filter(c => c.card_id !== cardId);
       });
+  };
+
+  // Spec E2 §6: eine Kopie verschieben -- "→ Side" aus Main/Extra, "→ Deck" aus Side (Main/Extra per Kartentyp).
+  const moveOne = (card, from) => {
+      const to = moveTarget(from, card.card_type);
+      const setTo = to === 'side' ? setSideDeck : to === 'extra' ? setExtraDeck : setMainDeck;
+      removeFromDeck(card.card_id, from);
+      setTo((prev) => (prev.some((c) => c.card_id === card.card_id)
+          ? prev.map((c) => (c.card_id === card.card_id ? { ...c, quantity: c.quantity + 1 } : c))
+          : [...prev, { ...card, quantity: 1 }]));
   };
 
   const filteredCollection = collection.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()));
@@ -276,14 +279,7 @@ export default function DeckBuilder() {
             <div className="bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 flex flex-col h-1/3">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-white">My Decks</h3>
-                    <div className="flex gap-2">
-                        <button onClick={handleImportYdk} className="p-1.5 bg-gray-800 hover:text-white text-gray-400 rounded transition-colors" title="Import .ydk">
-                            <Upload className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setIsCreating(true)} className="p-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded transition-colors" title="New Deck">
-                            <Plus className="w-4 h-4" />
-                        </button>
-                    </div>
+                    <DeckNewMenu onEmpty={() => setIsCreating(true)} onYdkFile={handleImportYdk} onPaste={() => setImportSource({})} />
                 </div>
 
                 {isCreating && (
@@ -339,6 +335,15 @@ export default function DeckBuilder() {
             </div>
 
             <div className="bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 flex flex-col flex-1 h-2/3">
+                <div className="mb-2 flex items-center gap-2 text-xs text-gray-400">
+                    <span>Ziel:</span>
+                    {[['deck', 'Deck'], ['side', 'Side']].map(([value, label]) => (
+                        <button key={value} type="button" onClick={() => setAddTarget(value)}
+                            className={`px-2 py-1 rounded ${addTarget === value ? 'bg-space-violet text-white' : 'bg-gray-800 hover:text-white'}`}>
+                            {label}
+                        </button>
+                    ))}
+                </div>
                 <div className="mb-4">
                     <input
                         type="text"
@@ -380,10 +385,7 @@ export default function DeckBuilder() {
                                 <Play className="w-4 h-4 mr-2" />
                                 Test Hand
                             </button>
-                             <button onClick={handleExportYdk} className="flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors text-sm font-medium border border-gray-700">
-                                <Download className="w-4 h-4 mr-2" />
-                                Export YDK
-                            </button>
+                            <DeckExportMenu deckName={activeDeck.name} entries={exportEntries} />
                             <button onClick={handleSaveDeck} className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium shadow-lg shadow-space-violet/20">
                                 <Save className="w-4 h-4 mr-2" />
                                 Save Deck
@@ -398,6 +400,11 @@ export default function DeckBuilder() {
                         onChangeBox={handleChangeBox}
                         onOpenWishlist={() => setDialog({ kind: 'wishlist' })}
                         onOpenFillBox={openFillBox}
+                    />
+
+                    <textarea
+                        value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notizen" rows={notes ? 3 : 1}
+                        className="w-full mb-4 bg-black/30 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 font-mono focus:outline-none focus:border-space-violet"
                     />
 
                     {showStats && <DeckStats {...deckStatsProps} />}
@@ -430,7 +437,7 @@ export default function DeckBuilder() {
                             </div>
                             <div className="space-y-1">
                                 {mainDeck.length === 0 && <p className="text-gray-600 text-sm italic">Drag or click cards to add.</p>}
-                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} />)}
+                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} />)}
                             </div>
                         </div>
 
@@ -441,7 +448,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{extraDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} />)}
+                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} />)}
                             </div>
                         </div>
 
@@ -452,7 +459,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{sideDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} />)}
+                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} />)}
                             </div>
                         </div>
                     </div>
@@ -474,6 +481,9 @@ export default function DeckBuilder() {
                 onOpenWishlist={() => setDialog({ kind: 'wishlist' })}
             />
         )}
+        {importSource && (
+            <DeckImportDialog source={importSource} onClose={() => setImportSource(null)} onCreated={handleImported} />
+        )}
         {dialog && dialog.kind === 'wishlist' && activeCoverage && (
             <DeckWishlistDialog coverage={activeCoverage} cardInfo={deckCardInfo} onClose={() => setDialog(null)} />
         )}
@@ -483,7 +493,7 @@ export default function DeckBuilder() {
 
 // Sub-component for a card row in deck list
 // Spec E1 §8: statt des roten "fehlt" die drei Zahlen aus dem Abgleich (numbers null = noch nicht geladen).
-const DeckCardRow = ({ card, type, numbers, removeFromDeck }) => {
+const DeckCardRow = ({ card, type, numbers, removeFromDeck, onMove }) => {
     const missing = !!numbers && numbers.missing > 0;
 
     return (
@@ -498,7 +508,13 @@ const DeckCardRow = ({ card, type, numbers, removeFromDeck }) => {
                 </div>
                 <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
             </div>
-            <DeckCardNumbers card={numbers} />
+            <div className="flex items-center gap-2">
+                <DeckCardNumbers card={numbers} />
+                <button type="button" onClick={(e) => { e.stopPropagation(); onMove(card, type); }}
+                    className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:text-white">
+                    {moveLabel(type)}
+                </button>
+            </div>
         </div>
     );
 };

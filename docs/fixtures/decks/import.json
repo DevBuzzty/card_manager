@@ -1,0 +1,250 @@
+{
+  "_comment": "Spec E2 §4/§5 — Namensaufloesung, Abschnittsregel, Vorschau-Plan, Texte. Leser: desktop/src/utils/deckImport.test.js und android DeckImportTest.kt. resolve[].catalog false = kein Katalog (null). expected.rows[].candidates sind Passcodes; plans[].choices: Zeilenindex -> Passcode. Passcodes 1000xxxx sind erfundene Testkarten.",
+  "catalog": [
+    {"id":14558127,"name_de":"Asche-Blüte & Freudiger Frühling","name_en":"Ash Blossom & Joyous Spring","type":"Tuner Monster"},
+    {"id":23434538,"name_de":"Maxx „C“","name_en":"Maxx \"C\"","type":"Effect Monster"},
+    {"id":27204311,"name_de":"Nibiru, das Urwesen","name_en":"Nibiru, the Primal Being","type":"Effect Monster"},
+    {"id":55144522,"name_de":"Topf der Gier","name_en":"Pot of Greed","type":"Spell Card"},
+    {"id":46986414,"name_de":"Dunkler Magier","name_en":"Dark Magician","type":"Normal Monster"},
+    {"id":90448279,"name_de":"Göttliches Arsenal AA-ZEUS – Himmelsdonner","name_en":"Divine Arsenal AA-ZEUS - Sky Thunder","type":"XYZ Monster"},
+    {"id":1861629,"name_de":"Decode Talker","name_en":"Decode Talker","type":"Link Monster"},
+    {"id":12580477,"name_de":"Raigeki","name_en":"Raigeki","type":"Spell Card"},
+    {"id":77585513,"name_de":"Jinzo","name_en":"Jinzo","type":"Effect Monster"},
+    {"id":10000001,"name_de":"Weiße Straße","name_en":"White Street","type":"Trap Card"},
+    {"id":10000011,"name_de":"Zwillingskarte","name_en":"Twin-Card","type":"Spell Card"},
+    {"id":10000012,"name_de":"Zwillingskarte Zwei","name_en":"Twin Card","type":"Spell Card"},
+    {"id":10000021,"name_de":"Spielmarke","name_en":"Token","type":"Token"},
+    {"id":10000022,"name_de":"Spielmarke","name_en":"Token","type":"Token"},
+    {"id":10000031,"name_de":"Rune Date","name_en":"Rune Date","type":"Spell Card"},
+    {"id":10000032,"name_de":"Rune Gate","name_en":"Rune Gate","type":"Spell Card"},
+    {"id":10000033,"name_de":"Rune Late","name_en":"Rune Late","type":"Spell Card"},
+    {"id":10000034,"name_de":"Rune Mate","name_en":"Rune Mate","type":"Spell Card"},
+    {"id":10000035,"name_de":"Rune Bxte","name_en":"Rune Bxte","type":"Spell Card"},
+    {"id":10000041,"name_de":"Elfen-Fusion","name_en":"Élan Fusion","type":"Spell Card"},
+    {"id":10000051,"name_de":"","name_en":"Only English","type":"Spell Card"}
+  ],
+  "normalize": [
+    {"in":"Asche-Blüte & Freudiger Frühling","out":"asche blute freudiger fruhling"},
+    {"in":"Weiße Straße","out":"weisse strasse"},
+    {"in":"GROẞE STRAẞE","out":"grosse strasse"},
+    {"in":"  Maxx „C“  ","out":"maxx c"},
+    {"in":"Élan Fusion","out":"elan fusion"},
+    {"in":"Divine Arsenal AA-ZEUS - Sky Thunder","out":"divine arsenal aa zeus sky thunder"},
+    {"in":"Number 39: Utopia","out":"number 39 utopia"},
+    {"in":"ﬁnal","out":"final"},
+    {"in":"","out":""}
+  ],
+  "levenshtein": [
+    {"a":"","b":"","d":0},
+    {"a":"kitten","b":"sitting","d":3},
+    {"a":"raigek","b":"raigeki","d":1},
+    {"a":"rune kate","b":"rune bxte","d":2},
+    {"a":"abc","b":"","d":3}
+  ],
+  "sectionFor": [
+    {"type":"Fusion Monster","section":"extra"},
+    {"type":"Synchro Tuner Monster","section":"extra"},
+    {"type":"XYZ Pendulum Effect Monster","section":"extra"},
+    {"type":"Link Monster","section":"extra"},
+    {"type":"Pendulum Effect Fusion Monster","section":"extra"},
+    {"type":"xyz monster","section":"extra"},
+    {"type":"Effect Monster","section":"main"},
+    {"type":"Spell Card","section":"main"},
+    {"type":"Token","section":"main"},
+    {"type":"","section":"main"},
+    {"type":null,"section":"main"}
+  ],
+  "moveTarget": [
+    {"section":"main","type":"Effect Monster","target":"side","label":"→ Side"},
+    {"section":"extra","type":"Link Monster","target":"side","label":"→ Side"},
+    {"section":"side","type":"Link Monster","target":"extra","label":"→ Deck"},
+    {"section":"side","type":"Spell Card","target":"main","label":"→ Deck"},
+    {"section":"side","type":null,"target":"main","label":"→ Deck"}
+  ],
+  "resolve": [
+    {
+      "name": "per Passcode: Name DE, unbekannter Passcode, Rohzeile aus dem Lesen",
+      "catalog": true,
+      "parsed": {"format":"ydk","cards":[{"passcode":"14558127","count":3,"section":"main"},{"passcode":"99999999","count":1,"section":"main"},{"passcode":"90448279","count":1,"section":"extra"},{"passcode":"27204311","count":2,"section":"side"}],"unresolved":["abc"]},
+      "expected": {"catalogMissing":false,"rows":[
+        {"status":"ok","count":3,"section":"main","source":"14558127","candidates":["14558127"]},
+        {"status":"unknownPasscode","count":1,"section":"main","source":"99999999","candidates":[]},
+        {"status":"ok","count":1,"section":"extra","source":"90448279","candidates":["90448279"]},
+        {"status":"ok","count":2,"section":"side","source":"27204311","candidates":["27204311"]}
+      ]},
+      "plans": [
+        {"choices":{},"expected":{
+          "cards":[{"card_id":"14558127","name":"Asche-Blüte & Freudiger Frühling","count":3,"section":"main"},{"card_id":"90448279","name":"Göttliches Arsenal AA-ZEUS – Himmelsdonner","count":1,"section":"extra"},{"card_id":"27204311","name":"Nibiru, das Urwesen","count":2,"section":"side"}],
+          "counts":{"main":3,"extra":1,"side":2},
+          "skipped":["abc","Unbekannter Passcode 99999999"],
+          "skippedLabels":["abc","Unbekannter Passcode 99999999"],
+          "notes":"Nicht übernommen beim Import:\nabc\nUnbekannter Passcode 99999999",
+          "countsText":"Main 3 · Extra 1 · Side 2",
+          "skippedText":"2 nicht übernommen"
+        }}
+      ]
+    },
+    {
+      "name": "per Passcode: ohne deutschen Namen gilt der englische",
+      "catalog": true,
+      "parsed": {"format":"ydke","cards":[{"passcode":"10000051","count":1,"section":"main"}],"unresolved":[]},
+      "expected": {"catalogMissing":false,"rows":[{"status":"ok","count":1,"section":"main","source":"10000051","candidates":["10000051"]}]},
+      "plans": [
+        {"choices":{},"expected":{"cards":[{"card_id":"10000051","name":"Only English","count":1,"section":"main"}],"counts":{"main":1,"extra":0,"side":0},"skipped":[],"skippedLabels":[],"notes":null,"countsText":"Main 1 · Extra 0 · Side 0","skippedText":null}}
+      ]
+    },
+    {
+      "name": "Textliste mit Überschriften: exakt, normalisiert (Umlaute, ß, Satzzeichen, Akzent), Vorschläge, Mehrdeutig, Grenzen",
+      "catalog": true,
+      "parsed": {"format":"text","cards":[
+        {"name":"Ash Blossom & Joyous Spring","count":3,"section":"main","line":"3 Ash Blossom & Joyous Spring"},
+        {"name":"Asche Blute & Freudiger Fruhling","count":2,"section":"main","line":"2 Asche Blute & Freudiger Fruhling"},
+        {"name":"Maxx C","count":1,"section":"main","line":"1 Maxx C"},
+        {"name":"weisse strasse","count":1,"section":"main","line":"1 weisse strasse"},
+        {"name":"Elan Fusion","count":1,"section":"main","line":"1 Elan Fusion"},
+        {"name":"Dark Magican","count":1,"section":"main","line":"Dark Magican"},
+        {"name":"Rune Kate","count":3,"section":"main","line":"3 Rune Kate"},
+        {"name":"twin card!","count":1,"section":"main","line":"twin card!"},
+        {"name":"TOKEN","count":1,"section":"main","line":"TOKEN"},
+        {"name":"Dork Mogicien","count":1,"section":"main","line":"Dork Mogicien"},
+        {"name":"Jinzu","count":1,"section":"main","line":"Jinzu"},
+        {"name":"Raigek","count":1,"section":"main","line":"Raigek"},
+        {"name":"Raigekixx","count":1,"section":"main","line":"Raigekixx"},
+        {"name":"Raigekixxx","count":1,"section":"main","line":"Raigekixxx"},
+        {"name":"Divine Arsenal AA-ZEUS - Sky Thunder","count":1,"section":"extra","line":"1 Divine Arsenal AA-ZEUS - Sky Thunder"},
+        {"name":"Nibiru, the Primal Being","count":2,"section":"side","line":"2 Nibiru, the Primal Being"}
+      ],"unresolved":["0 Pot of Greed"]},
+      "expected": {"catalogMissing":false,"rows":[
+        {"status":"ok","count":3,"section":"main","source":"3 Ash Blossom & Joyous Spring","candidates":["14558127"]},
+        {"status":"ok","count":2,"section":"main","source":"2 Asche Blute & Freudiger Fruhling","candidates":["14558127"]},
+        {"status":"ok","count":1,"section":"main","source":"1 Maxx C","candidates":["23434538"]},
+        {"status":"ok","count":1,"section":"main","source":"1 weisse strasse","candidates":["10000001"]},
+        {"status":"ok","count":1,"section":"main","source":"1 Elan Fusion","candidates":["10000041"]},
+        {"status":"suggest","count":1,"section":"main","source":"Dark Magican","candidates":["46986414"]},
+        {"status":"suggest","count":3,"section":"main","source":"3 Rune Kate","candidates":["10000031","10000032","10000033"]},
+        {"status":"ambiguous","count":1,"section":"main","source":"twin card!","candidates":["10000011","10000012"]},
+        {"status":"ambiguous","count":1,"section":"main","source":"TOKEN","candidates":["10000021","10000022"]},
+        {"status":"notFound","count":1,"section":"main","source":"Dork Mogicien","candidates":[]},
+        {"status":"notFound","count":1,"section":"main","source":"Jinzu","candidates":[]},
+        {"status":"suggest","count":1,"section":"main","source":"Raigek","candidates":["12580477"]},
+        {"status":"suggest","count":1,"section":"main","source":"Raigekixx","candidates":["12580477"]},
+        {"status":"notFound","count":1,"section":"main","source":"Raigekixxx","candidates":[]},
+        {"status":"ok","count":1,"section":"extra","source":"1 Divine Arsenal AA-ZEUS - Sky Thunder","candidates":["90448279"]},
+        {"status":"ok","count":2,"section":"side","source":"2 Nibiru, the Primal Being","candidates":["27204311"]}
+      ]},
+      "plans": [
+        {"choices":{},"expected":{
+          "cards":[
+            {"card_id":"14558127","name":"Asche-Blüte & Freudiger Frühling","count":5,"section":"main"},
+            {"card_id":"23434538","name":"Maxx „C“","count":1,"section":"main"},
+            {"card_id":"10000001","name":"Weiße Straße","count":1,"section":"main"},
+            {"card_id":"10000041","name":"Elfen-Fusion","count":1,"section":"main"},
+            {"card_id":"90448279","name":"Göttliches Arsenal AA-ZEUS – Himmelsdonner","count":1,"section":"extra"},
+            {"card_id":"27204311","name":"Nibiru, das Urwesen","count":2,"section":"side"}
+          ],
+          "counts":{"main":8,"extra":1,"side":2},
+          "skipped":["0 Pot of Greed","Dark Magican","3 Rune Kate","twin card!","TOKEN","Dork Mogicien","Jinzu","Raigek","Raigekixx","Raigekixxx"],
+          "skippedLabels":["0 Pot of Greed","Dark Magican · offen","3 Rune Kate · offen","twin card! · offen","TOKEN · offen","Dork Mogicien · Nicht gefunden","Jinzu · Nicht gefunden","Raigek · offen","Raigekixx · offen","Raigekixxx · Nicht gefunden"],
+          "notes":"Nicht übernommen beim Import:\n0 Pot of Greed\nDark Magican\n3 Rune Kate\ntwin card!\nTOKEN\nDork Mogicien\nJinzu\nRaigek\nRaigekixx\nRaigekixxx",
+          "countsText":"Main 8 · Extra 1 · Side 2",
+          "skippedText":"10 nicht übernommen"
+        }},
+        {"choices":{"5":"46986414","6":"10000032","7":"10000011","8":"10000022","11":"12580477","12":"99999999"},"expected":{
+          "cards":[
+            {"card_id":"14558127","name":"Asche-Blüte & Freudiger Frühling","count":5,"section":"main"},
+            {"card_id":"23434538","name":"Maxx „C“","count":1,"section":"main"},
+            {"card_id":"10000001","name":"Weiße Straße","count":1,"section":"main"},
+            {"card_id":"10000041","name":"Elfen-Fusion","count":1,"section":"main"},
+            {"card_id":"46986414","name":"Dunkler Magier","count":1,"section":"main"},
+            {"card_id":"10000032","name":"Rune Gate","count":3,"section":"main"},
+            {"card_id":"10000011","name":"Zwillingskarte","count":1,"section":"main"},
+            {"card_id":"10000022","name":"Spielmarke","count":1,"section":"main"},
+            {"card_id":"12580477","name":"Raigeki","count":1,"section":"main"},
+            {"card_id":"90448279","name":"Göttliches Arsenal AA-ZEUS – Himmelsdonner","count":1,"section":"extra"},
+            {"card_id":"27204311","name":"Nibiru, das Urwesen","count":2,"section":"side"}
+          ],
+          "counts":{"main":15,"extra":1,"side":2},
+          "skipped":["0 Pot of Greed","Dork Mogicien","Jinzu","Raigekixx","Raigekixxx"],
+          "skippedLabels":["0 Pot of Greed","Dork Mogicien · Nicht gefunden","Jinzu · Nicht gefunden","Raigekixx · offen","Raigekixxx · Nicht gefunden"],
+          "notes":"Nicht übernommen beim Import:\n0 Pot of Greed\nDork Mogicien\nJinzu\nRaigekixx\nRaigekixxx",
+          "countsText":"Main 15 · Extra 1 · Side 2",
+          "skippedText":"5 nicht übernommen"
+        }}
+      ]
+    },
+    {
+      "name": "Textliste ohne Überschrift: Abschnitt per Typ, auch nach Auswahl eines Vorschlags",
+      "catalog": true,
+      "parsed": {"format":"text","cards":[
+        {"name":"Ash Blossom & Joyous Spring","count":3,"section":"unknown","line":"3 Ash Blossom & Joyous Spring"},
+        {"name":"Divine Arsenal AA-ZEUS - Sky Thunder","count":1,"section":"unknown","line":"1 Divine Arsenal AA-ZEUS - Sky Thunder"},
+        {"name":"Decode Talker","count":1,"section":"unknown","line":"Decode Talker"},
+        {"name":"Decode Talker","count":1,"section":"unknown","line":"Decode Talker"},
+        {"name":"Dark Magican","count":1,"section":"unknown","line":"Dark Magican"},
+        {"name":"Decode Talkr","count":1,"section":"unknown","line":"Decode Talkr"}
+      ],"unresolved":[]},
+      "expected": {"catalogMissing":false,"rows":[
+        {"status":"ok","count":3,"section":"unknown","source":"3 Ash Blossom & Joyous Spring","candidates":["14558127"]},
+        {"status":"ok","count":1,"section":"unknown","source":"1 Divine Arsenal AA-ZEUS - Sky Thunder","candidates":["90448279"]},
+        {"status":"ok","count":1,"section":"unknown","source":"Decode Talker","candidates":["1861629"]},
+        {"status":"ok","count":1,"section":"unknown","source":"Decode Talker","candidates":["1861629"]},
+        {"status":"suggest","count":1,"section":"unknown","source":"Dark Magican","candidates":["46986414"]},
+        {"status":"suggest","count":1,"section":"unknown","source":"Decode Talkr","candidates":["1861629"]}
+      ]},
+      "plans": [
+        {"choices":{},"expected":{
+          "cards":[{"card_id":"14558127","name":"Asche-Blüte & Freudiger Frühling","count":3,"section":"main"},{"card_id":"90448279","name":"Göttliches Arsenal AA-ZEUS – Himmelsdonner","count":1,"section":"extra"},{"card_id":"1861629","name":"Decode Talker","count":2,"section":"extra"}],
+          "counts":{"main":3,"extra":3,"side":0},
+          "skipped":["Dark Magican","Decode Talkr"],
+          "skippedLabels":["Dark Magican · offen","Decode Talkr · offen"],
+          "notes":"Nicht übernommen beim Import:\nDark Magican\nDecode Talkr",
+          "countsText":"Main 3 · Extra 3 · Side 0",
+          "skippedText":"2 nicht übernommen"
+        }},
+        {"choices":{"4":"46986414","5":"1861629"},"expected":{
+          "cards":[{"card_id":"14558127","name":"Asche-Blüte & Freudiger Frühling","count":3,"section":"main"},{"card_id":"90448279","name":"Göttliches Arsenal AA-ZEUS – Himmelsdonner","count":1,"section":"extra"},{"card_id":"1861629","name":"Decode Talker","count":3,"section":"extra"},{"card_id":"46986414","name":"Dunkler Magier","count":1,"section":"main"}],
+          "counts":{"main":4,"extra":4,"side":0},
+          "skipped":[],
+          "skippedLabels":[],
+          "notes":null,
+          "countsText":"Main 4 · Extra 4 · Side 0",
+          "skippedText":null
+        }}
+      ]
+    },
+    {
+      "name": "Katalog fehlt: Passcodes werden unbekannt",
+      "catalog": false,
+      "parsed": {"format":"ydke","cards":[{"passcode":"14558127","count":1,"section":"main"}],"unresolved":[]},
+      "expected": {"catalogMissing":true,"rows":[{"status":"unknownPasscode","count":1,"section":"main","source":"14558127","candidates":[]}]},
+      "plans": [
+        {"choices":{},"expected":{"cards":[],"counts":{"main":0,"extra":0,"side":0},"skipped":["Unbekannter Passcode 14558127"],"skippedLabels":["Unbekannter Passcode 14558127"],"notes":"Nicht übernommen beim Import:\nUnbekannter Passcode 14558127","countsText":"Main 0 · Extra 0 · Side 0","skippedText":"1 nicht übernommen"}}
+      ]
+    },
+    {
+      "name": "Katalog fehlt: Namen werden nicht gefunden",
+      "catalog": false,
+      "parsed": {"format":"text","cards":[{"name":"Raigeki","count":1,"section":"unknown","line":"Raigeki"}],"unresolved":[]},
+      "expected": {"catalogMissing":true,"rows":[{"status":"notFound","count":1,"section":"unknown","source":"Raigeki","candidates":[]}]},
+      "plans": [
+        {"choices":{},"expected":{"cards":[],"counts":{"main":0,"extra":0,"side":0},"skipped":["Raigeki"],"skippedLabels":["Raigeki · Nicht gefunden"],"notes":"Nicht übernommen beim Import:\nRaigeki","countsText":"Main 0 · Extra 0 · Side 0","skippedText":"1 nicht übernommen"}}
+      ]
+    },
+    {
+      "name": "Textliste: normalisierte Anfrage gleich lang wie Katalogname, Levenshtein-Abstand genau 3 -> Nicht gefunden (prueft die Grenze <= 2 direkt, nicht ueber den Laengen-Vorfilter)",
+      "catalog": true,
+      "parsed": {"format":"text","cards":[{"name":"rune wine","count":1,"section":"main","line":"rune wine"}],"unresolved":[]},
+      "expected": {"catalogMissing":false,"rows":[{"status":"notFound","count":1,"section":"main","source":"rune wine","candidates":[]}]},
+      "plans": [
+        {"choices":{},"expected":{"cards":[],"counts":{"main":0,"extra":0,"side":0},"skipped":["rune wine"],"skippedLabels":["rune wine · Nicht gefunden"],"notes":"Nicht übernommen beim Import:\nrune wine","countsText":"Main 0 · Extra 0 · Side 0","skippedText":"1 nicht übernommen"}}
+      ]
+    }
+  ],
+  "texts": {
+    "failed": [{"message":"duplicate key","text":"Import fehlgeschlagen: duplicate key"}],
+    "deckName": [{"file":"Tenpai Dragon","name":"Tenpai Dragon"},{"file":"  ","name":"Importiertes Deck"},{"file":null,"name":"Importiertes Deck"}],
+    "suggestion": [{"name":"Dunkler Magier","text":"Meintest du Dunkler Magier?"}],
+    "ambiguousOption": [{"passcode":"10000021","name":"Spielmarke","text":"Spielmarke (10000021)"}],
+    "unknownPasscode": [{"passcode":"12345678","text":"Unbekannter Passcode 12345678"}]
+  }
+}

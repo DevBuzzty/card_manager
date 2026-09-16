@@ -93,4 +93,13 @@ class CatalogParserTest {
         assertEquals("SELECT id, cm_price FROM cards WHERE id IN (?,?)", sql)
         assertEquals(listOf("14558127", "23434538"), args.toList())
     }
+
+    @Test fun `Import-Abfrage mit Passcodes samt Bild, ohne alle Karten ohne Bild`() {
+        val (sql, args) = CatalogRepository.importRowsQuery(listOf("14558127", "23434538"))
+        assertEquals("SELECT id, name_de, name_en, type, image FROM cards WHERE id IN (?,?)", sql)
+        assertEquals(listOf("14558127", "23434538"), args.toList())
+        val (all, none) = CatalogRepository.importRowsQuery(null)
+        assertEquals("SELECT id, name_de, name_en, type, NULL FROM cards", all)
+        assertEquals(0, none.size)
+    }
 }
