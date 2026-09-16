@@ -22,7 +22,9 @@ export default function FillBoxDialog({ boxId, boxName, proposal, copiesById, co
     setBusy(true);
     setError(null);
     try {
-      const copyIds = proposal.rows.filter((r) => checked.has(r.copy_id)).map((r) => r.copy_id);
+      // F1: ein vom Handy geloeschtes Exemplar steht noch in proposal.rows (eingefroren), aber nicht mehr in
+      // copiesById -- so eine Zeile wird weder verschoben noch mitgezaehlt.
+      const copyIds = proposal.rows.filter((r) => checked.has(r.copy_id) && copiesById.has(r.copy_id)).map((r) => r.copy_id);
       const res = await window.api.moveCopiesToContainer({ copyIds, containerId: boxId });
       if (res.success) {
         setResults(new Map(res.results.map((r) => [r.copy_id, r])));
@@ -51,6 +53,7 @@ export default function FillBoxDialog({ boxId, boxName, proposal, copiesById, co
           {proposal.rows.length === 0 && <p className="text-sm text-ink-muted">Nichts zu verschieben.</p>}
           {proposal.rows.map((r) => {
             const cp = copiesById.get(r.copy_id);
+            if (!cp) return null;
             const result = results && results.get(r.copy_id);
             return (
               <label key={r.copy_id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-obsidian-600 text-sm">
@@ -82,7 +85,7 @@ export default function FillBoxDialog({ boxId, boxName, proposal, copiesById, co
           <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">Schließen</button>
           {!results && (
             <button
-              type="button" onClick={move} disabled={busy || checked.size === 0}
+              type="button" onClick={move} disabled={busy || proposal.rows.filter((r) => checked.has(r.copy_id) && copiesById.has(r.copy_id)).length === 0}
               className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {busy ? 'Wird verschoben…' : 'In die Box verschieben'}
