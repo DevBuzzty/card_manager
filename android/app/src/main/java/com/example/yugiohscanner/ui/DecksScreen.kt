@@ -435,7 +435,7 @@ private fun DeckCoverageHead(
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         when {
             containers == null -> Text(DeckCoverage.LOADING, color = Muted, style = MaterialTheme.typography.bodyMedium)
-            containers.none { it.kind == "deckbox" } -> Text("Noch keine Deckbox", color = Muted, style = MaterialTheme.typography.bodyMedium)
+            containers.none { it.kind == "deckbox" && !it.deleted } -> Text("Noch keine Deckbox", color = Muted, style = MaterialTheme.typography.bodyMedium)
             else -> Box {
                 Row(Modifier.clickable { expanded = true }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Deckbox: ${DeckCoverage.deckBoxId(deck, containers)?.let { id -> containers.firstOrNull { it.containerId == id }?.name } ?: "Keine Box"}",
