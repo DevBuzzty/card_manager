@@ -199,6 +199,11 @@
       "name": "Leeres Deck", "format": "tcg", "catalog": true, "base": [],
       "cards": [],
       "expected": {"legal":false,"violations":[{"rule":1,"cardId":null,"text":"Main Deck: 0 Karten (erlaubt 40–60)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
+    },
+    {
+      "name": "Regel 5: leerer Deckkartenname greift auf den Katalognamen zurück", "format": "tcg", "catalog": true, "base": ["main40"],
+      "cards": [{"card_id":"46986414","name":"","count":4,"section":"main"}],
+      "expected": {"legal":false,"violations":[{"rule":5,"cardId":"46986414","text":"Dunkler Magier: 4 Kopien (höchstens 3)"}],"warnings":[],"badge":"1 Verstoß","badgeKind":"crit"}
     }
   ],
   "formats": [
