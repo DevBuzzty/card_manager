@@ -64,7 +64,10 @@ fun DeckImportScreen(sharedText: String?, onBack: () -> Unit, onCreated: (Long) 
             // F4: ein Fehler hier (z. B. Katalogzugriff) darf die Vorschau nicht abstuerzen lassen -- als
             // PreparedImport-Fehler zeigen, genau wie ein ungueltiger YDKE-Link oder unerkannter Text.
             try {
-                DeckImport.prepare(text, null) { ids -> if (CatalogRepository.isReady()) CatalogRepository.importRows(ids) else null }
+                // Spec E3 §3: Artwork-Passcodes erst ueber die Zuordnung, dann die Hauptkarten.
+                DeckImport.prepare(
+                    text, null, { ids -> if (CatalogRepository.isReady()) CatalogRepository.aliases(ids) else emptyMap() },
+                ) { ids -> if (CatalogRepository.isReady()) CatalogRepository.importRows(ids) else null }
             } catch (e: Exception) {
                 PreparedImport(e.message ?: e.javaClass.simpleName, null)
             }
@@ -150,8 +153,12 @@ fun DeckImportScreen(sharedText: String?, onBack: () -> Unit, onCreated: (Long) 
                                 error = null
                                 scope.launch {
                                     try {
+                                        // Spec E3 §3: Bild der Hauptkarte, die Deckkarte behaelt den Artwork-Passcode.
                                         val images = withContext(Dispatchers.IO) {
-                                            CatalogRepository.importRows(plan.cards.map { it.cardId }).associate { it.id to it.image }
+                                            val ids = plan.cards.map { it.cardId }
+                                            val aliases = CatalogRepository.aliases(ids)
+                                            val byMain = CatalogRepository.importRows(ids.map { DeckImport.canonicalPasscode(it, aliases) }).associate { it.id to it.image }
+                                            ids.associateWith { byMain[DeckImport.canonicalPasscode(it, aliases)] }
                                         }
                                         val id = DecksRepository.createImportedDeck(DeckImport.deckNameFor(name), plan.notes, plan.cards, images)
                                         SideStores.decks.refreshAndWait()
