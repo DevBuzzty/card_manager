@@ -12,7 +12,10 @@ const E1_CHANNELS = [
   'get-catalog-prices', 'deck-missing-to-wishlist', 'move-copies-to-container',
 ];
 
-for (const ch of E1_CHANNELS) {
+// Spec E2 §9: neue Kanaele plus die umgebauten Deck-Kanaele (YDK lesen/schreiben, Notizen).
+const E2_CHANNELS = ['get-catalog-cards', 'create-imported-deck', 'import-deck-ydk', 'export-deck-ydk', 'save-deck'];
+
+for (const ch of [...E1_CHANNELS, ...E2_CHANNELS]) {
   test(`Kanal ${ch} steht in main.cjs und preload.cjs`, () => {
     assert.ok(MAIN.includes(`ipcMain.handle('${ch}'`), `main.cjs fehlt ipcMain.handle('${ch}'`);
     assert.ok(PRELOAD.includes(`ipcRenderer.invoke('${ch}'`), `preload.cjs fehlt ipcRenderer.invoke('${ch}'`);

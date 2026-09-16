@@ -21,8 +21,8 @@ const { deleteContainer } = require('./containers-schema.cjs');
 const sealed = require('./sealed-items.cjs');
 const { readSealedProducts, searchSealedProducts, sealedProductsAvailable } = require('./sealed-products.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
-const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer } = require('./decks.cjs');
-const { catalogPrices } = require('./catalog-prices.cjs');
+const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck } = require('./decks.cjs');
+const { catalogPrices, catalogCards, readCatalogCards } = require('./catalog-prices.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -613,7 +613,7 @@ ipcMain.handle('delete-deck', async (event, id) => {
     return { success: true };
 });
 
-ipcMain.handle('save-deck', async (event, { deckId, cards }) => {
+ipcMain.handle('save-deck', async (event, { deckId, cards, notes }) => {
     const c = await dealsClient();
     await c.from('deck_cards').delete().eq('deck_id', deckId);
     if (cards && cards.length) {
@@ -631,6 +631,11 @@ ipcMain.handle('save-deck', async (event, { deckId, cards }) => {
         const { error } = await c.from('deck_cards').insert(rows);
         if (error) throw new Error(error.message);
     }
+    // Spec E2 §5: Notizen nur schreiben, wenn der Renderer sie mitschickt (er tut es nur bei einer Aenderung).
+    if (notes !== undefined) {
+        const { error } = await c.from('decks').update({ notes: notes || null }).eq('id', deckId);
+        if (error) throw new Error(error.message);
+    }
     return { success: true };
 });
 
@@ -642,53 +647,32 @@ ipcMain.handle('get-deck-details', async (event, id) => {
         'SELECT name, image_url, type AS card_type, desc, atk, def, level, race, attribute, price ' +
         'FROM cards WHERE id = ? AND deleted = 0 LIMIT 1'
     );
+    // Spec E2 §6: "→ Deck" braucht den Kartentyp auch fuer nicht besessene Karten -- Rueckfall auf den Katalog.
+    const catalog = readCatalogCards(userDataPath);
     return (data || []).map(dc => {
         const d = detail.get(String(dc.card_id)) || {};
+        const cat = (catalog && catalog.get(String(dc.card_id))) || {};
         return {
             deck_id: dc.deck_id, card_id: dc.card_id, type: dc.section, quantity: dc.count,
             name: dc.name || d.name || null, image_url: dc.image_url || d.image_url || null,
-            card_type: d.card_type || null, desc: d.desc || null,
+            card_type: d.card_type || cat.type || null, desc: d.desc || null,
             atk: d.atk ?? null, def: d.def ?? null, level: d.level ?? null,
             race: d.race || null, attribute: d.attribute || null, price: d.price ?? null,
         };
     });
 });
 
+// Spec E2 §5: nur Datei waehlen und lesen -- geparst wird im Renderer mit dem gemeinsamen Parser (deckFormats.js).
 ipcMain.handle('import-deck-ydk', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
         properties: ['openFile'],
         filters: [{ name: 'YDK Deck', extensions: ['ydk'] }]
     });
     if (result.canceled || result.filePaths.length === 0) return { canceled: true };
-
-    const content = fs.readFileSync(result.filePaths[0], 'utf-8');
-    const name = path.basename(result.filePaths[0], '.ydk');
-    const lines = content.split(/\r?\n/);
-
-    const cards = [];
-    let currentSection = 'main';
-
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed === '#main') currentSection = 'main';
-        else if (trimmed === '#extra') currentSection = 'extra';
-        else if (trimmed === '!side') currentSection = 'side';
-        else if (/^\d+$/.test(trimmed)) {
-            cards.push({ id: trimmed, type: currentSection, quantity: 1 });
-        }
-    }
-
-    // Consolidate duplicates
-    const consolidated = [];
-    cards.forEach(c => {
-        const existing = consolidated.find(x => x.id === c.id && x.type === c.type);
-        if (existing) existing.quantity++;
-        else consolidated.push(c);
-    });
-
-    return { canceled: false, name, cards: consolidated };
+    return readYdkFile(result.filePaths[0]);
 });
 
+// Spec E2 §6: der Renderer baut den YDK-Text (deckFormats.js#buildYdk, mit Side-Deck); hier nur speichern.
 ipcMain.handle('export-deck-ydk', async (event, { name, content }) => {
     const result = await dialog.showSaveDialog(mainWindow, {
         title: 'Export Deck',
@@ -697,23 +681,7 @@ ipcMain.handle('export-deck-ydk', async (event, { name, content }) => {
     });
 
     if (result.canceled || !result.filePath) return { canceled: true };
-
-    let ydk = '#created by Yu-Gi-Oh! Card Manager\n#main\n';
-    content.filter(c => c.type === 'main').forEach(c => {
-        for(let i=0; i<(c.quantity||1); i++) ydk += `${c.id}\n`;
-    });
-
-    ydk += '#extra\n';
-    content.filter(c => c.type === 'extra').forEach(c => {
-        for(let i=0; i<(c.quantity||1); i++) ydk += `${c.id}\n`;
-    });
-
-    ydk += '!side\n';
-    content.filter(c => c.type === 'side').forEach(c => {
-        for(let i=0; i<(c.quantity||1); i++) ydk += `${c.id}\n`;
-    });
-
-    fs.writeFileSync(result.filePath, ydk);
+    fs.writeFileSync(result.filePath, String(content));
     return { success: true };
 });
 
@@ -748,6 +716,16 @@ ipcMain.handle('move-copies-to-container', (event, { copyIds, containerId } = {}
         const results = moveCopiesToContainer(db, { copyIds, containerId }, (e) => containerCopyErrorMessage(e, 'move-copies-to-container'));
         return { success: true, results };
     } catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'move-copies-to-container') }; }
+});
+
+// --- Spec E2: Import & Export ---
+// Katalog-Index fuer die Namensaufloesung im Renderer: mit ids nur diese Passcodes, ohne ids alle Karten kompakt.
+ipcMain.handle('get-catalog-cards', (event, ids) => catalogCards(userDataPath, Array.isArray(ids) ? ids : undefined));
+// Neues Deck mit Notizen und allen Karten; scheitern die Karten, wird das leere Deck wieder geloescht.
+ipcMain.handle('create-imported-deck', async (event, input) => {
+    const c = await dealsClient();
+    const catalog = readCatalogCards(userDataPath);
+    return createImportedDeck(c, input, (id) => (catalog && catalog.get(id) ? catalog.get(id).image : null));
 });
 
 // --- Other Handlers ---
