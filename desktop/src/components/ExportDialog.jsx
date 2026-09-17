@@ -27,10 +27,12 @@ export default function ExportDialog({ onClose, filterCopyIds = null }) {
   useEffect(() => {
     let alive = true;
     setCount(null);
+    setNote(null);
     window.api.exportCount({ format, scope }).then((res) => {
       if (!alive) return;
+      // Bei einem Zähl-Fehler bleibt count null ("…"), statt 0 ("Nichts zu exportieren") vorzutäuschen.
+      if (res.error) { setNote({ ok: false, text: res.error }); return; }
       setCount(res.count);
-      if (res.error) setNote({ ok: false, text: res.error });
     });
     return () => { alive = false; };
     // scope ist bei jedem Rendern ein neues Objekt; gezählt wird nur, wenn sich seine Teile ändern.
