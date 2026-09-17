@@ -287,6 +287,7 @@ fun ScanScreen(onClose: () -> Unit) {
     val tone = remember { try { android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80) } catch (e: RuntimeException) { null } }
     val vibrator = remember { context.getSystemService(android.os.Vibrator::class.java) }
     remember { com.example.yugiohscanner.ml.MessLog.start(context.filesDir) }
+    remember { com.example.yugiohscanner.ml.HangWatchdog.start() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
@@ -438,6 +439,7 @@ fun ScanScreen(onClose: () -> Unit) {
             // Die Erkennung laeuft seit der Stapel-Lichtschranke auf mlAnalyzers eigenem Thread --
             // auch den abwarten, bevor pipeline.close() die nativen Sitzungen freigibt.
             mlAnalyzer.shutdown()
+            com.example.yugiohscanner.ml.HangWatchdog.stop()
             tone?.release()
             analyzer.close()
             pipeline.close()
