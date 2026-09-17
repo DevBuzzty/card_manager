@@ -1,7 +1,7 @@
 // Spec F1 §4 -- Exporte: Umfang aus der Datenbank laden und die Datei bauen. Das Speichern (Dialog, Schreiben) macht
 // main.cjs; die Formatierer stehen in carddex-format.cjs und export-formats.cjs.
 const { carddexGroups, writeCarddex } = require('./carddex-format.cjs');
-const { dragonShieldCsv, ygoprodeckCsv, cardmarketWantslist, saleListText } = require('./export-formats.cjs');
+const { dragonShieldCsv, ygoprodeckCsv, cardmarketWantslist, saleListText, isUnknown } = require('./export-formats.cjs');
 
 // Dateiname und Endung je Format; die Beschriftungen fuer den Dialog stehen in src/utils/exportScope.js.
 const EXPORT_FORMATS = {
@@ -55,10 +55,20 @@ function buildExport(db, { format, scope } = {}, deps = {}) {
   return done(sale.text, sale.omitted);
 }
 
+// I1 -- reine Zaehlfunktion fuer export-count: dieselbe Zahl wie buildExport(...).count, ohne CSV/Text zu bauen
+// (kein nameEn-Nachschlagen, keine Formatierer). deps = { wishlist }, nur fuer die Wantslist gebraucht.
+function exportCount(db, { format, scope } = {}, deps = {}) {
+  if (!EXPORT_FORMATS[format]) throw new Error('Unbekanntes Exportformat');
+  if (format === 'wantslist') return (deps.wishlist || []).length;
+  const list = loadExportCopies(db, scope);
+  if (format === 'salelist') return list.filter((cp) => !isUnknown(cp)).length;
+  return list.length;
+}
+
 function exportResultText({ count, omitted, unit }) {
   const noun = unit === 'wish' ? (count === 1 ? 'Wunsch' : 'Wünsche') : (count === 1 ? 'Exemplar' : 'Exemplare');
   const base = `${count} ${noun} exportiert`;
   return omitted > 0 ? `${base} · ${omitted} ${omitted === 1 ? 'Exemplar' : 'Exemplare'} ohne Set-Code weggelassen` : base;
 }
 
-module.exports = { EXPORT_FORMATS, loadExportCopies, buildExport, exportResultText };
+module.exports = { EXPORT_FORMATS, loadExportCopies, buildExport, exportCount, exportResultText };

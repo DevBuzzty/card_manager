@@ -29,10 +29,17 @@ function groupBy(copies, keyOf) {
   return [...m.values()];
 }
 const printingOf = (cp) => [String(cp.card_id), cp.set_code, cp.language, cp.rarity];
-const sortGroups = (groups, nameOf) => groups.sort((a, b) => byText(nameOf(a), nameOf(b))
-  || byText(a.set_code, b.set_code) || byText(a.rarity, b.rarity) || byText(a.language, b.language)
-  || EDITIONS.indexOf(a.edition) - EDITIONS.indexOf(b.edition)
-  || CONDITIONS.indexOf(a.condition) - CONDITIONS.indexOf(b.condition));
+// nameOf(g) einmal je Gruppe vor dem Sortieren bestimmen und als `_nameEn` an die Gruppe haengen, nicht im
+// Comparator (der O(n log n)-mal laeuft) und nicht ein zweites Mal beim Bauen der Ausgabezeile -- nameOf ruft bei
+// den CSV-Exporten `nameEn` auf, was bei jedem Aufruf den Katalog nachschlaegt (I1).
+function sortGroups(groups, nameOf) {
+  const named = groups.map((g) => ({ ...g, _nameEn: nameOf(g) }));
+  named.sort((a, b) => byText(a._nameEn, b._nameEn)
+    || byText(a.set_code, b.set_code) || byText(a.rarity, b.rarity) || byText(a.language, b.language)
+    || EDITIONS.indexOf(a.edition) - EDITIONS.indexOf(b.edition)
+    || CONDITIONS.indexOf(a.condition) - CONDITIONS.indexOf(b.condition));
+  return named;
+}
 
 // nameEn(passcode) -> englischer Katalogname oder null; Rueckfall ist der lokale Name.
 const englishName = (nameEn, cp) => (nameEn && nameEn(String(cp.card_id))) || cp.name || '';
@@ -42,7 +49,7 @@ function dragonShieldCsv(copies, nameEn) {
   return toCsv([
     ['Quantity', 'Card Name', 'Set Code', 'Rarity', 'Language', 'Printing', 'Condition', 'Price'],
     ...groups.map((g) => [
-      g.count, englishName(nameEn, g), isUnknown(g) ? '' : g.set_code, g.rarity, DS_LANGUAGE[g.language] || g.language,
+      g.count, g._nameEn, isUnknown(g) ? '' : g.set_code, g.rarity, DS_LANGUAGE[g.language] || g.language,
       DS_PRINTING[g.edition] ?? '', DS_CONDITION[g.condition] || '', pieceValue(g).toFixed(2),
     ]),
   ]);
@@ -52,7 +59,7 @@ function ygoprodeckCsv(copies, nameEn) {
   const groups = sortGroups(groupBy(copies, printingOf), (g) => englishName(nameEn, g));
   return toCsv([
     ['cardname', 'cardq', 'cardrarity', 'cardcode', 'cardid'],
-    ...groups.map((g) => [englishName(nameEn, g), g.count, g.rarity, isUnknown(g) ? '' : g.set_code, String(g.card_id)]),
+    ...groups.map((g) => [g._nameEn, g.count, g.rarity, isUnknown(g) ? '' : g.set_code, String(g.card_id)]),
   ]);
 }
 
@@ -84,4 +91,4 @@ function saleListText(copies) {
   return { text, omitted: (copies || []).length - known.length };
 }
 
-module.exports = { DS_CONDITION, DS_PRINTING, DS_LANGUAGE, pieceValue, euroText, dragonShieldCsv, ygoprodeckCsv, cardmarketWantslist, saleListText };
+module.exports = { DS_CONDITION, DS_PRINTING, DS_LANGUAGE, pieceValue, euroText, isUnknown, dragonShieldCsv, ygoprodeckCsv, cardmarketWantslist, saleListText };

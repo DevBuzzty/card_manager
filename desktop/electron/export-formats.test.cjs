@@ -47,6 +47,17 @@ test('Verkaufsliste: ohne Preis, Einzahl, Tausenderpunkt; leer ohne bekannte Pri
   assert.deepEqual(saleListText([IN.copies[5]]), { text: '', omitted: 1 });
 });
 
+// I1 -- nameEn ruft main.cjs#exportBuild ueber den Katalog auf (fs.statSync je Aufruf); sortGroups darf es daher
+// hoechstens einmal je Gruppe aufrufen, nicht im Comparator (der O(n log n)-mal laeuft). Zaehler-Fake ueber nameEn.
+test('I1: nameEn wird höchstens einmal je Gruppe aufgerufen (Dragon Shield: 6 Gruppen, YGOPRODeck: 4 Gruppen)', () => {
+  let dsCalls = 0;
+  dragonShieldCsv(IN.copies, (id) => { dsCalls += 1; return nameEn(id); });
+  assert.equal(dsCalls, 6);
+  let ygoCalls = 0;
+  ygoprodeckCsv(IN.copies, (id) => { ygoCalls += 1; return nameEn(id); });
+  assert.equal(ygoCalls, 4);
+});
+
 test('Stückwert: 1.-Auflage-Preis nur bei edition first, sonst Basispreis, mal Zustandsfaktor, auf Cent gerundet', () => {
   assert.equal(pieceValue({ price: 12.5, price_first_ed: 20, edition: 'first', condition: 'EX' }), 17);
   assert.equal(pieceValue({ price: 12.5, price_first_ed: 20, edition: 'unlimited', condition: 'EX' }), 10.63);

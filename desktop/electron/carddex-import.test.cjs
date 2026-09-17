@@ -7,7 +7,7 @@ const { initDatabase } = require('./database.cjs');
 const copies = require('./copies.cjs');
 const { tagsOfCell } = require('./carddex-format.cjs');
 const { createImportSessions, importOpen, importResolve, importRun, importLogName } = require('./carddex-import.cjs');
-const { buildExport, loadExportCopies, exportResultText } = require('./collection-export.cjs');
+const { buildExport, loadExportCopies, exportCount, exportResultText } = require('./collection-export.cjs');
 const { deleteContainer } = require('./containers-schema.cjs');
 
 // Spec F1 §6 -- import-run gegen eine echte SQLite-Datenbank mit dem vollen Schema aus database.cjs (Trigger inklusive).
@@ -231,4 +231,17 @@ test('Export-Umfang: ganze Sammlung, ein Behälter, aktueller Filter; Wantslist 
   assert.equal(exportResultText(wants), '1 Wunsch exportiert');
   assert.equal(buildExport(db, { format: 'carddex', scope: { kind: 'copies', copyIds: [] } }).count, 0);
   assert.throws(() => buildExport(db, { format: 'pdf' }), /Unbekanntes Exportformat/);
+});
+
+// I1 -- export-count baut nicht mehr den ganzen Inhalt: exportCount liefert fuer alle Formate dieselbe Zahl wie
+// buildExport(...).count, ohne CSV/Text zu bauen.
+test('I1: exportCount zaehlt wie buildExport(...).count, fuer alle 5 Formate', (t) => {
+  const { db } = tempDb(t);
+  seedCollection(db);
+  const wishlist = [{ card_id: '46986414', name: 'Dunkler Magier' }];
+  for (const format of ['carddex', 'dragonshield', 'ygoprodeck', 'wantslist', 'salelist']) {
+    const scope = { kind: 'all' };
+    assert.equal(exportCount(db, { format, scope }, { wishlist }), buildExport(db, { format, scope }, { wishlist }).count, format);
+  }
+  assert.throws(() => exportCount(db, { format: 'pdf' }), /Unbekanntes Exportformat/);
 });

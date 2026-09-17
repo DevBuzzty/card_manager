@@ -24,7 +24,7 @@ const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck, saveDeck } = require('./decks.cjs');
 const { catalogPrices, catalogCards, readCatalogCards, catalogMainId, catalogLegality } = require('./catalog-prices.cjs');
 const { createImportSessions, importOpen, importResolve, importRun } = require('./carddex-import.cjs');
-const { buildExport, exportResultText } = require('./collection-export.cjs');
+const { buildExport, exportCount, exportResultText } = require('./collection-export.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -757,21 +757,35 @@ ipcMain.handle('import-run', (event, input) => {
     } catch (e) { console.error('[import-run]', e); return { success: false, error: `Import fehlgeschlagen: ${CONTAINER_COPY_ERROR_MSG}` }; }
 });
 // Wunschliste nur fuer die Wantslist (Cloud); englische Namen aus dem Katalog.
+async function exportWishlist(format) {
+    if (format !== 'wantslist') return undefined;
+    const c = await dealsClient();
+    const { data, error } = await c.from('wishlist').select('card_id, name');
+    if (error) throw new Error(error.message);
+    return data || [];
+}
 async function exportBuild({ format, scope } = {}) {
     const catalog = importCatalog();
-    const nameEn = (p) => { const c = catalog && catalog.card(p); return (c && c.name_en) || null; };
-    let wishlist;
-    if (format === 'wantslist') {
-        const c = await dealsClient();
-        const { data, error } = await c.from('wishlist').select('card_id, name');
-        if (error) throw new Error(error.message);
-        wishlist = data || [];
-    }
+    // I1 -- nameEn je Build mit einer Map (Passcode -> Name) memoisieren: sortGroups ruft nameEn einmal je Gruppe auf,
+    // ohne die Map wuerde jeder Aufruf trotzdem den Katalog samt fs.statSync erneut nachschlagen.
+    const nameEnCache = new Map();
+    const nameEn = (p) => {
+        if (nameEnCache.has(p)) return nameEnCache.get(p);
+        const c = catalog && catalog.card(p);
+        const name = (c && c.name_en) || null;
+        nameEnCache.set(p, name);
+        return name;
+    };
+    const wishlist = await exportWishlist(format);
     return buildExport(db, { format, scope }, { nameEn, wishlist, now: new Date() });
 }
+// I1 -- baut nicht mehr den ganzen Inhalt fuer die Zaehlung, nur die Anzahl (exportCount in collection-export.cjs).
 ipcMain.handle('export-count', async (event, input) => {
-    try { return { count: (await exportBuild(input)).count }; }
-    catch (e) { return { count: 0, error: e.message }; }
+    try {
+        const { format, scope } = input || {};
+        const wishlist = await exportWishlist(format);
+        return { count: exportCount(db, { format, scope }, { wishlist }) };
+    } catch (e) { return { count: 0, error: e.message }; }
 });
 ipcMain.handle('export-run', async (event, input) => {
     let built;
