@@ -1,0 +1,61 @@
+StapelMess === Scanner geoeffnet t=1789646706314 ===
+StapelMess stoss start=1789646706994 dauer=0 spitze=8,7 einwurf=false
+StapelMess stoss start=1789646708708 dauer=0 spitze=3,1 einwurf=false
+StapelMess stoss start=1789646709255 dauer=108 spitze=7,0 einwurf=false
+StapelMess stoss start=1789646709558 dauer=255 spitze=5,2 einwurf=false
+StapelMess stoss start=1789646709929 dauer=470 spitze=5,7 einwurf=false
+StapelMess stoss start=1789646710520 dauer=0 spitze=3,1 einwurf=false
+StapelMess stoss start=1789646712775 dauer=1900 spitze=50,1 einwurf=false
+StapelMess stoss start=1789646716210 dauer=1160 spitze=12,7 einwurf=false
+StapelMess stoss start=1789646717637 dauer=34 spitze=3,9 einwurf=false
+StapelMess stoss start=1789646717837 dauer=334 spitze=14,2 einwurf=false
+StapelMess stoss start=1789646722168 dauer=167 spitze=62,6 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[] t=1789646723160
+MlScan confirmed card 77044671 t=1789646724644
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646726351 dauer=0 spitze=4,8 einwurf=false
+StapelMess stoss start=1789646726596 dauer=34 spitze=5,1 einwurf=false
+StapelMess stoss start=1789646727030 dauer=0 spitze=3,2 einwurf=false
+StapelMess stoss start=1789646727169 dauer=62 spitze=4,8 einwurf=false
+StapelMess stoss start=1789646727430 dauer=569 spitze=14,2 einwurf=false
+StapelMess stoss start=1789646728130 dauer=33 spitze=4,4 einwurf=false
+StapelMess stoss start=1789646728297 dauer=66 spitze=6,5 einwurf=false
+StapelMess stoss start=1789646730928 dauer=235 spitze=46,9 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646732009
+StapelMess stoss start=1789646741169 dauer=222 spitze=50,0 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[] t=1789646742209
+MlScan confirmed card 77044671 t=1789646742722
+StapelScan gebucht 77044671 x2
+StapelMess stoss start=1789646745992 dauer=0 spitze=3,2 einwurf=false
+StapelMess stoss start=1789646753481 dauer=168 spitze=40,2 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646754494
+MlScan confirmed card 77044671 t=1789646755087
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646759244 dauer=196 spitze=6,6 einwurf=false
+StapelMess stoss start=1789646759675 dauer=2267 spitze=14,2 einwurf=false
+StapelMess stoss start=1789646764240 dauer=199 spitze=56,0 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[] t=1789646765309
+MlScan confirmed card 77044671 t=1789646767485
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646770607 dauer=134 spitze=8,1 einwurf=false
+StapelMess stoss start=1789646770174 dauer=261 spitze=43,8 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646771213
+MlScan confirmed card 77044671 t=1789646771734
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646775734 dauer=168 spitze=61,3 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646776766
+StapelMess stoss start=1789646786235 dauer=194 spitze=64,6 einwurf=true
+MlScan confirmed card 77044671 t=1789646787108
+StapelScan gebucht 77044671 x1
+StapelScan einwurf anzahl=1 rearmt=[] t=1789646787304
+StapelMess stoss start=1789646790457 dauer=174 spitze=62,4 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646791499
+MlScan confirmed card 77044671 t=1789646792458
+StapelScan gebucht 77044671 x2
+StapelMess stoss start=1789646798784 dauer=767 spitze=10,4 einwurf=false
+StapelMess stoss start=1789646799690 dauer=426 spitze=7,7 einwurf=false
+StapelMess stoss start=1789646800284 dauer=892 spitze=7,0 einwurf=false
+StapelMess stoss start=1789646801817 dauer=66 spitze=15,1 einwurf=false
+StapelMess stoss start=1789646802183 dauer=535 spitze=21,6 einwurf=false
+StapelMess stoss start=1789646802954 dauer=94 spitze=20,1 einwurf=false
+StapelMess stoss start=1789646803482 dauer=0 spitze=17,2 einwurf=false

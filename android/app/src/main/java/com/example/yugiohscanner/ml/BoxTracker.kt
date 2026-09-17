@@ -32,7 +32,7 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
      * Feed one frame's detections; returns the detections that JUST reached confirmation.
      * [tMs] ist der Zeitstempel dieses Bildes -- als Default `System.currentTimeMillis()` fuer
      * Aufrufer, die keine eigene Uhr mitfuehren (z. B. SortIntoBinderScreen); ScanScreen (Modus
-     * "stapel") reicht denselben Zeitstempel durch, den es auch [StackMotion.update] gibt, damit
+     * "stapel") reicht denselben Zeitstempel durch, den es auch fuer die Einwurf-Erkennung benutzt, damit
      * [rearm]s Unruhe-Vergleich auf derselben Uhr beruht.
      */
     fun update(dets: List<Detection>, tMs: Long = System.currentTimeMillis()): List<Detection> {
@@ -83,8 +83,8 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
 
     /**
      * Stapel-Scan-Fix: entfernt die bereits BESTAETIGTEN unter [passcodes] aus `emitted` und
-     * setzt ihre `votes` zurueck, sodass eine noch anwesende Karte mit denselben [need] Treffern
-     * erneut bestaetigt. Fuer StackMotion (siehe
+     * setzt ihre `votes` zurueck, sodass eine noch anwesende Karte nach zwei weiteren Treffern (hoechstens [need])
+     * erneut bestaetigt. Fuer den Stapel-Scan (siehe
      * docs/superpowers/ledgers/2026-09-17-stapel-scan-bewegung/brief.md): eine zweite gleiche
      * Karte, die auf die erste rutscht, aendert nie den Passcode im Bild, also faellt sie nie
      * unter maxMisses und wuerde ohne rearm nie ein zweites Mal gemeldet.
@@ -100,7 +100,7 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
      * ob/wie eine anwesende Karte erneut bestaetigt, nicht wann eine abwesende vergessen wird.
      *
      * Fix Runde 1 (Review von 3c5f3f6, Kritisch #2): [unrestStartMs] ist der Beginn der Unruhe,
-     * die genau diese Meldung ausgeloest hat (siehe [StackMotion.Decision.unrestStartMs]). Eine
+     * die genau diese Meldung ausgeloest hat (heute: Beginn des Einwurfs, [ChuteGate.Burst.startMs]). Eine
      * Karte, die WAEHREND dieser Unruhe erst bestaetigt wurde -- also z. B. die einzige Karte, die
      * gerade neu in ein leeres Fach faellt, deren eigenes Einfallen die Unruhe UND ihre eigene
      * vierte Stimme ausloest --, ist keine zweite, eingerutschte Kopie, sondern dieselbe Ankunft.
@@ -113,6 +113,15 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
      *   bestaetigt war UND vor [unrestStartMs] bestaetigt wurde) -- der Aufrufer braucht das, um
      *   zugehoerige Belege (z. B. SetCodeEvidence) nur fuer wirklich rearmte Karten zu vergessen.
      */
+    /**
+     * Stapel-Lichtschranke, Abnahme 1 (docs/superpowers/ledgers/2026-09-17-stapel-lichtschranke/
+     * abnahme-1-roh.log): wie [rearm], aber fuer ALLE bestaetigten Passcodes -- nicht nur die im
+     * Einwurf-Bild erkannten. Waehrend die Karte einrutscht, ist oft gar keine erkannt; rearm mit den
+     * Erkennungen dieses Bildes setzte dann nichts zurueck, die liegende Karte bestaetigte nie erneut
+     * und der Einwurf blieb offen, bis ein spaeterer ihn mitnahm (Zaehler sprang) oder er verfiel.
+     */
+    fun rearmAll(unrestStartMs: Long): Set<Int> = rearm(confirmedAt.keys.toList(), unrestStartMs)
+
     fun rearm(passcodes: Collection<Int>, unrestStartMs: Long): Set<Int> {
         val rearmed = HashSet<Int>()
         for (pc in passcodes) {
@@ -123,7 +132,9 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
             // Kritisch #2: nur rearmen, wenn diese Bestaetigung VOR der aktuellen Unruhe lag.
             if (at >= unrestStartMs) continue
             emitted.remove(pc)
-            votes.remove(pc)
+            // Abnahme 2: die Karte ist schon identifiziert (gleicher Passcode), zwei frische
+            // Sichtungen reichen -- spart bei ~4 Erkennungen/s gut eine halbe Sekunde je Einwurf.
+            if (need > 2) votes[pc] = need - 2 else votes.remove(pc)
             confirmedAt.remove(pc)
             rearmed.add(pc)
         }

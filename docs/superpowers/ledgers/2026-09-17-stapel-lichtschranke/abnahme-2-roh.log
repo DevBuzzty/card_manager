@@ -1,0 +1,66 @@
+StapelMess === Scanner geoeffnet t=1789646027930 ===
+StapelMess stoss start=1789646028719 dauer=174 spitze=13,7 einwurf=false
+StapelMess stoss start=1789646039252 dauer=434 spitze=193,9 einwurf=true
+StapelMess stoss start=1789646039918 dauer=0 spitze=3,3 einwurf=false
+StapelScan einwurf anzahl=1 rearmt=[] t=1789646040052
+StapelMess stoss start=1789646040562 dauer=133 spitze=7,1 einwurf=false
+StapelMess stoss start=1789646041003 dauer=0 spitze=3,2 einwurf=false
+StapelMess stoss start=1789646041296 dauer=135 spitze=5,5 einwurf=false
+StapelMess stoss start=1789646041952 dauer=200 spitze=6,4 einwurf=false
+StapelMess stoss start=1789646047082 dauer=0 spitze=3,1 einwurf=false
+StapelMess stoss start=1789646052920 dauer=190 spitze=4,8 einwurf=false
+StapelMess stoss start=1789646053343 dauer=168 spitze=6,6 einwurf=false
+StapelMess stoss start=1789646054478 dauer=197 spitze=30,4 einwurf=false
+MlScan confirmed card 77044671 t=1789646055818
+StapelScan gebucht 77044671 x0
+StapelMess stoss start=1789646056306 dauer=268 spitze=6,1 einwurf=false
+StapelMess stoss start=1789646056708 dauer=1298 spitze=23,1 einwurf=false
+StapelMess stoss start=1789646058141 dauer=463 spitze=15,0 einwurf=false
+StapelMess stoss start=1789646067735 dauer=156 spitze=5,6 einwurf=false
+StapelMess stoss start=1789646068101 dauer=0 spitze=3,9 einwurf=false
+StapelMess stoss start=1789646068336 dauer=0 spitze=4,9 einwurf=false
+StapelMess stoss start=1789646068539 dauer=0 spitze=3,1 einwurf=false
+StapelMess stoss start=1789646068699 dauer=0 spitze=5,1 einwurf=false
+StapelMess stoss start=1789646068933 dauer=1172 spitze=25,2 einwurf=false
+StapelMess stoss start=1789646073902 dauer=197 spitze=53,3 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[] t=1789646074888
+MlScan confirmed card 77044671 t=1789646075231
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646077459 dauer=202 spitze=55,7 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646078192
+MlScan confirmed card 77044671 t=1789646079544
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646082293 dauer=165 spitze=59,1 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646082760
+MlScan confirmed card 77044671 t=1789646084854
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646086787 dauer=199 spitze=43,6 einwurf=false
+StapelMess stoss start=1789646102079 dauer=243 spitze=72,2 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[] t=1789646103029
+MlScan confirmed card 77044671 t=1789646105849
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646119935 dauer=132 spitze=6,0 einwurf=false
+StapelMess stoss start=1789646120236 dauer=230 spitze=7,4 einwurf=false
+StapelMess stoss start=1789646120667 dauer=1027 spitze=10,8 einwurf=false
+StapelMess stoss start=1789646121845 dauer=1097 spitze=21,0 einwurf=false
+StapelMess stoss start=1789646123199 dauer=0 spitze=3,3 einwurf=false
+StapelMess stoss start=1789646127332 dauer=232 spitze=60,8 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[] t=1789646128267
+MlScan confirmed card 77044671 t=1789646129329
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646133327 dauer=130 spitze=54,5 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646133795
+MlScan confirmed card 77044671 t=1789646135520
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646137026 dauer=196 spitze=42,7 einwurf=false
+StapelMess stoss start=1789646149451 dauer=162 spitze=53,8 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646150155
+MlScan confirmed card 77044671 t=1789646152422
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646159674 dauer=167 spitze=54,1 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789646160366
+MlScan confirmed card 77044671 t=1789646162174
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789646167336 dauer=1431 spitze=51,2 einwurf=false
+StapelMess stoss start=1789646169011 dauer=1291 spitze=16,7 einwurf=false
+StapelMess stoss start=1789646170568 dauer=1235 spitze=24,8 einwurf=false
