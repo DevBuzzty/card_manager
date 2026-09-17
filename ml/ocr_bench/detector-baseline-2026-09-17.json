@@ -1,0 +1,109 @@
+{
+  "detector": "C:\\Users\\Buzzty\\Downloads\\yugi\\android\\app\\src\\main\\assets\\detector.onnx",
+  "conf": 0.6,
+  "n": 600,
+  "seed": 0,
+  "koerbe": {
+    "stapel": {
+      "STAPEL": {
+        "fotos": 3,
+        "mit_box": 0,
+        "treffer": 0
+      },
+      "GESAMT": {
+        "fotos": 3,
+        "mit_box": 0,
+        "treffer": 0
+      },
+      "_fehlgriffe": [
+        "abnahme-4-karte5.jpg",
+        "performance-3-einwurf-1789648704793.jpg",
+        "performance-3-einwurf-1789648716154.jpg"
+      ]
+    },
+    "ebay": {
+      "LINK": {
+        "fotos": 15,
+        "mit_box": 6,
+        "treffer": 4
+      },
+      "GESAMT": {
+        "fotos": 608,
+        "mit_box": 356,
+        "treffer": 270
+      },
+      "PENDULUM": {
+        "fotos": 10,
+        "mit_box": 3,
+        "treffer": 0
+      },
+      "SPELL_TRAP": {
+        "fotos": 118,
+        "mit_box": 51,
+        "treffer": 36
+      },
+      "STANDARD": {
+        "fotos": 455,
+        "mit_box": 291,
+        "treffer": 230
+      },
+      "UNBEKANNT": {
+        "fotos": 10,
+        "mit_box": 5,
+        "treffer": 0
+      },
+      "_fehlgriffe": [
+        "ebay_6547.jpg",
+        "ebay_1686.jpg",
+        "ebay_5179.jpg",
+        "ebay_8934.jpg",
+        "ebay_8768.jpg",
+        "ebay_6701.jpg",
+        "ebay_8535.jpg",
+        "ebay_6284.jpg",
+        "ebay_4195.jpg",
+        "ebay_5415.jpg",
+        "ebay_2121.jpg",
+        "ebay_8914.jpg",
+        "ebay_5072.jpg",
+        "ebay_8420.jpg",
+        "ebay_8890.jpg",
+        "ebay_2448.jpg",
+        "ebay_5307.jpg",
+        "ebay_1608.jpg",
+        "ebay_1529.jpg",
+        "ebay_5677.jpg",
+        "ebay_7987.jpg",
+        "ebay_2532.jpg",
+        "ebay_682.jpg",
+        "ebay_8468.jpg",
+        "ebay_6066.jpg",
+        "ebay_4622.jpg",
+        "ebay_8909.jpg",
+        "ebay_8580.jpg",
+        "ebay_1335.jpg",
+        "ebay_7773.jpg",
+        "ebay_9193.jpg",
+        "ebay_6344.jpg",
+        "ebay_1926.jpg",
+        "ebay_4484.jpg",
+        "ebay_4836.jpg",
+        "ebay_5042.jpg",
+        "ebay_3727.jpg",
+        "pool_63.jpg",
+        "ebay_2421.jpg",
+        "ebay_6098.jpg",
+        "ebay_2857.jpg",
+        "ebay_588.jpg",
+        "ebay_3375.jpg",
+        "ebay_634.jpg",
+        "ebay_995.jpg",
+        "ebay_4619.jpg",
+        "ebay_7600.jpg",
+        "ebay_4467.jpg",
+        "ebay_4426.jpg",
+        "ebay_5379.jpg"
+      ]
+    }
+  }
+}
