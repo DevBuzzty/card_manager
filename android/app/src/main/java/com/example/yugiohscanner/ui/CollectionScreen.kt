@@ -199,23 +199,27 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (searchOpen) {
-                    OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.weight(1f),
-                        placeholder = { Text("Suchen") },
-                        trailingIcon = { IconButton(onClick = { query = ""; searchOpen = false }) { Icon(Icons.Default.Close, "Suche schließen") } })
-                } else {
-                    Text("${groups.size} Karten", color = Muted, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { searchOpen = true }) { Icon(Icons.Default.Search, "Suchen", tint = OnSurface) }
+            // T9: Suchen/Ansicht-wechseln/Filter wirken nur auf "Alle" (groups) -- in Duplikate/Zum
+            // Verkauf waeren sie wirkungslose Knoepfe, deshalb dort ganz ausgeblendet.
+            if (chip == CollectionChip.ALLE) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (searchOpen) {
+                        OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.weight(1f),
+                            placeholder = { Text("Suchen") },
+                            trailingIcon = { IconButton(onClick = { query = ""; searchOpen = false }) { Icon(Icons.Default.Close, "Suche schließen") } })
+                    } else {
+                        Text("${groups.size} Karten", color = Muted, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { searchOpen = true }) { Icon(Icons.Default.Search, "Suchen", tint = OnSurface) }
+                    }
+                    IconButton(onClick = { grid = !grid }) {
+                        Icon(if (grid) Icons.AutoMirrored.Filled.List else Icons.Default.GridView, "Ansicht wechseln", tint = OnSurface)
+                    }
+                    BadgedBox(badge = { if (activeFilterCount > 0) Badge { Text("$activeFilterCount") } }) {
+                        IconButton(onClick = { filterOpen = true }) { Icon(Icons.Default.FilterList, "Filter", tint = OnSurface) }
+                    }
                 }
-                IconButton(onClick = { grid = !grid }) {
-                    Icon(if (grid) Icons.AutoMirrored.Filled.List else Icons.Default.GridView, "Ansicht wechseln", tint = OnSurface)
-                }
-                BadgedBox(badge = { if (activeFilterCount > 0) Badge { Text("$activeFilterCount") } }) {
-                    IconButton(onClick = { filterOpen = true }) { Icon(Icons.Default.FilterList, "Filter", tint = OnSurface) }
-                }
+                Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(8.dp))
             // Spec H1 §5.2: Chip-Zeile ueber der Liste; Sortierung und aktive Filter gelten nur fuer "Alle".
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(chip == CollectionChip.ALLE, { chip = CollectionChip.ALLE }, label = { Text("Alle") })
