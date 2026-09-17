@@ -289,10 +289,16 @@ function applyPulledSealed(db, rows) {
   return applied;
 }
 
-// Spec F1 §3: ein Card-Dex-Import legt auf einen Schlag tausende Printings an. Wie pushCopies/pushContainers in Bloecken
-// schieben: kleine Anfragen, und die zurueckgegebenen Zeilen (fuer die Echo-Sperre) bleiben unter der PostgREST-Grenze von
-// 1000 Zeilen je Antwort. Ein Fehler bricht ab, bevor der Cursor weiterrueckt -- der naechste Zyklus schiebt alles erneut
-// (Upsert, also ohne Doppel).
+// Spec F1 §3: ein Card-Dex-Import legt auf einen Schlag tausende Printings an. In Bloecken schieben
+// wie pushCopies/pushContainers/pushSealed (dieselbe Blockgroesse 500): kleine Anfragen statt einer
+// grossen. Nebenbei bleibt jede einzelne Antwort dadurch ohnehin unter PostgRESTs Zeilenlimit von
+// rund 1000 Zeilen je Antwort -- das Limit bestimmt aber nicht die Wahl von 500, jede Blockgroesse
+// darunter waere ebenso sicher. Jeder erfolgreiche Block traegt seine Zeilen sofort in die
+// Echo-Sperre ein (wie die anderen drei Stroeme das inline in ihrer eigenen Schleife tun), damit ein
+// erst in einem spaeteren Block scheiternder Push die bereits in der Cloud angekommenen Zeilen nicht
+// ungesperrt laesst -- sonst wertet der naechste Pull ihr eigenes Echo faelschlich als fremde
+// Aenderung. Ein Fehler bricht ab, bevor der Cursor weiterrueckt -- der naechste Zyklus schiebt
+// alles erneut (Upsert, also ohne Doppel).
 const CARDS_PUSH_CHUNK = 500;
 async function upsertCardsInChunks(c, rows) {
   const pushed = [];
@@ -301,7 +307,10 @@ async function upsertCardsInChunks(c, rows) {
       .upsert(rows.slice(i, i + CARDS_PUSH_CHUNK).map(rowToRemote), { onConflict: 'id,set_code,language,rarity' })
       .select('id,set_code,language,updated_at');
     if (error) throw new Error('Push failed: ' + error.message);
-    pushed.push(...(data || []));
+    for (const r of (data || [])) {
+      recentlyPushed.set(`${r.id}|${r.set_code}|${r.language}`, r.updated_at);
+      pushed.push(r);
+    }
   }
   return pushed;
 }
@@ -398,14 +407,12 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     // Deferring same-second rows to the next cycle keeps every row eventually pushed.
     const changed = db.prepare("SELECT * FROM cards WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
     if (changed.length > 0) {
-      const data = await upsertCardsInChunks(c, changed);
+      // upsertCardsInChunks sets the echo lock itself, per successful block (Fix Runde 1) --
+      // so an echo of an already-pushed earlier block still gets skipped on the next pull even
+      // when a later block fails and the cursor stays behind.
+      await upsertCardsInChunks(c, changed);
       const maxTs = changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor);
       setSetting(db, 'sync_last_push', maxTs);
-      // Remember the cloud updated_at the trigger stamped on each row we just pushed,
-      // so the next pull can recognize its own echo and skip re-applying it.
-      for (const r of data) {
-        recentlyPushed.set(`${r.id}|${r.set_code}|${r.language}`, r.updated_at);
-      }
     }
   }
 
@@ -672,4 +679,7 @@ module.exports = {
   _sealedPushRows: sealedPushRows,
   // Test-only hook (sync-push-chunks.test.cjs): the chunked cards upsert that push() uses.
   _upsertCardsInChunks: upsertCardsInChunks,
+  // Test-only hook (sync-push-chunks.test.cjs, Fix Runde 1): the cards echo-lock map, to verify
+  // upsertCardsInChunks populates it per successful block even when a later block fails.
+  _recentlyPushed: recentlyPushed,
 };

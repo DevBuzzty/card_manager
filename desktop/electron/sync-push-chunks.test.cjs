@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { _upsertCardsInChunks } = require('./sync.cjs');
+const { _upsertCardsInChunks, _recentlyPushed } = require('./sync.cjs');
 
 // Spec F1 §3 -- nach einem grossen Import schiebt der Push die cards-Zeilen in Bloecken zu 500 (wie Exemplare und Behaelter).
 function fakeClient({ failOnCall = null } = {}) {
@@ -45,6 +45,20 @@ test('cards-Push: ein Fehler im zweiten Block bricht ab, kein dritter Block', as
   await assert.rejects(_upsertCardsInChunks(c, localRows(1201)), /Push failed: kaputt/);
   assert.equal(c.calls.length, 2);
   assert.deepEqual(await _upsertCardsInChunks(fakeClient(), []), []);
+});
+
+// Fix Runde 1 (Review): pushCopies/pushContainers/pushSealed tragen ihre Echo-Sperre pro Block ein,
+// nicht erst nach dem ganzen Push -- sonst bliebe ein bereits erfolgreich in die Cloud geschobener
+// Block ungesperrt, wenn ein spaeterer Block scheitert, und sein Echo wuerde beim naechsten Pull
+// faelschlich als fremde Aenderung gewertet. cards muss sich gleich verhalten.
+test('cards-Push: Block 1 bleibt in der Echo-Sperre, auch wenn Block 2 scheitert', async () => {
+  _recentlyPushed.clear();
+  const c = fakeClient({ failOnCall: 2 });
+  await assert.rejects(_upsertCardsInChunks(c, localRows(1201)), /Push failed: kaputt/);
+  assert.equal(_recentlyPushed.get('10000000|LOB-DE001|DE'), 'ts-1', 'erste Zeile von Block 1 ist gesperrt');
+  assert.equal(_recentlyPushed.get('10000499|LOB-DE001|DE'), 'ts-1', 'letzte Zeile von Block 1 ist gesperrt');
+  assert.equal(_recentlyPushed.has('10000500|LOB-DE001|DE'), false, 'Block 2 kam nie zurueck, also keine Sperre dafuer');
+  _recentlyPushed.clear();
 });
 
 // Quelltext-Zaun: push() benutzt den Blockweg und rueckt den Cursor erst danach vor.
