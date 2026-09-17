@@ -281,18 +281,13 @@ fun ScanScreen(onClose: () -> Unit) {
     // (ChuteGate), StackCounter loest sie mit Bestaetigungen ein.
     val stackCounter = remember { com.example.yugiohscanner.ml.StackCounter() }
     var stapelCount by remember { mutableStateOf(0) }
-    // DIAGNOSE (vorlaeufig): seit wann ein Einwurf auf seine Buchung wartet (0 = keiner), Foto schon abgelegt.
-    val einwurfOffenSeit = remember { java.util.concurrent.atomic.AtomicLong(0L) }
-    val diagFoto = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val tone = remember { try { android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80) } catch (e: RuntimeException) { null } }
     val vibrator = remember { context.getSystemService(android.os.Vibrator::class.java) }
-    remember { com.example.yugiohscanner.ml.MessLog.start(context.filesDir) }
-    remember { com.example.yugiohscanner.ml.HangWatchdog.start() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
     val mlAnalyzer = remember {
-        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, frame, w, h, ms, einwuerfe, einwurfStartMs ->
+        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms, einwuerfe, einwurfStartMs ->
             mlDetections = dets
             mlFrameW = w
             mlFrameH = h
@@ -305,32 +300,14 @@ fun ScanScreen(onClose: () -> Unit) {
                 // OCR-Belege vergessen, bevor setEvidence.record() unten den ersten der neuen schreibt.
                 val rearmed = tracker.rearmAll(einwurfStartMs)
                 for (pc in rearmed) setEvidence.forget(pc)
-                com.example.yugiohscanner.ml.MessLog.line("StapelScan", "einwurf anzahl=$einwuerfe rearmt=$rearmed t=$now")
-                if (einwurfOffenSeit.get() == 0L) { einwurfOffenSeit.set(now); diagFoto.set(false) }
-            }
-            // DIAGNOSE (vorlaeufig): Einwurf offen -> Erkennungen protokollieren; nach 2 s ohne
-            // Buchung ein Foto dieses Bildes ablegen (files/stapel-diag/), um zu sehen, warum.
-            // StackCounter laesst offene Einwuerfe nach 15 s verfallen -- die Diagnose ebenso.
-            if (einwurfOffenSeit.get() != 0L && now - einwurfOffenSeit.get() > 15_000) einwurfOffenSeit.set(0L)
-            val offenSeit = einwurfOffenSeit.get()
-            if (offenSeit != 0L && !diagFoto.get() && now - offenSeit >= 2_000) {
-                diagFoto.set(true)
-                try {
-                    val dir = java.io.File(context.filesDir, "stapel-diag").apply { mkdirs() }
-                    java.io.FileOutputStream(java.io.File(dir, "einwurf-$offenSeit.jpg")).use {
-                        frame.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, it)
-                    }
-                    com.example.yugiohscanner.ml.MessLog.line("StapelDiag", "foto einwurf-$offenSeit.jpg dets=${dets.map { it.passcode }}")
-                } catch (e: Exception) {
-                    Log.e("StapelDiag", "Foto nicht gespeichert", e)
-                }
+                Log.i("StapelScan", "einwurf anzahl=$einwuerfe rearmt=$rearmed t=$now")
             }
             // Pool each visible card's bottom-band OCR text (set-code voting across frames).
             for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
             // On confirmation, resolve the set code from ALL pooled evidence for that card, then
             // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
             for (d in tracker.update(dets, now)) {
-                com.example.yugiohscanner.ml.MessLog.line("MlScan", "confirmed card ${d.passcode} t=$now")
+                Log.i("MlScan", "confirmed card ${d.passcode}")
                 // Voted candidates FIRST, then every frame's raw text. SetCodeMatch scores by
                 // edit distance over both, so a grammar-clean winner still matches at 0 — but a
                 // reading the grammar rejects (lost hyphen, line break, region digit) is no longer
@@ -340,9 +317,8 @@ fun ScanScreen(onClose: () -> Unit) {
                 // Modus "stapel": so oft buchen, wie Einwuerfe offen sind; ohne Einwurf gar nicht.
                 val times = if (scanMode == "stapel") stackCounter.claim(now) else 1
                 if (scanMode == "stapel") {
-                    com.example.yugiohscanner.ml.MessLog.line("StapelScan", "gebucht ${d.passcode} x$times")
+                    Log.i("StapelScan", "gebucht ${d.passcode} x$times")
                     if (times > 0) {
-                        einwurfOffenSeit.set(0L)
                         stapelCount += times
                         tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
                         vibrator?.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
@@ -413,8 +389,6 @@ fun ScanScreen(onClose: () -> Unit) {
         }
     }
 
-    remember { mlAnalyzer.diagnose = { einwurfOffenSeit.get() != 0L } }
-
     DisposableEffect(Unit) {
         onDispose {
             // Order matters. Stop new frames FIRST (unbind the camera), then drain the analysis
@@ -439,7 +413,6 @@ fun ScanScreen(onClose: () -> Unit) {
             // Die Erkennung laeuft seit der Stapel-Lichtschranke auf mlAnalyzers eigenem Thread --
             // auch den abwarten, bevor pipeline.close() die nativen Sitzungen freigibt.
             mlAnalyzer.shutdown()
-            com.example.yugiohscanner.ml.HangWatchdog.stop()
             tone?.release()
             analyzer.close()
             pipeline.close()

@@ -1,0 +1,261 @@
+--------- beginning of main
+09-17 14:37:30.087 I/Choreographer( 6073): first vsync insert message into MessageQueue Head
+09-17 14:37:30.369 I/Choreographer(10435): first vsync insert message into MessageQueue Head
+09-17 14:37:34.006 I/Choreographer(10435): Skipped 61 frames!  The application may be doing too much work on its main thread.
+09-17 14:37:34.628 I/Choreographer(10435): Skipped 74 frames!  The application may be doing too much work on its main thread.
+09-17 14:37:35.317 I/StapelMess(10435): === Scanner geoeffnet t=1789648655317 ===
+09-17 14:37:35.489 I/Choreographer(10435): Skipped 77 frames!  The application may be doing too much work on its main thread.
+09-17 14:37:36.285 I/StapelMess(10435): stoss start=1789648656151 dauer=0 spitze=4,9 einwurf=false
+09-17 14:37:38.695 I/StapelMess(10435): stoss start=1789648658390 dauer=206 spitze=10,6 einwurf=false
+09-17 14:37:38.935 I/StapelMess(10435): stoss start=1789648658824 dauer=0 spitze=4,6 einwurf=false
+09-17 14:37:41.820 I/StapelMess(10435): stoss start=1789648661517 dauer=201 spitze=28,4 einwurf=false
+09-17 14:37:42.049 I/MlScan  (10435): frame: 1 cards in 348ms top=77044671@0,87
+09-17 14:37:42.692 I/MlScan  (10435): frame: 1 cards in 298ms top=77044671@1,00
+09-17 14:37:43.341 I/MlScan  (10435): frame: 1 cards in 242ms top=77044671@1,00
+09-17 14:37:43.987 I/MlScan  (10435): confirmed card 77044671 t=1789648663987
+09-17 14:37:43.988 I/StapelScan(10435): gebucht 77044671 x0
+09-17 14:37:43.988 I/MlScan  (10435): frame: 1 cards in 246ms top=77044671@1,00
+09-17 14:37:44.723 I/MlScan  (10435): frame: 1 cards in 320ms top=77044671@0,81
+09-17 14:37:45.396 I/MlScan  (10435): frame: 1 cards in 260ms top=77044671@1,00
+09-17 14:37:45.760 I/MlScan  (10435): frame: 1 cards in 296ms top=77044671@0,80
+09-17 14:37:46.285 I/MlScan  (10435): frame: 1 cards in 285ms top=77044671@0,80
+09-17 14:37:46.959 I/MlScan  (10435): frame: 1 cards in 258ms top=77044671@1,00
+09-17 14:37:47.608 I/MlScan  (10435): frame: 1 cards in 236ms top=77044671@1,00
+09-17 14:37:48.212 I/MlScan  (10435): frame: 1 cards in 219ms top=77044671@1,00
+09-17 14:37:48.830 I/MlScan  (10435): frame: 1 cards in 230ms top=77044671@1,00
+09-17 14:37:49.234 I/MlScan  (10435): frame: 1 cards in 343ms top=77044671@0,81
+09-17 14:37:49.752 I/MlScan  (10435): frame: 1 cards in 293ms top=77044671@0,80
+09-17 14:37:50.419 I/MlScan  (10435): frame: 1 cards in 260ms top=77044671@1,00
+09-17 14:37:50.786 I/MlScan  (10435): frame: 1 cards in 311ms top=77044671@0,81
+09-17 14:37:51.305 I/MlScan  (10435): frame: 1 cards in 274ms top=77044671@1,00
+09-17 14:37:51.323 I/StapelMess(10435): stoss start=1789648670858 dauer=363 spitze=28,7 einwurf=false
+09-17 14:37:51.696 I/MlScan  (10435): frame: 1 cards in 322ms top=77044671@0,84
+09-17 14:37:52.215 I/MlScan  (10435): frame: 1 cards in 283ms top=77044671@1,00
+09-17 14:37:52.287 I/StapelMess(10435): stoss start=1789648672185 dauer=0 spitze=3,3 einwurf=false
+09-17 14:37:52.753 I/StapelMess(10435): stoss start=1789648672322 dauer=330 spitze=4,5 einwurf=false
+09-17 14:37:52.985 I/MlScan  (10435): frame: 1 cards in 377ms top=77044671@0,84
+09-17 14:37:53.354 I/MlScan  (10435): frame: 1 cards in 274ms top=77044671@1,00
+09-17 14:37:53.578 I/StapelMess(10435): stoss start=1789648673280 dauer=201 spitze=8,9 einwurf=false
+09-17 14:37:54.111 I/MlScan  (10435): frame: 1 cards in 345ms top=77044671@0,85
+09-17 14:37:54.751 I/MlScan  (10435): frame: 1 cards in 390ms top=77044671@0,82
+09-17 14:37:55.125 I/MlScan  (10435): frame: 1 cards in 288ms top=77044671@1,00
+09-17 14:37:55.566 I/MlScan  (10435): frame: 1 cards in 364ms top=77044671@0,84
+09-17 14:37:56.009 I/MlScan  (10435): frame: 1 cards in 375ms top=77044671@0,84
+09-17 14:37:56.487 I/MlScan  (10435): frame: 1 cards in 383ms top=77044671@0,84
+09-17 14:37:57.184 I/MlScan  (10435): frame: 1 cards in 450ms top=77044671@0,83
+09-17 14:37:57.635 I/MlScan  (10435): frame: 1 cards in 362ms top=77044671@0,84
+09-17 14:37:57.808 I/StapelMess(10435): stoss start=1789648677708 dauer=0 spitze=3,7 einwurf=false
+09-17 14:37:58.079 I/StapelMess(10435): stoss start=1789648677376 dauer=196 spitze=72,8 einwurf=true
+09-17 14:37:58.231 I/MlScan  (10435): frame: 1 cards in 373ms top=77044671@0,83
+09-17 14:37:58.548 I/StapelMess(10435): stoss start=1789648678413 dauer=31 spitze=5,4 einwurf=false
+09-17 14:37:58.579 I/StapelScan(10435): einwurf anzahl=1 rearmt=[77044671] t=1789648678579
+09-17 14:37:58.580 I/MlScan  (10435): frame: 1 cards in 285ms top=77044671@1,00
+09-17 14:37:58.782 I/StapelDiag(10435): ml t=1789648678613 dets=0 
+09-17 14:37:58.988 I/StapelDiag(10435): ml t=1789648678809 dets=0 
+09-17 14:37:59.368 I/StapelDiag(10435): ml t=1789648679011 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:37:59.369 I/MlScan  (10435): confirmed card 77044671 t=1789648679369
+09-17 14:37:59.369 I/StapelScan(10435): gebucht 77044671 x1
+09-17 14:37:59.385 I/MlScan  (10435): frame: 1 cards in 296ms top=77044671@1,00
+09-17 14:38:00.147 I/MlScan  (10435): frame: 1 cards in 437ms top=77044671@0,81
+09-17 14:38:00.534 I/MlScan  (10435): frame: 1 cards in 310ms top=77044671@1,00
+09-17 14:38:01.212 I/MlScan  (10435): frame: 1 cards in 256ms top=77044671@1,00
+09-17 14:38:01.872 I/MlScan  (10435): frame: 1 cards in 250ms top=77044671@1,00
+09-17 14:38:02.524 I/MlScan  (10435): frame: 1 cards in 243ms top=77044671@1,00
+09-17 14:38:03.125 I/MlScan  (10435): frame: 1 cards in 369ms top=77044671@0,86
+09-17 14:38:03.205 I/StapelMess(10435): stoss start=1789648682475 dauer=200 spitze=49,5 einwurf=true
+09-17 14:38:03.556 I/MlScan  (10435): frame: 1 cards in 363ms top=77044671@0,85
+09-17 14:38:03.992 I/StapelScan(10435): einwurf anzahl=1 rearmt=[77044671] t=1789648683992
+09-17 14:38:03.992 I/MlScan  (10435): frame: 1 cards in 363ms top=77044671@0,85
+09-17 14:38:04.437 I/StapelDiag(10435): ml t=1789648684004 dets=1 77044671@0,85[465,627,944,1103]in
+09-17 14:38:04.438 I/MlScan  (10435): confirmed card 77044671 t=1789648684437
+09-17 14:38:04.438 I/StapelScan(10435): gebucht 77044671 x1
+09-17 14:38:04.449 I/MlScan  (10435): frame: 1 cards in 370ms top=77044671@0,85
+09-17 14:38:05.007 I/MlScan  (10435): frame: 1 cards in 429ms top=77044671@0,85
+09-17 14:38:05.442 I/MlScan  (10435): frame: 1 cards in 379ms top=77044671@0,85
+09-17 14:38:05.905 I/MlScan  (10435): frame: 1 cards in 379ms top=77044671@0,85
+09-17 14:38:06.377 I/MlScan  (10435): frame: 1 cards in 385ms top=77044671@0,84
+09-17 14:38:07.069 I/MlScan  (10435): frame: 1 cards in 280ms top=77044671@1,00
+09-17 14:38:07.235 I/StapelMess(10435): stoss start=1789648686301 dauer=405 spitze=76,6 einwurf=true
+09-17 14:38:07.435 I/StapelScan(10435): einwurf anzahl=1 rearmt=[77044671] t=1789648687435
+09-17 14:38:07.744 I/StapelDiag(10435): ml t=1789648687440 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:07.744 I/MlScan  (10435): frame: 1 cards in 253ms top=77044671@1,00
+09-17 14:38:07.929 I/StapelDiag(10435): ml t=1789648687768 dets=0 
+09-17 14:38:08.096 I/StapelDiag(10435): ml t=1789648687936 dets=0 
+09-17 14:38:08.416 I/StapelDiag(10435): ml t=1789648688102 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:08.416 I/MlScan  (10435): confirmed card 77044671 t=1789648688416
+09-17 14:38:08.417 I/StapelScan(10435): gebucht 77044671 x1
+09-17 14:38:08.430 I/MlScan  (10435): frame: 1 cards in 252ms top=77044671@1,00
+09-17 14:38:09.305 I/MlScan  (10435): frame: 1 cards in 313ms top=77044671@1,00
+09-17 14:38:10.063 I/MlScan  (10435): frame: 1 cards in 269ms top=77044671@1,00
+09-17 14:38:10.634 I/StapelMess(10435): stoss start=1789648689826 dauer=279 spitze=65,8 einwurf=true
+09-17 14:38:10.698 I/MlScan  (10435): frame: 1 cards in 245ms top=77044671@1,00
+09-17 14:38:10.848 I/StapelScan(10435): einwurf anzahl=1 rearmt=[77044671] t=1789648690848
+09-17 14:38:11.025 I/StapelDiag(10435): ml t=1789648690873 dets=0 
+09-17 14:38:11.321 I/StapelDiag(10435): ml t=1789648691034 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:11.322 I/MlScan  (10435): frame: 1 cards in 237ms top=77044671@1,00
+09-17 14:38:11.500 I/StapelDiag(10435): ml t=1789648691334 dets=0 
+09-17 14:38:11.660 I/StapelDiag(10435): ml t=1789648691502 dets=0 
+09-17 14:38:11.969 I/StapelDiag(10435): ml t=1789648691672 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:11.970 I/MlScan  (10435): confirmed card 77044671 t=1789648691970
+09-17 14:38:11.970 I/StapelScan(10435): gebucht 77044671 x1
+09-17 14:38:11.982 I/MlScan  (10435): frame: 1 cards in 246ms top=77044671@1,00
+09-17 14:38:12.719 I/MlScan  (10435): frame: 1 cards in 267ms top=77044671@1,00
+09-17 14:38:13.379 I/MlScan  (10435): frame: 1 cards in 253ms top=77044671@1,00
+09-17 14:38:14.397 I/StapelMess(10435): stoss start=1789648693235 dauer=1102 spitze=16,5 einwurf=false
+09-17 14:38:16.286 I/StapelMess(10435): stoss start=1789648694467 dauer=1736 spitze=36,6 einwurf=false
+09-17 14:38:16.529 I/StapelMess(10435): stoss start=1789648696363 dauer=74 spitze=5,9 einwurf=false
+09-17 14:38:18.198 I/StapelMess(10435): stoss start=1789648698080 dauer=17 spitze=8,4 einwurf=false
+09-17 14:38:19.604 I/StapelMess(10435): stoss start=1789648698863 dauer=237 spitze=66,2 einwurf=true
+09-17 14:38:19.962 I/StapelScan(10435): einwurf anzahl=1 rearmt=[] t=1789648699962
+09-17 14:38:19.962 I/MlScan  (10435): frame: 1 cards in 239ms top=17704467@1,00
+09-17 14:38:20.166 I/StapelDiag(10435): ml t=1789648700006 dets=0 
+09-17 14:38:20.340 I/StapelDiag(10435): ml t=1789648700169 dets=0 
+09-17 14:38:20.656 I/StapelDiag(10435): ml t=1789648700358 dets=1 17704467@1,00[259,230,1180,1689]in
+09-17 14:38:20.657 I/MlScan  (10435): frame: 1 cards in 247ms top=17704467@1,00
+09-17 14:38:20.815 I/StapelDiag(10435): ml t=1789648700663 dets=0 
+09-17 14:38:20.986 I/StapelDiag(10435): ml t=1789648700825 dets=0 
+09-17 14:38:21.284 I/StapelDiag(10435): ml t=1789648700992 dets=1 17704467@1,00[259,230,1180,1689]in
+09-17 14:38:21.285 I/MlScan  (10435): frame: 1 cards in 244ms top=17704467@1,00
+09-17 14:38:21.452 I/StapelDiag(10435): ml t=1789648701292 dets=0 
+09-17 14:38:21.612 I/StapelDiag(10435): ml t=1789648701459 dets=0 
+09-17 14:38:21.914 I/StapelDiag(10435): ml t=1789648701624 dets=1 17704467@1,00[259,230,1180,1689]in
+09-17 14:38:21.915 I/MlScan  (10435): confirmed card 17704467 t=1789648701915
+09-17 14:38:21.915 I/StapelScan(10435): gebucht 17704467 x1
+09-17 14:38:21.928 I/MlScan  (10435): frame: 1 cards in 240ms top=17704467@1,00
+09-17 14:38:22.617 I/MlScan  (10435): frame: 1 cards in 239ms top=17704467@1,00
+09-17 14:38:23.271 I/MlScan  (10435): frame: 1 cards in 261ms top=17704467@1,00
+09-17 14:38:24.297 I/StapelMess(10435): stoss start=1789648703429 dauer=366 spitze=59,4 einwurf=true
+09-17 14:38:24.594 I/MlScan  (10435): frame: 1 cards in 240ms top=77044671@1,00
+09-17 14:38:24.794 I/StapelScan(10435): einwurf anzahl=1 rearmt=[17704467] t=1789648704793
+09-17 14:38:24.994 I/StapelDiag(10435): ml t=1789648704823 dets=0 
+09-17 14:38:25.320 I/StapelDiag(10435): ml t=1789648705022 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:25.320 I/MlScan  (10435): frame: 1 cards in 248ms top=77044671@1,00
+09-17 14:38:25.483 I/StapelDiag(10435): ml t=1789648705323 dets=0 
+09-17 14:38:25.658 I/StapelDiag(10435): ml t=1789648705499 dets=0 
+09-17 14:38:25.982 I/StapelDiag(10435): ml t=1789648705691 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:25.983 I/MlScan  (10435): frame: 1 cards in 241ms top=77044671@1,00
+09-17 14:38:26.150 I/StapelDiag(10435): ml t=1789648705988 dets=0 
+09-17 14:38:26.310 I/StapelDiag(10435): ml t=1789648706158 dets=0 
+09-17 14:38:26.612 I/StapelDiag(10435): ml t=1789648706323 dets=0 
+09-17 14:38:26.777 I/StapelDiag(10435): ml t=1789648706622 dets=0 
+09-17 14:38:26.946 I/StapelDiag(10435): ml t=1789648706788 dets=0 
+09-17 14:38:26.985 I/StapelDiag(10435): foto einwurf-1789648704793.jpg dets=[]
+09-17 14:38:27.276 I/StapelDiag(10435): ml t=1789648706990 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:27.276 I/MlScan  (10435): confirmed card 77044671 t=1789648707276
+09-17 14:38:27.277 I/StapelScan(10435): gebucht 77044671 x1
+09-17 14:38:27.293 I/MlScan  (10435): frame: 1 cards in 236ms top=77044671@1,00
+09-17 14:38:28.811 I/MlScan  (10435): frame: 1 cards in 259ms top=77044671@1,00
+09-17 14:38:29.114 I/StapelMess(10435): stoss start=1789648708188 dauer=367 spitze=50,5 einwurf=true
+09-17 14:38:29.494 I/StapelScan(10435): einwurf anzahl=1 rearmt=[77044671] t=1789648709494
+09-17 14:38:29.495 I/MlScan  (10435): frame: 1 cards in 243ms top=77044671@1,00
+09-17 14:38:29.692 I/StapelDiag(10435): ml t=1789648709527 dets=0 
+09-17 14:38:29.855 I/StapelDiag(10435): ml t=1789648709693 dets=0 
+09-17 14:38:30.151 I/StapelDiag(10435): ml t=1789648709856 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:30.152 I/MlScan  (10435): confirmed card 77044671 t=1789648710152
+09-17 14:38:30.152 I/StapelScan(10435): gebucht 77044671 x1
+09-17 14:38:30.165 I/MlScan  (10435): frame: 1 cards in 244ms top=77044671@1,00
+09-17 14:38:30.938 I/MlScan  (10435): frame: 1 cards in 258ms top=77044671@1,00
+09-17 14:38:31.608 I/MlScan  (10435): frame: 1 cards in 265ms top=77044671@1,00
+09-17 14:38:32.619 I/StapelMess(10435): stoss start=1789648711591 dauer=495 spitze=74,0 einwurf=true
+09-17 14:38:32.628 I/MlScan  (10435): frame: 1 cards in 284ms top=77044671@1,00
+09-17 14:38:32.821 I/StapelScan(10435): einwurf anzahl=1 rearmt=[77044671] t=1789648712821
+09-17 14:38:32.983 I/StapelDiag(10435): ml t=1789648712822 dets=0 
+09-17 14:38:33.288 I/StapelDiag(10435): ml t=1789648712985 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:33.289 I/MlScan  (10435): frame: 1 cards in 252ms top=77044671@1,00
+09-17 14:38:33.439 I/StapelDiag(10435): ml t=1789648713289 dets=0 
+09-17 14:38:33.601 I/StapelDiag(10435): ml t=1789648713450 dets=0 
+09-17 14:38:33.923 I/StapelDiag(10435): ml t=1789648713623 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:33.924 I/MlScan  (10435): confirmed card 77044671 t=1789648713924
+09-17 14:38:33.924 I/StapelScan(10435): gebucht 77044671 x1
+09-17 14:38:33.941 I/MlScan  (10435): frame: 1 cards in 247ms top=77044671@1,00
+09-17 14:38:34.684 I/MlScan  (10435): frame: 1 cards in 280ms top=77044671@1,00
+09-17 14:38:35.693 I/StapelMess(10435): stoss start=1789648714920 dauer=236 spitze=68,8 einwurf=true
+09-17 14:38:35.990 I/MlScan  (10435): frame: 1 cards in 250ms top=77044671@1,00
+09-17 14:38:36.154 I/StapelScan(10435): einwurf anzahl=1 rearmt=[77044671] t=1789648716154
+09-17 14:38:36.340 I/StapelDiag(10435): ml t=1789648716158 dets=0 
+09-17 14:38:36.521 I/StapelDiag(10435): ml t=1789648716349 dets=0 
+09-17 14:38:36.731 I/StapelDiag(10435): ml t=1789648716550 dets=0 
+09-17 14:38:36.931 I/StapelDiag(10435): ml t=1789648716749 dets=0 
+09-17 14:38:37.126 I/StapelDiag(10435): ml t=1789648716949 dets=0 
+09-17 14:38:37.328 I/StapelDiag(10435): ml t=1789648717154 dets=0 
+09-17 14:38:37.516 I/StapelDiag(10435): ml t=1789648717329 dets=0 
+09-17 14:38:37.744 I/StapelDiag(10435): ml t=1789648717555 dets=0 
+09-17 14:38:37.928 I/StapelDiag(10435): ml t=1789648717748 dets=0 
+09-17 14:38:38.125 I/StapelDiag(10435): ml t=1789648717952 dets=0 
+09-17 14:38:38.327 I/StapelDiag(10435): ml t=1789648718147 dets=0 
+09-17 14:38:38.363 I/StapelDiag(10435): foto einwurf-1789648716154.jpg dets=[]
+09-17 14:38:38.556 I/StapelDiag(10435): ml t=1789648718385 dets=0 
+09-17 14:38:38.762 I/StapelDiag(10435): ml t=1789648718581 dets=0 
+09-17 14:38:38.957 I/StapelDiag(10435): ml t=1789648718779 dets=0 
+09-17 14:38:39.168 I/StapelDiag(10435): ml t=1789648718983 dets=0 
+09-17 14:38:39.365 I/StapelDiag(10435): ml t=1789648719188 dets=0 
+09-17 14:38:39.560 I/StapelDiag(10435): ml t=1789648719380 dets=0 
+09-17 14:38:39.747 I/StapelDiag(10435): ml t=1789648719565 dets=0 
+09-17 14:38:39.924 I/StapelDiag(10435): ml t=1789648719753 dets=0 
+09-17 14:38:40.129 I/StapelDiag(10435): ml t=1789648719948 dets=0 
+09-17 14:38:40.309 I/StapelDiag(10435): ml t=1789648720131 dets=0 
+09-17 14:38:40.492 I/StapelDiag(10435): ml t=1789648720314 dets=0 
+09-17 14:38:40.692 I/StapelDiag(10435): ml t=1789648720512 dets=0 
+09-17 14:38:40.901 I/StapelDiag(10435): ml t=1789648720721 dets=0 
+09-17 14:38:41.103 I/StapelDiag(10435): ml t=1789648720919 dets=0 
+09-17 14:38:41.291 I/StapelDiag(10435): ml t=1789648721112 dets=0 
+09-17 14:38:41.481 I/StapelDiag(10435): ml t=1789648721312 dets=0 
+09-17 14:38:41.685 I/StapelDiag(10435): ml t=1789648721511 dets=0 
+09-17 14:38:41.895 I/StapelDiag(10435): ml t=1789648721717 dets=0 
+09-17 14:38:42.108 I/StapelDiag(10435): ml t=1789648721920 dets=0 
+09-17 14:38:42.316 I/StapelDiag(10435): ml t=1789648722130 dets=0 
+09-17 14:38:42.496 I/StapelDiag(10435): ml t=1789648722319 dets=0 
+09-17 14:38:42.702 I/StapelDiag(10435): ml t=1789648722513 dets=0 
+09-17 14:38:42.883 I/StapelDiag(10435): ml t=1789648722712 dets=0 
+09-17 14:38:43.087 I/StapelDiag(10435): ml t=1789648722913 dets=0 
+09-17 14:38:43.290 I/StapelDiag(10435): ml t=1789648723113 dets=0 
+09-17 14:38:43.488 I/StapelDiag(10435): ml t=1789648723315 dets=0 
+09-17 14:38:43.687 I/StapelDiag(10435): ml t=1789648723511 dets=0 
+09-17 14:38:43.897 I/StapelDiag(10435): ml t=1789648723718 dets=0 
+09-17 14:38:44.092 I/StapelDiag(10435): ml t=1789648723911 dets=0 
+09-17 14:38:44.284 I/StapelDiag(10435): ml t=1789648724109 dets=0 
+09-17 14:38:44.456 I/StapelDiag(10435): ml t=1789648724286 dets=0 
+09-17 14:38:44.662 I/StapelDiag(10435): ml t=1789648724483 dets=0 
+09-17 14:38:44.851 I/StapelDiag(10435): ml t=1789648724678 dets=0 
+09-17 14:38:45.060 I/StapelDiag(10435): ml t=1789648724884 dets=0 
+09-17 14:38:45.263 I/StapelDiag(10435): ml t=1789648725082 dets=0 
+09-17 14:38:45.448 I/StapelDiag(10435): ml t=1789648725276 dets=0 
+09-17 14:38:45.653 I/StapelDiag(10435): ml t=1789648725477 dets=0 
+09-17 14:38:45.864 I/StapelDiag(10435): ml t=1789648725684 dets=0 
+09-17 14:38:46.048 I/StapelDiag(10435): ml t=1789648725880 dets=0 
+09-17 14:38:46.235 I/StapelDiag(10435): ml t=1789648726050 dets=0 
+09-17 14:38:46.425 I/StapelDiag(10435): ml t=1789648726249 dets=0 
+09-17 14:38:46.625 I/StapelDiag(10435): ml t=1789648726442 dets=0 
+09-17 14:38:46.815 I/StapelDiag(10435): ml t=1789648726642 dets=0 
+09-17 14:38:46.999 I/StapelDiag(10435): ml t=1789648726819 dets=0 
+09-17 14:38:47.181 I/StapelDiag(10435): ml t=1789648727008 dets=0 
+09-17 14:38:47.368 I/StapelDiag(10435): ml t=1789648727209 dets=0 
+09-17 14:38:47.557 I/StapelDiag(10435): ml t=1789648727375 dets=0 
+09-17 14:38:47.756 I/StapelDiag(10435): ml t=1789648727580 dets=0 
+09-17 14:38:47.955 I/StapelDiag(10435): ml t=1789648727774 dets=0 
+09-17 14:38:48.151 I/StapelDiag(10435): ml t=1789648727975 dets=0 
+09-17 14:38:48.351 I/StapelDiag(10435): ml t=1789648728175 dets=0 
+09-17 14:38:48.567 I/StapelDiag(10435): ml t=1789648728375 dets=0 
+09-17 14:38:48.741 I/StapelDiag(10435): ml t=1789648728575 dets=0 
+09-17 14:38:48.925 I/StapelDiag(10435): ml t=1789648728751 dets=0 
+09-17 14:38:49.127 I/StapelDiag(10435): ml t=1789648728946 dets=0 
+09-17 14:38:49.318 I/StapelDiag(10435): ml t=1789648729141 dets=0 
+09-17 14:38:49.619 I/StapelDiag(10435): ml t=1789648729318 dets=1 77044671@1,00[259,230,1180,1689]in
+09-17 14:38:49.620 I/MlScan  (10435): frame: 1 cards in 252ms top=77044671@1,00
+09-17 14:38:49.828 I/StapelDiag(10435): ml t=1789648729643 dets=0 
+09-17 14:38:50.017 I/StapelDiag(10435): ml t=1789648729842 dets=0 
+09-17 14:38:50.209 I/StapelDiag(10435): ml t=1789648730040 dets=0 
+09-17 14:38:50.386 I/StapelDiag(10435): ml t=1789648730214 dets=0 
+09-17 14:38:50.586 I/StapelDiag(10435): ml t=1789648730407 dets=0 
+09-17 14:38:50.784 I/StapelDiag(10435): ml t=1789648730605 dets=0 
+09-17 14:38:51.003 I/StapelDiag(10435): ml t=1789648730816 dets=0 
+09-17 14:38:51.195 I/StapelDiag(10435): ml t=1789648731008 dets=0 
+09-17 14:38:54.560 I/MlScan  (10435): frame: 1 cards in 234ms top=77044671@1,00
+09-17 14:38:55.839 I/StapelMess(10435): stoss start=1789648734412 dauer=1328 spitze=9,2 einwurf=false
+09-17 14:38:55.970 I/StapelMess(10435): stoss start=1789648735872 dauer=0 spitze=3,6 einwurf=false
+09-17 14:38:57.411 I/StapelMess(10435): stoss start=1789648736003 dauer=1299 spitze=10,3 einwurf=false
+09-17 14:38:58.738 I/StapelMess(10435): stoss start=1789648737503 dauer=1138 spitze=15,6 einwurf=false
+09-17 14:38:59.011 I/StapelMess(10435): stoss start=1789648738904 dauer=0 spitze=3,2 einwurf=false
+09-17 14:39:15.803 I/StapelMess(10435): stoss start=1789648755665 dauer=35 spitze=6,7 einwurf=false
+09-17 14:43:06.148 I/StapelDiag(10435): luecke 160 ms bis t=1789648986147
+09-17 14:43:07.102 I/StapelDiag(10435): luecke 175 ms bis t=1789648987101

@@ -51,3 +51,19 @@ werden nicht erkannt.
 Explizite Pfade stagen, nie `git add -A`, nie `git stash`, nie amend. `android/local.properties` nie
 lesen/kopieren (ANDROID_HOME setzen). Trailer `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
 Build: `ANDROID_HOME="C:/Users/Buzzty/AppData/Local/Android/Sdk" ./android/gradlew -p android testDebugUnitTest assembleDebug`, danach `--stop`.
+
+## Ergebnis (Stand Abschluss, 17.09. nachmittags)
+- **ChuteGate** (Lichtschranke): Spitze >= 37, Dauer <= 600 ms, 500 ms ohne Nachbar-Stoss (>= 10) davor/danach.
+  Messung 1 14/14, Abnahme 1-4 und Performance 3: alle Karten-Einwuerfe bis auf einen schwachen (28) erkannt,
+  kein Hand-/Herausnehmen-Fehlalarm. Tests aus allen Logs.
+- **StackCounter**: jeder Einwurf genau +1, eingeloest von der naechsten Bestaetigung, verfaellt nach 15 s.
+  Bestaetigung ohne Einwurf zaehlt im Modus stapel nicht.
+- **BoxTracker.rearmAll**: Einwurf rearmt alle bestaetigten Karten (im Einwurf-Bild ist oft keine erkannt);
+  danach reichen 2 Sichtungen.
+- **Umrandung echt** (beide Modi), Zaehler/Ton/Vibration im Stapel-Modus.
+- **Haenger behoben**: SetCodeMatch.best in ScanResolver.resolve lief auf dem UI-Thread, wuchs mit den
+  OCR-Belegen (1-3 s) und hielt ueber die Vorschau auch die Kamera an (performance-2-roh.log, Thread-Stacks).
+  Performance 3: keine Haenger, keine Bildluecken.
+- **Offen, eigenes Thema (Kartenerkennung)**: im Aufbau des Nutzers findet der Artwork-Detektor die Karte fast
+  nie; Treffer kommen aus der Ganzbild-OCR (jedes 3. Bild, Box = 18/12/82/88 % des Bildes) -> langsam, und
+  einmal Passcode verlesen (17704467 statt 77044671). Diagnosefotos: abnahme-4-karte5.jpg, performance-3-*.jpg.
