@@ -30,8 +30,16 @@ class StackMotion {
         private const val MAX_DAUER_MS = 1200L
     }
 
-    /** Meldung ODER Verwerfung einer abgeschlossenen Unruhe -- fuers Logging (siehe [lastDecision]). */
-    data class Decision(val gemeldet: Boolean, val dauerMs: Long)
+    /**
+     * Meldung ODER Verwerfung einer abgeschlossenen Unruhe (siehe [lastDecision]). [unrestStartMs]
+     * ist der Zeitstempel des ERSTEN Bildes dieser Unruhe -- Fix Runde 1 (Review von 3c5f3f6,
+     * Kritisch #2): eine Karte, die WAEHREND dieser Unruhe erst bestaetigt wurde (z. B. weil die
+     * Unruhe schon beim Einfallen der einzigen Karte in ein leeres Fach beginnt, siehe
+     * messung-2-roh.log 11:50:00.267-01.639), darf von genau dieser Meldung NICHT rearmt werden --
+     * das waere keine zweite, eingerutschte Karte, sondern dieselbe Ankunft doppelt gezaehlt. Der
+     * Aufrufer (ScanScreen) rearmt daher nur Passcodes, deren Bestaetigung VOR [unrestStartMs] lag.
+     */
+    data class Decision(val gemeldet: Boolean, val dauerMs: Long, val unrestStartMs: Long)
 
     private var unrestActive = false
     private var unrestStart = 0L
@@ -73,7 +81,7 @@ class StackMotion {
                 val melden = sawPeak && dauer <= MAX_DAUER_MS
                 unrestActive = false
                 calmCount = 0
-                lastDecision = Decision(melden, dauer)
+                lastDecision = Decision(melden, dauer, unrestStart)
                 return melden
             }
             return false
