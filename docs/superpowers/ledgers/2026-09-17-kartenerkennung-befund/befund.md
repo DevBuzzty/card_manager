@@ -27,3 +27,12 @@ auf den Diagnosefotos `../2026-09-17-stapel-lichtschranke/abnahme-4-karte5.jpg` 
 - Geraet 2 (geraet-2-roh.log): 167 Umrandungs-Treffer, 5/5 gebucht. Set-Code nur 1/5 gesendet: Bestaetigung
   ~0,3 s nach Einwurf (zu frueh fuer OCR-Belege) und Zonen-OCR fuer Umrandungs-Boxen uebersprungen
   (Seitenverhaeltnis 1,12 durch Schraegsicht, "Box ist kein Artwork"). -> eigener Schritt.
+
+## Set-Code im Stapel-Modus (feat/stapel-setcode)
+- PendingSends: gezaehlte Karte wartet bis 1,5 s auf Set-Code-Kandidat, bevor sie gesendet wird.
+- SetCodeMatch Fall 3: gleiche Region in >= 2 Bildern schlaegt verifizierten Druck (Nutzerentscheid, gemischte
+  DE/EN-Stapel); bei widerspruechlichen Lesungen Mehrheit (>= 2, eindeutig). RegionToken: 3/B verwechselbar.
+- ARTWORK_REL an echten Detektor-Boxen vermessen (0,196/0,302/0,740/0,665); SET_CODE-Zone fuer
+  Umrandungs-Boxen um 0,10 x 0,22 Box-Einheiten aufgeweitet.
+- geraet-6-roh.log: 3x DE + 2x EN -> alle 5 mit richtigem Set-Code (MATCHED) gesendet, am PC korrekt.
+- Offen: PC waehlt ohne gesendeten Set-Code den englischen Standarddruck.
