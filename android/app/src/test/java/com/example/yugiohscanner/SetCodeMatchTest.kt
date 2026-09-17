@@ -98,6 +98,54 @@ class SetCodeMatchTest {
         assertEquals(listOf("SDY-G005", "SDY-EN005"), result.candidates.map { it.setCode })
     }
 
+    @Test fun `Fall 3 Ausnahme -- dieselbe Region in zwei Bildern gelesen schlaegt den verifizierten Druck`() {
+        // Gemischter DE/EN-Stapel (geraet-3-roh.log): eine englische Karte neben verifiziertem DE-Druck.
+        val known = listOf(
+            SetOption("BLGG-DE053", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN053", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("BLGG-EN053", "BLGG-EN053")
+        val result = SetCodeMatch.best(frames, known, frames)
+        assertEquals(SetCodeMatch.MatchReason.MATCHED, result.reason)
+        assertEquals("BLGG-EN053", result.selected?.setCode)
+    }
+
+    @Test fun `Fall 3 Ausnahme -- echte verstuemmelte Lesungen vom Geraet`() {
+        // Haeufigste EN-Lesungen in geraet-3-roh.log: "3LGG-ENOS3" (23x), "BLGG-ENOS3" (7x).
+        val known = listOf(
+            SetOption("BLGG-DE053", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN053", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("3LGG-ENOS3", "BLGG-ENOS3")
+        val result = SetCodeMatch.best(frames, known, frames)
+        assertEquals("BLGG-EN053", result.selected?.setCode)
+    }
+
+    @Test fun `widerspruechliche Lesungen -- Mehrheit aus mindestens zwei Bildern entscheidet die Region`() {
+        val known = listOf(
+            SetOption("BLGG-DE053", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN053", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("3LGG-ENOS3", "BLGG-DEOS3", "3LGG-ENOS3")
+        assertEquals("BLGG-EN053", SetCodeMatch.best(frames, known, frames).selected?.setCode)
+        // Gleichstand: keine Region, verifizierter Druck vorn (Fall 2).
+        val patt = listOf("BLGG-ENOS3", "BLGG-DEOS3")
+        val r = SetCodeMatch.best(patt, known, patt)
+        assertEquals(SetCodeMatch.MatchReason.REGION_UNCLEAR, r.reason)
+        assertEquals("BLGG-DE053", r.selected?.setCode)
+    }
+
+    @Test fun `Fall 3 Ausnahme greift nicht bei nur einem Bild mit der abweichenden Region`() {
+        val known = listOf(
+            SetOption("BLGG-DE053", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN053", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("BLGG-EN053", "BLGG053")
+        val result = SetCodeMatch.best(frames, known, frames)
+        assertEquals(SetCodeMatch.MatchReason.REGION_CONTRADICTS_VERIFIED, result.reason)
+        assertEquals("BLGG-DE053", result.selected?.setCode)
+    }
+
     // -- verified schlaegt abgeleitet -------------------------------------------------------------
 
     @Test fun `ein echtes verifiziertes Printing wird wiederverwendet statt neu komponiert`() {

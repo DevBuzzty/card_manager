@@ -280,6 +280,8 @@ fun ScanScreen(onClose: () -> Unit) {
     // Modus "stapel" zaehlt jeder Einwurf ueber die Rutsche genau +1. Der Analyzer erkennt Einwuerfe
     // (ChuteGate), StackCounter loest sie mit Bestaetigungen ein.
     val stackCounter = remember { com.example.yugiohscanner.ml.StackCounter() }
+    // Gezaehlte Stapel-Karten warten bis zu 1,5 s auf einen gelesenen Set-Code, bevor sie rausgehen.
+    val pendingSends = remember { com.example.yugiohscanner.ml.PendingSends() }
     var stapelCount by remember { mutableStateOf(0) }
     val tone = remember { try { android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80) } catch (e: RuntimeException) { null } }
     val vibrator = remember { context.getSystemService(android.os.Vibrator::class.java) }
@@ -287,12 +289,26 @@ fun ScanScreen(onClose: () -> Unit) {
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
     val mlAnalyzer = remember {
+        // [times]-mal an Staging/PC mit den bis jetzt gesammelten Belegen. Voted candidates FIRST,
+        // then every frame's raw text (see SetCodeEvidence.rawTexts); EDITION per-frame text from
+        // the same record() calls (SetCodeEvidence.editionTexts).
+        fun sendConfirmed(passcode: Int, times: Int) {
+            val frames = setEvidence.rawTexts(passcode)
+            repeat(times) {
+                onConfirmed.value(
+                    passcode, setEvidence.setCodeCandidates(passcode) + frames, frames,
+                    setEvidence.editionTexts(passcode),
+                )
+            }
+        }
         com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms, einwuerfe, einwurfStartMs ->
             mlDetections = dets
             mlFrameW = w
             mlFrameH = h
             val now = System.currentTimeMillis()
             if (scanMode == "stapel" && einwuerfe > 0) {
+                // Noch wartende Karten sofort senden -- rearm unten verwirft ihre Belege.
+                for ((pc, n) in pendingSends.flushAll()) sendConfirmed(pc, n)
                 stackCounter.einwurf(einwuerfe, now)
                 // Die eingeworfene Karte hat denselben Passcode wie die liegende: ALLE bestaetigten
                 // erneut bestaetigungsfaehig machen -- im Einwurf-Bild ist oft keine erkannt (siehe
@@ -308,29 +324,19 @@ fun ScanScreen(onClose: () -> Unit) {
             // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
             for (d in tracker.update(dets, now)) {
                 Log.i("MlScan", "confirmed card ${d.passcode}")
-                // Voted candidates FIRST, then every frame's raw text. SetCodeMatch scores by
-                // edit distance over both, so a grammar-clean winner still matches at 0 — but a
-                // reading the grammar rejects (lost hyphen, line break, region digit) is no longer
-                // silently dropped before the matcher that exists to handle it. See
-                // SetCodeEvidence.rawTexts.
-                val frames = setEvidence.rawTexts(d.passcode)
                 // Modus "stapel": so oft buchen, wie Einwuerfe offen sind; ohne Einwurf gar nicht.
-                val times = if (scanMode == "stapel") stackCounter.claim(now) else 1
+                // Rueckmeldung sofort, Senden erst mit Set-Code (PendingSends, unten).
                 if (scanMode == "stapel") {
+                    val times = stackCounter.claim(now)
                     Log.i("StapelScan", "gebucht ${d.passcode} x$times")
                     if (times > 0) {
                         stapelCount += times
                         tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
                         vibrator?.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                        pendingSends.add(d.passcode, times, now)
                     }
-                }
-                // Task 7's own addition: the EDITION zone's per-frame text, recorded by the same
-                // setEvidence.record() call above -- see SetCodeEvidence.editionTexts.
-                repeat(times) {
-                    onConfirmed.value(
-                        d.passcode, setEvidence.setCodeCandidates(d.passcode) + frames, frames,
-                        setEvidence.editionTexts(d.passcode),
-                    )
+                } else {
+                    sendConfirmed(d.passcode, 1)
                 }
                 // NO setEvidence.forget() here (Spec D3 Task 6, "Stille Verbesserung"): the card
                 // usually stays visible after its first confirmation, and BoxTracker.update only
@@ -345,6 +351,12 @@ fun ScanScreen(onClose: () -> Unit) {
             // Sitzung unbegrenzt, und der Speed-Scan aus D4 schiebt Hunderte Karten durch eine
             // einzige. BoxTracker ist die einzige Stelle, die "weg" von "kurz verdeckt"
             // unterscheiden kann: es meldet erst nach maxMisses Frames ohne Sichtung.
+            // Wartende Stapel-Karten senden, sobald ein Set-Code-Kandidat da ist oder 1,5 s um sind --
+            // vor dem Abraeumen unten, das die Belege einer verschwundenen Karte verwirft.
+            for ((pc, n) in pendingSends.due(now) { setEvidence.setCodeCandidates(it).isNotEmpty() }) {
+                Log.i("StapelScan", "gesendet $pc x$n kandidaten=${setEvidence.setCodeCandidates(pc)}")
+                sendConfirmed(pc, n)
+            }
             for (gone in tracker.droppedThisFrame) setEvidence.forget(gone)
 
             // Silent improvement (Spec D3 Task 6, plan Section 6.2): a card already staged

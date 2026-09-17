@@ -84,6 +84,9 @@ object SetCodeMatch {
      *  `null` for a plain, uncontested match (Task 5 derives ITS OWN green/yellow reasons there
      *  from code distance, frame count, rarity and edition -- this object only ever speaks for the
      *  region decision, which is the one thing only this function has enough information to know). */
+    /** Ab so vielen getrennten Bildern mit derselben gelesenen Region schlaegt sie einen verifizierten Druck. */
+    const val REGION_TRUST_FRAMES = 2
+
     enum class MatchReason(val text: String?) {
         MATCHED(null),
         REGION_UNCLEAR("Region unklar"),
@@ -223,14 +226,30 @@ object SetCodeMatch {
 
         // Case 2: region not readable. Offer only printings that actually exist for this
         // prefix+number -- nothing is composed.
-        val region = RegionToken.read(joined, groupPrefix, groupNumber) ?: return byVerifiedFirst(bestGroup).let {
+        //
+        // Pro Bild gelesene Regionen: liefert der gepoolte Text keine eindeutige Region (mehrere
+        // Bilder mit unterschiedlichen Lesungen), entscheidet die Mehrheit -- sofern sie in
+        // mindestens [REGION_TRUST_FRAMES] Bildern gelesen wurde und allein vorn liegt.
+        val regionCounts = framesEvidence
+            .mapNotNull { RegionToken.read(it, groupPrefix, groupNumber)?.uppercase(java.util.Locale.ROOT) }
+            .groupingBy { it }.eachCount()
+        val majority = regionCounts.maxByOrNull { it.value }
+            ?.takeIf { top -> top.value >= REGION_TRUST_FRAMES && regionCounts.values.count { it == top.value } == 1 }
+            ?.key
+        val region = RegionToken.read(joined, groupPrefix, groupNumber) ?: majority ?: return byVerifiedFirst(bestGroup).let {
             MatchResult(it.firstOrNull(), it, MatchReason.REGION_UNCLEAR, codeExactMatch, codeFrameCount)
         }
 
         // Case 3: the read region contradicts a VERIFIED printing of the same prefix+number (a
         // verified entry whose OWN region differs from what was just read). The verified printing
         // wins the selection and sorts first; the misread composition is not trusted over it.
-        val conflicting = bestGroup.firstOrNull { s ->
+        //
+        // Ausnahme (Nutzerentscheid 17.09., gemischte DE/EN-Stapel): wurde dieselbe Region in
+        // mindestens [REGION_TRUST_FRAMES] getrennten Bildern gelesen, ist sie kein einzelner
+        // Lesefehler mehr -- dann gilt sie (Fall 1). Sonst blieb eine englische Karte neben einem
+        // verifizierten deutschen Druck unbuchbar (geraet-3-roh.log: "BLGG-EN053" gelesen, DE gesendet).
+        val regionFrames = regionCounts[region.uppercase(java.util.Locale.ROOT)] ?: 0
+        val conflicting = if (regionFrames >= REGION_TRUST_FRAMES) null else bestGroup.firstOrNull { s ->
             s.option.verified && s.parts.region != null && !s.parts.region.equals(region, ignoreCase = true)
         }
         if (conflicting != null) {

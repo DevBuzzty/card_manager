@@ -46,10 +46,11 @@ object GuideRegion {
 
     /**
      * Wo das Artwork einer in der Umrandung liegenden Karte zu erwarten ist, relativ zur Umrandung
-     * (l, t, r, b). Aus den Diagnosefotos und der am Geraet protokollierten Umrandung
-     * (docs/superpowers/ledgers/2026-09-17-kartenerkennung-befund/); die Suche verzeiht ~60 px.
+     * (l, t, r, b). Gemessen an echten Detektor-Boxen am Geraet (geraet-4-roh.log: 488,738-903,1145
+     * in der Umrandung 0,235-0,765 x 0,208-0,792 bei 1440x1920) -- die erste Schaetzung aus den
+     * Diagnosefotos war ~30 % zu gross, die Set-Code-Zone landete dann im Effekttext.
      */
-    val ARTWORK_REL = NRect(0.16f, 0.27f, 0.87f, 0.70f)
+    val ARTWORK_REL = NRect(0.196f, 0.302f, 0.740f, 0.665f)
 
     /** Kandidaten-Ausschnitte fuer das Artwork, in Pixeln des aufrechten Bildes ([frameW]x[frameH]):
      *  Mitte zuerst, dann je [ARTWORK_SHIFT] der Umrandung nach links/rechts/oben/unten; [ARTWORK_SCALE]-fach gross. */
