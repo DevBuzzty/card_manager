@@ -9,3 +9,4 @@ android/.idea/
 # Kaggle upload staging (large: code + 14.7k artworks)
 /kaggle_upload/
 .superpowers/
+/colab_upload/
