@@ -95,6 +95,9 @@ contextBridge.exposeInMainWorld('api', {
   importRun: (data) => ipcRenderer.invoke('import-run', data),
   exportCount: (data) => ipcRenderer.invoke('export-count', data),
   exportRun: (data) => ipcRenderer.invoke('export-run', data),
+  // Spec H1: Duplikate & Verkaufsliste
+  listSaleCopies: () => ipcRenderer.invoke('list-sale-copies'),
+  setForSale: (data) => ipcRenderer.invoke('set-for-sale', data),
 
   // Wishlist
   getWishlist: () => ipcRenderer.invoke('get-wishlist'),

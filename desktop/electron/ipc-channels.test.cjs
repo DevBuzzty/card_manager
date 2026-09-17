@@ -21,7 +21,10 @@ const E3_CHANNELS = ['get-catalog-legality', 'get-deck-details'];
 // Spec F1 §3/§4: Card-Dex-Import (Datei öffnen, Regel wechseln, Übernehmen) und Export (Anzahl, Datei schreiben).
 const F1_CHANNELS = ['import-open', 'import-resolve', 'import-run', 'export-count', 'export-run'];
 
-for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS]) {
+// Spec H1 §6: Exemplare fuer Duplikate/Verkaufsliste laden, Verkaufsliste umschalten.
+const H1_CHANNELS = ['list-sale-copies', 'set-for-sale'];
+
+for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS]) {
   test(`Kanal ${ch} steht in main.cjs und preload.cjs`, () => {
     assert.ok(MAIN.includes(`ipcMain.handle('${ch}'`), `main.cjs fehlt ipcMain.handle('${ch}'`);
     assert.ok(PRELOAD.includes(`ipcRenderer.invoke('${ch}'`), `preload.cjs fehlt ipcRenderer.invoke('${ch}'`);
