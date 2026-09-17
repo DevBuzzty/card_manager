@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.TypeChip
 import com.example.yugiohscanner.ui.components.ValueText
+import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
@@ -265,6 +267,11 @@ private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, onClick: ()
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Spec H1 §5.3: Preisschild an markierten Exemplaren.
+        if (copy.forSale) {
+            Icon(Icons.Default.Sell, "Zum Verkauf", tint = Gold, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+        }
         Text(
             CopyLocation.format(copy, container),
             style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = Muted,

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -360,6 +361,8 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
         else DeckCoverage.compute(deck.id, dc, r.copies, r.cards, decks, r.containers, prices)
     }
     val numbers = remember(coverage) { coverage?.cards?.associateBy { it.cardId } }
+    // Spec H1 §5.3: Passcodes mit mindestens einem markierten Exemplar (Preisschild; gleicher Schluessel wie der Abgleich).
+    val forSaleCards = remember(ready?.copies) { ready?.copies?.filter { !it.deleted && it.forSale }?.map { it.cardId }?.toSet() ?: emptySet() }
     var boxError by remember { mutableStateOf<String?>(null) }
     var fill by remember { mutableStateOf<FillProposal?>(null) }
     var wishlistOpen by remember { mutableStateOf(false) }
@@ -554,19 +557,19 @@ private fun DeckEditor(deck: Deck, decks: List<Deck>, onBack: () -> Unit) {
                         SectionHeader("Main · ${main.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(main, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), banOf(it), move, plusOne, mutating) { block -> mutate(block) } }
+                    items(main, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), banOf(it), it.cardId in forSaleCards, move, plusOne, mutating) { block -> mutate(block) } }
                     item {
                         Spacer(Modifier.height(10.dp))
                         SectionHeader("Extra · ${extra.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(extra, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), banOf(it), move, plusOne, mutating) { block -> mutate(block) } }
+                    items(extra, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), banOf(it), it.cardId in forSaleCards, move, plusOne, mutating) { block -> mutate(block) } }
                     item {
                         Spacer(Modifier.height(10.dp))
                         SectionHeader("Side · ${side.sumOf { it.count }}")
                         Spacer(Modifier.height(6.dp))
                     }
-                    items(side, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), banOf(it), move, plusOne, mutating) { block -> mutate(block) } }
+                    items(side, key = { it.id }) { DeckCardRow(it, numbers?.get(it.cardId), banOf(it), it.cardId in forSaleCards, move, plusOne, mutating) { block -> mutate(block) } }
                 }
             }
         }
@@ -831,7 +834,7 @@ private fun SearchResultRow(r: CardRow, onAdd: () -> Unit) {
 
 @Composable
 private fun DeckCardRow(
-    card: DeckCard, numbers: CoverageCard?, ban: String?, onMove: (DeckCard) -> Unit, onPlus: (DeckCard) -> Unit, busy: Boolean,
+    card: DeckCard, numbers: CoverageCard?, ban: String?, forSale: Boolean, onMove: (DeckCard) -> Unit, onPlus: (DeckCard) -> Unit, busy: Boolean,
     mutate: ((suspend () -> Unit)) -> Unit,
 ) {
     SpaceCard(Modifier.fillMaxWidth()) {
@@ -846,6 +849,8 @@ private fun DeckCardRow(
                     )
                     // Spec E3 §7: Banlist-Icon nach Format, kein Stern am Handy.
                     BanIcon(ban)
+                    // Spec H1 §5.3: markierte Exemplare bleiben verfuegbar, mit Preisschild.
+                    if (forSale) Icon(Icons.Default.Sell, "Zum Verkauf markiert", tint = Gold, modifier = Modifier.size(16.dp))
                 }
                 // Spec E1 §8: "Box 1 · verfügbar 2 · gebraucht 3" (rot bei Fehlenden) und gelb "1 in Deck Tenpai".
                 Text(
