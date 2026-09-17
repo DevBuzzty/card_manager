@@ -407,7 +407,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     // Deferring same-second rows to the next cycle keeps every row eventually pushed.
     const changed = db.prepare("SELECT * FROM cards WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
     if (changed.length > 0) {
-      // upsertCardsInChunks sets the echo lock itself, per successful block (Fix Runde 1) --
+      // upsertCardsInChunks sets the echo lock itself, per successful block --
       // so an echo of an already-pushed earlier block still gets skipped on the next pull even
       // when a later block fails and the cursor stays behind.
       await upsertCardsInChunks(c, changed);
@@ -679,7 +679,7 @@ module.exports = {
   _sealedPushRows: sealedPushRows,
   // Test-only hook (sync-push-chunks.test.cjs): the chunked cards upsert that push() uses.
   _upsertCardsInChunks: upsertCardsInChunks,
-  // Test-only hook (sync-push-chunks.test.cjs, Fix Runde 1): the cards echo-lock map, to verify
+  // Test-only hook (sync-push-chunks.test.cjs): the cards echo-lock map, to verify
   // upsertCardsInChunks populates it per successful block even when a later block fails.
   _recentlyPushed: recentlyPushed,
 };

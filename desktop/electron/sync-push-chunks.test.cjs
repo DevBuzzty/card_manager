@@ -47,7 +47,7 @@ test('cards-Push: ein Fehler im zweiten Block bricht ab, kein dritter Block', as
   assert.deepEqual(await _upsertCardsInChunks(fakeClient(), []), []);
 });
 
-// Fix Runde 1 (Review): pushCopies/pushContainers/pushSealed tragen ihre Echo-Sperre pro Block ein,
+// pushCopies/pushContainers/pushSealed tragen ihre Echo-Sperre pro Block ein,
 // nicht erst nach dem ganzen Push -- sonst bliebe ein bereits erfolgreich in die Cloud geschobener
 // Block ungesperrt, wenn ein spaeterer Block scheitert, und sein Echo wuerde beim naechsten Pull
 // faelschlich als fremde Aenderung gewertet. cards muss sich gleich verhalten.
