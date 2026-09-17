@@ -73,7 +73,7 @@ class MlScanAnalyzer(
 
             val startMl = mlBusy.compareAndSet(false, true)
             if (gv != null) {
-                Log.i("StapelMess", "t=$tFrame strip=${"%.1f".format(strip)} inner=${"%.1f".format(inner)} ml=${if (startMl) "start" else "busy"}")
+                MessLog.line("StapelMess", "t=$tFrame strip=${"%.1f".format(strip)} inner=${"%.1f".format(inner)} ml=${if (startMl) "start" else "busy"}")
             }
             if (!startMl) return
 
@@ -111,7 +111,7 @@ class MlScanAnalyzer(
             val t0 = System.currentTimeMillis()
             val dets = pipeline.process(upright)
             if (diff >= 4.0) {
-                Log.i("StapelScan", "t=${System.currentTimeMillis()} diff=${"%.1f".format(diff)} pcs=${dets.map { it.passcode }}")
+                MessLog.line("StapelScan", "t=${System.currentTimeMillis()} diff=${"%.1f".format(diff)} pcs=${dets.map { it.passcode }}")
             }
             if (uprightGuide != null) {
                 val pcs = dets.joinToString(",") { d ->
@@ -119,7 +119,7 @@ class MlScanAnalyzer(
                     val cy = (d.box.y1 + d.box.y2) / 2f / upright.height
                     "${d.passcode}:${if (uprightGuide.contains(cx, cy)) "in" else "aus"}"
                 }
-                Log.i("StapelMess", "ml t=$tFrame fertig=${System.currentTimeMillis()} pcs=[$pcs]")
+                MessLog.line("StapelMess", "ml t=$tFrame fertig=${System.currentTimeMillis()} pcs=[$pcs]")
             }
             onResult(dets, upright, upright.width, upright.height, System.currentTimeMillis() - t0, diff)
         } catch (e: Throwable) {

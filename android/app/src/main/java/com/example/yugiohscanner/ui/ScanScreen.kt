@@ -281,6 +281,7 @@ fun ScanScreen(onClose: () -> Unit) {
     // Bildaenderung, damit BoxTracker sie per rearm() erneut bestaetigen kann -- ohne aendert sich
     // der Passcode im Bild nie, also faellt er nie unter maxMisses und wird nie zweimal gemeldet.
     val stackMotion = remember { com.example.yugiohscanner.ml.StackMotion() }
+    remember { com.example.yugiohscanner.ml.MessLog.start(context.filesDir) }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
@@ -300,7 +301,7 @@ fun ScanScreen(onClose: () -> Unit) {
                 val meldung = stackMotion.update(diff, now)
                 val decision = stackMotion.lastDecision
                 decision?.let { d ->
-                    Log.i(
+                    com.example.yugiohscanner.ml.MessLog.line(
                         "StapelScan",
                         "diff=${"%.1f".format(diff)} dauer=${d.dauerMs} entscheidung=${if (d.gemeldet) "Meldung" else "Verworfen"}",
                     )
@@ -328,7 +329,7 @@ fun ScanScreen(onClose: () -> Unit) {
             // On confirmation, resolve the set code from ALL pooled evidence for that card, then
             // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
             for (d in tracker.update(dets, now)) {
-                Log.i("MlScan", "confirmed card ${d.passcode}")
+                com.example.yugiohscanner.ml.MessLog.line("MlScan", "confirmed card ${d.passcode} t=$now")
                 // Voted candidates FIRST, then every frame's raw text. SetCodeMatch scores by
                 // edit distance over both, so a grammar-clean winner still matches at 0 — but a
                 // reading the grammar rejects (lost hyphen, line break, region digit) is no longer
