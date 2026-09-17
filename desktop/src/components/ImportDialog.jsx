@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import clsx from 'clsx';
 import { List } from 'react-window';
-import { PREVIEW_FILTERS, IMPORT_RULES, visibleRows, canApply, omitAllUnknown, rowLabel } from '../utils/importPreview';
+import { PREVIEW_FILTERS, IMPORT_RULES, visibleRows, canApply, nothingToApply, NOTHING_TO_APPLY, omitAllUnknown, rowLabel } from '../utils/importPreview';
 
 const DOT = { green: 'bg-good', yellow: 'bg-gold', red: 'bg-crit' };
 
@@ -39,10 +39,13 @@ export default function ImportDialog({ opened, onClose }) {
   const [result, setResult] = useState(null);
   const { token, fileName } = opened;
 
+  // M5 -- rule erst nach erfolgreicher importResolve-Antwort übernehmen: bei einem Fehler bleiben die alte Regel
+  // und ihre Vorschau stehen (statt eine Regel zu zeigen, deren Vorschau nie kam), nur die Fehlermeldung ist neu.
   const changeRule = async (next) => {
-    setRule(next);
     const res = await window.api.importResolve({ token, rule: next });
-    if (res.error) setError(res.error); else setPreview(res.preview);
+    if (res.error) { setError(res.error); return; }
+    setRule(next);
+    setPreview(res.preview);
   };
 
   const toggleOmit = (line) => setOmitted((prev) => {
@@ -53,6 +56,7 @@ export default function ImportDialog({ opened, onClose }) {
 
   const rows = useMemo(() => visibleRows(preview?.rows, filter), [preview, filter]);
   const ready = preview && canApply(preview.rows, omitted);
+  const nothingToImport = preview && !ready && nothingToApply(preview.rows, omitted);
 
   const apply = async () => {
     if (phase !== 'preview' || !ready) return;
@@ -116,6 +120,7 @@ export default function ImportDialog({ opened, onClose }) {
           <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">
             {phase === 'done' ? 'Schließen' : 'Abbrechen'}
           </button>
+          {phase !== 'done' && nothingToImport && <span className="text-sm text-ink-muted">{NOTHING_TO_APPLY}</span>}
           {phase !== 'done' && (
             <button type="button" onClick={apply} disabled={busy || !ready}
               className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium disabled:opacity-50">

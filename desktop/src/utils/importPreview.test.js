@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { visibleRows, canApply, omitAllUnknown, rowLabel, PREVIEW_FILTERS, IMPORT_RULES } from './importPreview.js';
+import { visibleRows, canApply, nothingToApply, NOTHING_TO_APPLY, omitAllUnknown, rowLabel, PREVIEW_FILTERS, IMPORT_RULES } from './importPreview.js';
 
 const P = { id: '46986414', set_code: 'LOB-DE005', language: 'DE', rarity: 'Ultra Rare' };
 const ROWS = [
@@ -26,8 +26,21 @@ test('Übernehmen erst, wenn alle roten Zeilen ausgelassen sind und etwas übrig
   assert.equal(canApply(ROWS.map((r) => (r.action === 'import' ? { ...r, action: 'skip-existing' } : r)), new Set([4])), false, 'alles übersprungen');
 });
 
-test('Zeilentext', () => {
-  assert.equal(rowLabel(ROWS[0]), 'Dunkler Magier · LOB-DE005 · Ultra Rare · DE · 2× · first/NM · Binder Blau · S1 · F3');
-  assert.equal(rowLabel(ROWS[1]), '46986414 · LOB-DE005 · Ultra Rare · DE · 1× · unknown/EX · Box');
+// M4 -- "Nichts zu übernehmen" nur, wenn keine rote Zeile mehr offen ist, aber trotzdem nichts importiert würde
+// (Regel "Überspringen" o. Ä.); nicht, solange noch eine rote Zeile aussteht (dort blockiert die, nicht "nichts da").
+test('nothingToApply: nur wenn keine rote Zeile offen ist UND keine Zeile importiert würde', () => {
+  assert.equal(NOTHING_TO_APPLY, 'Nichts zu übernehmen');
+  assert.equal(nothingToApply(ROWS, new Set()), false, 'rote Zeile blockiert noch, ist nicht "nichts da"');
+  assert.equal(nothingToApply(ROWS, new Set([4])), false, 'Zeile 2/3 würden importiert');
+  const allSkipped = ROWS.map((r) => (r.action === 'import' ? { ...r, action: 'skip-existing' } : r));
+  assert.equal(nothingToApply(allSkipped, new Set([4])), true);
+  assert.equal(nothingToApply(allSkipped, new Set()), false, 'rote Zeile 4 ist noch offen');
+});
+
+// M6 -- Edition als Anzeigename (EDITION_LABELS aus valuation.js, wie CopyChip.jsx); Zustand bleibt der Code, wie im
+// Rest der App (CopyChip/CopySheet/BinderView zeigen MT/NM/… ebenfalls unübersetzt).
+test('Zeilentext: Edition als Anzeigename, Zustand als Code, unbekannte Edition unverändert', () => {
+  assert.equal(rowLabel(ROWS[0]), 'Dunkler Magier · LOB-DE005 · Ultra Rare · DE · 2× · 1st Ed/NM · Binder Blau · S1 · F3');
+  assert.equal(rowLabel(ROWS[1]), '46986414 · LOB-DE005 · Ultra Rare · DE · 1× · Unbek./EX · Box');
   assert.equal(rowLabel(ROWS[2]), 'X · LOB-DE005 · Ultra Rare · DE · x/y');
 });
