@@ -82,7 +82,15 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
                 .mapNotNull { artwork.embedBox(frame, it, GUIDE_MIN_SIM) }
                 .maxByOrNull { it.sim }
             if (best != null && out.none { it.passcode == best.passcode }) {
-                val (zoneTexts, legacyText) = readZones(frame, best.box, best.passcode)
+                // Zonen am vollen erwarteten Artwork verankern (der Kandidat ist ARTWORK_SCALE-fach
+                // kleiner). Seitenform nicht pruefen: die Box ist hier konstruiert, nicht vom Detektor
+                // geraten, und die Schraegsicht der Halterung streckt das Artwork auf ~1,12.
+                val b = best.box
+                val cx = (b.x1 + b.x2) / 2; val cy = (b.y1 + b.y2) / 2
+                val hw = (b.x2 - b.x1) / 2 / GuideRegion.ARTWORK_SCALE; val hh = (b.y2 - b.y1) / 2 / GuideRegion.ARTWORK_SCALE
+                val zoneBox = Box((cx - hw).coerceAtLeast(0f), (cy - hh).coerceAtLeast(0f),
+                    (cx + hw).coerceAtMost(frame.width.toFloat()), (cy + hh).coerceAtMost(frame.height.toFloat()), 1f)
+                val (zoneTexts, legacyText) = readZones(frame, zoneBox, best.passcode, trustShape = true)
                 out.add(Detection(best.box, best.passcode, best.sim, zoneTexts, legacyText))
                 return out
             }
@@ -116,7 +124,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
      * Every zone bitmap [CardZones] hands back is already enhanced; this function OCRs each and
      * recycles it immediately after, exactly as the old single-band read did.
      */
-    private fun readZones(frame: Bitmap, b: Box, knownPasscode: Int?): Pair<Map<Zone, String>, String> {
+    private fun readZones(frame: Bitmap, b: Box, knownPasscode: Int?, trustShape: Boolean = false): Pair<Map<Zone, String>, String> {
         // Key the safety net off whether the TYPE actually resolved, not off whether `layout` is
         // null: CardLayout.layoutFor(null) returns STANDARD, a concrete value, so keying off the
         // layout silently denied the legacy band to catalog misses — the case where we know least.
@@ -164,7 +172,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // ueber den Katalog aufgeloesten Pfad ab (eine bekannte STANDARD-Karte, deren Box die
         // obere Kartenhaelfte erwischt hat), und sie ist es, die eine Box verwirft, die in gar kein
         // Band faellt — 55 der 85 Embedder-Fehltreffer im Messkorb, gestreut von 1:0.3 bis 8.6.
-        if (!CardLayout.isArtworkShaped(layout, bw, bh)) {
+        if (!trustShape && !CardLayout.isArtworkShaped(layout, bw, bh)) {
             android.util.Log.i("BandOcr", "layout=$layoutLabel zone=SKIPPED " +
                 "ar=${String.format(java.util.Locale.ROOT, "%.3f", CardLayout.aspect(bw, bh))} " +
                 "box=${bw.toInt()}x${bh.toInt()} (Box ist kein Artwork)")
