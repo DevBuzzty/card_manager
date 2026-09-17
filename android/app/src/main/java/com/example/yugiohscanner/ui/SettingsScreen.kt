@@ -6,6 +6,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -14,6 +16,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.BuildConfig
 import com.example.yugiohscanner.cloud.CatalogRepository
@@ -202,6 +207,22 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
                         label = { Text(com.example.yugiohscanner.cloud.Valuation.EDITION_LABELS[e] ?: e) })
                 }
             }
+            // Spec H1 §4: keep_per_card -- gespeichert beim Verlassen des Felds oder "Fertig", normalisiert (ungültig -> 3).
+            var keepInput by remember { mutableStateOf(com.example.yugiohscanner.Prefs.keepPerCard(ctx).toString()) }
+            var keepFocused by remember { mutableStateOf(false) }
+            fun saveKeep() { keepInput = com.example.yugiohscanner.Prefs.setKeepPerCard(ctx, keepInput).toString() }
+            Text("Duplikate: behalten je Karte", style = MaterialTheme.typography.labelSmall, color = Muted)
+            OutlinedTextField(
+                value = keepInput, onValueChange = { keepInput = it.filter(Char::isDigit).take(2) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { saveKeep() }),
+                modifier = Modifier.width(96.dp).onFocusChanged { f ->
+                    if (keepFocused && !f.isFocused) saveKeep()
+                    keepFocused = f.isFocused
+                },
+            )
+            Text("Ganze Zahl 1–99, Standard 3. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
         }
 
         // ---- Über -------------------------------------------------------------
