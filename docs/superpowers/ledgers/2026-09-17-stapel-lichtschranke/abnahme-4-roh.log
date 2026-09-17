@@ -1,0 +1,183 @@
+StapelMess === Scanner geoeffnet t=1789647283248 ===
+StapelMess stoss start=1789647283949 dauer=0 spitze=4,9 einwurf=false
+StapelMess stoss start=1789647285430 dauer=491 spitze=15,5 einwurf=false
+StapelMess stoss start=1789647286089 dauer=173 spitze=6,7 einwurf=false
+StapelMess stoss start=1789647293909 dauer=198 spitze=76,3 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[] t=1789647294940
+StapelDiag ml t=1789647294947 dets=0 
+StapelDiag ml t=1789647295076 dets=0 
+StapelDiag ml t=1789647295208 dets=1 77044671@1,00[259,230,1180,1689]in
+StapelDiag ml t=1789647295479 dets=0 
+StapelDiag ml t=1789647295600 dets=0 
+StapelDiag ml t=1789647295739 dets=1 77044671@1,00[259,230,1180,1689]in
+MlScan confirmed card 77044671 t=1789647295973
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789647298937 dauer=399 spitze=79,3 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789647300164
+StapelDiag ml t=1789647300174 dets=0 
+StapelDiag ml t=1789647300306 dets=1 77044671@1,00[259,230,1180,1689]in
+StapelDiag ml t=1789647300571 dets=0 
+StapelDiag ml t=1789647300703 dets=0 
+StapelDiag ml t=1789647300836 dets=1 77044671@1,00[259,230,1180,1689]in
+MlScan confirmed card 77044671 t=1789647301085
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789647303802 dauer=199 spitze=58,6 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789647304830
+StapelDiag ml t=1789647304835 dets=0 
+StapelDiag ml t=1789647304966 dets=0 
+StapelDiag ml t=1789647305100 dets=1 77044671@1,00[259,230,1180,1689]in
+StapelDiag ml t=1789647305336 dets=0 
+StapelDiag ml t=1789647305467 dets=0 
+StapelDiag ml t=1789647305602 dets=1 77044671@1,00[259,230,1180,1689]in
+MlScan confirmed card 77044671 t=1789647305833
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789647307905 dauer=295 spitze=81,0 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789647308955
+StapelDiag ml t=1789647308965 dets=1 77044671@1,00[259,230,1180,1689]in
+StapelDiag ml t=1789647309198 dets=0 
+StapelDiag ml t=1789647309323 dets=0 
+StapelDiag ml t=1789647309471 dets=1 77044671@1,00[259,230,1180,1689]in
+MlScan confirmed card 77044671 t=1789647309693
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789647312297 dauer=234 spitze=79,9 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789647313420
+StapelDiag ml t=1789647313428 dets=0 
+StapelDiag ml t=1789647313563 dets=0 
+StapelDiag ml t=1789647313695 dets=0 
+StapelDiag ml t=1789647313928 dets=0 
+StapelDiag ml t=1789647314061 dets=0 
+StapelDiag ml t=1789647314231 dets=0 
+StapelDiag ml t=1789647314462 dets=0 
+StapelDiag ml t=1789647314595 dets=0 
+StapelDiag ml t=1789647314727 dets=0 
+StapelDiag ml t=1789647314961 dets=0 
+StapelDiag ml t=1789647315097 dets=0 
+StapelDiag ml t=1789647315227 dets=0 
+StapelDiag foto einwurf-1789647313420.jpg dets=[]
+StapelDiag ml t=1789647315494 dets=0 
+StapelDiag ml t=1789647315626 dets=0 
+StapelDiag ml t=1789647315760 dets=0 
+StapelDiag ml t=1789647315993 dets=0 
+StapelDiag ml t=1789647316121 dets=0 
+StapelDiag ml t=1789647316261 dets=0 
+StapelDiag ml t=1789647316492 dets=0 
+StapelDiag ml t=1789647316626 dets=0 
+StapelDiag ml t=1789647316763 dets=0 
+StapelDiag ml t=1789647317028 dets=0 
+StapelDiag ml t=1789647317160 dets=0 
+StapelDiag ml t=1789647317292 dets=0 
+StapelDiag ml t=1789647317527 dets=0 
+StapelDiag ml t=1789647317659 dets=0 
+StapelDiag ml t=1789647317792 dets=0 
+StapelDiag ml t=1789647318026 dets=0 
+StapelDiag ml t=1789647318159 dets=0 
+StapelDiag ml t=1789647318292 dets=0 
+StapelDiag ml t=1789647318533 dets=0 
+StapelDiag ml t=1789647318659 dets=0 
+StapelDiag ml t=1789647318791 dets=0 
+StapelDiag ml t=1789647319026 dets=0 
+StapelDiag ml t=1789647319157 dets=0 
+StapelDiag ml t=1789647319292 dets=0 
+StapelDiag ml t=1789647319525 dets=0 
+StapelDiag ml t=1789647319657 dets=0 
+StapelDiag ml t=1789647319793 dets=0 
+StapelDiag ml t=1789647320025 dets=0 
+StapelDiag ml t=1789647320162 dets=0 
+StapelDiag ml t=1789647320292 dets=0 
+StapelDiag ml t=1789647320529 dets=0 
+StapelDiag ml t=1789647320657 dets=0 
+StapelDiag ml t=1789647320795 dets=0 
+StapelDiag ml t=1789647321026 dets=0 
+StapelDiag ml t=1789647321160 dets=0 
+StapelDiag ml t=1789647321287 dets=0 
+StapelDiag ml t=1789647321524 dets=0 
+StapelDiag ml t=1789647321659 dets=0 
+StapelDiag ml t=1789647321796 dets=0 
+StapelDiag ml t=1789647322061 dets=0 
+StapelDiag ml t=1789647322224 dets=0 
+StapelDiag ml t=1789647322391 dets=0 
+StapelDiag ml t=1789647322624 dets=0 
+StapelDiag ml t=1789647322960 dets=0 
+StapelMess stoss start=1789647323024 dauer=132 spitze=8,6 einwurf=false
+StapelDiag ml t=1789647323123 dets=0 
+StapelDiag ml t=1789647323356 dets=0 
+StapelDiag ml t=1789647323493 dets=0 
+StapelMess stoss start=1789647323356 dauer=300 spitze=13,8 einwurf=false
+StapelDiag ml t=1789647323656 dets=0 
+StapelMess stoss start=1789647323791 dauer=66 spitze=4,7 einwurf=false
+StapelDiag ml t=1789647323857 dets=0 
+StapelDiag ml t=1789647323992 dets=0 
+StapelMess stoss start=1789647323992 dauer=199 spitze=5,2 einwurf=false
+StapelDiag ml t=1789647324156 dets=0 
+StapelDiag ml t=1789647324363 dets=0 
+StapelDiag ml t=1789647324527 dets=0 
+StapelDiag ml t=1789647324689 dets=0 
+StapelDiag ml t=1789647324888 dets=0 
+StapelDiag ml t=1789647325024 dets=0 
+StapelDiag ml t=1789647325165 dets=0 
+StapelDiag ml t=1789647325360 dets=0 
+StapelMess stoss start=1789647324363 dauer=1061 spitze=26,8 einwurf=false
+StapelDiag ml t=1789647325526 dets=0 
+StapelMess stoss start=1789647325590 dauer=104 spitze=6,2 einwurf=false
+StapelDiag ml t=1789647325694 dets=0 
+StapelDiag ml t=1789647325895 dets=0 
+StapelDiag ml t=1789647326029 dets=0 
+StapelDiag ml t=1789647326194 dets=0 
+StapelDiag ml t=1789647326392 dets=0 
+StapelDiag ml t=1789647326554 dets=0 
+StapelDiag ml t=1789647326722 dets=0 
+StapelDiag ml t=1789647326921 dets=0 
+StapelDiag ml t=1789647327081 dets=0 
+StapelDiag ml t=1789647327256 dets=0 
+StapelDiag ml t=1789647327455 dets=0 
+StapelDiag ml t=1789647327589 dets=0 
+StapelDiag ml t=1789647327755 dets=0 
+StapelDiag ml t=1789647327953 dets=0 
+StapelDiag ml t=1789647328087 dets=0 
+StapelDiag ml t=1789647328256 dets=0 
+StapelMess stoss start=1789647328521 dauer=197 spitze=73,2 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[] t=1789647329641
+StapelDiag ml t=1789647329654 dets=0 
+StapelDiag ml t=1789647329791 dets=0 
+StapelDiag ml t=1789647329954 dets=1 77044671@1,00[259,230,1180,1689]in
+StapelDiag ml t=1789647330220 dets=0 
+StapelDiag ml t=1789647330388 dets=0 
+StapelDiag ml t=1789647330556 dets=1 77044671@1,00[259,230,1180,1689]in
+MlScan confirmed card 77044671 t=1789647330802
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789647334849 dauer=300 spitze=75,4 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789647335928
+StapelDiag ml t=1789647335948 dets=0 
+StapelDiag ml t=1789647336115 dets=1 77044671@1,00[259,230,1180,1689]in
+StapelDiag ml t=1789647336384 dets=0 
+StapelDiag ml t=1789647336547 dets=0 
+StapelDiag ml t=1789647336715 dets=1 77044671@1,00[259,230,1180,1689]in
+MlScan confirmed card 77044671 t=1789647336954
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789647339879 dauer=203 spitze=65,1 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789647340919
+StapelDiag ml t=1789647340945 dets=0 
+StapelDiag ml t=1789647341112 dets=1 77044671@1,00[259,230,1180,1689]in
+StapelDiag ml t=1789647341386 dets=0 
+StapelDiag ml t=1789647341546 dets=0 
+StapelDiag ml t=1789647341717 dets=1 77044671@1,00[259,230,1180,1689]in
+MlScan confirmed card 77044671 t=1789647341953
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789647345212 dauer=269 spitze=63,9 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789647346317
+StapelDiag ml t=1789647346343 dets=1 77044671@1,00[259,230,1180,1689]in
+StapelDiag ml t=1789647346614 dets=0 
+StapelDiag ml t=1789647346774 dets=0 
+StapelDiag ml t=1789647346910 dets=1 77044671@1,00[259,230,1180,1689]in
+MlScan confirmed card 77044671 t=1789647347148
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789647350073 dauer=337 spitze=57,5 einwurf=true
+StapelScan einwurf anzahl=1 rearmt=[77044671] t=1789647351250
+StapelDiag ml t=1789647351272 dets=0 
+StapelDiag ml t=1789647351438 dets=0 
+StapelDiag ml t=1789647351605 dets=1 77044671@1,00[259,230,1180,1689]in
+MlScan confirmed card 77044671 t=1789647351852
+StapelScan gebucht 77044671 x1
+StapelMess stoss start=1789647353212 dauer=291 spitze=9,6 einwurf=false
+StapelMess stoss start=1789647353636 dauer=1799 spitze=39,6 einwurf=false
+StapelMess stoss start=1789647355643 dauer=25 spitze=6,7 einwurf=false
