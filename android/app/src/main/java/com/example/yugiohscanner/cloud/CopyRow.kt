@@ -29,6 +29,8 @@ data class CopyRow(
     val createdAt: String? = null,
     // NUR-LESE-FELD wie createdAt: der Server stempelt es; Stichtag des Delta-Abgleichs (Spec §4.3).
     val updatedAt: String? = null,
+    // Spec H1 §6: Exemplar steht auf der Verkaufsliste. Geschrieben nur ueber CollectionRepository.setForSale.
+    val forSale: Boolean = false,
 ) {
     fun printingKey() = "$cardId|$setCode|$language|$rarity"
 }
