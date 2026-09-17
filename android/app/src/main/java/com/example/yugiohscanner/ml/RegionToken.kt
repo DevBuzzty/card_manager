@@ -77,8 +77,10 @@ object RegionToken {
     // extraction ("125") would otherwise never fuzzy-match this project's own real "...DEY25"
     // captures. This is reuse of an existing, narrow, already-evidenced correction -- not a new
     // one invented for this file.
+    // "B3"/"3B": am Geraet (Stapel-Halterung, Schraegsicht, Glitzer) las die OCR das "B" von
+    // "BLGG-EN053" 23-mal als "3" (docs/superpowers/ledgers/2026-09-17-kartenerkennung-befund/geraet-3-roh.log).
     private val CONFUSE = hashSetOf(
-        "O0", "0O", "I1", "1I", "L1", "1L", "S5", "5S", "B8", "8B", "Y1", "1Y"
+        "O0", "0O", "I1", "1I", "L1", "1L", "S5", "5S", "B8", "8B", "Y1", "1Y", "B3", "3B"
     )
 
     private fun fuzzyEquals(a: String, b: String): Boolean {
