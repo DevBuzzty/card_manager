@@ -23,6 +23,8 @@ const { readSealedProducts, searchSealedProducts, sealedProductsAvailable } = re
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck, saveDeck } = require('./decks.cjs');
 const { catalogPrices, catalogCards, readCatalogCards, catalogMainId, catalogLegality } = require('./catalog-prices.cjs');
+const { createImportSessions, importOpen, importResolve, importRun } = require('./carddex-import.cjs');
+const { buildExport, exportResultText } = require('./collection-export.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -718,6 +720,73 @@ ipcMain.handle('create-imported-deck', async (event, input) => {
 // --- Spec E3: Legalitaet & Simulation ---
 // Name, Typ und Banlist aller Katalogkarten, Artwork-Zuordnung und Baudatum; ohne (E3-)Katalog available = false.
 ipcMain.handle('get-catalog-legality', () => catalogLegality(userDataPath));
+
+// --- Spec F1: Export & eigenes Format ---
+// Regeln in carddex-format/-resolve/-import.cjs, export-formats.cjs und collection-export.cjs; hier nur Dialoge und Dateien.
+const importSessions = createImportSessions();
+// Katalogkarte ueber die Artwork-Zuordnung (Name, Typ, Bild der Hauptkarte); ohne Datei null ("Offline-Katalog fehlt").
+function importCatalog() {
+    const cards = readCatalogCards(userDataPath);
+    return cards ? { card: (p) => cards.get(catalogMainId(userDataPath, p)) || null } : null;
+}
+ipcMain.handle('import-open', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Card-Dex-CSV importieren', properties: ['openFile'], filters: [{ name: 'CSV', extensions: ['csv', 'txt'] }],
+    });
+    if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+    let text;
+    try { text = fs.readFileSync(result.filePaths[0], 'utf8'); }
+    catch (e) { console.error('[import-open]', e); return { error: 'Datei nicht lesbar' }; }
+    try { return importOpen(db, importSessions, { fileName: path.basename(result.filePaths[0]), text }, importCatalog()); }
+    catch (e) { console.error('[import-open]', e); return { error: CONTAINER_COPY_ERROR_MSG }; }
+});
+ipcMain.handle('import-resolve', (event, input) => {
+    try { return importResolve(db, importSessions, input, importCatalog()); }
+    catch (e) { console.error('[import-resolve]', e); return { error: CONTAINER_COPY_ERROR_MSG }; }
+});
+// Busy-Schutz am Anfang von importRun: die Vorschau-Sitzung wird verbraucht, ein zweiter Klick findet keine mehr.
+ipcMain.handle('import-run', (event, input) => {
+    try {
+        return importRun(db, importSessions, input, {
+            catalog: importCatalog(), logDir: path.join(userDataPath, 'imports'), now: new Date(),
+            onChanged: () => {
+                recordPortfolioValueSafe();
+                if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('collection-changed');
+            },
+        });
+    } catch (e) { console.error('[import-run]', e); return { success: false, error: `Import fehlgeschlagen: ${CONTAINER_COPY_ERROR_MSG}` }; }
+});
+// Wunschliste nur fuer die Wantslist (Cloud); englische Namen aus dem Katalog.
+async function exportBuild({ format, scope } = {}) {
+    const catalog = importCatalog();
+    const nameEn = (p) => { const c = catalog && catalog.card(p); return (c && c.name_en) || null; };
+    let wishlist;
+    if (format === 'wantslist') {
+        const c = await dealsClient();
+        const { data, error } = await c.from('wishlist').select('card_id, name');
+        if (error) throw new Error(error.message);
+        wishlist = data || [];
+    }
+    return buildExport(db, { format, scope }, { nameEn, wishlist, now: new Date() });
+}
+ipcMain.handle('export-count', async (event, input) => {
+    try { return { count: (await exportBuild(input)).count }; }
+    catch (e) { return { count: 0, error: e.message }; }
+});
+ipcMain.handle('export-run', async (event, input) => {
+    let built;
+    try { built = await exportBuild(input); }
+    catch (e) { return { success: false, error: `Export fehlgeschlagen: ${e.message}` }; }
+    if (built.count === 0) return { success: false, error: 'Nichts zu exportieren' };
+    const result = await dialog.showSaveDialog(mainWindow, {
+        title: 'Exportieren', defaultPath: built.defaultName,
+        filters: [{ name: built.ext === 'csv' ? 'CSV' : 'Text', extensions: [built.ext] }],
+    });
+    if (result.canceled || !result.filePath) return { canceled: true };
+    try { fs.writeFileSync(result.filePath, built.content, 'utf8'); }
+    catch (e) { return { success: false, error: `Export fehlgeschlagen: ${e.message}` }; }
+    return { success: true, text: exportResultText(built) };
+});
 
 // --- Other Handlers ---
 
