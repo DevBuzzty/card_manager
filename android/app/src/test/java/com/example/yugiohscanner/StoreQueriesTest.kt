@@ -97,7 +97,7 @@ class StoreQueriesTest {
 
     @Test fun `Spaltenlisten enthalten updated_at`() {
         assertEquals(
-            "copy_id,card_id,set_code,language,rarity,edition,condition,deleted,container_id,page,slot,tags,note,created_at,updated_at",
+            "copy_id,card_id,set_code,language,rarity,edition,condition,deleted,container_id,page,slot,tags,note,for_sale,created_at,updated_at",
             StoreQueries.COPY_COLS,
         )
         assertEquals("container_id,name,kind,pockets_per_page,color,sort_order,deleted,updated_at", StoreQueries.CONTAINER_COLS)

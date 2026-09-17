@@ -119,8 +119,11 @@ object CollectionRepository {
         ids
     }
 
+    // Spec H1 §5.3: markierte Exemplare (for_sale) zuerst, sonst die bisherige Reihenfolge (neueste zuerst, wie copiesOf liefert).
+    internal fun removalOrder(copies: List<CopyRow>): List<CopyRow> = copies.sortedByDescending { it.forSale }
+
     suspend fun removeCopies(printing: CardRow, edition: String, condition: String, count: Int = 1): Int = withContext(Dispatchers.IO) {
-        val victims = copiesOf(printing, edition, condition).take(maxOf(1, count))
+        val victims = removalOrder(copiesOf(printing, edition, condition)).take(maxOf(1, count))
         for (c in victims) patchCopy(c.copyId, JSONObject().put("deleted", true))
         victims.size
     }
@@ -140,7 +143,8 @@ object CollectionRepository {
         }.use { resp -> if (!resp.isSuccessful) throw RuntimeException("Exemplar ändern fehlgeschlagen (${resp.code}): ${resp.body?.string()}") }
     }
 
-    private fun parseCopies(arr: JSONArray): List<CopyRow> = (0 until arr.length()).map { i ->
+    // internal statt private: SaleCopiesRepoTest prueft das Lesen von for_sale (Spec H1 §8).
+    internal fun parseCopies(arr: JSONArray): List<CopyRow> = (0 until arr.length()).map { i ->
         val o = arr.getJSONObject(i)
         CopyRow(
             copyId = o.getString("copy_id"), cardId = o.getString("card_id"),
@@ -154,7 +158,35 @@ object CollectionRepository {
             note = if (o.isNull("note")) null else o.optString("note"),
             createdAt = if (o.isNull("created_at")) null else o.optString("created_at"),
             updatedAt = if (o.isNull("updated_at")) null else o.optString("updated_at"),
+            forSale = o.optBoolean("for_sale", false),
         )
+    }
+
+    /**
+     * Spec H1 §6: Query-Parameter eines for_sale-PATCH fuer einen Block copy_ids -- nur lebende Exemplare und nur solche mit
+     * anderem Wert, damit ein wiederholter Aufruf nichts neu stempelt. Rein, damit ohne Server testbar.
+     */
+    internal fun forSalePatchParams(ids: List<String>, value: Boolean): List<Pair<String, String>> = listOf(
+        "copy_id" to "in.(${ids.joinToString(",") { "\"$it\"" }})",
+        "deleted" to "eq.false",
+        "for_sale" to "eq.${!value}",
+    )
+
+    /**
+     * Spec H1 §6: Verkaufsliste umschalten, in Bloecken zu 100 copy_ids. `updated_at` stempelt der Server (Delta-Abgleich).
+     * Aufrufer laufen durch das InFlight-Gatter und gleichen danach mit CollectionStore.awaitSync() ab.
+     */
+    suspend fun setForSale(copyIds: List<String>, value: Boolean) = withContext(Dispatchers.IO) {
+        for (chunk in copyIds.distinct().chunked(100)) {
+            val b = "${SupabaseCloud.base()}/rest/v1/card_copies".toHttpUrl().newBuilder()
+            for ((k, v) in forSalePatchParams(chunk, value)) b.addQueryParameter(k, v)
+            val body = JSONObject().put("for_sale", value)
+            executeWithReauth {
+                auth(Request.Builder().url(b.build())).addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=minimal")
+                    .patch(body.toString().toRequestBody(SupabaseCloud.jsonMedia)).build()
+            }.use { resp -> if (!resp.isSuccessful) throw RuntimeException("Verkaufsliste ändern fehlgeschlagen (${resp.code}): ${resp.body?.string()}") }
+        }
     }
 
     // Bindet die "Box und Deckbox haben keine Seiten"-Regel an den Aufruf selbst, nicht an die
