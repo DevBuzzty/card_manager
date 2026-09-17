@@ -40,6 +40,7 @@ class MlScanAnalyzer(
     // Nur auf dem Analyse-Thread benutzt.
     private var prevStrip: FloatArray? = null
     private val chuteGate = ChuteGate()
+    private var lastFrameMs = 0L
 
     // Einwuerfe, die noch keinem Erkennungsergebnis mitgegeben wurden (Analyse- -> Erkennungs-Thread).
     private val einwurfLock = Any()
@@ -56,6 +57,9 @@ class MlScanAnalyzer(
 
     override fun analyze(image: ImageProxy) {
         val tFrame = System.currentTimeMillis()
+        // DIAGNOSE (vorlaeufig): Aussetzer der Kamerabilder -- ein Einwurf dauert nur ~200 ms.
+        if (lastFrameMs != 0L && tFrame - lastFrameMs > 150) MessLog.line("StapelDiag", "luecke ${tFrame - lastFrameMs} ms bis t=$tFrame")
+        lastFrameMs = tFrame
         try {
             val rot = image.imageInfo.rotationDegrees
             val gv = guideView
