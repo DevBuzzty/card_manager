@@ -2701,7 +2701,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 1. Einstellungen › Daten › „Exportieren…" › Card Dex (CSV) › Ganze Sammlung → Datei speichern; Meldung „N Exemplare exportiert".
 2. Datei im Texteditor und in Excel öffnen: Umlaute korrekt, 16 Spalten, Behälter/Seite/Fach/Tags/Notizen.
-3. Test-Datenbank nach Offenem Punkt 17: sichern, Sync aus, „Speicherort verschieben“ (Kopie), „Importieren…“ mit *Ersetzen*: Kopfzeile und Warnung prüfen, Übernehmen, Anzahl und Standorte vergleichen; zurück über das Löschen von `config.json` bei geschlossener App, Sync wieder an.
-4. In der echten Sammlung eine kleine bearbeitete Datei mit *Hinzufügen* und *Ersetzen* importieren (je eine unbekannte Passcode-Zeile, eine ungültige Menge, ein neuer Behälter, ein belegtes Fach); Warnung bei *Ersetzen* lesen; rote Zeilen auslassen; Protokoll unter `%APPDATA%/…/imports/` ansehen.
+3. (Gestrichen, Nutzerentscheidung 2026-09-17: Rundlauf in leere Datenbank ist in Task 5 automatisiert; keine Test-Datenbank über „Speicherort verschieben“.)
+4. Vorher „Datenbank sichern“. In der echten Sammlung eine kleine bearbeitete Datei mit *Hinzufügen* und *Ersetzen* importieren (je eine unbekannte Passcode-Zeile, eine ungültige Menge, ein neuer Behälter, ein belegtes Fach); Warnung bei *Ersetzen* lesen; rote Zeilen auslassen; Protokoll unter `%APPDATA%/…/imports/` ansehen.
 5. Verkaufsliste und Wantslist exportieren und in Kleinanzeigen bzw. Cardmarket einfügen; Dragon Shield CSV testweise in Dragon Shield importieren (Offener Punkt 2).
 6. Am Handy nach dem nächsten Sync prüfen, dass importierte Exemplare, Printings und Behälter da sind.
