@@ -129,4 +129,14 @@ class DuplicatesTest {
         assertEquals("…", Duplicates.LOADING)
         assertEquals(DuplicatesSummary(0, 0, 0.0), Duplicates.summary(emptyList()))
     }
+
+    /** Spec H1 I1: "…" nur bis zum ersten Ergebnis; danach bleibt der alte Stand stehen, auch wenn
+     *  cards/copies/keep sich schon geaendert haben -- die Identitaetspruefung darf das nicht mehr
+     *  erzwingen. Nur ohne Speicher (storeReady = false) wird der Platzhalter erzwungen. */
+    @Test fun `Sichtbarer Stand bleibt bei Aenderung stehen, nur ohne Speicher weg`() {
+        assertEquals(null, Duplicates.visibleSaleData(false, "alt"))
+        assertEquals(null, Duplicates.visibleSaleData(false, null))
+        assertEquals("alt", Duplicates.visibleSaleData(true, "alt"))
+        assertEquals(null, Duplicates.visibleSaleData(true, null))
+    }
 }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -75,7 +76,12 @@ suspend fun freshSaleData(ctx: Context): SaleData? {
     return computeSaleData(r.cards, r.copies, keepOf(ctx))
 }
 
-/** Verkaufsdaten zum aktuellen Speicherstand; null, solange (neu) gerechnet wird -> "…", nie "0 Karten". */
+/**
+ * Verkaufsdaten zum Speicher; "…" (null) nur, bis das ERSTE Ergebnis da ist. Danach bleibt der zuletzt
+ * berechnete Stand sichtbar, auch waehrend nach einer Mutation/einem Sync/keep_per_card-Wechsel neu
+ * gerechnet wird (Spec H1 I1) -- sonst verlaesst die LazyColumn die Komposition und die Scrollposition
+ * geht verloren. Mutationen lesen ohnehin frisch über freshSaleData(), nie über diesen Schnappschuss.
+ */
 @Composable
 fun rememberSaleData(): SaleData? {
     val ctx = LocalContext.current
@@ -86,7 +92,7 @@ fun rememberSaleData(): SaleData? {
         val r = ready ?: return@produceState
         value = computeSaleData(r.cards, r.copies, keep)
     }
-    return data?.takeIf { ready != null && it.cards === ready.cards && it.copies === ready.copies && it.keep == keep }
+    return Duplicates.visibleSaleData(ready != null, data)
 }
 
 /** Ein-Lauf-Mutation: InFlight-Gatter, danach Abgleich mit dem Speicher, erst dann frei (Spec H1 §7). */
@@ -108,14 +114,17 @@ private fun rememberMutation(onError: (String?) -> Unit): Pair<Boolean, (suspend
     return busy to mutate
 }
 
-/** Spec H1 §5.2: Duplikate am Handy -- Kopf mit "Alle Vorschläge", je Karte Zeile mit Schalter; Tipp oeffnet das Detail. */
+/**
+ * Spec H1 §5.2: Duplikate am Handy -- Kopf mit "Alle Vorschläge", je Karte Zeile mit Schalter; Tipp oeffnet das Detail.
+ * [history] (§5.4 Vorgeschichte je Haupt-Passcode) und [listState] (Scrollposition) werden vom Aufrufer
+ * (CollectionScreen, oberhalb des Karten-Detail-Returns) gehalten, damit beides ein Detail-Öffnen und
+ * -Schließen überlebt (Spec H1 M2); der Aufrufer leert [history] beim Verlassen des Duplikate-Chips.
+ */
 @Composable
-fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, modifier: Modifier = Modifier) {
+fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashMap<String, List<String>>, listState: LazyListState, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
     val (busy, mutate) = rememberMutation { error = it }
-    // §5.4: je Haupt-Passcode die Vorschlaege, die beim Einschalten in dieser Ansicht schon markiert waren.
-    val history = remember { HashMap<String, List<String>>() }
     var confirmAll by remember { mutableStateOf(false) }
 
     if (data == null) {
@@ -135,7 +144,7 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, modifier: Modi
         if (data.duplicates.isEmpty()) {
             Text("Keine Duplikate.", color = Muted, modifier = Modifier.padding(top = 16.dp))
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
+            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(data.duplicates, key = { it.mainId }) { e ->
                     val first = data.byId[e.copyIds.first()]
                     SpaceCard(Modifier.fillMaxWidth()) {
@@ -191,9 +200,12 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, modifier: Modi
     }
 }
 
-/** Spec H1 §5.2: Zum Verkauf am Handy -- Printings mit markierten Exemplaren, je Exemplar "Zurück in die Sammlung". Kein Export. */
+/**
+ * Spec H1 §5.2: Zum Verkauf am Handy -- Printings mit markierten Exemplaren, je Exemplar "Zurück in die Sammlung". Kein Export.
+ * [listState] wird vom Aufrufer gehalten, damit die Scrollposition ein Karten-Detail-Öffnen/-Schließen überlebt (Spec H1 M2).
+ */
 @Composable
-fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, modifier: Modifier = Modifier) {
+fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyListState, modifier: Modifier = Modifier) {
     var error by remember { mutableStateOf<String?>(null) }
     val (busy, mutate) = rememberMutation { error = it }
     val store by CollectionStore.state.collectAsState()
@@ -212,7 +224,7 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, modifier: Modifie
         if (groups.isEmpty()) {
             Text("Keine Exemplare zum Verkauf.", color = Muted, modifier = Modifier.padding(top = 16.dp))
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
+            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
                 items(groups, key = { "${it.cardId}|${it.setCode}|${it.language}|${it.rarity}" }) { g ->
                     SpaceCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(10.dp)) {

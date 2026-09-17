@@ -163,4 +163,13 @@ object Duplicates {
         val byKey = cards.filter { !it.deleted }.associateBy { it.printingKey() }
         return copies.mapNotNull { c -> if (c.deleted) null else byKey[c.printingKey()]?.let { SaleCopy(c, it) } }
     }
+
+    /**
+     * Spec H1 I1: welcher Stand angezeigt wird. "…" (LOADING, current == null) nur, bis das erste
+     * Ergebnis da ist; danach bleibt der zuletzt berechnete Stand sichtbar, auch wenn cards/copies/keep
+     * sich schon geaendert haben und neu gerechnet wird -- Mutationen lesen ohnehin ueber
+     * freshSaleData(), nie ueber den Kompositions-Schnappschuss. Nur ohne bereiten Speicher (storeReady
+     * = false) wird der Platzhalter erzwungen.
+     */
+    fun <T> visibleSaleData(storeReady: Boolean, current: T?): T? = if (storeReady) current else null
 }
