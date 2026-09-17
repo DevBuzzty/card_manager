@@ -1,0 +1,614 @@
+--------- beginning of main
+09-17 16:18:59.837 I/StapelScan(10559): stoss start=1789654739715 dauer=0 spitze=4,2 einwurf=false
+09-17 16:19:07.099 I/StapelScan(10559): stoss start=1789654746824 dauer=168 spitze=8,7 einwurf=false
+09-17 16:19:07.933 I/StapelScan(10559): stoss start=1789654747821 dauer=0 spitze=3,3 einwurf=false
+09-17 16:19:28.459 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:28.529 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='GDEO53 | n Friedhof'
+09-17 16:19:28.559 I/StapelScan(10559): stoss start=1789654767860 dauer=198 spitze=52,4 einwurf=true
+09-17 16:19:28.609 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:28.610 I/MlScan  (10559): frame: 1 cards in 431ms top=77044671@0,77
+09-17 16:19:28.942 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:29.011 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEO53 | en Friedhof'
+09-17 16:19:29.095 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:29.096 I/StapelScan(10559): einwurf anzahl=1 rearmt=[] t=1789654769096
+09-17 16:19:29.096 I/MlScan  (10559): frame: 1 cards in 420ms top=77044671@0,73
+09-17 16:19:29.455 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:29.520 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEOS3 | en Friedhof'
+09-17 16:19:29.590 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:29.590 I/MlScan  (10559): frame: 1 cards in 407ms top=77044671@0,73
+09-17 16:19:29.953 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:30.017 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEOS3 | en Friedhof'
+09-17 16:19:30.091 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:30.091 I/MlScan  (10559): confirmed card 77044671
+09-17 16:19:30.092 I/StapelScan(10559): gebucht 77044671 x1
+09-17 16:19:30.107 I/MlScan  (10559): frame: 1 cards in 415ms top=77044671@0,73
+09-17 16:19:30.490 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:30.564 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEO53 | en Friedhof'
+09-17 16:19:30.658 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:30.660 I/MlScan  (10559): frame: 1 cards in 476ms top=77044671@0,73
+09-17 16:19:31.035 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:31.109 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEOS3 | en Friedhof'
+09-17 16:19:31.189 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:31.190 I/MlScan  (10559): frame: 1 cards in 450ms top=77044671@0,73
+09-17 16:19:31.539 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:31.604 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEOS3 | en Friedhof'
+09-17 16:19:31.684 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:31.685 I/StapelScan(10559): gesendet 77044671 x1 kandidaten=[]
+09-17 16:19:31.687 I/MlScan  (10559): frame: 1 cards in 430ms top=77044671@0,74
+09-17 16:19:32.119 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:32.183 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEO53 | en Friedhof'
+09-17 16:19:32.289 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:32.292 I/MlScan  (10559): frame: 1 cards in 546ms top=77044671@0,73
+09-17 16:19:32.427 I/ScanDecision(10559): stage=erst pc=77044671 code=- rarity=- lang=- composed=false match=NO_MATCH exact=false frames=0 known=23 light=RED grund='Kein Code-Treffer' edition=first editionConf=HIGH
+09-17 16:19:32.681 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:32.740 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEOS3 | en Friedhof'
+09-17 16:19:32.822 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:32.823 I/MlScan  (10559): frame: 1 cards in 442ms top=77044671@0,73
+09-17 16:19:33.180 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:33.242 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEOS3 | en Friedhof'
+09-17 16:19:33.322 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:33.323 I/MlScan  (10559): frame: 1 cards in 442ms top=77044671@0,73
+09-17 16:19:33.697 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:33.767 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEOS3 | en Friedhof'
+09-17 16:19:33.839 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:33.842 I/MlScan  (10559): frame: 1 cards in 428ms top=77044671@0,73
+09-17 16:19:34.235 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='77044671'
+09-17 16:19:34.310 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEOS3 | en Friedhof'
+09-17 16:19:34.391 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:34.392 I/MlScan  (10559): frame: 1 cards in 451ms top=77044671@0,73
+09-17 16:19:34.738 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,612-1002,1094 crop=684x472 raw='7704467'
+09-17 16:19:34.802 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,612-1002,1094 crop=704x316 raw='G-DEOS3 | en Friedhof'
+09-17 16:19:34.881 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,612-1002,1094 crop=540x452 raw='4671 1. Auflage'
+09-17 16:19:34.881 I/MlScan  (10559): frame: 1 cards in 436ms top=77044671@0,74
+09-17 16:19:35.064 I/BandOcr (10559): layout=UNKNOWN zone=SKIPPED ar=1.177 box=295x250 (Box ist kein Artwork)
+09-17 16:19:35.499 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:35.573 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='nd auf den Friedhof | it 2000 0der weriger | k beschworen'
+09-17 16:19:35.626 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:35.627 I/MlScan  (10559): frame: 1 cards in 405ms top=77044671@0,79
+09-17 16:19:35.694 I/StapelScan(10559): stoss start=1789654774888 dauer=272 spitze=56,8 einwurf=true
+09-17 16:19:35.963 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:36.036 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='I auf den Friedhof | 2000 oder weniger | beschwören.'
+09-17 16:19:36.085 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:36.086 I/MlScan  (10559): frame: 1 cards in 377ms top=77044671@0,77
+09-17 16:19:36.407 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:36.479 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='I auf den Friedhof | 2000 oder weniger | beschwören.'
+09-17 16:19:36.525 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:36.525 I/StapelScan(10559): einwurf anzahl=1 rearmt=[77044671] t=1789654776525
+09-17 16:19:36.525 I/MlScan  (10559): frame: 1 cards in 376ms top=77044671@0,77
+09-17 16:19:36.867 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:19:36.933 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='n Friedhof | er weniger | en.'
+09-17 16:19:36.990 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:19:36.990 I/MlScan  (10559): confirmed card 77044671
+09-17 16:19:36.990 I/StapelScan(10559): gebucht 77044671 x1
+09-17 16:19:37.003 I/MlScan  (10559): frame: 1 cards in 385ms top=77044671@0,77
+09-17 16:19:37.350 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:37.428 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='I auf den Friedhof | 2000 oder weniger | beschwören.'
+09-17 16:19:37.486 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:37.488 I/MlScan  (10559): frame: 1 cards in 394ms top=77044671@0,77
+09-17 16:19:37.812 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:37.881 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='I auf den Friedhof | 2000 oder weniger | beschwören.'
+09-17 16:19:37.933 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:37.934 I/MlScan  (10559): frame: 1 cards in 378ms top=77044671@0,78
+09-17 16:19:38.287 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:38.365 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 2000 0der weniger | beschwören.'
+09-17 16:19:38.408 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:38.409 I/MlScan  (10559): frame: 1 cards in 386ms top=77044671@0,78
+09-17 16:19:38.738 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:38.807 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 2000 oder weniger | beschwören.'
+09-17 16:19:38.857 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:38.858 I/StapelScan(10559): gesendet 77044671 x1 kandidaten=[]
+09-17 16:19:38.859 I/MlScan  (10559): frame: 1 cards in 386ms top=77044671@0,78
+09-17 16:19:39.259 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:39.356 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='| auf den Friedhof | 2000 oder weniger | beschwören.'
+09-17 16:19:39.381 I/ScanDecision(10559): stage=erst pc=77044671 code=- rarity=- lang=- composed=false match=NO_MATCH exact=false frames=0 known=23 light=RED grund='Kein Code-Treffer' edition=unknown editionConf=LOW
+09-17 16:19:39.410 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:39.412 I/MlScan  (10559): frame: 1 cards in 459ms top=77044671@0,78
+09-17 16:19:39.740 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:39.813 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='I auf den Friedhof | 2000 0der weniger | beschwören.'
+09-17 16:19:39.860 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:39.861 I/MlScan  (10559): frame: 1 cards in 377ms top=77044671@0,78
+09-17 16:19:40.206 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:40.282 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='| auf den Friedhof | 2000 0der weniger | beschwören.'
+09-17 16:19:40.330 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:40.330 I/MlScan  (10559): frame: 1 cards in 383ms top=77044671@0,78
+09-17 16:19:40.660 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:40.736 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='| auf den Friedhof | 2000 oder weniger | beschwören.'
+09-17 16:19:40.796 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:40.797 I/MlScan  (10559): frame: 1 cards in 393ms top=77044671@0,79
+09-17 16:19:41.147 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:41.229 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='BLGG-DEOS | t und auf den Friedhof | -mit 2000 0der weniger'
+09-17 16:19:41.303 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:41.303 I/MlScan  (10559): frame: 1 cards in 429ms top=77044671@0,76
+09-17 16:19:41.385 I/StapelScan(10559): stoss start=1789654780620 dauer=238 spitze=51,8 einwurf=true
+09-17 16:19:41.611 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=486,698-899,1127 crop=520x420 raw='77044671 1'
+09-17 16:19:41.674 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=486,698-899,1127 crop=540x280 raw='BLGG-DEOS3'
+09-17 16:19:41.740 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=486,698-899,1127 crop=412x400 raw='1. Auflage'
+09-17 16:19:41.741 I/MlScan  (10559): frame: 1 cards in 369ms top=77044671@0,82
+09-17 16:19:42.073 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:42.144 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | meschwõren.'
+09-17 16:19:42.213 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:42.213 I/StapelScan(10559): einwurf anzahl=1 rearmt=[77044671] t=1789654782213
+09-17 16:19:42.214 I/MlScan  (10559): frame: 1 cards in 411ms top=77044671@0,77
+09-17 16:19:42.532 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:42.598 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | meschwören.'
+09-17 16:19:42.647 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:42.647 I/MlScan  (10559): confirmed card 77044671
+09-17 16:19:42.647 I/StapelScan(10559): gebucht 77044671 x1
+09-17 16:19:42.660 I/MlScan  (10559): frame: 1 cards in 376ms top=77044671@0,77
+09-17 16:19:42.984 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:43.063 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | meschwören.'
+09-17 16:19:43.117 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:43.118 I/MlScan  (10559): frame: 1 cards in 379ms top=77044671@0,77
+09-17 16:19:43.437 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:43.503 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | meschwören.'
+09-17 16:19:43.550 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:43.550 I/MlScan  (10559): frame: 1 cards in 365ms top=77044671@0,77
+09-17 16:19:43.928 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:43.999 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | eschwören.'
+09-17 16:19:44.043 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:44.044 I/MlScan  (10559): frame: 1 cards in 388ms top=77044671@0,77
+09-17 16:19:44.373 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:44.440 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | meschwören.'
+09-17 16:19:44.488 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:44.489 I/StapelScan(10559): gesendet 77044671 x1 kandidaten=[]
+09-17 16:19:44.490 I/MlScan  (10559): frame: 1 cards in 373ms top=77044671@0,77
+09-17 16:19:44.887 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:44.935 I/ScanDecision(10559): stage=erst pc=77044671 code=- rarity=- lang=- composed=false match=NO_MATCH exact=false frames=0 known=23 light=RED grund='Kein Code-Treffer' edition=unknown editionConf=LOW
+09-17 16:19:44.957 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | meschwören.'
+09-17 16:19:45.016 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw='4'
+09-17 16:19:45.016 I/MlScan  (10559): frame: 1 cards in 429ms top=77044671@0,77
+09-17 16:19:45.333 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:45.404 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | meschwören.'
+09-17 16:19:45.470 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:45.471 I/MlScan  (10559): frame: 1 cards in 396ms top=77044671@0,77
+09-17 16:19:45.790 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:45.855 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | eschwören.'
+09-17 16:19:45.916 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:45.917 I/MlScan  (10559): frame: 1 cards in 385ms top=77044671@0,77
+09-17 16:19:46.230 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:19:46.296 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='auf den Friedhof | 000 oder weniger | meschwören.'
+09-17 16:19:46.349 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:19:46.350 I/MlScan  (10559): frame: 1 cards in 374ms top=77044671@0,77
+09-17 16:19:46.389 I/StapelScan(10559): stoss start=1789654786118 dauer=168 spitze=30,7 einwurf=false
+09-17 16:19:46.675 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=491,739-911,1152 crop=532x404 raw='77044671'
+09-17 16:19:46.745 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=491,739-911,1152 crop=544x268 raw='BLGCHEN0S3'
+09-17 16:19:46.816 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=491,739-911,1152 crop=416x388 raw='1Edition'
+09-17 16:19:46.817 I/MlScan  (10559): frame: 1 cards in 373ms top=77044671@0,86
+09-17 16:19:47.109 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,738-903,1146 crop=524x400 raw='77044671 1'
+09-17 16:19:47.177 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,738-903,1146 crop=540x268 raw='BLGG-BNOS3'
+09-17 16:19:47.244 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,738-903,1146 crop=416x380 raw='L1 Edition'
+09-17 16:19:47.245 I/MlScan  (10559): frame: 1 cards in 365ms top=77044671@0,85
+09-17 16:19:47.521 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,737-902,1145 crop=520x400 raw='7704467Z11'
+09-17 16:19:47.584 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,737-902,1145 crop=536x268 raw='BLGG-BNOS3'
+09-17 16:19:47.648 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,737-902,1145 crop=412x384 raw='1t Edition'
+09-17 16:19:47.648 I/MlScan  (10559): frame: 1 cards in 346ms top=77044671@0,85
+09-17 16:19:47.948 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,737-903,1144 crop=524x400 raw='77044671 1'
+09-17 16:19:48.009 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,737-903,1144 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:19:48.076 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,737-903,1144 crop=412x380 raw='18 Edition'
+09-17 16:19:48.077 I/MlScan  (10559): frame: 1 cards in 344ms top=77044671@0,86
+09-17 16:19:48.377 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,738-903,1144 crop=524x400 raw='77044671 1'
+09-17 16:19:48.444 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,738-903,1144 crop=540x268 raw='BLGG-ENOS3'
+09-17 16:19:48.509 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,738-903,1144 crop=416x380 raw='L Edition'
+09-17 16:19:48.510 I/MlScan  (10559): frame: 1 cards in 363ms top=77044671@0,85
+09-17 16:19:48.804 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,739-903,1145 crop=524x400 raw='77044671 1'
+09-17 16:19:48.867 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,739-903,1145 crop=540x264 raw='BLGG-BNO53'
+09-17 16:19:48.929 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,739-903,1145 crop=416x380 raw='L1 Edition'
+09-17 16:19:48.930 I/BandOcr (10559): layout=STANDARD korrigiert=BLGG-BN053
+09-17 16:19:48.930 I/MlScan  (10559): frame: 1 cards in 349ms top=77044671@0,85
+09-17 16:19:49.242 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-902,1145 crop=520x400 raw='77044671 1'
+09-17 16:19:49.302 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-902,1145 crop=540x264 raw='BLGG-BNOS3'
+09-17 16:19:49.368 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-902,1145 crop=412x380 raw='14 Edition'
+09-17 16:19:49.369 I/MlScan  (10559): frame: 1 cards in 356ms top=77044671@0,86
+09-17 16:19:49.649 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1145 crop=524x400 raw='77044671 1'
+09-17 16:19:49.716 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1145 crop=540x268 raw='BLGG-ENOS3'
+09-17 16:19:49.793 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1145 crop=416x384 raw='136 Edition'
+09-17 16:19:49.794 I/MlScan  (10559): frame: 1 cards in 365ms top=77044671@0,85
+09-17 16:19:50.087 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1144 crop=524x396 raw='77044671 1'
+09-17 16:19:50.150 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1144 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:19:50.213 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1144 crop=416x380 raw='L1 Edition'
+09-17 16:19:50.213 I/MlScan  (10559): frame: 1 cards in 343ms top=77044671@0,85
+09-17 16:19:50.481 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-901,1144 crop=524x400 raw='77044671 1'
+09-17 16:19:50.545 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-901,1144 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:19:50.602 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-901,1144 crop=416x380 raw='18 Edition'
+09-17 16:19:50.603 I/MlScan  (10559): frame: 1 cards in 334ms top=77044671@0,86
+09-17 16:19:50.899 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,738-902,1144 crop=524x396 raw='77044671 1'
+09-17 16:19:50.983 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,738-902,1144 crop=544x264 raw='BLGG-ENOS3'
+09-17 16:19:51.060 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,738-902,1144 crop=416x380 raw='1Edition'
+09-17 16:19:51.060 I/MlScan  (10559): frame: 1 cards in 393ms top=77044671@0,85
+09-17 16:19:51.339 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1145 crop=524x400 raw='7704467Z1 1'
+09-17 16:19:51.410 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1145 crop=540x264 raw='BLGG-BNOS3'
+09-17 16:19:51.472 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1145 crop=416x384 raw='1 Edition'
+09-17 16:19:51.473 I/MlScan  (10559): frame: 1 cards in 345ms top=77044671@0,85
+09-17 16:19:51.743 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=486,739-901,1143 crop=524x396 raw='77044671 1'
+09-17 16:19:51.809 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=486,739-901,1143 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:19:51.868 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=486,739-901,1143 crop=416x380 raw='L1 Edition'
+09-17 16:19:51.868 I/MlScan  (10559): frame: 1 cards in 339ms top=77044671@0,85
+09-17 16:19:52.171 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-902,1145 crop=524x396 raw='7704467Z1 1'
+09-17 16:19:52.241 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-902,1145 crop=540x268 raw='BLGG-ENO53'
+09-17 16:19:52.296 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-902,1145 crop=416x380 raw='1 Edition'
+09-17 16:19:52.296 I/BandOcr (10559): layout=STANDARD korrigiert=BLGG-EN053
+09-17 16:19:52.297 I/MlScan  (10559): frame: 1 cards in 364ms top=77044671@0,85
+09-17 16:19:52.586 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,739-901,1145 crop=524x400 raw='77044671 1'
+09-17 16:19:52.644 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,739-901,1145 crop=536x268 raw='BLGG-ENO53'
+09-17 16:19:52.711 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,739-901,1145 crop=412x380 raw='L1 Edition'
+09-17 16:19:52.712 I/BandOcr (10559): layout=STANDARD korrigiert=BLGG-EN053
+09-17 16:19:52.713 I/MlScan  (10559): frame: 1 cards in 341ms top=77044671@0,85
+09-17 16:19:53.026 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1144 crop=524x396 raw='77044671 1'
+09-17 16:19:53.090 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1144 crop=536x268 raw='BLGG-BNOS3'
+09-17 16:19:53.147 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1144 crop=416x380 raw='1 Edition'
+09-17 16:19:53.147 I/MlScan  (10559): frame: 1 cards in 339ms top=77044671@0,86
+09-17 16:19:53.448 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,738-902,1145 crop=524x400 raw='77044671 1'
+09-17 16:19:53.519 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,738-902,1145 crop=540x264 raw='BLGG-NOS3'
+09-17 16:19:53.574 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,738-902,1145 crop=416x380 raw='L1 Edition'
+09-17 16:19:53.575 I/MlScan  (10559): frame: 1 cards in 344ms top=77044671@0,85
+09-17 16:19:53.849 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,737-902,1146 crop=524x404 raw='77044671 1'
+09-17 16:19:53.917 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,737-902,1146 crop=540x268 raw='BLGG-EN0S3'
+09-17 16:19:53.979 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,737-902,1146 crop=416x384 raw='L1 Edition'
+09-17 16:19:53.980 I/MlScan  (10559): frame: 1 cards in 347ms top=77044671@0,85
+09-17 16:19:54.309 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,739-902,1145 crop=524x396 raw='77044671 1'
+09-17 16:19:54.386 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,739-902,1145 crop=536x264 raw='BLGG-BNOS3'
+09-17 16:19:54.449 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,739-902,1145 crop=416x380 raw='L1 Edition'
+09-17 16:19:54.450 I/MlScan  (10559): frame: 1 cards in 382ms top=77044671@0,85
+09-17 16:19:54.753 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,739-903,1144 crop=524x400 raw='77044671 1'
+09-17 16:19:54.828 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,739-903,1144 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:19:54.887 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,739-903,1144 crop=416x380 raw='1t Edition'
+09-17 16:19:54.887 I/MlScan  (10559): frame: 1 cards in 354ms top=77044671@0,85
+09-17 16:19:55.178 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,738-903,1144 crop=524x400 raw='77044671 1'
+09-17 16:19:55.236 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,738-903,1144 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:19:55.299 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,738-903,1144 crop=416x380 raw='L1 Edition'
+09-17 16:19:55.300 I/MlScan  (10559): frame: 1 cards in 336ms top=77044671@0,85
+09-17 16:19:55.591 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1145 crop=524x396 raw='77044671 1'
+09-17 16:19:55.668 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1145 crop=540x268 raw='BLGG-BNOS3'
+09-17 16:19:55.730 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1145 crop=412x380 raw='1 Edition'
+09-17 16:19:55.731 I/MlScan  (10559): frame: 1 cards in 361ms top=77044671@0,85
+09-17 16:19:56.007 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,738-902,1144 crop=524x400 raw='77044671 1'
+09-17 16:19:56.068 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,738-902,1144 crop=540x264 raw='BLGG-EN0S3'
+09-17 16:19:56.127 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,738-902,1144 crop=416x380 raw='L1 Edition'
+09-17 16:19:56.128 I/MlScan  (10559): frame: 1 cards in 335ms top=77044671@0,85
+09-17 16:19:56.423 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,738-903,1144 crop=524x400 raw='77044671 1'
+09-17 16:19:56.488 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,738-903,1144 crop=540x268 raw='BLGG-BNOS3'
+09-17 16:19:56.547 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,738-903,1144 crop=416x380 raw='L1t Edtion'
+09-17 16:19:56.548 I/MlScan  (10559): frame: 1 cards in 344ms top=77044671@0,85
+09-17 16:19:56.849 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,737-902,1144 crop=524x396 raw='77044671 1'
+09-17 16:19:56.920 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,737-902,1144 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:19:56.985 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,737-902,1144 crop=416x384 raw='18 Edition'
+09-17 16:19:56.985 I/MlScan  (10559): frame: 1 cards in 353ms top=77044671@0,86
+09-17 16:19:57.286 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,737-903,1145 crop=524x400 raw='77044671 1'
+09-17 16:19:57.349 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,737-903,1145 crop=540x268 raw='BLGG-ENOS3'
+09-17 16:19:57.412 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,737-903,1145 crop=416x380 raw='L 14 Edition'
+09-17 16:19:57.413 I/MlScan  (10559): frame: 1 cards in 347ms top=77044671@0,86
+09-17 16:19:57.710 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1145 crop=524x400 raw='770446711'
+09-17 16:19:57.773 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1145 crop=540x268 raw='BLGG-BNOS3'
+09-17 16:19:57.829 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1145 crop=416x384 raw='1 Edition'
+09-17 16:19:57.830 I/MlScan  (10559): frame: 1 cards in 332ms top=77044671@0,85
+09-17 16:19:58.110 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1145 crop=520x400 raw='77044671 1'
+09-17 16:19:58.174 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1145 crop=540x264 raw='BLGG-BNOS3'
+09-17 16:19:58.227 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1145 crop=412x380 raw='1 Edition'
+09-17 16:19:58.228 I/MlScan  (10559): frame: 1 cards in 332ms top=77044671@0,85
+09-17 16:19:58.512 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=489,738-902,1145 crop=524x396 raw='77044671 1'
+09-17 16:19:58.579 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=489,738-902,1145 crop=536x264 raw='BLGG-ENOS3'
+09-17 16:19:58.643 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=489,738-902,1145 crop=416x380 raw='1 Bdition'
+09-17 16:19:58.644 I/MlScan  (10559): frame: 1 cards in 350ms top=77044671@0,86
+09-17 16:19:58.967 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-902,1145 crop=524x400 raw='77044671 1'
+09-17 16:19:59.034 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-902,1145 crop=536x268 raw='BLGG-ENOS3'
+09-17 16:19:59.092 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-902,1145 crop=416x380 raw='L1 Edition'
+09-17 16:19:59.092 I/MlScan  (10559): frame: 1 cards in 351ms top=77044671@0,85
+09-17 16:19:59.372 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-904,1145 crop=524x400 raw='77044671 1'
+09-17 16:19:59.439 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-904,1145 crop=540x268 raw='BLGG-BNO33'
+09-17 16:19:59.509 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-904,1145 crop=416x380 raw='1 Edition'
+09-17 16:19:59.510 I/BandOcr (10559): layout=STANDARD korrigiert=BLGG-BN033
+09-17 16:19:59.510 I/MlScan  (10559): frame: 1 cards in 346ms top=77044671@0,86
+09-17 16:19:59.812 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,737-901,1147 crop=524x400 raw='77044671 1'
+09-17 16:19:59.889 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,737-901,1147 crop=536x268 raw='BLGG-ENOS3'
+09-17 16:19:59.947 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,737-901,1147 crop=416x384 raw='L14 Edition'
+09-17 16:19:59.947 I/MlScan  (10559): frame: 1 cards in 357ms top=77044671@0,85
+09-17 16:20:00.237 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,737-902,1145 crop=524x400 raw='77044671 1'
+09-17 16:20:00.298 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,737-902,1145 crop=540x268 raw='BLGG-ENOS3'
+09-17 16:20:00.359 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,737-902,1145 crop=416x380 raw='1t Edition'
+09-17 16:20:00.361 I/MlScan  (10559): frame: 1 cards in 338ms top=77044671@0,86
+09-17 16:20:00.649 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-902,1144 crop=524x400 raw='77044671 1'
+09-17 16:20:00.720 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-902,1144 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:20:00.784 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-902,1144 crop=416x380 raw='18 Edition'
+09-17 16:20:00.785 I/MlScan  (10559): frame: 1 cards in 357ms top=77044671@0,85
+09-17 16:20:01.073 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1145 crop=528x396 raw='77044671 1'
+09-17 16:20:01.141 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1145 crop=540x268 raw='BLGG-BNOS3'
+09-17 16:20:01.197 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1145 crop=416x384 raw='16 Edition'
+09-17 16:20:01.199 I/MlScan  (10559): frame: 1 cards in 335ms top=77044671@0,86
+09-17 16:20:01.481 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,738-902,1146 crop=524x400 raw='770446711'
+09-17 16:20:01.544 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,738-902,1146 crop=540x268 raw='BLGG-BNOS3'
+09-17 16:20:01.604 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,738-902,1146 crop=416x384 raw='L1 Edition'
+09-17 16:20:01.605 I/MlScan  (10559): frame: 1 cards in 345ms top=77044671@0,85
+09-17 16:20:01.914 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,739-902,1144 crop=524x400 raw='77044671 1'
+09-17 16:20:01.985 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,739-902,1144 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:20:02.050 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,739-902,1144 crop=416x380 raw='L14 Edition'
+09-17 16:20:02.051 I/MlScan  (10559): frame: 1 cards in 358ms top=77044671@0,85
+09-17 16:20:02.350 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=487,739-902,1145 crop=524x400 raw='77044671 1'
+09-17 16:20:02.412 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=487,739-902,1145 crop=540x268 raw='BLGG-ENOS3'
+09-17 16:20:02.470 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=487,739-902,1145 crop=416x380 raw='L1 Edition'
+09-17 16:20:02.471 I/MlScan  (10559): frame: 1 cards in 347ms top=77044671@0,85
+09-17 16:20:02.777 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1145 crop=524x400 raw='77044671 1'
+09-17 16:20:02.846 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1145 crop=540x268 raw='BLGG-BNOS3'
+09-17 16:20:02.907 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1145 crop=416x384 raw='1 Edition'
+09-17 16:20:02.908 I/MlScan  (10559): frame: 1 cards in 351ms top=77044671@0,85
+09-17 16:20:03.211 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-903,1145 crop=524x400 raw='770446711'
+09-17 16:20:03.282 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-903,1145 crop=540x268 raw='BLGG-ENOS3'
+09-17 16:20:03.347 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-903,1145 crop=416x384 raw='L14 Edition'
+09-17 16:20:03.348 I/MlScan  (10559): frame: 1 cards in 351ms top=77044671@0,86
+09-17 16:20:03.643 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,739-902,1143 crop=524x396 raw='77044671 1'
+09-17 16:20:03.710 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,739-902,1143 crop=540x264 raw='BLGG-BNOS3'
+09-17 16:20:03.773 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,739-902,1143 crop=416x376 raw='L14 Edition'
+09-17 16:20:03.774 I/MlScan  (10559): frame: 1 cards in 350ms top=77044671@0,86
+09-17 16:20:04.061 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=488,738-902,1143 crop=524x400 raw='77044671 1'
+09-17 16:20:04.123 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=488,738-902,1143 crop=540x264 raw='BLGG-ENOS3'
+09-17 16:20:04.179 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=488,738-902,1143 crop=416x380 raw='L1 Edition'
+09-17 16:20:04.179 I/MlScan  (10559): frame: 1 cards in 347ms top=77044671@0,86
+09-17 16:20:04.519 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:20:04.589 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='ent to the GY: You can | 000 or less DEF from'
+09-17 16:20:04.636 I/StapelScan(10559): stoss start=1789654803904 dauer=231 spitze=39,3 einwurf=true
+09-17 16:20:04.642 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:20:04.643 I/MlScan  (10559): frame: 1 cards in 381ms top=77044671@0,78
+09-17 16:20:04.978 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:05.042 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:05.091 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:05.092 I/StapelScan(10559): einwurf anzahl=1 rearmt=[77044671] t=1789654805092
+09-17 16:20:05.092 I/MlScan  (10559): frame: 1 cards in 370ms top=77044671@0,80
+09-17 16:20:05.414 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:05.482 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:05.537 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:05.537 I/MlScan  (10559): confirmed card 77044671
+09-17 16:20:05.537 I/StapelScan(10559): gebucht 77044671 x1
+09-17 16:20:05.562 I/MlScan  (10559): frame: 1 cards in 378ms top=77044671@0,80
+09-17 16:20:05.892 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:05.953 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | -ss DEF from'
+09-17 16:20:06.006 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:06.007 I/MlScan  (10559): frame: 1 cards in 373ms top=77044671@0,80
+09-17 16:20:06.357 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:06.419 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:06.470 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:06.471 I/MlScan  (10559): frame: 1 cards in 379ms top=77044671@0,79
+09-17 16:20:06.799 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:06.872 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='- GY: You can | -ss DEF from'
+09-17 16:20:06.935 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:06.936 I/MlScan  (10559): frame: 1 cards in 396ms top=77044671@0,79
+09-17 16:20:07.258 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:07.312 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:07.371 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:07.372 I/StapelScan(10559): gesendet 77044671 x1 kandidaten=[]
+09-17 16:20:07.373 I/MlScan  (10559): frame: 1 cards in 381ms top=77044671@0,79
+09-17 16:20:07.747 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:07.785 I/ScanDecision(10559): stage=erst pc=77044671 code=- rarity=- lang=- composed=false match=NO_MATCH exact=false frames=0 known=23 light=RED grund='Kein Code-Treffer' edition=unknown editionConf=LOW
+09-17 16:20:07.817 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='- GY: You can | ss DEF from'
+09-17 16:20:07.881 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:07.883 I/MlScan  (10559): frame: 1 cards in 463ms top=77044671@0,80
+09-17 16:20:08.194 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:08.255 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | -ss DEF from'
+09-17 16:20:08.303 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:08.303 I/MlScan  (10559): frame: 1 cards in 356ms top=77044671@0,79
+09-17 16:20:08.657 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:08.722 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='- GY: You can | -ss DEF from'
+09-17 16:20:08.778 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:08.779 I/MlScan  (10559): frame: 1 cards in 379ms top=77044671@0,79
+09-17 16:20:09.108 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:09.169 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='- GY: You can | Ss DEF from'
+09-17 16:20:09.223 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:09.224 I/MlScan  (10559): frame: 1 cards in 373ms top=77044671@0,79
+09-17 16:20:09.548 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:09.612 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='- GY: You can | ss DEF from'
+09-17 16:20:09.662 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:09.663 I/MlScan  (10559): frame: 1 cards in 380ms top=77044671@0,79
+09-17 16:20:09.968 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:10.036 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='- GY: You can | ss DEF from'
+09-17 16:20:10.084 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:10.084 I/MlScan  (10559): frame: 1 cards in 365ms top=77044671@0,79
+09-17 16:20:10.398 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:10.467 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:10.522 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:10.523 I/MlScan  (10559): frame: 1 cards in 373ms top=77044671@0,79
+09-17 16:20:10.839 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:10.897 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:10.939 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:10.940 I/MlScan  (10559): frame: 1 cards in 351ms top=77044671@0,79
+09-17 16:20:11.275 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:11.340 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | -ss DEF from'
+09-17 16:20:11.383 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:11.383 I/MlScan  (10559): frame: 1 cards in 365ms top=77044671@0,79
+09-17 16:20:11.707 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:11.763 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:11.820 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:11.821 I/MlScan  (10559): frame: 1 cards in 367ms top=77044671@0,79
+09-17 16:20:12.139 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:20:12.194 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='ent to the GY: You can | boo or less DEF from'
+09-17 16:20:12.246 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:20:12.247 I/MlScan  (10559): frame: 1 cards in 368ms top=77044671@0,79
+09-17 16:20:12.577 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:12.636 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:12.688 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:12.689 I/MlScan  (10559): frame: 1 cards in 373ms top=77044671@0,79
+09-17 16:20:13.011 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:13.071 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:13.120 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:13.120 I/MlScan  (10559): frame: 1 cards in 362ms top=77044671@0,79
+09-17 16:20:13.454 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:13.513 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:13.564 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:13.565 I/MlScan  (10559): frame: 1 cards in 373ms top=77044671@0,79
+09-17 16:20:13.909 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:13.970 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:14.024 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:14.025 I/MlScan  (10559): frame: 1 cards in 371ms top=77044671@0,80
+09-17 16:20:14.358 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:14.427 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:14.471 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:14.471 I/MlScan  (10559): frame: 1 cards in 372ms top=77044671@0,80
+09-17 16:20:14.804 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:14.868 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:14.943 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:14.944 I/MlScan  (10559): frame: 1 cards in 394ms top=77044671@0,79
+09-17 16:20:15.262 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:15.323 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:15.373 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:15.374 I/MlScan  (10559): frame: 1 cards in 358ms top=77044671@0,79
+09-17 16:20:15.713 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:15.771 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:15.826 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:15.827 I/MlScan  (10559): frame: 1 cards in 363ms top=77044671@0,79
+09-17 16:20:16.147 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:16.206 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:16.263 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:16.264 I/MlScan  (10559): frame: 1 cards in 381ms top=77044671@0,79
+09-17 16:20:16.605 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:16.660 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:16.717 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:16.718 I/MlScan  (10559): frame: 1 cards in 370ms top=77044671@0,80
+09-17 16:20:17.034 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:17.096 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:17.150 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:17.151 I/MlScan  (10559): frame: 1 cards in 368ms top=77044671@0,79
+09-17 16:20:17.468 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:17.522 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:17.568 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:17.568 I/MlScan  (10559): frame: 1 cards in 357ms top=77044671@0,79
+09-17 16:20:17.911 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:17.970 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:18.031 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:18.031 I/MlScan  (10559): frame: 1 cards in 384ms top=77044671@0,79
+09-17 16:20:18.371 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:18.434 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:18.482 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:18.483 I/MlScan  (10559): frame: 1 cards in 371ms top=77044671@0,79
+09-17 16:20:18.817 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:18.873 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:18.924 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:18.925 I/MlScan  (10559): frame: 1 cards in 384ms top=77044671@0,79
+09-17 16:20:19.233 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:19.300 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:19.351 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:19.351 I/MlScan  (10559): frame: 1 cards in 372ms top=77044671@0,79
+09-17 16:20:19.677 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:19.740 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:19.788 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:19.788 I/MlScan  (10559): frame: 1 cards in 372ms top=77044671@0,79
+09-17 16:20:20.102 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:20.157 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:20.218 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:20.219 I/MlScan  (10559): frame: 1 cards in 369ms top=77044671@0,79
+09-17 16:20:20.552 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:20.609 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='- GY: You can | ss DEF from'
+09-17 16:20:20.657 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:20.658 I/MlScan  (10559): frame: 1 cards in 361ms top=77044671@0,79
+09-17 16:20:20.978 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:21.041 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:21.117 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:21.118 I/MlScan  (10559): frame: 1 cards in 402ms top=77044671@0,79
+09-17 16:20:21.432 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:21.487 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:21.532 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:21.533 I/MlScan  (10559): frame: 1 cards in 353ms top=77044671@0,80
+09-17 16:20:21.876 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:21.940 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:21.989 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:21.990 I/MlScan  (10559): frame: 1 cards in 379ms top=77044671@0,79
+09-17 16:20:22.307 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:20:22.380 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='ent to the GY: You can | boo or less DEF from | D'
+09-17 16:20:22.444 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:20:22.445 I/MlScan  (10559): frame: 1 cards in 386ms top=77044671@0,79
+09-17 16:20:22.779 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:22.847 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:22.895 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:22.896 I/MlScan  (10559): frame: 1 cards in 376ms top=77044671@0,80
+09-17 16:20:23.254 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:23.308 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:23.359 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:23.359 I/MlScan  (10559): frame: 1 cards in 367ms top=77044671@0,80
+09-17 16:20:23.714 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:23.773 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:23.820 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:23.821 I/MlScan  (10559): frame: 1 cards in 368ms top=77044671@0,80
+09-17 16:20:24.137 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:24.213 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:24.258 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:24.259 I/MlScan  (10559): frame: 1 cards in 373ms top=77044671@0,79
+09-17 16:20:24.575 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:24.649 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:24.717 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:24.717 I/MlScan  (10559): frame: 1 cards in 396ms top=77044671@0,80
+09-17 16:20:25.046 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:25.104 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:25.164 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:25.164 I/MlScan  (10559): frame: 1 cards in 381ms top=77044671@0,79
+09-17 16:20:25.508 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:25.566 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:25.614 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:25.614 I/MlScan  (10559): frame: 1 cards in 364ms top=77044671@0,79
+09-17 16:20:25.936 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:25.997 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:26.051 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:26.051 I/MlScan  (10559): frame: 1 cards in 374ms top=77044671@0,79
+09-17 16:20:26.373 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:26.435 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:26.482 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:26.483 I/MlScan  (10559): frame: 1 cards in 360ms top=77044671@0,80
+09-17 16:20:26.814 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:26.873 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:26.920 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:26.920 I/MlScan  (10559): frame: 1 cards in 369ms top=77044671@0,79
+09-17 16:20:27.233 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:27.295 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:27.351 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:27.352 I/MlScan  (10559): frame: 1 cards in 371ms top=77044671@0,79
+09-17 16:20:27.663 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:27.729 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:27.779 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:27.780 I/MlScan  (10559): frame: 1 cards in 371ms top=77044671@0,80
+09-17 16:20:28.097 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:28.158 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:28.224 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:28.225 I/MlScan  (10559): frame: 1 cards in 386ms top=77044671@0,80
+09-17 16:20:28.564 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:28.632 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:28.678 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:28.679 I/MlScan  (10559): frame: 1 cards in 371ms top=77044671@0,79
+09-17 16:20:29.013 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:29.074 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='- GY: You can | ss DEF from'
+09-17 16:20:29.131 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:29.132 I/MlScan  (10559): frame: 1 cards in 378ms top=77044671@0,80
+09-17 16:20:29.465 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:29.526 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:29.572 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:29.573 I/MlScan  (10559): frame: 1 cards in 362ms top=77044671@0,79
+09-17 16:20:29.903 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:29.968 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='-GY: You can | ss DEF from'
+09-17 16:20:30.025 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:30.026 I/MlScan  (10559): frame: 1 cards in 383ms top=77044671@0,80
+09-17 16:20:30.365 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:30.430 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='-GY: You can | ss DEF from'
+09-17 16:20:30.483 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:30.483 I/MlScan  (10559): frame: 1 cards in 375ms top=77044671@0,80
+09-17 16:20:30.808 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:20:30.872 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='ent to the GY: You can | boo or less DEF from'
+09-17 16:20:30.920 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:20:30.920 I/MlScan  (10559): frame: 1 cards in 376ms top=77044671@0,79
+09-17 16:20:31.235 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:31.298 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:31.349 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:31.350 I/MlScan  (10559): frame: 1 cards in 374ms top=77044671@0,79
+09-17 16:20:31.676 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:31.744 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:31.795 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:31.796 I/MlScan  (10559): frame: 1 cards in 388ms top=77044671@0,79
+09-17 16:20:32.136 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:32.201 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | Ss DEF from'
+09-17 16:20:32.250 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:32.251 I/MlScan  (10559): frame: 1 cards in 370ms top=77044671@0,79
+09-17 16:20:32.568 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:32.645 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:32.692 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:32.693 I/MlScan  (10559): frame: 1 cards in 389ms top=77044671@0,79
+09-17 16:20:33.028 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=460,701-1002,1184 crop=684x472 raw=''
+09-17 16:20:33.092 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=460,701-1002,1184 crop=704x316 raw='GY: You can | ss DEF from'
+09-17 16:20:33.142 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=460,701-1002,1184 crop=540x452 raw=''
+09-17 16:20:33.143 I/MlScan  (10559): frame: 1 cards in 371ms top=77044671@0,80
+09-17 16:20:33.448 I/BandOcr (10559): layout=STANDARD zone=PASSCODE frame=1440x1920 box=399,701-941,1184 crop=684x472 raw=''
+09-17 16:20:33.501 I/BandOcr (10559): layout=STANDARD zone=SET_CODE frame=1440x1920 box=399,701-941,1184 crop=704x316 raw='ent to the GY: You can | boo or less DEF from'
+09-17 16:20:33.531 I/BandOcr (10559): layout=STANDARD zone=EDITION frame=1440x1920 box=399,701-941,1184 crop=540x452 raw=''
+09-17 16:20:33.532 I/MlScan  (10559): frame: 1 cards in 316ms top=77044671@0,79

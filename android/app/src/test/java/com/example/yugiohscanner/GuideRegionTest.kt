@@ -69,10 +69,10 @@ class GuideRegionTest {
         val g = NRect(0.23501578f, 0.20780757f, 0.7649842f, 0.79219246f)
         val c = GuideRegion.artworkCandidates(g, 1440, 1920)
         assertEquals(5, c.size)
-        // Mitte: Artwork von Hand ausgeschnitten lag bei (462,700)-(1000,1180), Mittelpunkt (731, 940).
-        assertEquals(731f, (c[0].x1 + c[0].x2) / 2, 5f)
-        assertEquals(940f, (c[0].y1 + c[0].y2) / 2, 5f)
-        assertEquals(538f * GuideRegion.ARTWORK_SCALE, c[0].x2 - c[0].x1, 10f)
+        // Mitte: Detektor-Box am Geraet (geraet-4-roh.log) 488,738-903,1145, Mittelpunkt (695, 941).
+        assertEquals(695f, (c[0].x1 + c[0].x2) / 2, 5f)
+        assertEquals(941f, (c[0].y1 + c[0].y2) / 2, 5f)
+        assertEquals(415f * GuideRegion.ARTWORK_SCALE, c[0].x2 - c[0].x1, 10f)
         assertTrue(c[1].x1 < c[0].x1 && c[2].x1 > c[0].x1 && c[3].y1 < c[0].y1 && c[4].y1 > c[0].y1)
     }
 
