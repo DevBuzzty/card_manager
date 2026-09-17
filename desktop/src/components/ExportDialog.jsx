@@ -5,8 +5,9 @@ import { EXPORT_FORMAT_OPTIONS, NOTHING_TO_EXPORT, exportScope } from '../utils/
 
 // Spec F1 §4 — Export: Format und Umfang wählen, dann Speichern-Dialog im Hauptprozess.
 // filterCopyIds: Exemplar-IDs des aktuellen Sammlungsfilters oder null (dann gibt es den Umfang "Aktueller Filter" nicht).
-export default function ExportDialog({ onClose, filterCopyIds = null }) {
-  const [format, setFormat] = useState('carddex');
+// Spec H1 §5.1: aus "Zum Verkauf" mit initialFormat 'salelist' und filterLabel "Zum Verkauf" (Umfang genau diese Exemplare).
+export default function ExportDialog({ onClose, filterCopyIds = null, initialFormat = 'carddex', filterLabel = 'Aktueller Filter' }) {
+  const [format, setFormat] = useState(initialFormat);
   const [scopeKind, setScopeKind] = useState(filterCopyIds ? 'filter' : 'all');
   const [containers, setContainers] = useState([]);
   const [containerId, setContainerId] = useState(null);
@@ -54,7 +55,7 @@ export default function ExportDialog({ onClose, filterCopyIds = null }) {
 
   const scopeOptions = [
     { value: 'all', label: 'Ganze Sammlung' },
-    ...(filterCopyIds ? [{ value: 'filter', label: 'Aktueller Filter' }] : []),
+    ...(filterCopyIds ? [{ value: 'filter', label: filterLabel }] : []),
     ...(containers.length ? [{ value: 'container', label: 'Ein Behälter' }] : []),
   ];
 
