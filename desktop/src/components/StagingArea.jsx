@@ -146,6 +146,11 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         // pick up the real printing instead of the composed placeholder from the
                         // first setter above -- never blended with a local match.
                         chosen = phoneSelectedSet(c.scannedSetCode, c.scannedRarity, c.scannedLanguage, allPrintings) || chosen;
+                        // Hat das Handy gar keinen Set-Code gelesen, bleibt die Sammlung DE-first:
+                        // deutscher statt englischer Standarddruck (Nutzerentscheid 17.09.).
+                        if (!c.scannedSetCode && germanSets.length > 0) {
+                            chosen = { ...germanSets[0], language: 'DE', isYugipedia: true };
+                        }
                         auto = c.scannedConfidence !== 'red';
                         confidence = mapPhoneConfidence(c.scannedConfidence);
                     } else {
