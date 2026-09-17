@@ -18,7 +18,10 @@ const E2_CHANNELS = ['get-catalog-cards', 'create-imported-deck', 'import-deck-y
 // Spec E3 §10: neuer Kanal fuer die Legalitaet plus die umgebauten Deck-Kanaele (Format, Starter).
 const E3_CHANNELS = ['get-catalog-legality', 'get-deck-details'];
 
-for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS]) {
+// Spec F1 §3/§4: Card-Dex-Import (Datei öffnen, Regel wechseln, Übernehmen) und Export (Anzahl, Datei schreiben).
+const F1_CHANNELS = ['import-open', 'import-resolve', 'import-run', 'export-count', 'export-run'];
+
+for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS]) {
   test(`Kanal ${ch} steht in main.cjs und preload.cjs`, () => {
     assert.ok(MAIN.includes(`ipcMain.handle('${ch}'`), `main.cjs fehlt ipcMain.handle('${ch}'`);
     assert.ok(PRELOAD.includes(`ipcRenderer.invoke('${ch}'`), `preload.cjs fehlt ipcRenderer.invoke('${ch}'`);

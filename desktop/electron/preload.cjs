@@ -89,6 +89,12 @@ contextBridge.exposeInMainWorld('api', {
   createImportedDeck: (data) => ipcRenderer.invoke('create-imported-deck', data),
   // Spec E3: Legalitaet & Simulation
   getCatalogLegality: () => ipcRenderer.invoke('get-catalog-legality'),
+  // Spec F1: Export & eigenes Format
+  importOpen: () => ipcRenderer.invoke('import-open'),
+  importResolve: (data) => ipcRenderer.invoke('import-resolve', data),
+  importRun: (data) => ipcRenderer.invoke('import-run', data),
+  exportCount: (data) => ipcRenderer.invoke('export-count', data),
+  exportRun: (data) => ipcRenderer.invoke('export-run', data),
 
   // Wishlist
   getWishlist: () => ipcRenderer.invoke('get-wishlist'),
