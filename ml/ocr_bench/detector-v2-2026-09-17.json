@@ -1,0 +1,105 @@
+{
+  "detector": "C:/Users/Buzzty/Downloads/detector_v2.onnx",
+  "conf": 0.6,
+  "n": 600,
+  "seed": 0,
+  "koerbe": {
+    "stapel": {
+      "STAPEL": {
+        "fotos": 3,
+        "mit_box": 3,
+        "treffer": 3
+      },
+      "GESAMT": {
+        "fotos": 3,
+        "mit_box": 3,
+        "treffer": 3
+      },
+      "_fehlgriffe": []
+    },
+    "ebay": {
+      "LINK": {
+        "fotos": 15,
+        "mit_box": 15,
+        "treffer": 13
+      },
+      "GESAMT": {
+        "fotos": 608,
+        "mit_box": 604,
+        "treffer": 471
+      },
+      "PENDULUM": {
+        "fotos": 10,
+        "mit_box": 10,
+        "treffer": 2
+      },
+      "SPELL_TRAP": {
+        "fotos": 118,
+        "mit_box": 116,
+        "treffer": 92
+      },
+      "STANDARD": {
+        "fotos": 455,
+        "mit_box": 453,
+        "treffer": 364
+      },
+      "UNBEKANNT": {
+        "fotos": 10,
+        "mit_box": 10,
+        "treffer": 0
+      },
+      "_fehlgriffe": [
+        "ebay_6701.jpg",
+        "ebay_2121.jpg",
+        "ebay_8914.jpg",
+        "ebay_5072.jpg",
+        "ebay_8420.jpg",
+        "ebay_8890.jpg",
+        "ebay_2448.jpg",
+        "ebay_5307.jpg",
+        "ebay_1608.jpg",
+        "ebay_5677.jpg",
+        "ebay_8909.jpg",
+        "ebay_4836.jpg",
+        "ebay_2421.jpg",
+        "ebay_2857.jpg",
+        "ebay_588.jpg",
+        "ebay_3375.jpg",
+        "ebay_4426.jpg",
+        "ebay_3470.jpg",
+        "ebay_3848.jpg",
+        "ebay_9586.jpg",
+        "ebay_5016.jpg",
+        "ebay_2303.jpg",
+        "ebay_3133.jpg",
+        "ebay_7228.jpg",
+        "ebay_4125.jpg",
+        "ebay_823.jpg",
+        "ebay_3765.jpg",
+        "ebay_9753.jpg",
+        "ebay_4454.jpg",
+        "ebay_1453.jpg",
+        "ebay_1897.jpg",
+        "ebay_6753.jpg",
+        "ebay_9346.jpg",
+        "ebay_1679.jpg",
+        "ebay_691.jpg",
+        "ebay_4091.jpg",
+        "ebay_1891.jpg",
+        "ebay_3507.jpg",
+        "ebay_3547.jpg",
+        "ebay_487.jpg",
+        "ebay_2936.jpg",
+        "ebay_7880.jpg",
+        "ebay_7477.jpg",
+        "ebay_6396.jpg",
+        "ebay_1700.jpg",
+        "ebay_3181.jpg",
+        "ebay_4721.jpg",
+        "ebay_3139.jpg",
+        "ebay_6369.jpg",
+        "ebay_1466.jpg"
+      ]
+    }
+  }
+}
