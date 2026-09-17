@@ -1,0 +1,18 @@
+{
+  "_comment": "Spec F1 §4/§6 -- Eingabe der Export-Formatierer: Zeilen wie collection-export.cjs#loadExportCopies, englische Katalognamen, Wunschliste. Erwartete Ausgaben: export-*.csv/.txt (ohne BOM, LF; der Test normalisiert).",
+  "copies": [
+    { "copy_id": "k1", "card_id": "46986414", "name": "Dunkler Magier", "set_code": "LOB-DE005", "rarity": "Ultra Rare", "language": "DE", "edition": "first", "condition": "NM", "price": 12.5, "price_first_ed": 20, "container_id": "c1", "container_name": "Binder Blau", "container_kind": "binder", "pockets_per_page": 9, "page": 1, "slot": 1, "tags": "[\"Deck\",\"Tausch\"]", "note": null },
+    { "copy_id": "k2", "card_id": "46986414", "name": "Dunkler Magier", "set_code": "LOB-DE005", "rarity": "Ultra Rare", "language": "DE", "edition": "first", "condition": "NM", "price": 12.5, "price_first_ed": 20, "container_id": "c1", "container_name": "Binder Blau", "container_kind": "binder", "pockets_per_page": 9, "page": 1, "slot": 1, "tags": "[\"Deck\",\"Tausch\"]", "note": "" },
+    { "copy_id": "k3", "card_id": "46986414", "name": "Dunkler Magier", "set_code": "LOB-DE005", "rarity": "Ultra Rare", "language": "DE", "edition": "unknown", "condition": "EX", "price": 12.5, "price_first_ed": 20, "container_id": null, "container_name": null, "container_kind": null, "pockets_per_page": null, "page": null, "slot": null, "tags": null, "note": "Kante, \"leicht\" bestoßen" },
+    { "copy_id": "k4", "card_id": "89631139", "name": "Blauäugiger w. Drache", "set_code": "SDK-DE001", "rarity": "Ultra Rare", "language": "DE", "edition": "unlimited", "condition": "GD", "price": 8, "price_first_ed": null, "container_id": "c2", "container_name": "Box Tausch", "container_kind": "box", "pockets_per_page": null, "page": 2, "slot": 3, "tags": "[\"verkauf\"]", "note": null },
+    { "copy_id": "k5", "card_id": "89631139", "name": "Blauäugiger w. Drache", "set_code": "SDK-DE001", "rarity": "Ultra Rare", "language": "DE", "edition": "unlimited", "condition": "GD", "price": 8, "price_first_ed": null, "container_id": "c2", "container_name": "Box Tausch", "container_kind": "box", "pockets_per_page": null, "page": null, "slot": null, "tags": "[\"verkauf\"]", "note": null },
+    { "copy_id": "k6", "card_id": "55144522", "name": "Topf der Gier", "set_code": "Unknown", "rarity": "Unknown", "language": "DE", "edition": "unknown", "condition": "NM", "price": 0, "price_first_ed": null, "container_id": null, "container_name": null, "container_kind": null, "pockets_per_page": null, "page": null, "slot": null, "tags": "kaputt", "note": null },
+    { "copy_id": "k7", "card_id": "46986415", "name": "Dunkler Magier", "set_code": "CT13-DE003", "rarity": "Ultra Rare", "language": "DE", "edition": "limited", "condition": "PO", "price": 3, "price_first_ed": null, "container_id": "c1", "container_name": "Binder Blau", "container_kind": "binder", "pockets_per_page": 9, "page": 1, "slot": 2, "tags": "[]", "note": null },
+    { "copy_id": "k8", "card_id": "89631139", "name": "Blauäugiger w. Drache", "set_code": "SDK-DE001", "rarity": "Ultra Rare", "language": "DE", "edition": "first", "condition": "MT", "price": 8, "price_first_ed": null, "container_id": "c1", "container_name": "Binder Blau", "container_kind": "binder", "pockets_per_page": 9, "page": 2, "slot": 1, "tags": "[\"Überschuss\"]", "note": null }
+  ],
+  "namesEn": { "46986414": "Dark Magician", "46986415": "Dark Magician", "89631139": "Blue-Eyes White Dragon", "55144522": "Pot of Greed" },
+  "wishlist": [
+    { "card_id": "46986414", "name": "Dunkler Magier" },
+    { "card_id": "14558127", "name": "Aschenblüte" }
+  ]
+}

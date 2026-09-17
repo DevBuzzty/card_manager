@@ -351,4 +351,5 @@ module.exports = {
   ValidationError,
   defaults, listCopies, listAllCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting,
   setCopyLocation, deleteCopy, setCopyTagsNote, listUnsortedCopies, listDeckCopies, listTags, listContainers, saveContainer,
+  normalizeTagList, CONTAINER_KINDS, BINDER_POCKETS,
 };
