@@ -54,6 +54,8 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.yugiohscanner.cloud.CardRow
@@ -417,9 +419,22 @@ fun ScanScreen(onClose: () -> Unit) {
             } catch (e: InterruptedException) {
                 Thread.currentThread().interrupt()
             }
+            // Die Erkennung laeuft seit der Stapel-Lichtschranke auf mlAnalyzers eigenem Thread --
+            // auch den abwarten, bevor pipeline.close() die nativen Sitzungen freigibt.
+            mlAnalyzer.shutdown()
             analyzer.close()
             pipeline.close()
         }
+    }
+
+    // Stapel-Lichtschranke: die Umrandung (Card Frame) in PreviewView-Pixeln an den Analyzer geben.
+    var previewBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    var guideBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    fun pushGuide() {
+        val p = previewBounds ?: return
+        val g = guideBounds ?: return
+        if (p.width <= 0f || p.height <= 0f) return
+        mlAnalyzer.setGuide(g.left - p.left, g.top - p.top, g.right - p.left, g.bottom - p.top, p.width, p.height)
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -507,7 +522,7 @@ fun ScanScreen(onClose: () -> Unit) {
 
                 previewView
             },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().onGloballyPositioned { previewBounds = it.boundsInRoot(); pushGuide() }
         )
 
         // Phase-4: live detection overlay (boxes + passcodes), mapped frame->view (FILL_CENTER).
@@ -558,6 +573,7 @@ fun ScanScreen(onClose: () -> Unit) {
                 modifier = Modifier
                     .aspectRatio(0.68f) // Standard Card Ratio
                     .fillMaxWidth(0.8f)
+                    .onGloballyPositioned { guideBounds = it.boundsInRoot(); pushGuide() }
                     .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
             )
         }

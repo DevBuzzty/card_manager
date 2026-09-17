@@ -1143,6 +1143,7 @@ private fun SortCamera(
             executor.shutdown()
             try { executor.awaitTermination(2, TimeUnit.SECONDS) }
             catch (e: InterruptedException) { Thread.currentThread().interrupt() }
+            analyzer.shutdown() // Erkennung laeuft auf dem eigenen Thread des Analyzers
             pipeline.close()
         }
     }
