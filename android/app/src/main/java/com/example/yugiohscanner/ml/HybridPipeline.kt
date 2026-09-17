@@ -78,12 +78,9 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // das Artwork an seiner erwarteten Stelle ausschneiden und die besten von wenigen leicht
         // verschobenen Ausschnitten nehmen -- mit strengerer Schwelle, leerer Karton kam auf 0,62.
         if (guide != null && out.none { guide.contains((it.box.x1 + it.box.x2) / 2f / frame.width, (it.box.y1 + it.box.y2) / 2f / frame.height) }) {
-            val t0 = System.currentTimeMillis()
-            val hits = GuideRegion.artworkCandidates(guide, frame.width, frame.height)
-                .map { artwork.embedBox(frame, it, 0f) }
-            val best = hits.filterNotNull().filter { it.sim >= GUIDE_MIN_SIM }.maxByOrNull { it.sim }
-            android.util.Log.i("GuideArt", "umrandung ${best?.passcode ?: "-"} in ${System.currentTimeMillis() - t0}ms " +
-                "kandidaten=${hits.joinToString(" ") { "${it?.passcode}@${"%.2f".format(it?.sim ?: 0f)}" }} guide=$guide")
+            val best = GuideRegion.artworkCandidates(guide, frame.width, frame.height)
+                .mapNotNull { artwork.embedBox(frame, it, GUIDE_MIN_SIM) }
+                .maxByOrNull { it.sim }
             if (best != null && out.none { it.passcode == best.passcode }) {
                 val (zoneTexts, legacyText) = readZones(frame, best.box, best.passcode)
                 out.add(Detection(best.box, best.passcode, best.sim, zoneTexts, legacyText))

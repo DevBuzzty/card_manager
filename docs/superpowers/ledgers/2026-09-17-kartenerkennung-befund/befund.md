@@ -20,3 +20,10 @@ auf den Diagnosefotos `../2026-09-17-stapel-lichtschranke/abnahme-4-karte5.jpg` 
 - Erst grob daneben (150 px hoch, 120 px groesser): falsch (sim 0,45, unter minSim -> verworfen).
 
 => Nicht Glitzer, nicht Kartengroesse: **der Detektor ist der Engpass**, der Rest der Kette funktioniert.
+
+## Umrandungs-Suche am Geraet (feat/umrandungs-erkennung)
+- Geraet 1 (geraet-1-roh.log): 10/10 Einwuerfe gebucht, Einwurf->+1 0,4-1,9 s, keine Haenger. Umrandung am
+  Geraet 0,235-0,765 x 0,208-0,792 -> ARTWORK_REL nachkalibriert (0,16/0,27/0,87/0,70, Skala 0,9).
+- Geraet 2 (geraet-2-roh.log): 167 Umrandungs-Treffer, 5/5 gebucht. Set-Code nur 1/5 gesendet: Bestaetigung
+  ~0,3 s nach Einwurf (zu frueh fuer OCR-Belege) und Zonen-OCR fuer Umrandungs-Boxen uebersprungen
+  (Seitenverhaeltnis 1,12 durch Schraegsicht, "Box ist kein Artwork"). -> eigener Schritt.
