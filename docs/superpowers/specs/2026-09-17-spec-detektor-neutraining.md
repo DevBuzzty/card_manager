@@ -47,9 +47,9 @@ Erweiterung von `ml/compose_scene.py`/`ml/generate.py`, bestehende Augmentierung
 4. Größe: ~20–30 k Szenen (heute: bisheriger Produktionslauf), Validierung 10 %.
 
 ## 5. Training & Auslieferung
-- Wie Phase B: Kaggle-GPU mit `ml/kaggle/train_production.py` (nur Detektor-Teil), Upload-Paket über
-  `ml/kaggle/package_data.py` um ganze Kartenbilder erweitert. **Das Hochladen und Starten auf Kaggle macht
-  der Nutzer** (sein Konto); Anleitung wird wie `ml/kaggle/README.md` geschrieben.
+- Wie beim Embedder-Training: **Google Colab** mit GPU und Drive-Anbindung (Ergebnisse unter Drive `ygo_out/out/`),
+  Trainingscode aus `ml/kaggle/train_production.py` (nur Detektor-Teil), Paket über `ml/kaggle/package_data.py`
+  um ganze Kartenbilder erweitert. **Hochladen und Starten in Colab macht der Nutzer**; Anleitung als Notebook-Zellen.
 - Export ONNX mit NMS, gleiche I/O; lokal `ml/detector_bench.py` alt vs. neu.
 - Auslieferung: als APK-Asset und/oder über `ModelStore` (Supabase-Bucket, Versionsnummer +1) – Entscheidung
   nach Messung. Rückweg: altes Modell bleibt im Bucket als vorherige Version.
@@ -57,16 +57,14 @@ Erweiterung von `ml/compose_scene.py`/`ml/generate.py`, bestehende Augmentierung
 ## 6. Aufteilung
 1. **D-1 Messung**: `detector_bench.py`, Messkorb zusammenstellen, Baseline alt. *Braucht die Daten (§8).*
 2. **D-2 Daten**: ganze Kartenbilder laden, Artwork-Geometrie je Typ, Szenen-Generator erweitern, Overlays prüfen.
-3. **D-3 Training**: Paket, Kaggle-Lauf (Nutzer), Export, Messung neu vs. alt.
+3. **D-3 Training**: Paket, Colab-Lauf (Nutzer), Export, Messung neu vs. alt.
 4. **D-4 Gerät**: Modell ausliefern, Stapel- und Handscan-Abnahme.
 
 ## 7. Nicht Teil davon
 Embedder-Neutraining, Index-Neubau, Passcode-/Set-Code-OCR-Logik, Umrandungs-Suche (bleibt als Rückfall).
 
 ## 8. Offene Fragen an den Nutzer
-1. **Wo liegen die Trainingsdaten?** `ml/data/` (14,7 k Artworks, DTD-Hintergründe, gelabelte Foto-Ernte
-   `ml/data/harvest/labeled`) ist auf diesem Rechner nicht vorhanden – auf Google Drive (`ygo_out/`)?
-   Sonst werden Karten/Hintergründe neu geladen (öffentliche Quellen, ~1–2 h), die Foto-Ernte müsste neu.
-2. **Kaggle-Konto** wie beim letzten Training nutzbar?
+1. ~~Trainingsdaten~~: auf Drive (`ygo-scanner-data.zip` 2,1 GB, `ygo-pool.zip` 4,2 GB), Nutzer hat Laden freigegeben.
+2. ~~Trainingsumgebung~~: Google Colab (wie beim Embedder).
 3. Dürfen für den Messkorb **ein paar Dutzend Fotos aus der Halterung** gesammelt werden (verschiedene
    Karten, auch aus der Hand)? Dafür käme ein einfacher Foto-Knopf in eine Mess-APK.
