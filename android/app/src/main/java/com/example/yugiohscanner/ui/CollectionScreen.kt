@@ -6,10 +6,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -92,6 +94,13 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     val requestedChip by CollectionChip.request.collectAsState()
     LaunchedEffect(requestedChip) { CollectionChip.take()?.let { chip = it } }
     val sale = rememberSaleData()
+    // Spec H1 M2: history (§5.4 Vorgeschichte) und Scrollposition oberhalb des Karten-Detail-Returns
+    // halten, damit ein Detail-Öffnen und -Schließen als "Liste bleibt offen" zählt. Verlassen des
+    // Duplikate-Chips (nicht bloß das Detail) zählt als Schließen -- dann wird history geleert.
+    val duplicatesHistory = remember { HashMap<String, List<String>>() }
+    val duplicatesListState = rememberLazyListState()
+    val forSaleListState = rememberLazyListState()
+    LaunchedEffect(chip) { if (chip != CollectionChip.DUPLIKATE) duplicatesHistory.clear() }
 
     var searchOpen by remember { mutableStateOf(false) }
     var filterOpen by remember { mutableStateOf(false) }
@@ -238,9 +247,9 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             if (chip == CollectionChip.DUPLIKATE) {
-                DuplicatesList(sale, onOpenCard = { detailId = it }, modifier = Modifier.weight(1f))
+                DuplicatesList(sale, onOpenCard = { detailId = it }, history = duplicatesHistory, listState = duplicatesListState, modifier = Modifier.weight(1f))
             } else if (chip == CollectionChip.VERKAUF) {
-                ForSaleList(sale, onOpenCard = { detailId = it }, modifier = Modifier.weight(1f))
+                ForSaleList(sale, onOpenCard = { detailId = it }, listState = forSaleListState, modifier = Modifier.weight(1f))
             } else if (grid) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
