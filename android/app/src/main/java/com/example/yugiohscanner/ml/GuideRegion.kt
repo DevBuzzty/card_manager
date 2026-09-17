@@ -44,6 +44,36 @@ object GuideRegion {
         return NRect(minOf(a.first, c.first), minOf(a.second, c.second), maxOf(a.first, c.first), maxOf(a.second, c.second))
     }
 
+    /**
+     * Wo das Artwork einer in der Umrandung liegenden Karte zu erwarten ist, relativ zur Umrandung
+     * (l, t, r, b). Geschaetzt aus den Diagnosefotos (docs/superpowers/ledgers/
+     * 2026-09-17-kartenerkennung-befund/befund.md); die Suche verzeiht ~60 px Abweichung.
+     */
+    val ARTWORK_REL = NRect(0.09f, 0.22f, 0.94f, 0.74f)
+
+    /** Kandidaten-Ausschnitte fuer das Artwork, in Pixeln des aufrechten Bildes ([frameW]x[frameH]):
+     *  Mitte zuerst, dann je [ARTWORK_SHIFT] der Umrandung nach links/rechts/oben/unten; 0,88-fach gross. */
+    fun artworkCandidates(guide: NRect, frameW: Int, frameH: Int): List<Box> {
+        val gl = guide.l * frameW; val gt = guide.t * frameH
+        val gw = (guide.r - guide.l) * frameW; val gh = (guide.b - guide.t) * frameH
+        val w = gw * (ARTWORK_REL.r - ARTWORK_REL.l) * ARTWORK_SCALE
+        val h = gh * (ARTWORK_REL.b - ARTWORK_REL.t) * ARTWORK_SCALE
+        val cx0 = gl + gw * (ARTWORK_REL.l + ARTWORK_REL.r) / 2
+        val cy0 = gt + gh * (ARTWORK_REL.t + ARTWORK_REL.b) / 2
+        val shifts = listOf(0f to 0f, -1f to 0f, 1f to 0f, 0f to -1f, 0f to 1f)
+        return shifts.map { (sx, sy) ->
+            val cx = cx0 + sx * ARTWORK_SHIFT * gw
+            val cy = cy0 + sy * ARTWORK_SHIFT * gh
+            Box(
+                (cx - w / 2).coerceIn(0f, frameW.toFloat()), (cy - h / 2).coerceIn(0f, frameH.toFloat()),
+                (cx + w / 2).coerceIn(0f, frameW.toFloat()), (cy + h / 2).coerceIn(0f, frameH.toFloat()), 1f,
+            )
+        }
+    }
+
+    const val ARTWORK_SCALE = 0.88f
+    const val ARTWORK_SHIFT = 0.08f
+
     /** Lichtschranke: rechter Randstreifen der (aufrechten) Umrandung. */
     fun strip(rect: NRect): NRect = NRect(rect.r - (rect.r - rect.l) * STRIP_FRACTION, rect.t, rect.r, rect.b)
 }

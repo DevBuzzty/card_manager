@@ -62,4 +62,23 @@ class GuideRegionTest {
         assertTrue(r.contains(0.2f, 0.8f))
         assertFalse(r.contains(0.1f, 0.5f))
     }
+
+    @Test
+    fun artworkCandidates_mitteZuerstUndInnerhalbDesBildes() {
+        // Umrandung wie auf den Diagnosefotos geschaetzt (1440x1920, x 402-1037, y 493-1427).
+        val g = NRect(402f / 1440, 493f / 1920, 1037f / 1440, 1427f / 1920)
+        val c = GuideRegion.artworkCandidates(g, 1440, 1920)
+        assertEquals(5, c.size)
+        // Mitte: Artwork von Hand ausgeschnitten lag bei (462,700)-(1000,1180), Mittelpunkt (731, 940).
+        assertEquals(731f, (c[0].x1 + c[0].x2) / 2, 5f)
+        assertEquals(940f, (c[0].y1 + c[0].y2) / 2, 5f)
+        assertEquals(538f * GuideRegion.ARTWORK_SCALE, c[0].x2 - c[0].x1, 10f)
+        assertTrue(c[1].x1 < c[0].x1 && c[2].x1 > c[0].x1 && c[3].y1 < c[0].y1 && c[4].y1 > c[0].y1)
+    }
+
+    @Test
+    fun artworkCandidates_amBildrandGeklemmt() {
+        val c = GuideRegion.artworkCandidates(NRect(0f, 0f, 1f, 1f), 100, 100)
+        for (b in c) assertTrue(b.x1 >= 0f && b.y1 >= 0f && b.x2 <= 100f && b.y2 <= 100f)
+    }
 }
