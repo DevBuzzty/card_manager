@@ -107,4 +107,13 @@ class BoxTrackerRearmTest {
         tr.update(listOf(det(9)), 1_000)
         assertTrue(tr.rearmAll(900).isEmpty())
     }
+
+    @Test fun `nach rearm reichen zwei frische Sichtungen, auch wenn need groesser ist`() {
+        val tr = BoxTracker(need = 4, maxMisses = 8)
+        repeat(3) { tr.update(listOf(det(5)), 100L + it) }
+        assertEquals(listOf(5), tr.update(listOf(det(5)), 200).map { it.passcode })
+        assertEquals(setOf(5), tr.rearmAll(300))
+        assertTrue(tr.update(listOf(det(5)), 400).isEmpty())
+        assertEquals(listOf(5), tr.update(listOf(det(5)), 500).map { it.passcode })
+    }
 }
