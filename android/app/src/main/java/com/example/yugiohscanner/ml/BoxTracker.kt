@@ -113,6 +113,15 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
      *   bestaetigt war UND vor [unrestStartMs] bestaetigt wurde) -- der Aufrufer braucht das, um
      *   zugehoerige Belege (z. B. SetCodeEvidence) nur fuer wirklich rearmte Karten zu vergessen.
      */
+    /**
+     * Stapel-Lichtschranke, Abnahme 1 (docs/superpowers/ledgers/2026-09-17-stapel-lichtschranke/
+     * abnahme-1-roh.log): wie [rearm], aber fuer ALLE bestaetigten Passcodes -- nicht nur die im
+     * Einwurf-Bild erkannten. Waehrend die Karte einrutscht, ist oft gar keine erkannt; rearm mit den
+     * Erkennungen dieses Bildes setzte dann nichts zurueck, die liegende Karte bestaetigte nie erneut
+     * und der Einwurf blieb offen, bis ein spaeterer ihn mitnahm (Zaehler sprang) oder er verfiel.
+     */
+    fun rearmAll(unrestStartMs: Long): Set<Int> = rearm(confirmedAt.keys.toList(), unrestStartMs)
+
     fun rearm(passcodes: Collection<Int>, unrestStartMs: Long): Set<Int> {
         val rearmed = HashSet<Int>()
         for (pc in passcodes) {

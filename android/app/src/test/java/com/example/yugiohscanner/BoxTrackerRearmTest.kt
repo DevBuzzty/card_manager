@@ -86,4 +86,25 @@ class BoxTrackerRearmTest {
             listOf(555), fourthHit.map { it.passcode },
         )
     }
+
+    @Test fun `rearmAll setzt auch eine im Einwurf-Bild nicht erkannte bestaetigte Karte zurueck`() {
+        // Abnahme 1, 5. Karte: im Bild der Einwurf-Meldung keine Erkennung (rearm mit leerer Liste
+        // setzte nichts zurueck, die Karte bestaetigte nie erneut).
+        val tr = BoxTracker(need = 2, maxMisses = 8)
+        tr.update(listOf(det(7)), 100)
+        assertEquals(listOf(7), tr.update(listOf(det(7)), 200).map { it.passcode })
+        tr.update(emptyList(), 300) // Karte rutscht ein, keine Erkennung
+
+        assertTrue("alte Variante: nichts rearmt", tr.rearm(emptyList(), 250).isEmpty())
+        assertEquals(setOf(7), tr.rearmAll(250))
+
+        tr.update(listOf(det(7)), 400)
+        assertEquals(listOf(7), tr.update(listOf(det(7)), 500).map { it.passcode })
+    }
+
+    @Test fun `rearmAll laesst nach Einwurfbeginn bestaetigte Karten unberuehrt`() {
+        val tr = BoxTracker(need = 1, maxMisses = 8)
+        tr.update(listOf(det(9)), 1_000)
+        assertTrue(tr.rearmAll(900).isEmpty())
+    }
 }

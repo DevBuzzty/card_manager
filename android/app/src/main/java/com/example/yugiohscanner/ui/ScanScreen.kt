@@ -295,11 +295,11 @@ fun ScanScreen(onClose: () -> Unit) {
             val now = System.currentTimeMillis()
             if (scanMode == "stapel" && einwuerfe > 0) {
                 stackCounter.einwurf(einwuerfe, now)
-                // Die eingeworfene Karte hat denselben Passcode wie die liegende: diese erneut
-                // bestaetigungsfaehig machen (BoxTracker.rearm laesst unbestaetigte und erst nach
-                // Einwurfbeginn bestaetigte Karten unberuehrt). Alte OCR-Belege der vorigen Kopie
-                // vergessen, bevor setEvidence.record() unten den ersten Beleg der neuen schreibt.
-                val rearmed = tracker.rearm(dets.filter { it.passcode > 0 }.map { it.passcode }, einwurfStartMs)
+                // Die eingeworfene Karte hat denselben Passcode wie die liegende: ALLE bestaetigten
+                // erneut bestaetigungsfaehig machen -- im Einwurf-Bild ist oft keine erkannt (siehe
+                // BoxTracker.rearmAll). Erst nach Einwurfbeginn bestaetigte bleiben unberuehrt. Alte
+                // OCR-Belege vergessen, bevor setEvidence.record() unten den ersten der neuen schreibt.
+                val rearmed = tracker.rearmAll(einwurfStartMs)
                 for (pc in rearmed) setEvidence.forget(pc)
                 com.example.yugiohscanner.ml.MessLog.line("StapelScan", "einwurf anzahl=$einwuerfe rearmt=$rearmed t=$now")
             }
