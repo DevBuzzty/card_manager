@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { keepPerCard } from './duplicates.js';
+import { createLatestOnly } from './busyGate.js';
 
 const LOAD_ERROR = 'Verkaufsdaten konnten nicht geladen werden.';
 
@@ -7,16 +8,20 @@ const LOAD_ERROR = 'Verkaufsdaten konnten nicht geladen werden.';
 // Laedt beim Einhaengen, bei Sammlungsaenderung (Sync) und bei 'collection-dirty' (Karten-Detail) neu; reload()
 // liefert ein Promise, damit ein Schreibvorgang erst nach dem frischen Stand freigibt.
 // data null = laedt noch: die Oberflaeche zeigt "…", nie "0 Karten". Ein Ladefehler behaelt den letzten Stand.
+// Review Runde 1 -- createLatestOnly() schuetzt gegen sich ueberschneidende reload()-Aufrufe: kommt eine aeltere
+// Antwort spaeter an als eine neuere, wird sie verworfen.
 export function useSaleData() {
   const [state, setState] = useState(() => ({ data: null, error: window.api?.listSaleCopies ? null : LOAD_ERROR }));
   const alive = useRef(true);
+  const latest = useRef(createLatestOnly());
   const reload = useCallback(() => {
     if (!window.api?.listSaleCopies) return Promise.resolve();
+    const token = latest.current.start();
     return Promise.all([window.api.listSaleCopies(), window.api.getSettings()])
       .then(([copies, settings]) => {
-        if (alive.current) setState({ data: { copies: Array.isArray(copies) ? copies : [], keep: keepPerCard(settings?.keep_per_card) }, error: null });
+        if (alive.current && latest.current.isCurrent(token)) setState({ data: { copies: Array.isArray(copies) ? copies : [], keep: keepPerCard(settings?.keep_per_card) }, error: null });
       })
-      .catch(() => { if (alive.current) setState((s) => ({ data: s.data, error: LOAD_ERROR })); });
+      .catch(() => { if (alive.current && latest.current.isCurrent(token)) setState((s) => ({ data: s.data, error: LOAD_ERROR })); });
   }, []);
   useEffect(() => {
     alive.current = true;

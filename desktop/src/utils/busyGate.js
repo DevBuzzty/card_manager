@@ -18,3 +18,15 @@ export function createBusyGate() {
     },
   };
 }
+
+// Review Runde 1 -- Schutz gegen ueberholende Antworten bei sich ueberschneidenden useSaleData()-reload()-Aufrufen:
+// ein spaeter gestarteter Lauf gewinnt, auch wenn eine aeltere Antwort spaeter ankommt.
+export function createLatestOnly() {
+  let seq = 0;
+  return {
+    // Startet einen neuen Lauf, liefert dessen Token.
+    start() { return ++seq; },
+    // true, wenn token noch zum zuletzt gestarteten Lauf gehoert (kein neuerer start() ist dazwischengekommen).
+    isCurrent(token) { return token === seq; },
+  };
+}
