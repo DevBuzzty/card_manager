@@ -274,14 +274,34 @@ fun ScanScreen(onClose: () -> Unit) {
     val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 4) }
     // Pools each card's bottom-band OCR text across frames so the set code is voted, not read once.
     val setEvidence = remember { com.example.yugiohscanner.ml.SetCodeEvidence() }
+    // Stapel-Scan-Fix (docs/superpowers/ledgers/2026-09-17-stapel-scan-bewegung/brief.md): erkennt
+    // im Modus "stapel" das Einrutschen einer zweiten gleichen Karte auf die erste anhand der
+    // Bildaenderung, damit BoxTracker sie per rearm() erneut bestaetigen kann -- ohne aendert sich
+    // der Passcode im Bild nie, also faellt er nie unter maxMisses und wird nie zweimal gemeldet.
+    val stackMotion = remember { com.example.yugiohscanner.ml.StackMotion() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
     val mlAnalyzer = remember {
-        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms ->
+        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms, diff ->
             mlDetections = dets
             mlFrameW = w
             mlFrameH = h
+            // Nur im Modus "stapel": eine ununterbrochen sichtbare Karte, auf die eine zweite
+            // gleiche rutscht, erneut bestaetigungsfaehig machen. VOR tracker.update(dets), damit
+            // die Bestaetigung noch in diesem Frame greift. Im Modus "einzeln" unveraendert.
+            if (scanMode == "stapel") {
+                val meldung = stackMotion.update(diff, System.currentTimeMillis())
+                stackMotion.lastDecision?.let { d ->
+                    Log.i(
+                        "StapelScan",
+                        "diff=${"%.1f".format(diff)} dauer=${d.dauerMs} entscheidung=${if (d.gemeldet) "Meldung" else "Verworfen"}",
+                    )
+                }
+                if (meldung) {
+                    tracker.rearm(dets.filter { it.passcode > 0 }.map { it.passcode })
+                }
+            }
             // Pool each visible card's bottom-band OCR text (set-code voting across frames).
             for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
             // On confirmation, resolve the set code from ALL pooled evidence for that card, then

@@ -65,4 +65,20 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
     fun reset() {
         votes.clear(); misses.clear(); emitted.clear(); droppedThisFrame.clear()
     }
+
+    /**
+     * Stapel-Scan-Fix: entfernt [passcodes] aus `emitted` und setzt ihre `votes` zurueck, sodass
+     * eine noch anwesende Karte mit denselben [need] Treffern erneut bestaetigt. Fuer StackMotion
+     * (siehe docs/superpowers/ledgers/2026-09-17-stapel-scan-bewegung/brief.md): eine zweite
+     * gleiche Karte, die auf die erste rutscht, aendert nie den Passcode im Bild, also faellt sie
+     * nie unter maxMisses und wuerde ohne rearm nie ein zweites Mal gemeldet. `misses` bleibt
+     * unangetastet -- rearm aendert nur, ob/wie eine anwesende Karte erneut bestaetigt, nicht wann
+     * eine abwesende vergessen wird.
+     */
+    fun rearm(passcodes: Collection<Int>) {
+        for (pc in passcodes) {
+            emitted.remove(pc)
+            votes.remove(pc)
+        }
+    }
 }
