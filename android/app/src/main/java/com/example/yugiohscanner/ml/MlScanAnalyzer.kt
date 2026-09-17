@@ -21,17 +21,15 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Umrandung (sobald [setGuide] sie kennt). Aufrufer muessen nach dem Entbinden der Kamera
  * [shutdown] aufrufen, BEVOR sie die Pipeline schliessen.
  *
- * [diff] (last onResult param) is the grobe Bildaenderung gegenueber dem Vorbild -- siehe
- * ScanScreen's StackMotion-Verdrahtung fuer den Modus "stapel"
- * (docs/superpowers/ledgers/2026-09-17-stapel-scan-bewegung/brief.md).
+ * Ist die Umrandung bekannt, meldet [onResult] nur Karten, deren Box-Mitte in ihr liegt, und
+ * reicht die seit dem letzten Ergebnis erkannten Einwuerfe ([ChuteGate]) mit: [einwuerfe] Anzahl,
+ * [einwurfStartMs] Beginn des fruehesten. Ein Einwurf wird erst an ein Ergebnis gehaengt, dessen
+ * Kamerabild NACH der Einwurf-Entscheidung aufgenommen wurde -- die Karte liegt dann schon.
  */
 class MlScanAnalyzer(
     private val pipeline: CardPipeline,
-    private val onResult: (dets: List<Detection>, frame: Bitmap, frameW: Int, frameH: Int, ms: Long, diff: Double) -> Unit
+    private val onResult: (dets: List<Detection>, frame: Bitmap, frameW: Int, frameH: Int, ms: Long, einwuerfe: Int, einwurfStartMs: Long) -> Unit
 ) : ImageAnalysis.Analyzer {
-
-    // Nur auf mlExecutor benutzt.
-    private var prevLum: IntArray? = null
 
     private val mlExecutor = Executors.newSingleThreadExecutor()
     private val mlBusy = AtomicBoolean(false)
@@ -41,7 +39,13 @@ class MlScanAnalyzer(
 
     // Nur auf dem Analyse-Thread benutzt.
     private var prevStrip: FloatArray? = null
-    private var prevInner: FloatArray? = null
+    private val chuteGate = ChuteGate()
+
+    // Einwuerfe, die noch keinem Erkennungsergebnis mitgegeben wurden (Analyse- -> Erkennungs-Thread).
+    private val einwurfLock = Any()
+    private var einwurfAnzahl = 0
+    private var einwurfStart = 0L
+    private var einwurfEntschieden = 0L
 
     fun setGuide(l: Float, t: Float, r: Float, b: Float, viewW: Float, viewH: Float) {
         guideView = floatArrayOf(l, t, r, b, viewW, viewH)
@@ -54,7 +58,6 @@ class MlScanAnalyzer(
             val gv = guideView
             var uprightGuide: GuideRegion.NRect? = null
             var strip = -1.0
-            var inner = -1.0
             if (gv != null) {
                 val uw = if (rot % 180 == 0) image.width else image.height
                 val uh = if (rot % 180 == 0) image.height else image.width
@@ -63,19 +66,19 @@ class MlScanAnalyzer(
                 val plane = image.planes[0]
                 val s = zoneMeans(plane.buffer, plane.rowStride, plane.pixelStride, image.width, image.height,
                     GuideRegion.uprightToSensor(GuideRegion.strip(g), rot), 8)
-                val i = zoneMeans(plane.buffer, plane.rowStride, plane.pixelStride, image.width, image.height,
-                    GuideRegion.uprightToSensor(g, rot), 16)
                 strip = meanAbsDiff(prevStrip, s)
-                inner = meanAbsDiff(prevInner, i)
                 prevStrip = s
-                prevInner = i
+                chuteGate.update(strip, tFrame)?.let { b ->
+                    MessLog.line("StapelMess", "stoss start=${b.startMs} dauer=${b.dauerMs} spitze=${"%.1f".format(b.peak)} einwurf=${b.einwurf}")
+                    if (b.einwurf) synchronized(einwurfLock) {
+                        if (einwurfAnzahl == 0) einwurfStart = b.startMs
+                        einwurfAnzahl++
+                        einwurfEntschieden = tFrame
+                    }
+                }
             }
 
-            val startMl = mlBusy.compareAndSet(false, true)
-            if (gv != null) {
-                MessLog.line("StapelMess", "t=$tFrame strip=${"%.1f".format(strip)} inner=${"%.1f".format(inner)} ml=${if (startMl) "start" else "busy"}")
-            }
-            if (!startMl) return
+            if (!mlBusy.compareAndSet(false, true)) return
 
             val raw = try { image.toBitmap() } catch (e: Throwable) { mlBusy.set(false); throw e }
             try {
@@ -99,29 +102,22 @@ class MlScanAnalyzer(
                 // The rotated copy supersedes `raw`; free it now (only allocated when rot != 0).
                 Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, m, true).also { raw.recycle() }
             }
-            // Grobe Bildaenderung gegenueber dem vorigen ERKENNUNGS-Bild (StackMotion, Stapel-Scan v1).
-            val small = Bitmap.createScaledBitmap(upright, 32, 32, true)
-            val px = IntArray(32 * 32)
-            small.getPixels(px, 0, 32, 0, 0, 32, 32)
-            small.recycle()
-            val lum = IntArray(px.size) { val c = px[it]; ((c shr 16 and 255) * 3 + (c shr 8 and 255) * 6 + (c and 255)) / 10 }
-            val prev = prevLum
-            val diff = if (prev == null) -1.0 else lum.indices.sumOf { kotlin.math.abs(lum[it] - prev[it]) }.toDouble() / lum.size
-            prevLum = lum
             val t0 = System.currentTimeMillis()
-            val dets = pipeline.process(upright)
-            if (diff >= 4.0) {
-                MessLog.line("StapelScan", "t=${System.currentTimeMillis()} diff=${"%.1f".format(diff)} pcs=${dets.map { it.passcode }}")
+            val all = pipeline.process(upright)
+            // Echte Umrandung: nur Karten, deren Mitte in ihr liegt.
+            val dets = if (uprightGuide == null) all else all.filter { d ->
+                uprightGuide.contains((d.box.x1 + d.box.x2) / 2f / upright.width, (d.box.y1 + d.box.y2) / 2f / upright.height)
             }
-            if (uprightGuide != null) {
-                val pcs = dets.joinToString(",") { d ->
-                    val cx = (d.box.x1 + d.box.x2) / 2f / upright.width
-                    val cy = (d.box.y1 + d.box.y2) / 2f / upright.height
-                    "${d.passcode}:${if (uprightGuide.contains(cx, cy)) "in" else "aus"}"
+            var einwuerfe = 0
+            var start = 0L
+            synchronized(einwurfLock) {
+                if (einwurfAnzahl > 0 && tFrame > einwurfEntschieden) {
+                    einwuerfe = einwurfAnzahl
+                    start = einwurfStart
+                    einwurfAnzahl = 0
                 }
-                MessLog.line("StapelMess", "ml t=$tFrame fertig=${System.currentTimeMillis()} pcs=[$pcs]")
             }
-            onResult(dets, upright, upright.width, upright.height, System.currentTimeMillis() - t0, diff)
+            onResult(dets, upright, upright.width, upright.height, System.currentTimeMillis() - t0, einwuerfe, start)
         } catch (e: Throwable) {
             Log.e("MlScan", "frame failed", e)
         } finally {

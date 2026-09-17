@@ -1113,7 +1113,7 @@ private fun SortCamera(
 
     val onCardState = rememberUpdatedState(onCard)
     val analyzer = remember {
-        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, _, _ ->
+        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, _, _, _ ->
             detections = dets
             frameW = w
             frameH = h

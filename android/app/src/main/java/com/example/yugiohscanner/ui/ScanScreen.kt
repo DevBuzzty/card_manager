@@ -276,53 +276,32 @@ fun ScanScreen(onClose: () -> Unit) {
     val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 4) }
     // Pools each card's bottom-band OCR text across frames so the set code is voted, not read once.
     val setEvidence = remember { com.example.yugiohscanner.ml.SetCodeEvidence() }
-    // Stapel-Scan-Fix (docs/superpowers/ledgers/2026-09-17-stapel-scan-bewegung/brief.md): erkennt
-    // im Modus "stapel" das Einrutschen einer zweiten gleichen Karte auf die erste anhand der
-    // Bildaenderung, damit BoxTracker sie per rearm() erneut bestaetigen kann -- ohne aendert sich
-    // der Passcode im Bild nie, also faellt er nie unter maxMisses und wird nie zweimal gemeldet.
-    val stackMotion = remember { com.example.yugiohscanner.ml.StackMotion() }
+    // Stapel-Lichtschranke (docs/superpowers/ledgers/2026-09-17-stapel-lichtschranke/brief.md): im
+    // Modus "stapel" zaehlt jeder Einwurf ueber die Rutsche genau +1. Der Analyzer erkennt Einwuerfe
+    // (ChuteGate), StackCounter loest sie mit Bestaetigungen ein.
+    val stackCounter = remember { com.example.yugiohscanner.ml.StackCounter() }
+    var stapelCount by remember { mutableStateOf(0) }
+    val tone = remember { try { android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80) } catch (e: RuntimeException) { null } }
+    val vibrator = remember { context.getSystemService(android.os.Vibrator::class.java) }
     remember { com.example.yugiohscanner.ml.MessLog.start(context.filesDir) }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
     val mlAnalyzer = remember {
-        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms, diff ->
+        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms, einwuerfe, einwurfStartMs ->
             mlDetections = dets
             mlFrameW = w
             mlFrameH = h
-            // Ein Zeitstempel fuer dieses Bild -- StackMotion UND BoxTracker.update bekommen
-            // denselben, damit rearms Unruhe-Vergleich (Fix Runde 1, Kritisch #2) auf derselben Uhr
-            // beruht.
             val now = System.currentTimeMillis()
-            // Nur im Modus "stapel": eine ununterbrochen sichtbare Karte, auf die eine zweite
-            // gleiche rutscht, erneut bestaetigungsfaehig machen. VOR tracker.update(dets), damit
-            // die Bestaetigung noch in diesem Frame greift. Im Modus "einzeln" unveraendert.
-            if (scanMode == "stapel") {
-                val meldung = stackMotion.update(diff, now)
-                val decision = stackMotion.lastDecision
-                decision?.let { d ->
-                    com.example.yugiohscanner.ml.MessLog.line(
-                        "StapelScan",
-                        "diff=${"%.1f".format(diff)} dauer=${d.dauerMs} entscheidung=${if (d.gemeldet) "Meldung" else "Verworfen"}",
-                    )
-                }
-                if (meldung && decision != null) {
-                    // Rearmt ALLE aktuell erkannten (nicht nur eine) Karten -- bei mehreren
-                    // gleichzeitig sichtbaren Stapeln, die im selben Bild einrutschen, ist das
-                    // gewollt (BoxTracker.rearm selbst laesst unbestaetigte und -- Fix Runde 1,
-                    // Kritisch #2 -- erst WAEHREND dieser Unruhe bestaetigte Passcodes unberuehrt,
-                    // siehe dortigen Kommentar).
-                    val rearmed = tracker.rearm(
-                        dets.filter { it.passcode > 0 }.map { it.passcode },
-                        decision.unrestStartMs,
-                    )
-                    // Fix Runde 1 (Review von 3c5f3f6, Wichtig): die alten OCR-Belege der ersten
-                    // Kopie duerften die Set-Code-Abstimmung der zweiten (eingerutschten) Kopie
-                    // nicht verfaelschen -- also fuer jede TATSAECHLICH rearmte Karte vergessen,
-                    // NOCH VOR dem setEvidence.record() weiter unten, damit dessen Eintrag fuer
-                    // dieses Bild schon der ersten Beleg der neuen Kopie ist.
-                    for (pc in rearmed) setEvidence.forget(pc)
-                }
+            if (scanMode == "stapel" && einwuerfe > 0) {
+                stackCounter.einwurf(einwuerfe, now)
+                // Die eingeworfene Karte hat denselben Passcode wie die liegende: diese erneut
+                // bestaetigungsfaehig machen (BoxTracker.rearm laesst unbestaetigte und erst nach
+                // Einwurfbeginn bestaetigte Karten unberuehrt). Alte OCR-Belege der vorigen Kopie
+                // vergessen, bevor setEvidence.record() unten den ersten Beleg der neuen schreibt.
+                val rearmed = tracker.rearm(dets.filter { it.passcode > 0 }.map { it.passcode }, einwurfStartMs)
+                for (pc in rearmed) setEvidence.forget(pc)
+                com.example.yugiohscanner.ml.MessLog.line("StapelScan", "einwurf anzahl=$einwuerfe rearmt=$rearmed t=$now")
             }
             // Pool each visible card's bottom-band OCR text (set-code voting across frames).
             for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
@@ -336,12 +315,24 @@ fun ScanScreen(onClose: () -> Unit) {
                 // silently dropped before the matcher that exists to handle it. See
                 // SetCodeEvidence.rawTexts.
                 val frames = setEvidence.rawTexts(d.passcode)
+                // Modus "stapel": so oft buchen, wie Einwuerfe offen sind; ohne Einwurf gar nicht.
+                val times = if (scanMode == "stapel") stackCounter.claim(now) else 1
+                if (scanMode == "stapel") {
+                    com.example.yugiohscanner.ml.MessLog.line("StapelScan", "gebucht ${d.passcode} x$times")
+                    if (times > 0) {
+                        stapelCount += times
+                        tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
+                        vibrator?.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                    }
+                }
                 // Task 7's own addition: the EDITION zone's per-frame text, recorded by the same
                 // setEvidence.record() call above -- see SetCodeEvidence.editionTexts.
-                onConfirmed.value(
-                    d.passcode, setEvidence.setCodeCandidates(d.passcode) + frames, frames,
-                    setEvidence.editionTexts(d.passcode),
-                )
+                repeat(times) {
+                    onConfirmed.value(
+                        d.passcode, setEvidence.setCodeCandidates(d.passcode) + frames, frames,
+                        setEvidence.editionTexts(d.passcode),
+                    )
+                }
                 // NO setEvidence.forget() here (Spec D3 Task 6, "Stille Verbesserung"): the card
                 // usually stays visible after its first confirmation, and BoxTracker.update only
                 // ever returns it ONCE per presence (see BoxTracker's own doc) — so this is the
@@ -423,6 +414,7 @@ fun ScanScreen(onClose: () -> Unit) {
             // Die Erkennung laeuft seit der Stapel-Lichtschranke auf mlAnalyzers eigenem Thread --
             // auch den abwarten, bevor pipeline.close() die nativen Sitzungen freigibt.
             mlAnalyzer.shutdown()
+            tone?.release()
             analyzer.close()
             pipeline.close()
         }
@@ -576,6 +568,18 @@ fun ScanScreen(onClose: () -> Unit) {
                     .fillMaxWidth(0.8f)
                     .onGloballyPositioned { guideBounds = it.boundsInRoot(); pushGuide() }
                     .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+            )
+        }
+
+        // Stapel-Zaehler: gross, damit ein fehlendes +1 beim Einwerfen sofort auffaellt.
+        if (scanMode == "stapel") {
+            Text(
+                "+$stapelCount",
+                color = Color.Yellow,
+                style = MaterialTheme.typography.displayMedium,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 96.dp)
+                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
 

@@ -32,7 +32,7 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
      * Feed one frame's detections; returns the detections that JUST reached confirmation.
      * [tMs] ist der Zeitstempel dieses Bildes -- als Default `System.currentTimeMillis()` fuer
      * Aufrufer, die keine eigene Uhr mitfuehren (z. B. SortIntoBinderScreen); ScanScreen (Modus
-     * "stapel") reicht denselben Zeitstempel durch, den es auch [StackMotion.update] gibt, damit
+     * "stapel") reicht denselben Zeitstempel durch, den es auch fuer die Einwurf-Erkennung benutzt, damit
      * [rearm]s Unruhe-Vergleich auf derselben Uhr beruht.
      */
     fun update(dets: List<Detection>, tMs: Long = System.currentTimeMillis()): List<Detection> {
@@ -84,7 +84,7 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
     /**
      * Stapel-Scan-Fix: entfernt die bereits BESTAETIGTEN unter [passcodes] aus `emitted` und
      * setzt ihre `votes` zurueck, sodass eine noch anwesende Karte mit denselben [need] Treffern
-     * erneut bestaetigt. Fuer StackMotion (siehe
+     * erneut bestaetigt. Fuer den Stapel-Scan (siehe
      * docs/superpowers/ledgers/2026-09-17-stapel-scan-bewegung/brief.md): eine zweite gleiche
      * Karte, die auf die erste rutscht, aendert nie den Passcode im Bild, also faellt sie nie
      * unter maxMisses und wuerde ohne rearm nie ein zweites Mal gemeldet.
@@ -100,7 +100,7 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
      * ob/wie eine anwesende Karte erneut bestaetigt, nicht wann eine abwesende vergessen wird.
      *
      * Fix Runde 1 (Review von 3c5f3f6, Kritisch #2): [unrestStartMs] ist der Beginn der Unruhe,
-     * die genau diese Meldung ausgeloest hat (siehe [StackMotion.Decision.unrestStartMs]). Eine
+     * die genau diese Meldung ausgeloest hat (heute: Beginn des Einwurfs, [ChuteGate.Burst.startMs]). Eine
      * Karte, die WAEHREND dieser Unruhe erst bestaetigt wurde -- also z. B. die einzige Karte, die
      * gerade neu in ein leeres Fach faellt, deren eigenes Einfallen die Unruhe UND ihre eigene
      * vierte Stimme ausloest --, ist keine zweite, eingerutschte Kopie, sondern dieselbe Ankunft.
