@@ -36,9 +36,14 @@ object CardZones {
      * done. This function recycles its own pre-enhance intermediate crops internally and does
      * not leak them.
      */
-    fun crop(frame: Bitmap, box: Box, layout: Layout): Map<Zone, Bitmap> = buildMap {
+    fun crop(frame: Bitmap, box: Box, layout: Layout, setCodePadX: Float = 0f, setCodePadY: Float = 0f): Map<Zone, Bitmap> = buildMap {
         for ((zone, rect) in CardLayout.zones(layout)) {
-            val bitmap = cropZone(frame, box, rect, contrastFor(zone)) ?: continue
+            // Umrandungs-Suche: die Box ist nur ungefaehr (Karten landen ~90 px unterschiedlich hoch),
+            // also die SET_CODE-Zone um Anteile der Box-Breite/-Hoehe aufweiten statt den Code abzuschneiden.
+            val r = if (zone == Zone.SET_CODE && (setCodePadX > 0f || setCodePadY > 0f))
+                RectF(rect.left - setCodePadX, rect.top - setCodePadY, rect.right + setCodePadX, rect.bottom + setCodePadY)
+            else rect
+            val bitmap = cropZone(frame, box, r, contrastFor(zone)) ?: continue
             put(zone, bitmap)
         }
     }

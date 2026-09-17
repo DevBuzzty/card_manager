@@ -180,7 +180,9 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         }
 
         val zoneTexts = LinkedHashMap<Zone, String>()
-        for ((zone, bitmap) in CardZones.crop(frame, b, layout ?: Layout.STANDARD)) {
+        val padX = if (trustShape) GUIDE_SETCODE_PAD_X else 0f
+        val padY = if (trustShape) GUIDE_SETCODE_PAD_Y else 0f
+        for ((zone, bitmap) in CardZones.crop(frame, b, layout ?: Layout.STANDARD, padX, padY)) {
             // A placeholder layout has no measured SET_CODE geometry — CardLayout.zones() hands it
             // STANDARD's rectangle, which for a Skill or pre-2004 frame points at whatever happens
             // to sit there. Recording it anyway would be worse than useless: SetCodeEvidence ranks
@@ -274,6 +276,12 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // Mindest-Aehnlichkeit fuer die Umrandungs-Suche. Karten auf den Diagnosefotos: >= 0,73 schon im
         // mittleren Ausschnitt, bester >= 0,80; blosser Karton: bis 0,62.
         private const val GUIDE_MIN_SIM = 0.70f
+
+        // SET_CODE-Aufweitung fuer Umrandungs-Boxen, in Box-Einheiten. geraet-5-roh.log: dieselbe
+        // Umrandungs-Box las "BLGG-ENOS" (letzte Ziffer abgeschnitten), die Karte lag 89 px
+        // (0,22 Box-Hoehen) tiefer als die gewaehlte Box.
+        private const val GUIDE_SETCODE_PAD_X = 0.10f
+        private const val GUIDE_SETCODE_PAD_Y = 0.22f
 
         // Diagnostic frame dump, OFF by default: writes raw camera frames to external storage, so
         // it must never ship enabled. Flip to true, rebuild, scan a few cards, then
