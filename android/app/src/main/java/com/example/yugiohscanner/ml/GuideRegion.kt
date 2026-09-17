@@ -46,13 +46,13 @@ object GuideRegion {
 
     /**
      * Wo das Artwork einer in der Umrandung liegenden Karte zu erwarten ist, relativ zur Umrandung
-     * (l, t, r, b). Geschaetzt aus den Diagnosefotos (docs/superpowers/ledgers/
-     * 2026-09-17-kartenerkennung-befund/befund.md); die Suche verzeiht ~60 px Abweichung.
+     * (l, t, r, b). Aus den Diagnosefotos und der am Geraet protokollierten Umrandung
+     * (docs/superpowers/ledgers/2026-09-17-kartenerkennung-befund/); die Suche verzeiht ~60 px.
      */
-    val ARTWORK_REL = NRect(0.09f, 0.22f, 0.94f, 0.74f)
+    val ARTWORK_REL = NRect(0.16f, 0.27f, 0.87f, 0.70f)
 
     /** Kandidaten-Ausschnitte fuer das Artwork, in Pixeln des aufrechten Bildes ([frameW]x[frameH]):
-     *  Mitte zuerst, dann je [ARTWORK_SHIFT] der Umrandung nach links/rechts/oben/unten; 0,88-fach gross. */
+     *  Mitte zuerst, dann je [ARTWORK_SHIFT] der Umrandung nach links/rechts/oben/unten; [ARTWORK_SCALE]-fach gross. */
     fun artworkCandidates(guide: NRect, frameW: Int, frameH: Int): List<Box> {
         val gl = guide.l * frameW; val gt = guide.t * frameH
         val gw = (guide.r - guide.l) * frameW; val gh = (guide.b - guide.t) * frameH
@@ -71,7 +71,7 @@ object GuideRegion {
         }
     }
 
-    const val ARTWORK_SCALE = 0.88f
+    const val ARTWORK_SCALE = 0.9f
     const val ARTWORK_SHIFT = 0.08f
 
     /** Lichtschranke: rechter Randstreifen der (aufrechten) Umrandung. */

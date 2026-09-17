@@ -65,8 +65,8 @@ class GuideRegionTest {
 
     @Test
     fun artworkCandidates_mitteZuerstUndInnerhalbDesBildes() {
-        // Umrandung wie auf den Diagnosefotos geschaetzt (1440x1920, x 402-1037, y 493-1427).
-        val g = NRect(402f / 1440, 493f / 1920, 1037f / 1440, 1427f / 1920)
+        // Umrandung wie am Geraet protokolliert (geraet-1-roh.log), Bild 1440x1920.
+        val g = NRect(0.23501578f, 0.20780757f, 0.7649842f, 0.79219246f)
         val c = GuideRegion.artworkCandidates(g, 1440, 1920)
         assertEquals(5, c.size)
         // Mitte: Artwork von Hand ausgeschnitten lag bei (462,700)-(1000,1180), Mittelpunkt (731, 940).
