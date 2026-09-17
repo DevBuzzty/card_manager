@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Trash2, Save, FileUp, Star } from 'lucide-react';
+import { Trash2, Save, FileUp, Star, Tag } from 'lucide-react';
 import { LOADING, boxLabel, deckCoverage, listText } from '../utils/deckCoverage';
 import { fillBoxProposal } from '../utils/fillBoxProposal';
 import DeckCoverageHeader from './DeckCoverageHeader';
@@ -299,6 +299,8 @@ export default function DeckBuilder() {
   const copiesById = useMemo(() => new Map((coverageData ? coverageData.copies : []).map((c) => [c.copy_id, c])), [coverageData]);
   const containersById = useMemo(() => new Map((coverageData ? coverageData.containers : []).map((c) => [c.container_id, c])), [coverageData]);
   const numbersFor = (cardId) => (activeCoverage ? coverageByCard.get(String(cardId)) : null);
+  // Spec H1 §5.3: markierte Exemplare bleiben verfuegbar, die Deckzeile zeigt das Preisschild (gleicher Schluessel wie der Abgleich).
+  const forSaleCards = useMemo(() => new Set((coverageData ? coverageData.copies : []).filter((c) => c.for_sale).map((c) => String(c.card_id))), [coverageData]);
 
   // Spec E3 §7: Legalitaet aus dem UNGESPEICHERTEN Editor-Stand; null, solange der Katalog-Index laedt.
   const legalityCards = useMemo(() => [
@@ -454,7 +456,7 @@ export default function DeckBuilder() {
                             </div>
                             <div className="space-y-1">
                                 {mainDeck.length === 0 && <p className="text-gray-600 text-sm italic">Drag or click cards to add.</p>}
-                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} onToggleStarter={toggleStarter} />)}
+                                {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} onToggleStarter={toggleStarter} forSale={forSaleCards.has(String(c.card_id))} />)}
                             </div>
                         </div>
 
@@ -465,7 +467,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{extraDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} />)}
+                                {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} forSale={forSaleCards.has(String(c.card_id))} />)}
                             </div>
                         </div>
 
@@ -476,7 +478,7 @@ export default function DeckBuilder() {
                                 <span className="text-xs text-gray-500">{sideDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} />)}
+                                {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} forSale={forSaleCards.has(String(c.card_id))} />)}
                             </div>
                         </div>
                     </div>
@@ -516,7 +518,8 @@ export default function DeckBuilder() {
 // Sub-component for a card row in deck list
 // Spec E1 §8: statt des roten "fehlt" die drei Zahlen aus dem Abgleich (numbers null = noch nicht geladen).
 // Spec E3 §7: Banlist-Icon nach Format; Main-Deck-Zeilen mit Starter-Stern (onToggleStarter nur dort).
-const DeckCardRow = ({ card, type, numbers, removeFromDeck, onMove, ban, onToggleStarter }) => {
+// Spec H1 §5.3: forSale = mindestens ein Exemplar dieses Passcodes ist zum Verkauf markiert (Preisschild).
+const DeckCardRow = ({ card, type, numbers, removeFromDeck, onMove, ban, onToggleStarter, forSale }) => {
     const missing = !!numbers && numbers.missing > 0;
 
     return (
@@ -531,6 +534,7 @@ const DeckCardRow = ({ card, type, numbers, removeFromDeck, onMove, ban, onToggl
                 </div>
                 <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
                 <DeckBanIcon ban={ban} />
+                {forSale && <Tag className="w-3.5 h-3.5 text-gold shrink-0" aria-label="Zum Verkauf markiert" />}
             </div>
             <div className="flex items-center gap-2">
                 <DeckCardNumbers card={numbers} />

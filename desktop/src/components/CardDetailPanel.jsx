@@ -1,4 +1,4 @@
-import { ChevronUp, ChevronDown, X, Minus, Plus, Trash2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, X, Minus, Plus, Trash2, Tag } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import CustomSelect from './CustomSelect';
@@ -305,6 +305,8 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   {groupRows.map(c => (
                                       <button key={c.copy_id} type="button" onClick={() => setSheetCopy(c)}
                                           className="w-full flex items-center gap-2 px-2 py-1 rounded-lg bg-black/20 hover:bg-black/40 border border-gray-800 text-left transition-colors">
+                                          {/* Spec H1 §5.3: Preisschild an markierten Exemplaren */}
+                                          {!!c.for_sale && <Tag className="w-3 h-3 text-gold shrink-0" aria-label="Zum Verkauf" />}
                                           <span className="text-[11px] text-gray-400 font-mono truncate">
                                               {formatCopyLocation(c, containers.find(ct => ct.container_id === c.container_id))}
                                           </span>

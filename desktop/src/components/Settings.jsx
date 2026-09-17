@@ -3,6 +3,7 @@ import { NavLink, Navigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers, Cpu, UploadCloud } from 'lucide-react';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
+import { KEEP_DEFAULT, keepPerCard } from '../utils/duplicates';
 import { T } from '../utils/i18n-de';
 import PriceAlertSettings from './PriceAlertSettings';
 import ImportDialog from './ImportDialog';
@@ -31,6 +32,8 @@ export default function Settings() {
     const [sync, setSync] = useState({ supabase_url: '', supabase_key: '', supabase_email: '', supabase_password: '', sync_enabled: 'false' });
     const [syncStatus, setSyncStatus] = useState(null);
     const [defaults, setDefaults] = useState({ edition: 'unknown', condition: 'NM' });
+    // Spec H1 §4: keep_per_card als Text im Eingabefeld; gespeichert wird der normalisierte Wert (ungültig -> 3).
+    const [keepInput, setKeepInput] = useState(String(KEEP_DEFAULT));
     const [ipAddress, setIpAddress] = useState('…');
     const [catalogStatus, setCatalogStatus] = useState({ lastRun: null, version: 0, bytes: 0 });
     const [catalogResult, setCatalogResult] = useState(null); // { ok, text }
@@ -50,6 +53,7 @@ export default function Settings() {
                     supabase_email: settings?.supabase_email ?? '', supabase_password: settings?.supabase_password ?? '',
                     sync_enabled: settings?.sync_enabled ?? 'false',
                 }));
+                setKeepInput(String(keepPerCard(settings?.keep_per_card)));
             });
             window.api.getDefaults?.().then(d => d && setDefaults(d));
 
@@ -81,6 +85,12 @@ export default function Settings() {
     const saveDefault = async (key, value) => {
         setDefaults(prev => ({ ...prev, [key]: value }));
         if (window.api) await window.api.saveSetting({ key: key === 'edition' ? 'default_edition' : 'default_condition', value });
+    };
+
+    const saveKeep = async () => {
+        const k = keepPerCard(keepInput);
+        setKeepInput(String(k));
+        if (window.api) await window.api.saveSetting({ key: 'keep_per_card', value: String(k) });
     };
 
     const handleSaveSource = async (e) => {
@@ -524,6 +534,14 @@ export default function Settings() {
                                     ))}
                                 </div>
                             </div>
+                        </div>
+                        <div className="mt-6 pt-6 border-t border-gray-800">
+                            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Duplikate: behalten je Karte</label>
+                            <input type="number" min="1" max="99" step="1" value={keepInput}
+                                onChange={e => setKeepInput(e.target.value)} onBlur={saveKeep}
+                                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                className="w-24 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-space-violet" />
+                            <p className="text-xs text-gray-500 mt-2">Alles über dieser Anzahl je Karte (über alle Printings) erscheint unter „Duplikate“. Ganze Zahl 1–99, Standard 3. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.</p>
                         </div>
                     </div>
                 )}
