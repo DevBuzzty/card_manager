@@ -103,7 +103,7 @@ class MlScanAnalyzer(
                 Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, m, true).also { raw.recycle() }
             }
             val t0 = System.currentTimeMillis()
-            val all = pipeline.process(upright)
+            val all = pipeline.process(upright, uprightGuide)
             // Echte Umrandung: nur Karten, deren Mitte in ihr liegt.
             val dets = if (uprightGuide == null) all else all.filter { d ->
                 uprightGuide.contains((d.box.x1 + d.box.x2) / 2f / upright.width, (d.box.y1 + d.box.y2) / 2f / upright.height)

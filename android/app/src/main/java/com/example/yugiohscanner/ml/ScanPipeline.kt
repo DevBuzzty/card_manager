@@ -33,6 +33,10 @@ fun concatZoneTexts(zoneTexts: Map<Zone, String>, legacyText: String): String =
 /** A per-frame card recogniser: detect boxes and attach a passcode to each. */
 interface CardPipeline {
     fun process(frame: Bitmap): List<Detection>
+
+    /** [guide] = Scan-Umrandung, normiert im aufrechten Bild (siehe [GuideRegion]); null = unbekannt. */
+    fun process(frame: Bitmap, guide: GuideRegion.NRect?): List<Detection> = process(frame)
+
     fun close()
 }
 
@@ -49,7 +53,7 @@ class ScanPipeline(context: Context, private val minSim: Float = 0.5f) : CardPip
     fun detectBoxes(frame: Bitmap): List<Box> = detector.detect(frame)
 
     /** Embed one detector box and match it against the index; null if below [minSim]. */
-    fun embedBox(frame: Bitmap, b: Box): Detection? {
+    fun embedBox(frame: Bitmap, b: Box, minSim: Float = this.minSim): Detection? {
         val x = b.x1.toInt().coerceIn(0, frame.width - 1)
         val y = b.y1.toInt().coerceIn(0, frame.height - 1)
         val w = (b.x2 - b.x1).toInt().coerceIn(1, frame.width - x)

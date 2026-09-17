@@ -48,7 +48,9 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
             .getOrDefault(true)
     }
 
-    override fun process(frame: Bitmap): List<Detection> {
+    override fun process(frame: Bitmap): List<Detection> = process(frame, null)
+
+    override fun process(frame: Bitmap, guide: GuideRegion.NRect?): List<Detection> {
         frameCount++
         val out = ArrayList<Detection>()
         // One detector pass finds ALL card boxes (foils included). For each box, run the artwork
@@ -71,6 +73,20 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // found no boxes at all (when boxes existed, their targeted zone OCR already covers them
         // better) and only every FULLFRAME_EVERY-th frame — pointless to burn OCR on every frame
         // while panning over an empty table.
+        // Umrandungs-Suche (Befund 17.09.: der Detektor findet Artworks IM Kartenrahmen kaum, der
+        // Embedder erkennt sie ausgeschnitten sicher): findet der Detektor in der Umrandung nichts,
+        // das Artwork an seiner erwarteten Stelle ausschneiden und die besten von wenigen leicht
+        // verschobenen Ausschnitten nehmen -- mit strengerer Schwelle, leerer Karton kam auf 0,62.
+        if (guide != null && out.none { guide.contains((it.box.x1 + it.box.x2) / 2f / frame.width, (it.box.y1 + it.box.y2) / 2f / frame.height) }) {
+            val best = GuideRegion.artworkCandidates(guide, frame.width, frame.height)
+                .mapNotNull { artwork.embedBox(frame, it, GUIDE_MIN_SIM) }
+                .maxByOrNull { it.sim }
+            if (best != null && out.none { it.passcode == best.passcode }) {
+                val (zoneTexts, legacyText) = readZones(frame, best.box, best.passcode)
+                out.add(Detection(best.box, best.passcode, best.sim, zoneTexts, legacyText))
+                return out
+            }
+        }
         if (boxes.isEmpty() && frameCount % FULLFRAME_EVERY == 0) {
             val text = Tasks.await(recognizer.process(InputImage.fromBitmap(frame, 0))).text
             val pc = OcrText.findPasscode(text, catalogKnows)
@@ -246,6 +262,10 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
     companion object {
         // Run the whole-frame fallback OCR at most once every this many frames.
         private const val FULLFRAME_EVERY = 3
+
+        // Mindest-Aehnlichkeit fuer die Umrandungs-Suche. Karten auf den Diagnosefotos: >= 0,73 schon im
+        // mittleren Ausschnitt, bester >= 0,80; blosser Karton: bis 0,62.
+        private const val GUIDE_MIN_SIM = 0.70f
 
         // Diagnostic frame dump, OFF by default: writes raw camera frames to external storage, so
         // it must never ship enabled. Flip to true, rebuild, scan a few cards, then
