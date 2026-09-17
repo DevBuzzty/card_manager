@@ -289,6 +289,23 @@ function applyPulledSealed(db, rows) {
   return applied;
 }
 
+// Spec F1 §3: ein Card-Dex-Import legt auf einen Schlag tausende Printings an. Wie pushCopies/pushContainers in Bloecken
+// schieben: kleine Anfragen, und die zurueckgegebenen Zeilen (fuer die Echo-Sperre) bleiben unter der PostgREST-Grenze von
+// 1000 Zeilen je Antwort. Ein Fehler bricht ab, bevor der Cursor weiterrueckt -- der naechste Zyklus schiebt alles erneut
+// (Upsert, also ohne Doppel).
+const CARDS_PUSH_CHUNK = 500;
+async function upsertCardsInChunks(c, rows) {
+  const pushed = [];
+  for (let i = 0; i < rows.length; i += CARDS_PUSH_CHUNK) {
+    const { data, error } = await c.from('cards')
+      .upsert(rows.slice(i, i + CARDS_PUSH_CHUNK).map(rowToRemote), { onConflict: 'id,set_code,language,rarity' })
+      .select('id,set_code,language,updated_at');
+    if (error) throw new Error('Push failed: ' + error.message);
+    pushed.push(...(data || []));
+  }
+  return pushed;
+}
+
 // Lokale Sealed-Zeilen seit dem Push-Cursor, ohne die der laufenden Sekunde (Begruendung in push()).
 function sealedPushRows(db, cursor) {
   return db.prepare("SELECT * FROM sealed_items WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
@@ -381,15 +398,12 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     // Deferring same-second rows to the next cycle keeps every row eventually pushed.
     const changed = db.prepare("SELECT * FROM cards WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
     if (changed.length > 0) {
-      const { data, error } = await c.from('cards')
-        .upsert(changed.map(rowToRemote), { onConflict: 'id,set_code,language,rarity' })
-        .select('id,set_code,language,updated_at');
-      if (error) throw new Error('Push failed: ' + error.message);
+      const data = await upsertCardsInChunks(c, changed);
       const maxTs = changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor);
       setSetting(db, 'sync_last_push', maxTs);
       // Remember the cloud updated_at the trigger stamped on each row we just pushed,
       // so the next pull can recognize its own echo and skip re-applying it.
-      for (const r of (data || [])) {
+      for (const r of data) {
         recentlyPushed.set(`${r.id}|${r.set_code}|${r.language}`, r.updated_at);
       }
     }
@@ -656,4 +670,6 @@ module.exports = {
   _recentlyPushedSealed: recentlyPushedSealed,
   _applyPulledSealed: applyPulledSealed,
   _sealedPushRows: sealedPushRows,
+  // Test-only hook (sync-push-chunks.test.cjs): the chunked cards upsert that push() uses.
+  _upsertCardsInChunks: upsertCardsInChunks,
 };
