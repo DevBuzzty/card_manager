@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, LayoutGrid, List as ListIcon, FilterX, SlidersHorizontal, Coins, X, AlertCircle } from 'lucide-react';
+import { Search, LayoutGrid, List as ListIcon, FilterX, SlidersHorizontal, Coins, X, AlertCircle, Download } from 'lucide-react';
 import clsx from 'clsx';
 import { Grid } from 'react-window';
 import CustomSelect from './CustomSelect';
@@ -14,6 +14,8 @@ import { formatCopyLocation } from '../utils/copyLocation';
 // Schluessel wie ueberall sonst im Projekt (id/set_code/language/rarity). Er wohnt in
 // ../utils/printingKey.js, damit es ihn nur EINMAL gibt (BinderView.jsx liest denselben).
 import { printingKey } from '../utils/printingKey';
+import ExportDialog from './ExportDialog';
+import { filterCopyIds } from '../utils/exportScope';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -88,6 +90,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [cmAuto, setCmAuto] = useState(false); // background auto-refresh toggle
   const [cmBulkBusy, setCmBulkBusy] = useState(false);
   const [cmStatus, setCmStatus] = useState(null); // { lastRun, resolvedCount, unresolvedCount }
+  const [exportCopyIds, setExportCopyIds] = useState(null); // Spec F1 §4: offen = Exemplar-IDs des aktuellen Filters
 
   const relTime = (iso) => {
     if (!iso) return 'noch nie';
@@ -373,6 +376,12 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       });
   }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, segment, filterContainers, filterTags, copiesByPrinting]);
 
+  // Spec F1 §4: der Export-Dialog bekommt den aktuellen Filter als Exemplar-IDs (Stand beim Öffnen).
+  const openExport = () => setExportCopyIds(filterCopyIds(filtered, copiesByPrinting, {
+    lang: filterLang, rarity: filterRarity, set: filterSet, condition: filterCondition, edition: filterEdition,
+    containers: filterContainers, tags: filterTags,
+  }));
+
   const toggleContainerFilter = (id) => setFilterContainers(list => list.includes(id) ? list.filter(x => x !== id) : [...list, id]);
   const toggleTagFilter = (t) => setFilterTags(list => list.includes(t) ? list.filter(x => x !== t) : [...list, t]);
 
@@ -474,6 +483,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                     <SlidersHorizontal className="w-4 h-4" /> Filter
                     {activeFilters.length > 0 && <span className="font-mono text-[10px] bg-space-violet text-white rounded-full px-1.5">{activeFilters.length}</span>}
                 </button>
+                <button onClick={openExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-obsidian-700 border border-line text-ink-muted hover:text-ink">
+                    <Download className="w-4 h-4" /> Exportieren…
+                </button>
+                {exportCopyIds && <ExportDialog filterCopyIds={exportCopyIds} onClose={() => setExportCopyIds(null)} />}
                 <div className="relative">
                     <button onClick={() => setPricesOpen(o => !o)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-obsidian-700 border border-line text-ink-muted hover:text-ink">
                         <Coins className="w-4 h-4" /> Preise

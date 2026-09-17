@@ -5,6 +5,8 @@ import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput,
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { T } from '../utils/i18n-de';
 import PriceAlertSettings from './PriceAlertSettings';
+import ImportDialog from './ImportDialog';
+import ExportDialog from './ExportDialog';
 
 const SECTIONS = [
     { id: 'konto', label: 'Konto & Sync' },
@@ -34,6 +36,8 @@ export default function Settings() {
     const [catalogResult, setCatalogResult] = useState(null); // { ok, text }
     const [uploadingKind, setUploadingKind] = useState(null); // 'index' | 'embedder' | 'detector' | null
     const [modelResult, setModelResult] = useState(null); // { ok, text }
+    const [importOpened, setImportOpened] = useState(null); // Spec F1: Antwort von importOpen() solange die Vorschau offen ist
+    const [exportOpen, setExportOpen] = useState(false);
 
     useEffect(() => {
         if (window.api) {
@@ -157,6 +161,13 @@ export default function Settings() {
         }
         setLoading(false);
         setRunningAction(null);
+    };
+
+    // Spec F1 §3: erst der Dateidialog im Hauptprozess, dann die Vorschau (abgebrochen: nichts).
+    const handleImport = async () => {
+        if (!window.api) return;
+        const res = await window.api.importOpen();
+        if (res && !res.canceled) setImportOpened(res);
     };
 
     const handleBuildCatalog = async () => {
@@ -389,7 +400,31 @@ export default function Settings() {
                                 </div>
                                 <p className="text-sm text-space-violet/60 group-hover:text-space-violet">Führt alte 'Unknown'-Karten mit den passenden Sets zusammen, um doppelte Wertanzeige zu vermeiden.</p>
                             </button>
+
+                            <button
+                                onClick={handleImport}
+                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group"
+                            >
+                                <div className="flex items-center text-ink mb-2">
+                                    <FileUp className="w-5 h-5 mr-2" />
+                                    <h4 className="font-bold">Importieren…</h4>
+                                </div>
+                                <p className="text-sm text-ink-muted group-hover:text-ink">Liest eine Card-Dex-CSV mit Vorschau ein – Exemplare, Behälter, Seite/Fach, Tags und Notizen.</p>
+                            </button>
+
+                            <button
+                                onClick={() => setExportOpen(true)}
+                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group"
+                            >
+                                <div className="flex items-center text-ink mb-2">
+                                    <Download className="w-5 h-5 mr-2" />
+                                    <h4 className="font-bold">Exportieren…</h4>
+                                </div>
+                                <p className="text-sm text-ink-muted group-hover:text-ink">Card Dex, Dragon Shield, YGOPRODeck, Cardmarket-Wantslist oder Verkaufsliste.</p>
+                            </button>
                         </div>
+                        {importOpened && <ImportDialog opened={importOpened} onClose={() => setImportOpened(null)} />}
+                        {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
                     </div>
 
                     <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
