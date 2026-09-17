@@ -274,19 +274,58 @@ fun ScanScreen(onClose: () -> Unit) {
     val tracker = remember { com.example.yugiohscanner.ml.BoxTracker(need = 4) }
     // Pools each card's bottom-band OCR text across frames so the set code is voted, not read once.
     val setEvidence = remember { com.example.yugiohscanner.ml.SetCodeEvidence() }
+    // Stapel-Scan-Fix (docs/superpowers/ledgers/2026-09-17-stapel-scan-bewegung/brief.md): erkennt
+    // im Modus "stapel" das Einrutschen einer zweiten gleichen Karte auf die erste anhand der
+    // Bildaenderung, damit BoxTracker sie per rearm() erneut bestaetigen kann -- ohne aendert sich
+    // der Passcode im Bild nie, also faellt er nie unter maxMisses und wird nie zweimal gemeldet.
+    val stackMotion = remember { com.example.yugiohscanner.ml.StackMotion() }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
     val mlAnalyzer = remember {
-        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms ->
+        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms, diff ->
             mlDetections = dets
             mlFrameW = w
             mlFrameH = h
+            // Ein Zeitstempel fuer dieses Bild -- StackMotion UND BoxTracker.update bekommen
+            // denselben, damit rearms Unruhe-Vergleich (Fix Runde 1, Kritisch #2) auf derselben Uhr
+            // beruht.
+            val now = System.currentTimeMillis()
+            // Nur im Modus "stapel": eine ununterbrochen sichtbare Karte, auf die eine zweite
+            // gleiche rutscht, erneut bestaetigungsfaehig machen. VOR tracker.update(dets), damit
+            // die Bestaetigung noch in diesem Frame greift. Im Modus "einzeln" unveraendert.
+            if (scanMode == "stapel") {
+                val meldung = stackMotion.update(diff, now)
+                val decision = stackMotion.lastDecision
+                decision?.let { d ->
+                    Log.i(
+                        "StapelScan",
+                        "diff=${"%.1f".format(diff)} dauer=${d.dauerMs} entscheidung=${if (d.gemeldet) "Meldung" else "Verworfen"}",
+                    )
+                }
+                if (meldung && decision != null) {
+                    // Rearmt ALLE aktuell erkannten (nicht nur eine) Karten -- bei mehreren
+                    // gleichzeitig sichtbaren Stapeln, die im selben Bild einrutschen, ist das
+                    // gewollt (BoxTracker.rearm selbst laesst unbestaetigte und -- Fix Runde 1,
+                    // Kritisch #2 -- erst WAEHREND dieser Unruhe bestaetigte Passcodes unberuehrt,
+                    // siehe dortigen Kommentar).
+                    val rearmed = tracker.rearm(
+                        dets.filter { it.passcode > 0 }.map { it.passcode },
+                        decision.unrestStartMs,
+                    )
+                    // Fix Runde 1 (Review von 3c5f3f6, Wichtig): die alten OCR-Belege der ersten
+                    // Kopie duerften die Set-Code-Abstimmung der zweiten (eingerutschten) Kopie
+                    // nicht verfaelschen -- also fuer jede TATSAECHLICH rearmte Karte vergessen,
+                    // NOCH VOR dem setEvidence.record() weiter unten, damit dessen Eintrag fuer
+                    // dieses Bild schon der ersten Beleg der neuen Kopie ist.
+                    for (pc in rearmed) setEvidence.forget(pc)
+                }
+            }
             // Pool each visible card's bottom-band OCR text (set-code voting across frames).
             for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
             // On confirmation, resolve the set code from ALL pooled evidence for that card, then
             // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
-            for (d in tracker.update(dets)) {
+            for (d in tracker.update(dets, now)) {
                 Log.i("MlScan", "confirmed card ${d.passcode}")
                 // Voted candidates FIRST, then every frame's raw text. SetCodeMatch scores by
                 // edit distance over both, so a grammar-clean winner still matches at 0 — but a
