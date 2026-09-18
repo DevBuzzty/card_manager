@@ -13,6 +13,7 @@ def _make_ckpt(tmp_path):
 
 
 def test_build_index_shapes(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_index, "MANUAL_DIR", tmp_path / "keine")
     monkeypatch.setattr(compose_scene, "load_art_bgr",
                         lambda p: np.full((80, 80, 3), 180, np.uint8))
     ckpt = _make_ckpt(tmp_path)
@@ -47,6 +48,7 @@ def test_pendulum_view_nur_fuer_hohe_artworks():
 
 
 def test_build_index_haengt_pendel_ansicht_an(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_index, "MANUAL_DIR", tmp_path / "keine")
     shapes = {"quadrat": (80, 80, 3), "pendel": (120, 80, 3)}
     monkeypatch.setattr(compose_scene, "load_art_bgr", lambda p: np.full(shapes[p], 180, np.uint8))
     ckpt = _make_ckpt(tmp_path)
@@ -55,3 +57,21 @@ def test_build_index_haengt_pendel_ansicht_an(tmp_path, monkeypatch):
     data = np.load(out)
     assert list(data["passcodes"]) == [111, 222, 222]
     assert data["embeddings"].shape == (3, 128)
+
+
+def test_manual_items_liest_passcode_aus_dateinamen(tmp_path):
+    (tmp_path / "63166095_mamo_1.jpg").write_bytes(b"x")
+    (tmp_path / "63166095_mamo_2.jpg").write_bytes(b"x")
+    (tmp_path / "notiz.jpg").write_bytes(b"x")
+    items = build_index.manual_items(tmp_path)
+    assert [pc for pc, _ in items] == [63166095, 63166095]
+
+
+def test_build_index_haengt_manuelle_artworks_an(tmp_path, monkeypatch):
+    manual = tmp_path / "manual"; manual.mkdir()
+    (manual / "999_a.jpg").write_bytes(b"x")
+    monkeypatch.setattr(build_index, "MANUAL_DIR", manual)
+    monkeypatch.setattr(compose_scene, "load_art_bgr", lambda p: np.full((80, 80, 3), 180, np.uint8))
+    out = tmp_path / "index.npz"
+    build_index.build_index(_make_ckpt(tmp_path), [(111, "a")], out)
+    assert list(np.load(out)["passcodes"]) == [111, 999]
