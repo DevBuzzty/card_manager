@@ -79,6 +79,17 @@ class Pipeline:
         return int(self.P[i]), float(sims[i])
 
 
+def kanonisch():
+    """Gedruckter Passcode -> YGOPRODeck-Passcode. Bei Karten mit Alternativ-Artwork ist der auf der
+    Karte gedruckte Code oft die Artwork-ID (z. B. Wiedergeburt 83764718 -> 83764719, Dunkler Magier
+    36996508 -> 46986414); der Index liefert den kanonischen. Ohne diese Zuordnung zaehlten richtige
+    Treffer als Fehlgriffe (die 'unbekannten' Fotos im eBay-Korb, 18.09.)."""
+    m = ROOT / "ml" / "data" / "full_cards" / "manifest.json"
+    if not m.exists():
+        return {}
+    return {e["artwork_id"]: e["passcode"] for e in json.loads(m.read_text())}
+
+
 def ebay_korb(n: int, seed: int):
     rows = [r for r in csv.DictReader(open(LABELS, encoding="utf-8")) if r["passcode"].isdigit()]
     by = defaultdict(list)
@@ -90,7 +101,8 @@ def ebay_korb(n: int, seed: int):
         k = max(10, round(n * len(rs) / len(rows)))
         for r in rng.sample(rs, min(k, len(rs))):
             out.append((POOL / r["file"].split("/")[-1], int(r["passcode"]), layout))
-    return out
+    k = kanonisch()
+    return [(p, k.get(pc, pc), g) for p, pc, g in out]
 
 
 def stapel_korb():
