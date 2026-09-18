@@ -32,7 +32,7 @@ def main() -> None:
     config.BG_DIR = Path("/content/backgrounds")
     config.OUT_DIR = Path("/content/out")
     runs = Path(a.drive_out) / f"runs_{a.name}"
-    scenes = Path("/content/out/detect_v2")
+    scenes = Path("/content/out") / a.name  # je Lauf eigene Szenen (v3 hat andere Mischung als v2)
 
     # Auch beim Fortsetzen: eine neue Colab-Sitzung hat /content leer; gleicher Seed -> gleiche Szenen.
     if not (scenes / "data.yaml").exists():
