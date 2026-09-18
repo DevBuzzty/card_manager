@@ -44,9 +44,19 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
     // den GANZEN Frame samt aller Boxen, Bild fuer Bild, solange die Datei kaputt bleibt — wieder
     // dieselbe Klasse Fehler, nur mit anderem Ausloeser.
     private val catalogKnows: (String) -> Boolean = { pc ->
-        runCatching { !CatalogRepository.isReady() || CatalogRepository.card(pc) != null }
-            .getOrDefault(true)
+        runCatching {
+            !CatalogRepository.isReady() || CatalogRepository.card(pc) != null ||
+                CatalogRepository.aliases(listOf(pc)).isNotEmpty()
+        }.getOrDefault(true)
     }
+
+    // Karten mit Alternativ-Artwork tragen oft die ARTWORK-ID als gedruckten Passcode (Wiedergeburt
+    // 83764718, im Katalog 83764719; Dunkler Magier 36996508 -> 46986414). Der Embedder liefert immer den
+    // Haupt-Passcode; die OCR-Wege muessen darauf abbilden, sonst verwirft der Katalog-Check die Lesung
+    // bzw. geht eine zweite Nummer fuer dieselbe Karte an Staging/PC (18.09.2026).
+    private fun canonical(pc: Int): Int = runCatching {
+        CatalogRepository.aliases(listOf(pc.toString()))[pc.toString()]?.toInt()
+    }.getOrNull() ?: pc
 
     override fun process(frame: Bitmap): List<Detection> = process(frame, null)
 
@@ -62,7 +72,8 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         for (b in boxes) {
             val embed = artwork.embedBox(frame, b)
             val (zoneTexts, legacyText) = readZones(frame, b, embed?.passcode)
-            val passcode = embed?.passcode ?: (OcrText.findPasscode(concatZoneTexts(zoneTexts, legacyText), catalogKnows) ?: -1)
+            val passcode = embed?.passcode
+                ?: (OcrText.findPasscode(concatZoneTexts(zoneTexts, legacyText), catalogKnows)?.let(::canonical) ?: -1)
             val sim = embed?.sim ?: 1f
             if (passcode > 0 && out.none { it.passcode == passcode }) {
                 out.add(Detection(b, passcode, sim, zoneTexts, legacyText))
@@ -97,7 +108,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         }
         if (boxes.isEmpty() && frameCount % FULLFRAME_EVERY == 0) {
             val text = Tasks.await(recognizer.process(InputImage.fromBitmap(frame, 0))).text
-            val pc = OcrText.findPasscode(text, catalogKnows)
+            val pc = OcrText.findPasscode(text, catalogKnows)?.let(::canonical)
             if (pc != null && pc > 0) {
                 val w = frame.width.toFloat(); val h = frame.height.toFloat()
                 out.add(Detection(Box(w * 0.18f, h * 0.12f, w * 0.82f, h * 0.88f, 1f), pc, 1f, emptyMap(), text))
