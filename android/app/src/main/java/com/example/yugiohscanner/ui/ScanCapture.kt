@@ -89,7 +89,7 @@ class ScanCapture(
         editionTexts: List<String> = emptyList(),
         reservedContainer: String? = null, reservedPage: Int? = null, reservedSlot: Int? = null,
     ): ScanStagingEntry {
-        scope.launch { flash.snapTo(0.8f); flash.animateTo(0f, animationSpec = tween(300)) }
+        blinkUnlessStapel(0.8f)
         val entry = ScanStagingEntry(System.nanoTime(), pc).apply {
             edition = com.example.yugiohscanner.Prefs.defaultEdition(context)
             condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
@@ -173,7 +173,7 @@ class ScanCapture(
         }
         // Anderes Aufblitzen als bei einer Neuaufnahme (die blitzt mit 0.8f), damit ein "+1"
         // im Sucher nicht wie eine neue Karte aussieht.
-        scope.launch { flash.snapTo(0.45f); flash.animateTo(0f, animationSpec = tween(300)) }
+        blinkUnlessStapel(0.45f)
 
         // Fix-Durchlauf 2, Restbefund: `SetCodeMatch.best` bleibt hier auf dem Analyzer-Hintergrund-
         // thread -- es liest nur `entry.knownSets`, das nach dem ersten Aufloesen nicht mehr
@@ -278,10 +278,7 @@ class ScanCapture(
         pc: String, evidence: List<String>, framesEvidence: List<String>,
         editionTexts: List<String>, isRepeat: Boolean,
     ) {
-        scope.launch {
-            flash.snapTo(if (isRepeat) 0.45f else 0.8f)
-            flash.animateTo(0f, animationSpec = tween(300))
-        }
+        blinkUnlessStapel(if (isRepeat) 0.45f else 0.8f)
         scope.launch {
             try {
                 val r = ScanResolver.resolve(
@@ -310,7 +307,8 @@ class ScanCapture(
                 sendScanToDesktop(s, pc, r, mode())
                 sentCount++
                 lastLight = r.confidence.light
-                if (isRepeat) {
+                // Modus "stapel": der grosse Zaehler ist die Rueckmeldung, keine zusaetzliche Meldung.
+                if (isRepeat && mode() != "stapel") {
                     // §7: bei verbundenem PC ist die Meldung NUR informativ -- kein Knopf.
                     // Korrigiert wird am PC, wo der Eintrag mit seinen +/--Knoepfen sichtbar in
                     // der Liste steht. Die neue Menge steht bewusst NICHT hier: sie zaehlt am PC,
@@ -322,6 +320,19 @@ class ScanCapture(
                 snackbar.showSnackbar("Fehler beim Laden: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Aufblitzen. Im Modus "stapel" blitzt ScanScreen selbst -- im selben Moment wie Zaehler, Ton und
+     * Vibration ([blink]); das Senden kommt dort bis zu 1,5 s spaeter (PendingSends) und blitzte sonst
+     * ein zweites Mal ("vibriert, Pause, blinkt" -- Nutzer 18.09.).
+     */
+    private fun blinkUnlessStapel(strength: Float) {
+        if (mode() != "stapel") blink(strength)
+    }
+
+    fun blink(strength: Float = 0.45f) {
+        scope.launch { flash.snapTo(strength); flash.animateTo(0f, animationSpec = tween(300)) }
     }
 
     // Der einzige Einstieg fuer eine erfasste Karte -- autonome Erkennung wie manuelle Eingabe.

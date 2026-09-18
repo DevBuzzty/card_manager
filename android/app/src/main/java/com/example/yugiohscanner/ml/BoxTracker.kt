@@ -132,9 +132,10 @@ class BoxTracker(private val need: Int = 2, private val maxMisses: Int = 8) {
             // Kritisch #2: nur rearmen, wenn diese Bestaetigung VOR der aktuellen Unruhe lag.
             if (at >= unrestStartMs) continue
             emitted.remove(pc)
-            // Abnahme 2: die Karte ist schon identifiziert (gleicher Passcode), zwei frische
-            // Sichtungen reichen -- spart bei ~4 Erkennungen/s gut eine halbe Sekunde je Einwurf.
-            if (need > 2) votes[pc] = need - 2 else votes.remove(pc)
+            // Die Karte ist schon identifiziert (gleicher Passcode): EINE frische Sichtung nach dem
+            // Einwurf reicht (18.09., mit Detektor v2 sind die Sichtungen verlaesslich) -- jede
+            // weitere haette ~0,25 s Verzoegerung bis zum +1 bedeutet.
+            if (need > 1) votes[pc] = need - 1 else votes.remove(pc)
             confirmedAt.remove(pc)
             rearmed.add(pc)
         }

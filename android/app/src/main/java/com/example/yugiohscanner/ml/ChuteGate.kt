@@ -25,7 +25,9 @@ class ChuteGate {
         const val MAX_DAUER_MS = 600L
         const val RUHE_BILDER = 3
         const val NACHBAR = 10.0
-        const val ABSTAND_MS = 500L
+        // 18.09.: 500 -> 350 ms (schnelleres +1). Alle drei Messlogs bleiben bei 250-500 ms fehlerfrei
+        // eingeordnet; Hand-Wackel-Stoesse folgen einander nach 0,27-0,6 s.
+        const val ABSTAND_MS = 350L
     }
 
     /** Ein entschiedener Stoss: [einwurf] true = als Karte gezaehlt. */
