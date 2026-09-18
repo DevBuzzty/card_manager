@@ -331,6 +331,7 @@ fun ScanScreen(onClose: () -> Unit) {
                     Log.i("StapelScan", "gebucht ${d.passcode} x$times")
                     if (times > 0) {
                         stapelCount += times
+                        capture.blink()
                         tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
                         vibrator?.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
                         pendingSends.add(d.passcode, times, now)
