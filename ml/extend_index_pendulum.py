@@ -1,4 +1,6 @@
-"""index.bin um den SICHTBAREN Bildteil der Pendel-Karten erweitern (18.09.2026).
+"""Ein SCHON GEBAUTES index.bin um den sichtbaren Bildteil der Pendel-Karten erweitern (18.09.2026).
+
+Neu gebaute Indizes brauchen das nicht mehr: ml/build_index.build_index haengt die Pendel-Ansicht selbst an.
 
 Der Index enthaelt je Karte das ganze Artwork (`image_url_cropped`). Bei Pendel-Karten liegt die untere
 Haelfte davon hinter dem Pendel-Textfeld; der Detektor boxt nur das sichtbare Fenster (Seitenverhaeltnis
@@ -39,14 +41,18 @@ def main() -> None:
     pcs_old = np.frombuffer(raw, "<i4", n, 8 + n * dim * 4)
     sess = ort.InferenceSession(a.embedder)
 
-    manifest = json.loads((config.DATA_DIR / "full_cards" / "manifest.json").read_text())
+    # Dieselbe Regel wie ml/build_index.pendulum_view: nur HOHE Artworks (h > 1,15 w) bekommen die
+    # Ansicht; Pendel-Artworks, die schon als sichtbares Fenster vorliegen (~1,35 breit), nicht.
+    manifest = json.loads((config.CARDS_DIR / "manifest.json").read_text())
     new_e, new_p = [], []
     for e in manifest:
         art_path = config.CARDS_DIR / f"{e['artwork_id']}.jpg"
-        if "pendulum" not in e["frame_type"] or not art_path.exists():
+        if not art_path.exists():
             continue
         art = Image.open(art_path).convert("RGB")
-        top = art.crop((0, 0, art.width, min(art.height, int(round(art.width / ASPECT)))))
+        if art.height <= 1.15 * art.width:
+            continue
+        top = art.crop((0, 0, art.width, int(round(art.width / ASPECT))))
         side = max(top.size)
         sq = Image.new("RGB", (side, side), (127, 127, 127))
         sq.paste(top, ((side - top.width) // 2, (side - top.height) // 2))
