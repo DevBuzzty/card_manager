@@ -14,7 +14,7 @@ def _make_ckpt(tmp_path):
 
 def test_build_index_shapes(tmp_path, monkeypatch):
     monkeypatch.setattr(compose_scene, "load_art_bgr",
-                        lambda p: np.full((120, 80, 3), 180, np.uint8))
+                        lambda p: np.full((80, 80, 3), 180, np.uint8))
     ckpt = _make_ckpt(tmp_path)
     items = [(111, "a"), (222, "b")]
     out = tmp_path / "index.npz"
@@ -37,3 +37,21 @@ def test_export_onnx_runs(tmp_path, monkeypatch):
     dummy = np.zeros((1, 3, 224, 224), dtype=np.float32)
     (emb,) = sess.run(None, {"img": dummy})
     assert emb.shape == (1, 128)
+
+
+def test_pendulum_view_nur_fuer_hohe_artworks():
+    assert build_index.pendulum_view(np.zeros((100, 100, 3), np.uint8)) is None
+    assert build_index.pendulum_view(np.zeros((100, 135, 3), np.uint8)) is None  # schon sichtbares Fenster, 1,35 breit
+    top = build_index.pendulum_view(np.zeros((908, 712, 3), np.uint8))
+    assert top.shape[:2] == (round(712 / build_index.PENDULUM_VIEW_ASPECT), 712)
+
+
+def test_build_index_haengt_pendel_ansicht_an(tmp_path, monkeypatch):
+    shapes = {"quadrat": (80, 80, 3), "pendel": (120, 80, 3)}
+    monkeypatch.setattr(compose_scene, "load_art_bgr", lambda p: np.full(shapes[p], 180, np.uint8))
+    ckpt = _make_ckpt(tmp_path)
+    out = tmp_path / "index.npz"
+    build_index.build_index(ckpt, [(111, "quadrat"), (222, "pendel")], out)
+    data = np.load(out)
+    assert list(data["passcodes"]) == [111, 222, 222]
+    assert data["embeddings"].shape == (3, 128)

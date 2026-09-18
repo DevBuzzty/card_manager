@@ -19,6 +19,30 @@ def load_embedder(ckpt_path, device: str = "cpu"):
     return emb, ckpt["passcodes"]
 
 
+# Pendel-Karten (18.09.2026): ihr `image_url_cropped` ist das GANZE Artwork (hoch, h > 1,15 w), auf der
+# Karte ist aber nur der obere Teil sichtbar -- der Rest liegt hinter dem Pendel-Textfeld. Der Detektor
+# boxt das sichtbare Fenster (Seitenverhaeltnis ~1,36); mit nur dem ganzen Artwork im Index traf der
+# Embedder die Karte mit sim 0,44-0,69 (Schwelle 0,6). Darum bekommt jedes hohe Artwork einen zweiten
+# Eintrag: der obere Teil mit Seitenverhaeltnis PENDULUM_VIEW_ASPECT, gleicher Passcode.
+# Messkorb: Pendel-Fotos 27,9 -> 90,7 %, uebrige Koerbe unveraendert oder besser.
+PENDULUM_VIEW_ASPECT = 1.36
+TALL_RATIO = 1.15
+
+
+def pendulum_view(bgr: np.ndarray):
+    """Sichtbarer oberer Teil eines hohen (Pendel-)Artworks, sonst None."""
+    h, w = bgr.shape[:2]
+    if h <= TALL_RATIO * w:
+        return None
+    return bgr[: int(round(w / PENDULUM_VIEW_ASPECT))]
+
+
+def _embed_bgr(emb, bgr, device):
+    crop = cv2.resize(compose_scene.pad_to_square(bgr), (config.CROP_SIZE, config.CROP_SIZE))
+    t = dataset.to_model_tensor(crop).unsqueeze(0).to(device)
+    return emb(t).cpu().numpy()[0]
+
+
 def embed_clean(emb, items, device: str = "cpu") -> np.ndarray:
     vecs = []
     with torch.no_grad():
@@ -35,7 +59,17 @@ def build_index(ckpt_path, items, out_npz) -> Path:
     out_npz.parent.mkdir(parents=True, exist_ok=True)
     emb, _ = load_embedder(ckpt_path)
     embeddings = embed_clean(emb, items)
-    passcodes = np.array([int(pc) for pc, _ in items], dtype=np.int64)
+    passcodes = [int(pc) for pc, _ in items]
+    extra = []
+    with torch.no_grad():
+        for pc, path in items:
+            view = pendulum_view(compose_scene.load_art_bgr(path))
+            if view is not None:
+                extra.append(_embed_bgr(emb, view, "cpu"))
+                passcodes.append(int(pc))
+    if extra:
+        embeddings = np.vstack([embeddings, np.stack(extra).astype(np.float32)])
+    passcodes = np.array(passcodes, dtype=np.int64)
     np.savez(out_npz, embeddings=embeddings, passcodes=passcodes)
     return out_npz
 
