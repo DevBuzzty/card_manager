@@ -50,6 +50,30 @@ def manual_items(directory: Path | None = None):
     return [(int(p.stem.split("_")[0]), p) for p in sorted(directory.glob("*.jpg")) if p.stem.split("_")[0].isdigit()]
 
 
+# Neue Alternativ-Artworks von Yugipedia (ml/select_extra_artworks.py waehlt, ml/extra_artworks.json
+# fuehrt die Liste, die Bilder liegen in ml/data/yugipedia_art -- neu laden mit
+# ml/fetch_yugipedia_artworks.py). Fehlen Bilder, wird laut gewarnt statt still ein kleinerer Index gebaut.
+EXTRA_LIST = Path(__file__).resolve().parent / "extra_artworks.json"
+
+
+def extra_items(list_path: Path | None = None, art_dir: Path | None = None):
+    list_path = list_path or EXTRA_LIST
+    art_dir = art_dir or (config.DATA_DIR / "yugipedia_art")
+    if not list_path.exists():
+        return []
+    import json
+    out, missing = [], 0
+    for pc, name in json.loads(list_path.read_text()):
+        p = art_dir / name
+        if p.exists():
+            out.append((int(pc), p))
+        else:
+            missing += 1
+    if missing:
+        print(f"WARNUNG: {missing} Yugipedia-Artworks fehlen in {art_dir} -- erst ml.fetch_yugipedia_artworks laufen lassen")
+    return out
+
+
 def _embed_bgr(emb, bgr, device):
     crop = cv2.resize(compose_scene.pad_to_square(bgr), (config.CROP_SIZE, config.CROP_SIZE))
     t = dataset.to_model_tensor(crop).unsqueeze(0).to(device)
@@ -81,7 +105,7 @@ def build_index(ckpt_path, items, out_npz) -> Path:
                 extra.append(_embed_bgr(emb, view, "cpu"))
                 passcodes.append(int(pc))
     with torch.no_grad():
-        for pc, path in manual_items():
+        for pc, path in manual_items() + extra_items():
             extra.append(_embed_bgr(emb, compose_scene.load_art_bgr(path), "cpu"))
             passcodes.append(int(pc))
     if extra:

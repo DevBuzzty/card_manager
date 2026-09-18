@@ -1,4 +1,5 @@
-"""Manuelle Artworks (ml/manual_artworks/<passcode>_*.jpg) an ein SCHON GEBAUTES index.bin haengen.
+"""Manuelle Artworks (ml/manual_artworks/<passcode>_*.jpg) und die gewaehlten Yugipedia-Artworks
+(ml/extra_artworks.json) an ein SCHON GEBAUTES index.bin haengen.
 
 Neu gebaute Indizes brauchen das nicht: ml/build_index.build_index haengt sie selbst an. Ein Eintrag je
 Ausschnitt; mehrere Ausschnitte derselben Karte (verschiedene Fotos) machen die Erkennung robuster.
@@ -12,7 +13,7 @@ import numpy as np
 import onnxruntime as ort
 from PIL import Image
 
-from ml.build_index import manual_items
+from ml.build_index import extra_items, manual_items
 
 MEAN = np.array([0.485, 0.456, 0.406], np.float32)
 STD = np.array([0.229, 0.224, 0.225], np.float32)
@@ -31,7 +32,7 @@ def main() -> None:
     pcs = np.frombuffer(raw, "<i4", n, 8 + n * dim * 4)
     sess = ort.InferenceSession(a.embedder)
     new_e, new_p = [], []
-    for pc, path in manual_items():
+    for pc, path in manual_items() + extra_items():
         c = Image.open(path).convert("RGB")
         side = max(c.size)
         sq = Image.new("RGB", (side, side), (127, 127, 127))

@@ -14,6 +14,7 @@ def _make_ckpt(tmp_path):
 
 def test_build_index_shapes(tmp_path, monkeypatch):
     monkeypatch.setattr(build_index, "MANUAL_DIR", tmp_path / "keine")
+    monkeypatch.setattr(build_index, "EXTRA_LIST", tmp_path / "keine.json")
     monkeypatch.setattr(compose_scene, "load_art_bgr",
                         lambda p: np.full((80, 80, 3), 180, np.uint8))
     ckpt = _make_ckpt(tmp_path)
@@ -49,6 +50,7 @@ def test_pendulum_view_nur_fuer_hohe_artworks():
 
 def test_build_index_haengt_pendel_ansicht_an(tmp_path, monkeypatch):
     monkeypatch.setattr(build_index, "MANUAL_DIR", tmp_path / "keine")
+    monkeypatch.setattr(build_index, "EXTRA_LIST", tmp_path / "keine.json")
     shapes = {"quadrat": (80, 80, 3), "pendel": (120, 80, 3)}
     monkeypatch.setattr(compose_scene, "load_art_bgr", lambda p: np.full(shapes[p], 180, np.uint8))
     ckpt = _make_ckpt(tmp_path)
@@ -71,7 +73,18 @@ def test_build_index_haengt_manuelle_artworks_an(tmp_path, monkeypatch):
     manual = tmp_path / "manual"; manual.mkdir()
     (manual / "999_a.jpg").write_bytes(b"x")
     monkeypatch.setattr(build_index, "MANUAL_DIR", manual)
+    monkeypatch.setattr(build_index, "EXTRA_LIST", tmp_path / "keine.json")
     monkeypatch.setattr(compose_scene, "load_art_bgr", lambda p: np.full((80, 80, 3), 180, np.uint8))
     out = tmp_path / "index.npz"
     build_index.build_index(_make_ckpt(tmp_path), [(111, "a")], out)
     assert list(np.load(out)["passcodes"]) == [111, 999]
+
+
+def test_extra_items_liest_liste_und_warnt_bei_fehlenden(tmp_path, capsys):
+    art = tmp_path / "art"; art.mkdir()
+    (art / "5__X-OW.png").write_bytes(b"x")
+    lst = tmp_path / "extra.json"
+    lst.write_text('[[5, "5__X-OW.png"], [6, "6__fehlt.png"]]')
+    items = build_index.extra_items(lst, art)
+    assert [pc for pc, _ in items] == [5]
+    assert "WARNUNG" in capsys.readouterr().out
