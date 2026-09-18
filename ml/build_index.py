@@ -37,6 +37,19 @@ def pendulum_view(bgr: np.ndarray):
     return bgr[: int(round(w / PENDULUM_VIEW_ASPECT))]
 
 
+# Manuell nachgetragene Artworks (18.09.2026): neue Alternativ-Artworks, die YGOPRODeck nicht fuehrt
+# (z. B. MAMO-Neuzeichnungen), als Ausschnitte aus echten Fotos. Dateiname <passcode>_<beliebig>.jpg.
+# build_index haengt sie IMMER an -- ein neu gebauter Index kann sie so nicht verlieren.
+MANUAL_DIR = Path(__file__).resolve().parent / "manual_artworks"
+
+
+def manual_items(directory: Path | None = None):
+    directory = directory or MANUAL_DIR
+    if not directory.exists():
+        return []
+    return [(int(p.stem.split("_")[0]), p) for p in sorted(directory.glob("*.jpg")) if p.stem.split("_")[0].isdigit()]
+
+
 def _embed_bgr(emb, bgr, device):
     crop = cv2.resize(compose_scene.pad_to_square(bgr), (config.CROP_SIZE, config.CROP_SIZE))
     t = dataset.to_model_tensor(crop).unsqueeze(0).to(device)
@@ -67,6 +80,10 @@ def build_index(ckpt_path, items, out_npz) -> Path:
             if view is not None:
                 extra.append(_embed_bgr(emb, view, "cpu"))
                 passcodes.append(int(pc))
+    with torch.no_grad():
+        for pc, path in manual_items():
+            extra.append(_embed_bgr(emb, compose_scene.load_art_bgr(path), "cpu"))
+            passcodes.append(int(pc))
     if extra:
         embeddings = np.vstack([embeddings, np.stack(extra).astype(np.float32)])
     passcodes = np.array(passcodes, dtype=np.int64)
