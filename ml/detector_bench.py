@@ -35,7 +35,7 @@ STAPEL = [
     (ROOT / "docs/superpowers/ledgers/2026-09-17-stapel-lichtschranke/performance-3-einwurf-1789648704793.jpg", 77044671),
     (ROOT / "docs/superpowers/ledgers/2026-09-17-stapel-lichtschranke/performance-3-einwurf-1789648716154.jpg", 77044671),
 ]
-STAPEL_DIR = ROOT / "ml" / "data" / "stapel_fotos"   # weitere Halterungsfotos: <passcode>_<beliebig>.jpg
+STAPEL_DIR = ROOT / "ml" / "data" / "stapel_fotos"   # eigene Fotos: <passcode>_<nr>_<gruppe>.jpg (Gruppe z.B. halterung/boden)
 MIN_SIM = 0.6
 MEAN = np.array([0.485, 0.456, 0.406], np.float32)
 STD = np.array([0.229, 0.224, 0.225], np.float32)
@@ -97,9 +97,9 @@ def stapel_korb():
     out = [(p, pc, "STAPEL") for p, pc in STAPEL]
     if STAPEL_DIR.exists():
         for p in sorted(STAPEL_DIR.glob("*.jpg")):
-            pc = p.stem.split("_")[0]
-            if pc.isdigit():
-                out.append((p, int(pc), "STAPEL"))
+            parts = p.stem.split("_")
+            if parts[0].isdigit():
+                out.append((p, int(parts[0]), parts[-1].upper() if len(parts) > 2 else "STAPEL"))
     return out
 
 
