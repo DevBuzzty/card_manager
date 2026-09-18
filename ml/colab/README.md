@@ -35,3 +35,12 @@ Zelle 1 erneut ausführen, dann:
 ```bash
 python -m ml.detector_bench --detector <pfad>/detector_v2.onnx --n 600
 ```
+
+## Lauf v3 (Pendel-Karten, 18.09.)
+Weitertrainieren ab v2 mit allen Pendel-Karten und Pendel-Uebergewicht. Paket `colab_upload/ygo-detector-v3.zip`
+statt v2 hochladen; Zelle 1 mit `ygo-detector-v3.zip` statt `ygo-detector-v2.zip`, dann:
+```python
+!cd /content/ygo-detector-v2 && python -m ml.colab.train_detector_v2 --name detector_v3 --epochs 25 --pendulum-share 0.25 --init /content/drive/MyDrive/ygo_out/out/runs_detector_v2/detector_v2/weights/best.pt
+```
+Fortsetzen nach Trennung: dieselbe Zeile mit `--resume` (und `--name detector_v3`).
+Ergebnis: `ygo_out/out/detector_v3.onnx`.

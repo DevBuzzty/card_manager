@@ -25,7 +25,7 @@ def load_full_cards():
         rel = windows.get(e["frame_type"])
         p = FULL / f"{e['artwork_id']}.jpg"
         if rel and p.exists():
-            out.append((e["passcode"], p, rel["rel"]))
+            out.append((e["passcode"], p, rel["rel"], "pendulum" in e["frame_type"]))
     return out
 
 
@@ -45,10 +45,13 @@ def main() -> None:
     ap.add_argument("--out", default=str(config.OUT_DIR / "detect_v2"))
     ap.add_argument("--debug", type=int, default=0, help="so viele Szenen zusaetzlich mit Boxen zeichnen")
     ap.add_argument("--val", type=float, default=0.1)
+    ap.add_argument("--pendulum-share", type=float, default=0.0,
+                    help="Anteil der ganzen Karten, die aus Pendel-Karten gezogen werden (Uebergewicht)")
     a = ap.parse_args()
     out = Path(a.out)
     rng = np.random.default_rng(a.seed)
     full, arts, bgs = load_full_cards(), load_arts(), list_backgrounds()
+    pend = [c for c in full if c[3]]
     if not full or not arts or not bgs:
         raise RuntimeError(f"Daten fehlen: ganze Karten={len(full)} Artworks={len(arts)} Hintergruende={len(bgs)}")
     for split in ("train", "val"):
@@ -59,8 +62,9 @@ def main() -> None:
         u = rng.random()
         items = []
         if u < 0.7:
-            for j in rng.integers(0, len(full), size=int(rng.integers(1, 5))):
-                pc, p, rel = full[j]
+            for _ in range(int(rng.integers(1, 5))):
+                pool = pend if pend and rng.random() < a.pendulum_share else full
+                pc, p, rel, _p = pool[int(rng.integers(0, len(pool)))]
                 items.append((pc, compose_scene.load_art_bgr(p), rel, 0.25, 0.95))
         elif u < 0.9:
             for j in rng.integers(0, len(arts), size=int(rng.integers(1, 9))):

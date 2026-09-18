@@ -45,7 +45,8 @@ def main() -> None:
         by[e["frame_type"]].append(e)
     pick = []
     for ft, es in by.items():
-        k = max(20, round(a.full * len(es) / len(full)))
+        # Pendel-Karten vollstaendig: sie sind selten (~2,7 %) und die Schwachstelle von v2.
+        k = len(es) if "pendulum" in ft else max(20, round(a.full * len(es) / len(full)))
         pick += rng.sample(es, min(k, len(es)))
 
     arts = [e for e in json.loads((config.CARDS_DIR / "manifest.json").read_text())
