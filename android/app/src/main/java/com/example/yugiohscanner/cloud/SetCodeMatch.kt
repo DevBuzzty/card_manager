@@ -248,8 +248,17 @@ object SetCodeMatch {
         // mindestens [REGION_TRUST_FRAMES] getrennten Bildern gelesen, ist sie kein einzelner
         // Lesefehler mehr -- dann gilt sie (Fall 1). Sonst blieb eine englische Karte neben einem
         // verifizierten deutschen Druck unbuchbar (geraet-3-roh.log: "BLGG-EN053" gelesen, DE gesendet).
-        val regionFrames = regionCounts[region.uppercase(java.util.Locale.ROOT)] ?: 0
-        val conflicting = if (regionFrames >= REGION_TRUST_FRAMES) null else bestGroup.firstOrNull { s ->
+        //
+        // Nachtrag 19.09. (Scan-Protokoll: 9x "BLGG-EN135" gelesen, DE gebucht): seit das +1 schneller kommt,
+        // bleibt nach dem Einwurf oft nur EIN lesbares Bild. Eine einzige Lesung gilt deshalb auch, wenn
+        // (a) kein Bild eine andere Region las und (b) es einen ECHTEN Druck mit dieser Region gibt -- ein
+        // Lesefehler, der auf einen nicht existierenden Druck fuehrt (DE statt G), bleibt beim verifizierten.
+        val regionUpper = region.uppercase(java.util.Locale.ROOT)
+        val regionFrames = regionCounts[regionUpper] ?: 0
+        val einzigeRegion = regionFrames >= 1 && regionCounts.keys.all { it == regionUpper }
+        val echterDruck = bestGroup.any { it.parts.region?.equals(region, ignoreCase = true) == true }
+        val vertrauen = regionFrames >= REGION_TRUST_FRAMES || (einzigeRegion && echterDruck)
+        val conflicting = if (vertrauen) null else bestGroup.firstOrNull { s ->
             s.option.verified && s.parts.region != null && !s.parts.region.equals(region, ignoreCase = true)
         }
         if (conflicting != null) {

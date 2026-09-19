@@ -135,15 +135,24 @@ class SetCodeMatchTest {
         assertEquals("BLGG-DE053", r.selected?.setCode)
     }
 
-    @Test fun `Fall 3 Ausnahme greift nicht bei nur einem Bild mit der abweichenden Region`() {
+    @Test fun `Fall 3 -- eine einzige saubere Lesung ohne Gegenstimme gilt, wenn der Druck existiert`() {
+        // Scan-Protokoll 19.09.: nach dem Einwurf oft nur ein lesbares Bild.
         val known = listOf(
             SetOption("BLGG-DE053", "Ultra Rare", 0.0, "DE", verified = true),
             SetOption("BLGG-EN053", "Ultra Rare", 0.0, "EN", verified = false),
         )
         val frames = listOf("BLGG-EN053", "BLGG053")
         val result = SetCodeMatch.best(frames, known, frames)
-        assertEquals(SetCodeMatch.MatchReason.REGION_CONTRADICTS_VERIFIED, result.reason)
-        assertEquals("BLGG-DE053", result.selected?.setCode)
+        assertEquals("BLGG-EN053", result.selected?.setCode)
+    }
+
+    @Test fun `Fall 3 -- eine Lesung mit Gegenstimme bleibt beim verifizierten Druck`() {
+        val known = listOf(
+            SetOption("BLGG-DE053", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN053", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("BLGG-EN053", "BLGG-DE053")
+        assertEquals("BLGG-DE053", SetCodeMatch.best(frames, known, frames).selected?.setCode)
     }
 
     // -- verified schlaegt abgeleitet -------------------------------------------------------------
