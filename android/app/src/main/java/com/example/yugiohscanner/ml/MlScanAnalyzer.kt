@@ -40,6 +40,7 @@ class MlScanAnalyzer(
     // Nur auf dem Analyse-Thread benutzt.
     private var prevStrip: FloatArray? = null
     private val chuteGate = ChuteGate()
+    private var lastFrameMs = 0L
 
     // Einwuerfe, die noch keinem Erkennungsergebnis mitgegeben wurden (Analyse- -> Erkennungs-Thread).
     private val einwurfLock = Any()
@@ -53,6 +54,9 @@ class MlScanAnalyzer(
 
     override fun analyze(image: ImageProxy) {
         val tFrame = System.currentTimeMillis()
+        // Kamera-Aussetzer: ein Einwurf dauert nur ~200 ms, eine Luecke kann ihn verschlucken.
+        if (lastFrameMs != 0L && tFrame - lastFrameMs > 300) ScanLog.line("Bildluecke", "${tFrame - lastFrameMs}ms")
+        lastFrameMs = tFrame
         try {
             val rot = image.imageInfo.rotationDegrees
             val gv = guideView
@@ -69,7 +73,9 @@ class MlScanAnalyzer(
                 strip = meanAbsDiff(prevStrip, s)
                 prevStrip = s
                 chuteGate.update(strip, tFrame)?.let { b ->
-                    Log.i("StapelScan", "stoss start=${b.startMs} dauer=${b.dauerMs} spitze=${"%.1f".format(b.peak)} einwurf=${b.einwurf}")
+                    if (b.einwurf || b.peak >= 10) {
+                        ScanLog.line("Stoss", "start=${b.startMs} dauer=${b.dauerMs} spitze=${"%.1f".format(b.peak)} einwurf=${b.einwurf}")
+                    }
                     if (b.einwurf) synchronized(einwurfLock) {
                         if (einwurfAnzahl == 0) einwurfStart = b.startMs
                         einwurfAnzahl++

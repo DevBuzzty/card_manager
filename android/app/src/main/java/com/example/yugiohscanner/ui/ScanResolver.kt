@@ -103,7 +103,7 @@ internal fun logScanDecision(
 ) {
     val sel = match.selected
     val composed = sel != null && knownSets.none { it.setCode.equals(sel.setCode, ignoreCase = true) }
-    android.util.Log.i(
+    com.example.yugiohscanner.ml.ScanLog.line(
         "ScanDecision",
         "stage=$stage pc=$passcode " +
             "code=${sel?.setCode ?: "-"} rarity=${sel?.rarity ?: "-"} lang=${sel?.language ?: "-"} " +
