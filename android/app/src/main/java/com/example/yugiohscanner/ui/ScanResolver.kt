@@ -73,6 +73,7 @@ object ScanResolver {
             m to ScanConfidence.fromEvidence(m, knownSets, editionTexts, defaultEdition)
         }
         logScanDecision("erst", pc, match, confidence, knownSets)
+        com.example.yugiohscanner.ml.ScanLog.line("Sprache", "pc=$pc hinweis=${com.example.yugiohscanner.ml.SprachHinweis.aus(framesEvidence)}")
         return ResolvedScan(base, knownSets, match, confidence)
     }
 }

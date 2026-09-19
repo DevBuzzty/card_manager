@@ -313,4 +313,23 @@ class SetCodeMatchTest {
         assertEquals(SetCodeMatch.MatchReason.MATCHED, result.reason)
         assertEquals("EN", result.selected?.language)
     }
+
+    @Test fun `Sprache aus dem Kartentext schlaegt eine falsch gelesene Region`() {
+        // Scan-Protokoll 19.09.: Region schwankt, der englische Effekttext ist eindeutig.
+        val known = listOf(
+            SetOption("BLGG-DE135", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN135", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("BLGG-DE135 | Once per Chain, if an Effect Monster is Special Summoned", "you can send this card to the GY")
+        assertEquals("BLGG-EN135", SetCodeMatch.best(frames, known, frames).selected?.setCode)
+    }
+
+    @Test fun `deutscher Kartentext haelt eine faelschlich als EN gelesene Region beim deutschen Druck`() {
+        val known = listOf(
+            SetOption("BLGG-DE135", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN135", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("BLGG-EN135 | auf den Friedhof", "2000 oder weniger beschwören")
+        assertEquals("BLGG-DE135", SetCodeMatch.best(frames, known, frames).selected?.setCode)
+    }
 }

@@ -224,6 +224,18 @@ object SetCodeMatch {
 
         fun byVerifiedFirst(list: List<Scored>) = list.map { it.option }.sortedByDescending { it.verified }
 
+        // Sprache aus dem gelesenen Kartentext (19.09.2026, SprachHinweis): der Text ist gross und steht in
+        // jedem Bild, die Region im Set-Code oft nur in einem verstuemmelten. Ist die Sprache eindeutig und
+        // gibt es fuer dieses Kuerzel+Nummer einen Druck in ihr, gewinnt er -- vor Region und verifiziertem Druck.
+        val sprache = com.example.yugiohscanner.ml.SprachHinweis.aus(framesEvidence)
+        if (sprache != null) {
+            val passend = byVerifiedFirst(bestGroup.filter { it.option.language.equals(sprache, ignoreCase = true) })
+            if (passend.isNotEmpty()) {
+                val rest = byVerifiedFirst(bestGroup).filter { it !in passend }
+                return MatchResult(passend.first(), passend + rest, MatchReason.MATCHED, codeExactMatch, codeFrameCount)
+            }
+        }
+
         // Case 2: region not readable. Offer only printings that actually exist for this
         // prefix+number -- nothing is composed.
         //
