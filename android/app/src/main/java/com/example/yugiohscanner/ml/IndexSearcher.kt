@@ -23,6 +23,28 @@ class IndexSearcher(context: Context) {
         passcodes = IntArray(n) { bb.int }
     }
 
+    /**
+     * Wie [search], zusaetzlich die Aehnlichkeit der besten ANDEREN Karte (anderer Passcode) -- fuer die
+     * Abstandsregel in [ScanPipeline.embedBox]. Liefert (passcode, cosine, cosine der Zweitbesten).
+     */
+    fun searchTop2(query: FloatArray): Triple<Int, Float, Float> {
+        var best = -1
+        var bestSim = -2f
+        val sims = FloatArray(n)
+        for (i in 0 until n) {
+            var s = 0f
+            val off = i * dim
+            for (d in 0 until dim) s += emb[off + d] * query[d]
+            sims[i] = s
+            if (s > bestSim) { bestSim = s; best = i }
+        }
+        if (best < 0) return Triple(-1, bestSim, -2f)
+        val pc = passcodes[best]
+        var second = -2f
+        for (i in 0 until n) if (passcodes[i] != pc && sims[i] > second) second = sims[i]
+        return Triple(pc, bestSim, second)
+    }
+
     /** query must be L2-normalised (the embedder output is). Returns (passcode, cosine). */
     fun search(query: FloatArray): Pair<Int, Float> {
         var best = -1

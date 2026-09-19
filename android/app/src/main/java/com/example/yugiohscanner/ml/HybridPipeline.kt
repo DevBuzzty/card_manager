@@ -90,7 +90,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
         // verschobenen Ausschnitten nehmen -- mit strengerer Schwelle, leerer Karton kam auf 0,62.
         if (guide != null && out.none { guide.contains((it.box.x1 + it.box.x2) / 2f / frame.width, (it.box.y1 + it.box.y2) / 2f / frame.height) }) {
             val best = GuideRegion.artworkCandidates(guide, frame.width, frame.height)
-                .mapNotNull { artwork.embedBox(frame, it, GUIDE_MIN_SIM) }
+                .mapNotNull { artwork.embedBox(frame, it, GUIDE_MIN_SIM, abstandsregel = false) }
                 .maxByOrNull { it.sim }
             if (best != null && out.none { it.passcode == best.passcode }) {
                 // Zonen am vollen erwarteten Artwork verankern (der Kandidat ist ARTWORK_SCALE-fach
