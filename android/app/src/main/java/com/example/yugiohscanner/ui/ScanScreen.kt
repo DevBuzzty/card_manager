@@ -290,6 +290,11 @@ fun ScanScreen(onClose: () -> Unit) {
     // schon abgelegt ist, und das letzte Analysebild fuer "Fehler melden".
     val einwurfOffenSeit = remember { java.util.concurrent.atomic.AtomicLong(0L) }
     val einwurfFoto = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    // Zeitpunkt des letzten schwachen Stosses (Analyse-Thread -> Erkennungs-Thread), 0 = keiner.
+    val schwacherStoss = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+    val letzteBuchung = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+    // Der Analyzer selbst, fuer Einstellungen aus seinem eigenen Ergebnis-Callback (dort ist er noch nicht zugewiesen).
+    val mlAnalyzerRef = remember { java.util.concurrent.atomic.AtomicReference<com.example.yugiohscanner.ml.MlScanAnalyzer?>(null) }
     val letztesBild = remember { java.util.concurrent.atomic.AtomicReference<android.graphics.Bitmap?>(null) }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
@@ -336,6 +341,10 @@ fun ScanScreen(onClose: () -> Unit) {
                 val foto = com.example.yugiohscanner.ml.ScanLog.photo(frame, "offen-$offen")
                 com.example.yugiohscanner.ml.ScanLog.line("Einwurf", "offen seit ${now - offen}ms erkannt=${dets.map { "${it.passcode}@${"%.2f".format(it.sim)}" }} foto=$foto")
             }
+            if (scanMode == "stapel") {
+                val w = schwacherStoss.getAndSet(0L)
+                if (w != 0L) stackCounter.schwach(w)
+            }
             // Pool each visible card's bottom-band OCR text (set-code voting across frames).
             for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
             // On confirmation, resolve the set code from ALL pooled evidence for that card, then
@@ -345,10 +354,11 @@ fun ScanScreen(onClose: () -> Unit) {
                 // Modus "stapel": so oft buchen, wie Einwuerfe offen sind; ohne Einwurf gar nicht.
                 // Rueckmeldung sofort, Senden erst mit Set-Code (PendingSends, unten).
                 if (scanMode == "stapel") {
-                    val times = stackCounter.claim(now)
+                    val times = stackCounter.claim(now, d.passcode)
                     com.example.yugiohscanner.ml.ScanLog.line("Gebucht", "${d.passcode} x$times")
                     if (times > 0) {
                         einwurfOffenSeit.set(0L)
+                        letzteBuchung.set(now)
                         stapelCount += times
                         capture.blink()
                         tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
@@ -378,6 +388,13 @@ fun ScanScreen(onClose: () -> Unit) {
                 sendConfirmed(pc, n)
             }
             for (gone in tracker.droppedThisFrame) setEvidence.forget(gone)
+            // Ruhepause (MlScanAnalyzer.mlPauseMs): im Stapel-Modus, wenn weder ein Einwurf noch eine Sendung
+            // wartet und seit 2 s nichts gebucht wurde, nur noch ~1,5 Erkennungen pro Sekunde.
+            if (scanMode == "stapel" && einwurfOffenSeit.get() == 0L && pendingSends.isEmpty() && now - letzteBuchung.get() > 2_000) {
+                mlAnalyzerRef.get()?.mlPauseMs = 700L
+            } else {
+                mlAnalyzerRef.get()?.mlPauseMs = 0L
+            }
 
             // Silent improvement (Spec D3 Task 6, plan Section 6.2): a card already staged
             // (`seen`) but still visible gets its set code re-resolved from ALL evidence gathered
@@ -420,6 +437,9 @@ fun ScanScreen(onClose: () -> Unit) {
             }
         }
     }
+
+    remember { mlAnalyzer.onSchwacherStoss = { t -> schwacherStoss.set(t) } }
+    remember { mlAnalyzerRef.set(mlAnalyzer) }
 
     // Scan-Protokoll: eine Datei je Scanner-Sitzung (ScanLog).
     DisposableEffect(Unit) {
@@ -579,7 +599,8 @@ fun ScanScreen(onClose: () -> Unit) {
                         style = Stroke(width = 4f)
                     )
                     drawContext.canvas.nativeCanvas.drawText(
-                        if (d.passcode >= 0) d.passcode.toString() else "…",
+                        // Passcodes sind achtstellig; als Zahl verliert z. B. 02463794 die fuehrende 0.
+                        if (d.passcode >= 0) "%08d".format(d.passcode) else "…",
                         l, (t - 10f).coerceAtLeast(30f),
                         android.graphics.Paint().apply {
                             color = android.graphics.Color.rgb(0, 255, 102)

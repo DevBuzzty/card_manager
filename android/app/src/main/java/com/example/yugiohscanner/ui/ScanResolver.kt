@@ -8,6 +8,7 @@ import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
 import com.example.yugiohscanner.ml.ScanConfidence
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Das fertige Urteil ueber einen Scan -- alles, was ein Abnehmer braucht, und nichts davon
@@ -35,6 +36,9 @@ object ScanResolver {
 
     /** @return `null`, wenn zu [pc] ueberhaupt keine Karte gefunden wurde. Netz- und
      *  Katalogfehler fliegen als Ausnahme zum Aufrufer hoch, genau wie vorher. */
+    private const val NETZ_WARTEN_MS = 1_500L
+    private val hintergrund = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+
     suspend fun resolve(
         pc: String,
         evidence: List<String>,
@@ -62,7 +66,15 @@ object ScanResolver {
             base = catalogCard?.toCardRow()
                 ?: CardSearchRepository.search(pc).firstOrNull()
                 ?: return null
-            knownSets = runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
+            // Netz hoechstens NETZ_WARTEN_MS (Scan-Protokoll 19.09.: bis 10 s bis zum PC). Sonst die Drucke aus
+            // dem Katalog nehmen und im Hintergrund weiterladen -- der ScanCache macht die naechste Karte sofort.
+            knownSets = kotlinx.coroutines.withTimeoutOrNull(NETZ_WARTEN_MS) {
+                runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
+            } ?: run {
+                com.example.yugiohscanner.ml.ScanLog.line("Drucke", "pc=$pc Netz > ${NETZ_WARTEN_MS}ms, Katalog-Drucke genutzt")
+                hintergrund.launch { runCatching { PrintingRepository.fetchAllSets(pc) } }
+                catalogCard?.printings?.map { it.toSetOption() } ?: emptyList()
+            }
         }
 
         // Abseits des UI-Threads: der Abstandsvergleich waechst mit den gesammelten OCR-Texten und

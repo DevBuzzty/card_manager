@@ -30,4 +30,32 @@ class StackCounterTest {
         c.einwurf(1, 0)
         assertEquals(0, c.claim(15_001))
     }
+
+    @Test fun `schwacher Stoss zaehlt, wenn danach eine andere Karte oben liegt`() {
+        // Scan-Protokoll 19.09.: Adreus nach Galaxy-Eyes, Spitze 35 -> erkannt, aber nicht gezaehlt.
+        val c = StackCounter()
+        c.einwurf(1, 0); assertEquals(1, c.claim(1_000, 111))
+        c.schwach(5_000)
+        assertEquals(1, c.claim(7_000, 222))
+    }
+
+    @Test fun `schwacher Stoss mit derselben Karte zaehlt nicht`() {
+        val c = StackCounter()
+        c.einwurf(1, 0); assertEquals(1, c.claim(1_000, 111))
+        c.schwach(5_000)
+        assertEquals(0, c.claim(7_000, 111))
+    }
+
+    @Test fun `schwacher Stoss verfaellt`() {
+        val c = StackCounter()
+        c.einwurf(1, 0); assertEquals(1, c.claim(1_000, 111))
+        c.schwach(5_000)
+        assertEquals(0, c.claim(5_000 + StackCounter.SCHWACH_FENSTER_MS + 1, 222))
+    }
+
+    @Test fun `ohne schwachen Stoss zaehlt ein Kartenwechsel nicht`() {
+        val c = StackCounter()
+        c.einwurf(1, 0); assertEquals(1, c.claim(1_000, 111))
+        assertEquals(0, c.claim(3_000, 222))
+    }
 }

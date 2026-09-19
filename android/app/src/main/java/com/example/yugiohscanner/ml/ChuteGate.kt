@@ -28,10 +28,19 @@ class ChuteGate {
         // 18.09.: 500 -> 350 ms (schnelleres +1). Alle drei Messlogs bleiben bei 250-500 ms fehlerfrei
         // eingeordnet; Hand-Wackel-Stoesse folgen einander nach 0,27-0,6 s.
         const val ABSTAND_MS = 350L
+
+        // 19.09.: drei Karten landeten mit Spitze 31-35 (Scan-Protokoll sitzung-1789840759165) und
+        // wurden erkannt, aber nicht gezaehlt. Nicht-Karten-Stoesse erreichten bisher bis 44 (Hand) --
+        // deshalb gilt ein schwacher Stoss nur zusammen mit einem Kartenwechsel.
+        const val SCHWACH_PEAK = 25.0
     }
 
     /** Ein entschiedener Stoss: [einwurf] true = als Karte gezaehlt. */
-    data class Burst(val einwurf: Boolean, val startMs: Long, val dauerMs: Long, val peak: Double)
+    /**
+     * [schwach]: kein Einwurf, aber ein kurzer, allein stehender Stoss mit Spitze ab [SCHWACH_PEAK] -- vielleicht
+     * eine sanft gelandete Karte. Zaehlt nur, wenn danach eine ANDERE Karte oben liegt (StackCounter).
+     */
+    data class Burst(val einwurf: Boolean, val startMs: Long, val dauerMs: Long, val peak: Double, val schwach: Boolean = false)
 
     private var active = false
     private var start = 0L
@@ -91,6 +100,7 @@ class ChuteGate {
             kandidatEnd = end
             return out
         }
+        if (peak >= SCHWACH_PEAK && dauer <= MAX_DAUER_MS && allein) return out ?: b.copy(schwach = true)
         return out ?: b
     }
 }

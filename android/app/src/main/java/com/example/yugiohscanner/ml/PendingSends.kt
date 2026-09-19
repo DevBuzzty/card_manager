@@ -33,6 +33,8 @@ class PendingSends(private val maxWaitMs: Long = 1_500L) {
         return out
     }
 
+    fun isEmpty(): Boolean = offen.isEmpty()
+
     /** Alles sofort (bevor die Belege durch einen neuen Einwurf verworfen werden). */
     fun flushAll(): List<Pair<Int, Int>> = offen.map { (pc, o) -> pc to o.anzahl }.also { offen.clear() }
 }
