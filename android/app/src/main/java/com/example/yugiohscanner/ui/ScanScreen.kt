@@ -218,6 +218,20 @@ fun ScanScreen(onClose: () -> Unit) {
         if (passcode > 0) capture.onCapture(passcode.toString(), evidence, frames, editionTexts)
     }
 
+    // Waermestufe des Systems ins Protokoll, alle 10 s. Nicht selbst geschaetzt: die Stufe kommt vom
+    // PowerManager. Sie ist die Gegenrechnung zur Analyse-Aufloesung -- mehr Bildpunkte je Bild
+    // heizen, und Hitze war schon einmal ein Thema (43,6 Grad im Lauf vom 19.09.).
+    LaunchedEffect(Unit) {
+        while (true) {
+            val stufe = runCatching {
+                val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+                if (android.os.Build.VERSION.SDK_INT >= 29 && pm != null) pm.currentThermalStatus else -1
+            }.getOrDefault(-1)
+            com.example.yugiohscanner.ml.ScanLog.line("Waerme", "stufe=$stufe")
+            kotlinx.coroutines.delay(10_000)
+        }
+    }
+
     // Detection handlers wrapped in rememberUpdatedState so the single remembered analyzer
     // always runs the latest logic without being recreated on every recomposition.
     // (Legacy) socket flow, used by manual entry: push passcode (+ set code) to the desktop.
@@ -552,7 +566,18 @@ fun ScanScreen(onClose: () -> Unit) {
                     val resolutionSelector = ResolutionSelector.Builder()
                         .setResolutionStrategy(
                             ResolutionStrategy(
-                                Size(1920, 1080),
+                                // 2880x2160 statt 1920x1080 (20.09.2026): der Sensor kann 4096x3072,
+                                // und die OCR-Zonen sind der Engpass -- die Auflagenzeile ist im
+                                // 1080p-Bild nur 21 Bildpunkte hoch und wird zu 32 % gelesen. Vier
+                                // mal so viele Bildpunkte je Bild bringen dieselbe Vergroesserung
+                                // wie zweifacher Zoom, aber OHNE Sichtfeldverlust und ohne
+                                // Weichzeichnen: digitaler Zoom schneidet im Sensor zu und muss ab
+                                // etwa 2,1x wieder hochrechnen. Der Detektor laeuft weiter auf
+                                // seinem 640er Letterbox, kostet also nichts extra; teurer wird das
+                                // Umkopieren je Bild. Ob das Tempo und die Waerme das hergeben,
+                                // sagen die Protokollzeilen "Tempo" und "Waerme" -- gebaut, um
+                                // genau diese Abwaegung zu messen statt zu vermuten.
+                                Size(2880, 2160),
                                 ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
                             )
                         )

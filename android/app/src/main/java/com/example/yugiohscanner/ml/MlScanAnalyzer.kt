@@ -31,6 +31,8 @@ class MlScanAnalyzer(
     private val onResult: (dets: List<Detection>, frame: Bitmap, frameW: Int, frameH: Int, ms: Long, einwuerfe: Int, einwurfStartMs: Long) -> Unit
 ) : ImageAnalysis.Analyzer {
 
+    private companion object { const val TEMPO_FENSTER_MS = 5_000L }
+
     private val mlExecutor = Executors.newSingleThreadExecutor()
     private val mlBusy = AtomicBoolean(false)
 
@@ -63,11 +65,31 @@ class MlScanAnalyzer(
         guideView = floatArrayOf(l, t, r, b, viewW, viewH)
     }
 
+    // Tempo, alle TEMPO_FENSTER_MS eine Zeile (die Waermestufe schreibt ScanScreen, wo ein Context
+    // zur Hand ist). Ohne diese Messung ist die Abwaegung
+    // "hoehere Analyse-Aufloesung gegen Bildrate und Hitze" reine Vermutung -- und beides ist schon
+    // einmal aufgefallen (Hitze 43,6 Grad im Lauf vom 19.09., Bildluecken verschlucken Einwuerfe).
+    // Die Waermestufe kommt vom System selbst (PowerManager), nicht aus einer eigenen Schaetzung.
+    private var tempoStart = 0L
+    private var tempoBilder = 0
+
+    private fun tempoZaehlen(tFrame: Long, breite: Int, hoehe: Int) {
+        if (tempoStart == 0L) { tempoStart = tFrame; tempoBilder = 0; return }
+        tempoBilder++
+        val dauer = tFrame - tempoStart
+        if (dauer < TEMPO_FENSTER_MS) return
+        ScanLog.line("Tempo", "bilder=%.1f/s analyse=%dx%d".format(
+            tempoBilder * 1000.0 / dauer, breite, hoehe))
+        tempoStart = tFrame
+        tempoBilder = 0
+    }
+
     override fun analyze(image: ImageProxy) {
         val tFrame = System.currentTimeMillis()
         // Kamera-Aussetzer: ein Einwurf dauert nur ~200 ms, eine Luecke kann ihn verschlucken.
         if (lastFrameMs != 0L && tFrame - lastFrameMs > 300) ScanLog.line("Bildluecke", "${tFrame - lastFrameMs}ms")
         lastFrameMs = tFrame
+        tempoZaehlen(tFrame, image.width, image.height)
         try {
             val rot = image.imageInfo.rotationDegrees
             val gv = guideView
