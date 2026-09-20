@@ -14,6 +14,7 @@ import { formatCopyLocation } from '../utils/copyLocation';
 // Schluessel wie ueberall sonst im Projekt (id/set_code/language/rarity). Er wohnt in
 // ../utils/printingKey.js, damit es ihn nur EINMAL gibt (BinderView.jsx liest denselben).
 import { printingKey } from '../utils/printingKey';
+import { passcodeMatches } from '../utils/passcode';
 import ExportDialog from './ExportDialog';
 import { filterCopyIds } from '../utils/exportScope';
 
@@ -342,7 +343,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
         const q = filter.trim().toLowerCase();
         const matchesSearch = !q
             || (c.name && c.name.toLowerCase().includes(q))
-            || (c.id && String(c.id).includes(filter.trim()))
+            // name_de kommt aus dem Offline-Katalog (get-collection haengt ihn an) -- gespeichert
+            // ist nur der englische Name.
+            || (c.name_de && c.name_de.toLowerCase().includes(q))
+            || (c.id && passcodeMatches(filter, c.id))
             || (c.race && c.race.toLowerCase().includes(q))
             || (c.attribute && c.attribute.toLowerCase().includes(q))
             || Array.from(c.sets).some(s => s.toLowerCase().includes(q))

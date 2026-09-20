@@ -22,7 +22,7 @@ const sealed = require('./sealed-items.cjs');
 const { readSealedProducts, searchSealedProducts, sealedProductsAvailable } = require('./sealed-products.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck, saveDeck } = require('./decks.cjs');
-const { catalogPrices, catalogCards, readCatalogCards, catalogMainId, catalogLegality } = require('./catalog-prices.cjs');
+const { catalogPrices, catalogCards, readCatalogCards, catalogSearchNames, catalogMainId, catalogLegality } = require('./catalog-prices.cjs');
 const { createImportSessions, importOpen, importResolve, importRun } = require('./carddex-import.cjs');
 const { buildExport, exportCount, exportResultText } = require('./collection-export.cjs');
 
@@ -439,9 +439,23 @@ ipcMain.handle('add-card-to-db', (event, card) => {
   }
 });
 
+// Der deutsche Kartenname steht NICHT in der Sammlung (cards.name ist englisch), sondern im
+// Offline-Katalog. Wir haengen ihn beim Lesen an, statt ihn zu spiegeln: keine Spalte, kein Nachtrag,
+// keine Sync-Last -- und er ist immer so aktuell wie der Katalog. Damit findet die Suche in der
+// Sammlung auch "Ueberfallritter" (Nutzer 19.09.2026).
+function withGermanNames(rows) {
+    const cards = readCatalogCards(userDataPath);
+    if (!cards) return rows;
+    for (const r of rows) {
+        const de = cards.get(String(r.id))?.name_de;
+        if (de && de !== r.name) r.name_de = de;
+    }
+    return rows;
+}
+
 ipcMain.handle('get-collection', () => {
     const def = copies.defaults(db);
-    return db.prepare(collectionSql()).all({ def_condition: def.condition, def_edition: def.edition });
+    return withGermanNames(db.prepare(collectionSql()).all({ def_condition: def.condition, def_edition: def.edition }));
 });
 ipcMain.handle('get-defaults', () => copies.defaults(db));
 ipcMain.handle('list-copies', (event, printing) => {
@@ -850,7 +864,10 @@ ipcMain.handle('search-online', async (event, query) => {
         // German name comes back); otherwise a fuzzy name search.
         const isPasscode = /^\d+$/.test(q);
         if (isPasscode) {
-            return await fetchCards(`${base}?id=${encodeURIComponent(q)}&language=de`);
+            // Gedruckt wird achtstellig mit fuehrenden Nullen (02463794), gefuehrt wird ohne sie:
+            // ohne das Abschneiden findet die Passcode-Suche die Karte nicht (Nutzer 19.09.2026).
+            const id = q.replace(/^0+/, '') || '0';
+            return await fetchCards(`${base}?id=${encodeURIComponent(id)}&language=de`);
         }
         // The collection is mostly German, but YGOPRODeck's language=de only matches German
         // names -> search the German DB first, fall back to the English DB, and merge by id
@@ -859,9 +876,16 @@ ipcMain.handle('search-online', async (event, query) => {
             fetchCards(`${base}?fname=${encodeURIComponent(q)}&language=de`),
             fetchCards(`${base}?fname=${encodeURIComponent(q)}`),
         ]);
+        // Dritte Quelle: der Offline-Katalog kennt die deutschen Namen vollstaendig und faengt die
+        // Faelle ab, die YGOPRODecks Suche mit language=de auslaesst. Seine Treffer holen wir in EINEM
+        // Abruf (cardinfo.php nimmt mehrere ids, komma-getrennt).
+        const catalogIds = catalogSearchNames(userDataPath, q).filter(id => !de.some(c => String(c.id) === id));
+        const fromCatalog = catalogIds.length > 0
+            ? await fetchCards(`${base}?id=${encodeURIComponent(catalogIds.join(','))}&language=de`)
+            : [];
         const seen = new Set();
         const out = [];
-        for (const c of [...de, ...en]) {
+        for (const c of [...de, ...fromCatalog, ...en]) {
             if (seen.has(c.id)) continue;
             seen.add(c.id);
             out.push(c);
