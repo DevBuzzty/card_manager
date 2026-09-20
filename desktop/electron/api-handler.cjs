@@ -1,5 +1,6 @@
 const https = require('https');
 const { getDb } = require('./database.cjs');
+const { dropErfundeneRarity } = require('./rarity-sources.cjs');
 
 function fetchJson(url, options = {}) {
     return new Promise((resolve, reject) => {
@@ -128,7 +129,9 @@ async function parseWikiSets(apiBase, title, lang, cachePrefix) {
         if (tmpl) {
             const a = tmpl[1].split('|').map(s => s.trim());
             setCode = a[0];
-            rarityField = a[2] || 'Common';
+            // Keine Rarity erfinden: fehlt das Feld, bleibt es leer und dropErfundeneRarity
+            // entscheidet spaeter, ob eine andere Quelle sie kennt (siehe rarity-sources.cjs).
+            rarityField = a[2] || '';
         } else {
             const parts = line.split(';');
             if (parts.length < 3) continue;
@@ -136,9 +139,9 @@ async function parseWikiSets(apiBase, title, lang, cachePrefix) {
             rarityField = parts[2].trim();
         }
         if (!setCode) continue;
-        for (const rarity of rarityField.split(',').map(r => r.trim())) {
-            if (rarity) sets.push({ set_code: setCode, set_rarity: rarity });
-        }
+        const rarities = rarityField.split(',').map(r => r.trim()).filter(Boolean);
+        if (rarities.length === 0) sets.push({ set_code: setCode, set_rarity: '' });
+        else for (const rarity of rarities) sets.push({ set_code: setCode, set_rarity: rarity });
     }
     return sets;
 }
@@ -175,7 +178,9 @@ async function fetchKonamiSets(cid, locale) {
         if (!code) continue;
         const rarM = row.match(/class="lr_icon[^"]*">\s*<p>\s*([^<]*?)\s*<\/p>/);
         const abbr = rarM ? rarM[1].trim() : '';
-        sets.push({ set_code: code, set_rarity: KONAMI_RARITY[abbr] || abbr || 'Common' });
+        // Konamis deutsche Datenbank nennt zu KEINEM Druck eine Rarity (gemessen 20.09.2026) --
+        // frueher wurde daraus "Common", das die Vorauswahl dann jedes Mal gewann.
+        sets.push({ set_code: code, set_rarity: KONAMI_RARITY[abbr] || abbr || '' });
     }
     return sets;
 }
@@ -251,7 +256,7 @@ async function fetchSetsUnion(passcode, wikiLang, konamiLocale) {
 
     const seen = new Set();
     const out = [];
-    for (const s of collected) {
+    for (const s of dropErfundeneRarity(collected)) {
         if (!belongs(s.set_code)) continue;
         const key = `${s.set_code}|${s.set_rarity}`;
         if (seen.has(key)) continue;

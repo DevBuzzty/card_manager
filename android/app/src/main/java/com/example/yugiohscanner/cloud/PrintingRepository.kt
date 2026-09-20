@@ -79,7 +79,8 @@ object PrintingRepository {
         val jpD = async(Dispatchers.IO) { localizedUnion(title, cid, "jp", "JP") }
 
         val seen = HashSet<String>()
-        val result = (deD.await() + en + jpD.await()).filter { seen.add("${it.setCode}|${it.rarity}") }
+        val result = RarityQuellen.ohneErfundeneRarity(deD.await() + en + jpD.await())
+            .filter { seen.add("${it.setCode}|${it.rarity}") }
         // Only cache a real, non-empty union so a transient failure can't poison it for 14 days.
         if (result.isNotEmpty()) ScanCache.write("sets", passcode, serializeSets(result))
         result
@@ -181,7 +182,9 @@ object PrintingRepository {
                 // Format B: {{Card table set|CODE|Set Name|Rarity}}
                 val a = tmpl.groupValues[1].split("|").map { it.trim() }
                 code = a.getOrElse(0) { "" }
-                rarityField = a.getOrElse(2) { "" }.ifEmpty { "Common" }
+                // Keine Rarity erfinden -- RarityQuellen entscheidet spaeter, ob eine andere
+                // Quelle sie kennt.
+                rarityField = a.getOrElse(2) { "" }
             } else {
                 // Format A: CODE; Set Name; Rarity[,Rarity]
                 val parts = line.split(";")
@@ -190,9 +193,9 @@ object PrintingRepository {
                 rarityField = parts[2].trim()
             }
             if (code.isEmpty()) continue
-            for (rarity in rarityField.split(",").map { it.trim() }.filter { it.isNotEmpty() }) {
-                out.add(SetOption(code, rarity, 0.0, tag))
-            }
+            val rarities = rarityField.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            if (rarities.isEmpty()) out.add(SetOption(code, "", 0.0, tag))
+            else for (rarity in rarities) out.add(SetOption(code, rarity, 0.0, tag))
         }
         out
     }
@@ -224,7 +227,8 @@ object PrintingRepository {
             val code = codeRe.find(row)?.groupValues?.get(1)?.trim() ?: continue
             if (code.isEmpty()) continue
             val abbr = rarRe.find(row)?.groupValues?.get(1)?.trim() ?: ""
-            out.add(SetOption(code, KONAMI_RARITY[abbr] ?: abbr.ifEmpty { "Common" }, 0.0, tag))
+            // Konamis deutsche Datenbank nennt zu KEINEM Druck eine Rarity (gemessen 20.09.2026).
+            out.add(SetOption(code, KONAMI_RARITY[abbr] ?: abbr, 0.0, tag))
         }
         out
     }
