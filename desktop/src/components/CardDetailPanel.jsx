@@ -12,6 +12,7 @@ import { fmtEUR } from '../utils/format';
 import { printingFromParams, cardRoute, ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
 import { formatCopyLocation } from '../utils/copyLocation';
+import { formatPasscode } from '../utils/passcode';
 
 export default function CardDetailPanel({ paletteOpen = false }) {
   const params = useParams();
@@ -397,7 +398,8 @@ export default function CardDetailPanel({ paletteOpen = false }) {
            {/* Passcode */}
           <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
               <span className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Passcode</span>
-              <span className="text-xl font-mono text-gray-300">{card.id}</span>
+              {/* Achtstellig, wie auf der Karte gedruckt -- intern steht er ohne fuehrende Nullen. */}
+              <span className="text-xl font-mono text-gray-300">{formatPasscode(card.id)}</span>
           </div>
       </div>
 

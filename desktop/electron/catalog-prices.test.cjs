@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { mergeCards, packCatalog } = require('./catalog-build.cjs');
 const {
-  catalogFilePath, saveCatalogFile, readCatalogPrices, readCatalogCards, catalogPrices, catalogCards, catalogMainId, catalogLegality,
+  catalogFilePath, saveCatalogFile, readCatalogPrices, readCatalogCards, catalogSearchNames, catalogPrices, catalogCards, catalogMainId, catalogLegality,
 } = require('./catalog-prices.cjs');
 
 const card = (id, cardmarket_price) => ({
@@ -54,6 +54,24 @@ test('Katalog-Index: mit ids nur diese samt Bild, ohne ids alle kompakt ohne Bil
   });
   assert.equal(readCatalogCards(dir).get('1861629').image, 'https://x/1861629.jpg');
   assert.deepEqual(catalogPrices(dir), { available: true, prices: { '14558127': 4.5, '1861629': null } }, 'Preise unverändert');
+});
+
+// Namenssuche im Katalog -- deutsche Namen, die YGOPRODecks Suche auslaesst (Nutzer 19.09.2026).
+test('Katalog-Namenssuche: findet deutsche Namen, deutsche Treffer zuerst, ohne Datei leer', () => {
+  const dir = tmpDir();
+  const de = [
+    { id: 14558127, name: 'Ueberfallritter', desc: 'x' },
+    { id: 1861629, name: 'Adreus, Hueter der Goetterdaemmerung', desc: 'x' },
+  ];
+  saveCatalogFile(dir, packCatalog(mergeCards([card(14558127), card(1861629)], de), 7).buffer);
+  assert.deepEqual(catalogSearchNames(dir, 'ueberfall'), ['14558127']);
+  assert.deepEqual(catalogSearchNames(dir, 'hueter der'), ['1861629']);
+  assert.deepEqual(catalogSearchNames(dir, 'ADREUS'), ['1861629'], 'Gross/Kleinschreibung egal');
+  // Englischer Name trifft auch -- aber erst nach den deutschen Treffern.
+  assert.deepEqual(catalogSearchNames(dir, 'Karte 1861629'), ['1861629']);
+  assert.deepEqual(catalogSearchNames(dir, 'ueberfall', 0), [], 'Grenze wird eingehalten');
+  assert.deepEqual(catalogSearchNames(dir, 'u'), [], 'ein Zeichen ist zu unscharf');
+  assert.deepEqual(catalogSearchNames(tmpDir(), 'ueberfall'), [], 'ohne Katalogdatei leer');
 });
 
 test('Katalog-Index ohne Datei: Katalog fehlt', () => {

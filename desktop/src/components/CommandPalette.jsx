@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Layers, Library, TrendingUp, BookOpen, Heart, CornerDownLeft } from 'lucide-react';
 import { ROUTES, cardRoute } from '../utils/routes';
+import { formatPasscode, passcodeMatches } from '../utils/passcode';
 
 export default function CommandPalette({ open, onClose }) {
   const [query, setQuery] = useState('');
@@ -47,7 +48,8 @@ export default function CommandPalette({ open, onClose }) {
   const actionResults = actions.filter(a => !q || a.label.toLowerCase().includes(q));
   const cardResults = !q ? [] : grouped.filter(c =>
     (c.name && c.name.toLowerCase().includes(q)) ||
-    String(c.id).includes(query.trim()) ||
+    (c.name_de && c.name_de.toLowerCase().includes(q)) ||
+    passcodeMatches(query, c.id) ||
     Array.from(c.sets).some(s => s.toLowerCase().includes(q))
   ).slice(0, 8);
 
@@ -117,7 +119,7 @@ export default function CommandPalette({ open, onClose }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-ink truncate">{c.name}</div>
-                  <div className="font-mono text-[10px] text-ink-faint">{c.id} · ×{c.quantity}</div>
+                  <div className="font-mono text-[10px] text-ink-faint">{formatPasscode(c.id)} · ×{c.quantity}</div>
                 </div>
                 <CornerDownLeft className="w-3.5 h-3.5 opacity-40" />
               </button>

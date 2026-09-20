@@ -119,6 +119,26 @@ function catalogLegality(userDataPath) {
   return catalog.legalityIndex;
 }
 
+// Passcodes zu einem Namensstueck, deutsche Treffer zuerst. Die Sammlung speichert nur den ENGLISCHEN
+// Namen, und YGOPRODecks Suche mit language=de findet manche deutschen Namen nicht ("Adreus, Hueter der
+// Goetterdaemmerung", "Ueberfallritter" -- Nutzer 19.09.2026). Der Offline-Katalog kennt beide Namen, also
+// suchen wir hier lokal und holen die gefundenen Passcodes danach als ganze Karten.
+// Leer ohne Katalogdatei oder bei weniger als zwei Zeichen.
+function catalogSearchNames(userDataPath, query, limit = 20) {
+  const q = String(query || '').trim().toLowerCase();
+  if (q.length < 2) return [];
+  const catalog = readCatalog(userDataPath);
+  if (!catalog) return [];
+  const de = [], en = [];
+  for (const c of catalog.cards.values()) {
+    if (c.name_de && c.name_de.toLowerCase().includes(q)) de.push(c.id);
+    else if (c.name_en && c.name_en.toLowerCase().includes(q)) en.push(c.id);
+    if (de.length >= limit) break;
+    if (en.length > limit) en.length = limit;   // englische Treffer nur als Auffuellung
+  }
+  return [...de, ...en].slice(0, limit);
+}
+
 // Fuer den Renderer: alle Preise als Objekt. available = false ohne Datei (dann ist jeder Preis unbekannt).
 function catalogPrices(userDataPath) {
   const map = readCatalogPrices(userDataPath);
@@ -126,4 +146,4 @@ function catalogPrices(userDataPath) {
   return { available: true, prices: Object.fromEntries(map) };
 }
 
-module.exports = { catalogFilePath, saveCatalogFile, readCatalogPrices, readCatalogCards, catalogPrices, catalogCards, catalogMainId, catalogLegality };
+module.exports = { catalogFilePath, saveCatalogFile, readCatalogPrices, readCatalogCards, catalogSearchNames, catalogPrices, catalogCards, catalogMainId, catalogLegality };
