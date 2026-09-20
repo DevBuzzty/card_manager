@@ -3,6 +3,7 @@
 // bestätigten Set-Codes, gzip-Packen. Kein Netz, keine DB, kein Supabase — alles Testbare hier.
 const zlib = require('node:zlib');
 const { trendById } = require('./sealed-prices.cjs');
+const { UNBEKANNT, kenntRarity, repariereQuellcode } = require('./rarity-sources.cjs');
 
 // Spec E1 §5 — Cardmarket-Preis je Passcode aus card_prices[0].cardmarket_price. YGOPRODeck liefert ihn als
 // Zeichenkette ("4.50"); > 0 wird Zahl, alles andere (fehlt, "0.00", unlesbar) null. Ab Katalog Version 6.
@@ -50,9 +51,17 @@ function mergeCards(enCards, deCards) {
       attribute: c.attribute || null,
       image: img.image_url,
       image_small: img.image_url_small || img.image_url,
+      // Weder Rarity erfinden noch kaputte Codes uebernehmen -- beides stammt aus derselben
+      // Messung (20.09.2026) wie rarity-sources.cjs: YGOPRODeck liefert fuer frische Sets
+      // "LAVD-ENO11" (Buchstabe O statt Null) und `set_rarity: "3"`. Diese Zeile ist die
+      // Hauptquelle der `printings` im Offline-Katalog, den BEIDE Geraete lesen -- ein Fehler hier
+      // wandert in jede Erkennung und bleibt eine Woche stehen, bis der Katalog neu gebaut wird.
       printings: (c.card_sets || [])
         .filter(s => s && s.set_code)
-        .map(s => ({ code: s.set_code, rarity: s.set_rarity || 'Common' })),
+        .map(s => ({
+          code: repariereQuellcode(s.set_code),
+          rarity: kenntRarity(s.set_rarity) ? s.set_rarity : UNBEKANNT,
+        })),
       printings_verified: [],
       cm_price: cmPriceOf(c),
       ban_tcg: banOf(c, 'ban_tcg'),

@@ -75,4 +75,45 @@ class RarityQuellenTest {
         val sauber = listOf(s("A-DE001", "Common"), s("B-DE002", "Rare"))
         assertEquals(sauber, RarityQuellen.ohneErfundeneRarity(sauber))
     }
+
+    // --- Der Fall LAVD, gemessen am 20.09.2026 -------------------------------------------------
+    // YGOPRODeck liefert fuer "Legendary Arc-V Decks" woertlich:
+    //   {"set_code":"LAVD-ENO11","set_rarity":"3"}
+    // Auf der Karte steht LAVD-DE011, und die OCR des Nutzers las das korrekt.
+
+    @Test
+    fun `der Buchstabe O in einer Kartennummer ist eine Null`() {
+        assertEquals("LAVD-EN011", RarityQuellen.repariereQuellcode("LAVD-ENO11"))
+        assertEquals("LAVD-DE019", RarityQuellen.repariereQuellcode("LAVD-DEO19"))
+        assertEquals("LAVD-EN122", RarityQuellen.repariereQuellcode("LAVD-ENI22"))
+    }
+
+    @Test
+    fun `echte Codes bleiben unangetastet`() {
+        // SGX3-DEA10 hat einen ECHTEN Variantenbuchstaben -- A, nicht O oder I.
+        for (c in listOf("SGX3-DEA10", "LOB-EN001", "MAMO-DE103", "TP1-G015", "RA01-EN075")) {
+            assertEquals(c, RarityQuellen.repariereQuellcode(c))
+        }
+    }
+
+    @Test
+    fun `eine Rarity ohne Buchstaben ist keine Rarity`() {
+        assertFalse(RarityQuellen.kenntRarity("3"))
+        assertFalse(RarityQuellen.kenntRarity("2"))
+        assertFalse(RarityQuellen.kenntRarity("  7 "))
+        assertTrue(RarityQuellen.kenntRarity("Ultra Rare"))
+        assertTrue(RarityQuellen.kenntRarity("20th Secret Rare"))
+    }
+
+    @Test
+    fun `der ganze LAVD-Druck wird beim Zusammenfuehren geradegezogen`() {
+        val roh = listOf(
+            SetOption("LAVD-ENO11", "3", 0.0, "EN"),
+            SetOption("LAVD-DEO11", "Ultra Rare", 0.0, "DE"),
+        )
+        assertEquals(
+            listOf(SetOption("LAVD-EN011", "Unknown", 0.0, "EN"), SetOption("LAVD-DE011", "Ultra Rare", 0.0, "DE")),
+            RarityQuellen.ohneErfundeneRarity(roh),
+        )
+    }
 }

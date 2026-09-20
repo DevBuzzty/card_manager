@@ -5,7 +5,7 @@
 const fs = require('fs');
 const crypto = require('crypto');
 const { cachedFetch } = require('./api-handler.cjs');
-const { UNBEKANNT } = require('./rarity-sources.cjs');
+const { UNBEKANNT, repariereQuellcode } = require('./rarity-sources.cjs');
 const { mergeCards, buildAliases, attachVerified, packCatalog } = require('./catalog-build.cjs');
 const { sealedProductsForCatalog } = require('./sealed-products.cjs');
 const { saveCatalogFile } = require('./catalog-prices.cjs');
@@ -150,6 +150,7 @@ function readVerified(db) {
           code = parts[0].trim();
           rarityField = parts[2].trim();
         }
+        code = repariereQuellcode(code);   // "LAVD-DEO11" -> "LAVD-DE011", siehe rarity-sources.cjs
         if (!code || !isGermanCode(code)) continue;
         // Anders als bei der Quellen-Union am PC gibt es hier nur EINE Quelle. Eine Zeile ohne
         // Rarity zu verwerfen wuerde den verifizierten DEUTSCHEN Code mitverwerfen -- der ist das

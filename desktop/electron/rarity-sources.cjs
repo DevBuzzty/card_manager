@@ -20,10 +20,36 @@ const UNBEKANNT = 'Unknown';
 // frueher erfundene Common ("Rarity mehrdeutig: Ultra Rare/New" steht so im Scan-Protokoll).
 const PLATZHALTER = new Set(['unknown', 'new']);
 
-/** Nennt diese Quelle wirklich eine Rarity? Leer, "Unknown" und "New" heissen alle drei: nein. */
+/**
+ * Nennt diese Quelle wirklich eine Rarity? Leer, "Unknown" und "New" heissen alle drei: nein --
+ * und ebenso eine Angabe OHNE JEDEN BUCHSTABEN.
+ *
+ * Letzteres stammt aus einem echten Lauf (20.09.2026): fuer das frische Set "Legendary Arc-V
+ * Decks" liefert YGOPRODeck `set_rarity: "3"` bzw. "2" (94 Drucke im Katalog). Als Rarity gefuehrt
+ * ergibt das Anzeigen wie "Rarity mehrdeutig: 3/Secret Rare/Starlight Rare".
+ */
 function kenntRarity(rarity) {
   const r = String(rarity || '').trim();
-  return r !== '' && !PLATZHALTER.has(r.toLowerCase());
+  if (r === '' || PLATZHALTER.has(r.toLowerCase())) return false;
+  return /[A-Za-z]/.test(r);
+}
+
+/**
+ * Ein Druck-Code aus einer QUELLE (nicht aus der OCR), mit den zwei Zeichen repariert, die dort
+ * nie stehen koennen.
+ *
+ * Auch das ist gemessen, nicht vermutet: YGOPRODeck fuehrt die Karten von "Legendary Arc-V Decks"
+ * als "LAVD-ENO11" -- Buchstabe O statt Null. Auf der Karte steht "LAVD-DE011", die OCR des
+ * Nutzers las das am 20.09. korrekt, und unser Code stellte die kaputte Quelle darueber und bot
+ * "LAVD-DEO11" an, das von Hand korrigiert werden musste. Im ganzen Katalog steht dieses O NUR bei
+ * LAVD (55 Drucke), es ist also kein echter Variantenbuchstabe -- den gibt es (SGX3-DEA10), aber
+ * niemals als O oder I: Konami druckt keine Zeichen, die mit 0 und 1 verwechselbar sind.
+ */
+function repariereQuellcode(code) {
+  const c = String(code || '').trim().toUpperCase();
+  const m = /^([A-Z0-9]{2,6})-([A-Z]{1,2})([OI])(\d{1,4})$/.exec(c);
+  if (!m) return String(code || '').trim();
+  return `${m[1]}-${m[2]}${m[3] === 'O' ? '0' : '1'}${m[4]}`;
 }
 
 /**
@@ -35,7 +61,10 @@ function kenntRarity(rarity) {
  * Starlight Rare) -- das ist eine echte Mehrdeutigkeit, ueber die die Ampel reden darf.
  * Reihenfolge und Zusatzfelder der Eingabe bleiben unangetastet.
  */
-function dropErfundeneRarity(sets) {
+function dropErfundeneRarity(roh) {
+  // Erst die Codes reparieren, dann gruppieren: sonst stuenden "LAVD-ENO11" und ein anderswo
+  // sauber geliefertes "LAVD-EN011" als zwei verschiedene Drucke nebeneinander.
+  const sets = (roh || []).map(s => (s.set_code ? { ...s, set_code: repariereQuellcode(s.set_code) } : s));
   const kennt = new Set();
   for (const s of sets || []) {
     if (kenntRarity(s.set_rarity)) kennt.add(String(s.set_code || '').toUpperCase());
@@ -56,4 +85,4 @@ function dropErfundeneRarity(sets) {
   return out;
 }
 
-module.exports = { UNBEKANNT, kenntRarity, dropErfundeneRarity };
+module.exports = { UNBEKANNT, kenntRarity, repariereQuellcode, dropErfundeneRarity };

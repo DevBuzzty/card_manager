@@ -60,12 +60,22 @@ object PrintingRepository {
             runCatching { CatalogRepository.printings(passcode) }.getOrDefault(emptyList())
         }
         if (catalogSets.any { it.verified }) {
-            return@coroutineScope catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN", verified = it.verified) }
+            // Auch der Katalog geht durch RarityQuellen. Er ist KEINE saubere Quelle, sondern ein
+            // Abzug derselben Daten: die kaputten LAVD-Codes ("LAVD-ENO11") und die Rarity "3"
+            // stehen genauso darin, und dieser Pfad kehrt VOR der Netz-Union zurueck -- ohne das
+            // hier wirkte die Korrektur ausgerechnet dort nicht, wo die meisten deutschen Drucke
+            // herkommen. Er wird ausserdem nur woechentlich neu gebaut, ist also noch lange alt.
+            return@coroutineScope RarityQuellen.ohneErfundeneRarity(
+                catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN", verified = it.verified) }
+            )
         }
         // Disk cache: the 3-source union is the scan flow's slowest step (seconds). It's
         // deterministic per passcode, so a cached result makes a re-scanned card instant.
         ScanCache.read("sets", passcode)?.let { cached ->
-            runCatching { deserializeSets(cached) }.getOrNull()?.let { return@coroutineScope it }
+            // Ebenso der Plattenspeicher: er haelt Unions bis zu 14 Tage, also auch solche, die vor
+            // dieser Korrektur entstanden sind.
+            runCatching { deserializeSets(cached) }.getOrNull()
+                ?.let { return@coroutineScope RarityQuellen.ohneErfundeneRarity(it) }
         }
         val enD = async(Dispatchers.IO) { runCatching { fetchSets(passcode) }.getOrDefault(emptyList()) }
         val titleD = async(Dispatchers.IO) { resolveYugipediaTitle(passcode) }

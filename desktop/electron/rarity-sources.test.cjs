@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { kenntRarity, dropErfundeneRarity } = require('./rarity-sources.cjs');
+const { kenntRarity, repariereQuellcode, dropErfundeneRarity } = require('./rarity-sources.cjs');
 
 const s = (code, rarity) => ({ set_code: code, set_rarity: rarity });
 
@@ -50,4 +50,22 @@ test('leere Eingabe und unveraenderte Listen', () => {
   assert.deepEqual(dropErfundeneRarity(null), []);
   const sauber = [s('A-DE001', 'Common'), s('B-DE002', 'Rare')];
   assert.deepEqual(dropErfundeneRarity(sauber), sauber);
+});
+
+// --- Der Fall LAVD, gemessen am 20.09.2026 (Zwilling von RarityQuellenTest) ---------------------
+test('der Buchstabe O in einer Kartennummer ist eine Null, echte Codes bleiben', () => {
+  assert.equal(repariereQuellcode('LAVD-ENO11'), 'LAVD-EN011');
+  assert.equal(repariereQuellcode('LAVD-DEO19'), 'LAVD-DE019');
+  assert.equal(repariereQuellcode('LAVD-ENI22'), 'LAVD-EN122');
+  for (const c of ['SGX3-DEA10', 'LOB-EN001', 'MAMO-DE103', 'TP1-G015', 'RA01-EN075']) {
+    assert.equal(repariereQuellcode(c), c, c);
+  }
+});
+
+test('eine Rarity ohne Buchstaben ist keine Rarity', () => {
+  assert.ok(!kenntRarity('3'));
+  assert.ok(!kenntRarity('2'));
+  assert.ok(!kenntRarity('  7 '));
+  assert.ok(kenntRarity('Ultra Rare'));
+  assert.ok(kenntRarity('20th Secret Rare'));
 });

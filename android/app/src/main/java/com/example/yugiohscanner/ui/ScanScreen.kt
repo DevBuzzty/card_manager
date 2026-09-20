@@ -566,18 +566,23 @@ fun ScanScreen(onClose: () -> Unit) {
                     val resolutionSelector = ResolutionSelector.Builder()
                         .setResolutionStrategy(
                             ResolutionStrategy(
-                                // 2880x2160 statt 1920x1080 (20.09.2026): der Sensor kann 4096x3072,
-                                // und die OCR-Zonen sind der Engpass -- die Auflagenzeile ist im
-                                // 1080p-Bild nur 21 Bildpunkte hoch und wird zu 32 % gelesen. Vier
-                                // mal so viele Bildpunkte je Bild bringen dieselbe Vergroesserung
-                                // wie zweifacher Zoom, aber OHNE Sichtfeldverlust und ohne
-                                // Weichzeichnen: digitaler Zoom schneidet im Sensor zu und muss ab
-                                // etwa 2,1x wieder hochrechnen. Der Detektor laeuft weiter auf
-                                // seinem 640er Letterbox, kostet also nichts extra; teurer wird das
-                                // Umkopieren je Bild. Ob das Tempo und die Waerme das hergeben,
-                                // sagen die Protokollzeilen "Tempo" und "Waerme" -- gebaut, um
-                                // genau diese Abwaegung zu messen statt zu vermuten.
-                                Size(2880, 2160),
+                                // ZURUECK auf 1080p (20.09.2026, nach einem Lauf am Geraet).
+                                // 2880x2160 war der Versuch, die OCR-Zonen ohne Zoom groesser zu
+                                // bekommen. Das Protokoll hat ihn widerlegt: die BILDRATE blieb bei
+                                // 30/s -- die misst aber nur die Lichtschranke --, waehrend die
+                                // ERKENNUNG einbrach. Gemessen im Lauf 1789914143938: Einwurf bei
+                                // :44.773, "Einwurf offen seit 2412ms erkannt=[]", Karte erst bei
+                                // :53.253 erkannt, gebucht :55.988 -- ueber acht Sekunden. In der
+                                // Zwischenzeit laufen weitere Einwuerfe auf und werden gesammelt auf
+                                // die zuletzt erkannte Karte gebucht ("Gebucht x2" nach einem
+                                // einzelnen Wurf). Dazu wurde das Geraet deutlich waerm, obwohl der
+                                // PowerManager noch Stufe 0 meldete.
+                                //
+                                // Vier mal so viele Bildpunkte kosten eben nicht nur im Detektor
+                                // (der laeuft auf seinem festen 640er Letterbox), sondern in allem,
+                                // was je Bild umkopiert und vorverarbeitet wird. Wer das wieder
+                                // anheben will, muss ZUERST diese Kette messen, nicht die Bildrate.
+                                Size(1920, 1080),
                                 ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
                             )
                         )

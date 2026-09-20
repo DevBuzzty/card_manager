@@ -23,10 +23,39 @@ object RarityQuellen {
     // Rare/New".
     private val PLATZHALTER = setOf("unknown", "new")
 
-    /** Nennt diese Quelle wirklich eine Rarity? Leer, "Unknown" und "New" heissen alle drei: nein. */
+    /**
+     * Nennt diese Quelle wirklich eine Rarity? Leer, "Unknown" und "New" heissen alle drei: nein --
+     * und ebenso eine Angabe OHNE JEDEN BUCHSTABEN.
+     *
+     * Letzteres stammt aus einem echten Lauf (20.09.2026): fuer das frische Set "Legendary Arc-V
+     * Decks" liefert YGOPRODeck `set_rarity: "3"` bzw. "2" (94 Drucke im Katalog). Als Rarity
+     * gefuehrt ergibt das Anzeigen wie "Rarity mehrdeutig: 3/Secret Rare/Starlight Rare".
+     */
     fun kenntRarity(rarity: String?): Boolean {
         val r = rarity?.trim().orEmpty()
-        return r.isNotEmpty() && r.lowercase() !in PLATZHALTER
+        if (r.isEmpty() || r.lowercase() in PLATZHALTER) return false
+        return r.any { it.isLetter() }
+    }
+
+    private val QUELLCODE = Regex("^([A-Z0-9]{2,6})-([A-Z]{1,2})([OI])(\\d{1,4})$")
+
+    /**
+     * Ein Druck-Code aus einer QUELLE (nicht aus der OCR), mit den zwei Zeichen repariert, die dort
+     * nie stehen koennen.
+     *
+     * Gemessen, nicht vermutet: YGOPRODeck fuehrt die Karten von "Legendary Arc-V Decks" als
+     * "LAVD-ENO11" -- Buchstabe O statt Null. Auf der Karte steht "LAVD-DE011", die OCR las das am
+     * 20.09. korrekt, und der Abgleich stellte die kaputte Quelle darueber: angeboten wurde
+     * "LAVD-DEO11", das der Nutzer von Hand korrigieren musste, und die Region las sich als EN
+     * statt DE. Im ganzen Katalog steht dieses O NUR bei LAVD (55 Drucke), es ist also kein echter
+     * Variantenbuchstabe -- den gibt es (SGX3-DEA10), aber niemals als O oder I: Konami druckt
+     * keine Zeichen, die mit 0 und 1 verwechselbar sind.
+     */
+    fun repariereQuellcode(code: String): String {
+        val c = code.trim().uppercase()
+        val m = QUELLCODE.matchEntire(c) ?: return code.trim()
+        val (praefix, region, zeichen, nummer) = m.destructured
+        return praefix + "-" + region + (if (zeichen == "O") "0" else "1") + nummer
     }
 
     /**
@@ -36,7 +65,10 @@ object RarityQuellen {
      * Mehrere ECHTE Rarities zu einem Code bleiben erhalten (MAMO-DE015 gibt es als Ultra Rare UND
      * als Starlight Rare) -- darueber darf die Ampel reden. Reihenfolge bleibt unangetastet.
      */
-    fun ohneErfundeneRarity(sets: List<SetOption>): List<SetOption> {
+    fun ohneErfundeneRarity(roh: List<SetOption>): List<SetOption> {
+        // Erst die Codes reparieren, dann gruppieren: sonst stuenden "LAVD-ENO11" und ein anderswo
+        // sauber geliefertes "LAVD-EN011" als zwei verschiedene Drucke nebeneinander.
+        val sets = roh.map { it.copy(setCode = repariereQuellcode(it.setCode)) }
         val kennt = sets.filter { kenntRarity(it.rarity) }.map { it.setCode.uppercase() }.toHashSet()
         val gesehen = HashSet<String>()
         val out = ArrayList<SetOption>(sets.size)
