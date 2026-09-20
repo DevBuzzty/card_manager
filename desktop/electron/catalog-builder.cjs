@@ -5,6 +5,7 @@
 const fs = require('fs');
 const crypto = require('crypto');
 const { cachedFetch } = require('./api-handler.cjs');
+const { UNBEKANNT } = require('./rarity-sources.cjs');
 const { mergeCards, buildAliases, attachVerified, packCatalog } = require('./catalog-build.cjs');
 const { sealedProductsForCatalog } = require('./sealed-products.cjs');
 const { saveCatalogFile } = require('./catalog-prices.cjs');
@@ -141,7 +142,8 @@ function readVerified(db) {
         if (tmpl) {
           const a = tmpl[1].split('|').map(s => s.trim());
           code = a[0];
-          rarityField = a[2] || 'Common';
+          // Wie in api-handler.cjs: keine Rarity erfinden (siehe rarity-sources.cjs).
+          rarityField = a[2] || '';
         } else {
           const parts = line.split(';');
           if (parts.length < 3) continue;
@@ -149,9 +151,14 @@ function readVerified(db) {
           rarityField = parts[2].trim();
         }
         if (!code || !isGermanCode(code)) continue;
-        for (const rarity of rarityField.split(',').map(r => r.trim())) {
-          if (!rarity) continue;
-          entries.set(`${code}|${rarity}`, { code, rarity, lang: 'DE' });
+        // Anders als bei der Quellen-Union am PC gibt es hier nur EINE Quelle. Eine Zeile ohne
+        // Rarity zu verwerfen wuerde den verifizierten DEUTSCHEN Code mitverwerfen -- der ist das
+        // Wertvolle am Katalog. Also Code behalten, Rarity ehrlich als unbekannt.
+        const rarities = rarityField.split(',').map(r => r.trim()).filter(Boolean);
+        if (rarities.length === 0) {
+          entries.set(`${code}|${UNBEKANNT}`, { code, rarity: UNBEKANNT, lang: 'DE' });
+        } else {
+          for (const rarity of rarities) entries.set(`${code}|${rarity}`, { code, rarity, lang: 'DE' });
         }
       }
       if (entries.size > 0) verified.set(passcode, entries);
