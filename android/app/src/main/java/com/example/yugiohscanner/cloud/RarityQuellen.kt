@@ -17,10 +17,16 @@ object RarityQuellen {
 
     const val UNBEKANNT = "Unknown"
 
-    /** Nennt diese Quelle wirklich eine Rarity? Leer und "Unknown" heissen beide: nein. */
+    // YGOPRODeck schreibt "New" in set_rarity, solange die Rarity eines frisch erschienenen Sets
+    // noch nicht erfasst ist (gemessen 20.09.2026 an BLGG-EN045 "Fallin' Cheatah"). Im TCG gibt es
+    // keine Rarity dieses Namens -- im Scan-Protokoll steht deshalb "Rarity mehrdeutig: Ultra
+    // Rare/New".
+    private val PLATZHALTER = setOf("unknown", "new")
+
+    /** Nennt diese Quelle wirklich eine Rarity? Leer, "Unknown" und "New" heissen alle drei: nein. */
     fun kenntRarity(rarity: String?): Boolean {
         val r = rarity?.trim().orEmpty()
-        return r.isNotEmpty() && !r.equals(UNBEKANNT, ignoreCase = true)
+        return r.isNotEmpty() && r.lowercase() !in PLATZHALTER
     }
 
     /**

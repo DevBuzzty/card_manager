@@ -18,6 +18,8 @@ class RarityQuellenTest {
         assertFalse(RarityQuellen.kenntRarity(""))
         assertFalse(RarityQuellen.kenntRarity(null))
         assertFalse(RarityQuellen.kenntRarity("Unknown"))
+        assertFalse(RarityQuellen.kenntRarity("New"))
+        assertFalse(RarityQuellen.kenntRarity("new"))
         assertFalse(RarityQuellen.kenntRarity("   "))
     }
 
@@ -51,6 +53,20 @@ class RarityQuellenTest {
     fun `Gross-Kleinschreibung des Codes trennt nicht, andere Felder bleiben`() {
         val union = listOf(SetOption("blgg-de055", "Ultra Rare", 7.0, "DE"), s("BLGG-DE055", ""))
         assertEquals(listOf(SetOption("blgg-de055", "Ultra Rare", 7.0, "DE")), RarityQuellen.ohneErfundeneRarity(union))
+    }
+
+    @Test
+    fun `der zweite echte Fall - YGOPRODeck sagt New, das Wiki kennt Ultra Rare`() {
+        val union = listOf(s("BLGG-EN045", "New", "EN"), s("BLGG-EN045", "Ultra Rare", "EN"))
+        assertEquals(listOf(s("BLGG-EN045", "Ultra Rare", "EN")), RarityQuellen.ohneErfundeneRarity(union))
+    }
+
+    @Test
+    fun `kennt nur YGOPRODeck den Druck und sagt New, bleibt es ehrlich unbekannt`() {
+        assertEquals(
+            listOf(s("BLGG-EN045", "Unknown", "EN")),
+            RarityQuellen.ohneErfundeneRarity(listOf(s("BLGG-EN045", "New", "EN"))),
+        )
     }
 
     @Test

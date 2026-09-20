@@ -9,6 +9,8 @@ test('kennt die Quelle eine Rarity?', () => {
   assert.ok(!kenntRarity(''));
   assert.ok(!kenntRarity(null));
   assert.ok(!kenntRarity('Unknown'), 'der Platzhalter ist keine Auskunft');
+  assert.ok(!kenntRarity('New'), 'YGOPRODecks Platzhalter fuer ein frisches Set');
+  assert.ok(!kenntRarity('new'));
   assert.ok(!kenntRarity('  '));
 });
 
@@ -31,6 +33,16 @@ test('echte Mehrdeutigkeit bleibt: MAMO-DE015 gibt es als Ultra UND als Starligh
 test('Gross/Kleinschreibung des Codes trennt nicht, Zusatzfelder bleiben', () => {
   const union = [{ set_code: 'blgg-de055', set_rarity: 'Ultra Rare', price: 7 }, s('BLGG-DE055', '')];
   assert.deepEqual(dropErfundeneRarity(union), [{ set_code: 'blgg-de055', set_rarity: 'Ultra Rare', price: 7 }]);
+});
+
+test('der zweite echte Fall: YGOPRODeck sagt "New", das Wiki kennt Ultra Rare', () => {
+  // BLGG-EN045 "Fallin' Cheatah" -- so steht es im Scan-Protokoll: "Rarity mehrdeutig: Ultra Rare/New".
+  const union = [s('BLGG-EN045', 'New'), s('BLGG-EN045', 'Ultra Rare')];
+  assert.deepEqual(dropErfundeneRarity(union), [s('BLGG-EN045', 'Ultra Rare')]);
+});
+
+test('kennt NUR YGOPRODeck den Druck und sagt "New", bleibt es ehrlich unbekannt', () => {
+  assert.deepEqual(dropErfundeneRarity([s('BLGG-EN045', 'New')]), [s('BLGG-EN045', 'Unknown')]);
 });
 
 test('leere Eingabe und unveraenderte Listen', () => {

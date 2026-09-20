@@ -14,10 +14,16 @@
 
 const UNBEKANNT = 'Unknown';
 
-/** Nennt diese Quelle wirklich eine Rarity? Leer und "Unknown" heissen beide: nein. */
+// YGOPRODeck schreibt "New" in set_rarity, solange die Rarity eines frisch erschienenen Sets noch
+// nicht erfasst ist (gemessen 20.09.2026 an BLGG-EN045 "Fallin' Cheatah"). Im TCG gibt es keine
+// Rarity dieses Namens -- sie als echte zu fuehren erzeugt dieselbe falsche Mehrdeutigkeit wie das
+// frueher erfundene Common ("Rarity mehrdeutig: Ultra Rare/New" steht so im Scan-Protokoll).
+const PLATZHALTER = new Set(['unknown', 'new']);
+
+/** Nennt diese Quelle wirklich eine Rarity? Leer, "Unknown" und "New" heissen alle drei: nein. */
 function kenntRarity(rarity) {
   const r = String(rarity || '').trim();
-  return r !== '' && r.toLowerCase() !== 'unknown';
+  return r !== '' && !PLATZHALTER.has(r.toLowerCase());
 }
 
 /**
