@@ -502,9 +502,22 @@ fun ScanScreen(onClose: () -> Unit) {
                         cameraControl?.let { control ->
                              val currentZoomRatio = cameraInfo?.zoomState?.value?.zoomRatio ?: 1f
                              val delta = detector.scaleFactor
-                             control.setZoomRatio(currentZoomRatio * delta)
+                             val z = cameraInfo?.zoomState?.value
+                             control.setZoomRatio(
+                                 com.example.yugiohscanner.Prefs.zoomGeklemmt(
+                                     currentZoomRatio * delta, z?.minZoomRatio ?: 1f, z?.maxZoomRatio ?: 1f,
+                                 )
+                             )
                         }
                         return true
+                    }
+
+                    // Erst am ENDE der Geste merken, nicht bei jedem Zwischenschritt: onScale feuert
+                    // dutzendfach je Kniff.
+                    override fun onScaleEnd(detector: ScaleGestureDetector) {
+                        val z = cameraInfo?.zoomState?.value?.zoomRatio ?: return
+                        com.example.yugiohscanner.Prefs.setZoom(ctx, z)
+                        com.example.yugiohscanner.ml.ScanLog.line("Zoom", "gemerkt=%.2f".format(z))
                     }
                 })
 
@@ -565,6 +578,18 @@ fun ScanScreen(onClose: () -> Unit) {
                         )
                         cameraControl = camera.cameraControl
                         cameraInfo = camera.cameraInfo
+                        // Gemerkten Zoom wiederherstellen (Prefs.zoom). Der Halter steht fest, die
+                        // Karte liegt immer gleich weit weg -- einmal eingestellt soll das bleiben,
+                        // statt vor jedem Stapel neu gekniffen zu werden.
+                        val z = camera.cameraInfo.zoomState.value
+                        val gewuenscht = com.example.yugiohscanner.Prefs.zoomGeklemmt(
+                            com.example.yugiohscanner.Prefs.zoom(ctx),
+                            z?.minZoomRatio ?: 1f, z?.maxZoomRatio ?: 1f,
+                        )
+                        if (gewuenscht > 1f) camera.cameraControl.setZoomRatio(gewuenscht)
+                        com.example.yugiohscanner.ml.ScanLog.line(
+                            "Zoom", "gesetzt=%.2f moeglich=%.2f..%.2f".format(
+                                gewuenscht, z?.minZoomRatio ?: 1f, z?.maxZoomRatio ?: 1f))
                     } catch (exc: Exception) {
                         Log.e("Scanner", "Use case binding failed", exc)
                     }
