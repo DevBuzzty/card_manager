@@ -126,6 +126,9 @@ function newEntry(d) {
     scannedEditionConfidence: d.editionConfidence,
     scannedConfidence: d.confidence,
     scannedReason: d.reason,
+    // Nur zur Anzeige: der PC hat den Passcode nach dem gelesenen Set-Code getauscht (main.cjs).
+    correctedBy: d.correctedBy,
+    correctedFrom: d.correctedFrom,
     status: 'pending',
     data: null,
   };

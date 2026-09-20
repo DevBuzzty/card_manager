@@ -18,6 +18,10 @@ class ResolvedScan(
     val knownSets: List<SetOption>,
     val match: SetCodeMatch.MatchResult,
     val confidence: ScanConfidence.Result,
+    /** Der roh gelesene Set-Code (siehe [com.example.yugiohscanner.ml.ReadSetCode]) -- ungefiltert,
+     *  auch wenn er zu keinem Druck von [base] gehoert. Genau dann ist er wertvoll: dann hat die
+     *  Bilderkennung die falsche Karte gegriffen, und der PC kann es am Code merken. */
+    val readSetCode: String? = null,
 )
 
 /**
@@ -84,9 +88,11 @@ object ScanResolver {
             val m = SetCodeMatch.best(evidence, knownSets, framesEvidence)
             m to ScanConfidence.fromEvidence(m, knownSets, editionTexts, defaultEdition)
         }
+        val readSetCode = com.example.yugiohscanner.ml.ReadSetCode.aus(framesEvidence)
         logScanDecision("erst", pc, match, confidence, knownSets)
+        com.example.yugiohscanner.ml.ScanLog.line("Gelesen", "pc=$pc code=${readSetCode ?: "-"} gewaehlt=${match.selected?.setCode ?: "-"}")
         com.example.yugiohscanner.ml.ScanLog.line("Sprache", "pc=$pc hinweis=${com.example.yugiohscanner.ml.SprachHinweis.aus(framesEvidence)}")
-        return ResolvedScan(base, knownSets, match, confidence)
+        return ResolvedScan(base, knownSets, match, confidence, readSetCode)
     }
 }
 
