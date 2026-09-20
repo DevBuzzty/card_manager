@@ -24,6 +24,7 @@ const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck, saveDeck } = require('./decks.cjs');
 const { catalogPrices, catalogCards, readCatalogCards, catalogSearchNames, catalogMainId, catalogLegality } = require('./catalog-prices.cjs');
 const { createImportSessions, importOpen, importResolve, importRun } = require('./carddex-import.cjs');
+const { onlineSearch } = require('./online-search.cjs');
 const { buildExport, exportCount, exportResultText } = require('./collection-export.cjs');
 
 // Initialize Database
@@ -852,45 +853,16 @@ ipcMain.handle('cleanup-database', async () => {
 ipcMain.handle('search-online', async (event, query) => {
     try {
         const q = String(query).trim();
-        if (!q) return [];
-        const base = 'https://db.ygoprodeck.com/api/v7/cardinfo.php';
         const fetchCards = async (url) => {
             const r = await fetch(url);
-            if (!r.ok) return []; // YGOPRODeck returns HTTP 400 {"error":...} for no matches
+            if (!r.ok) return []; // YGOPRODeck antwortet mit HTTP 400 {"error":...}, wenn nichts passt
             const j = await r.json();
             return j.data || [];
         };
-        // A purely numeric query is an 8-digit passcode -> exact id lookup (in German, so the
-        // German name comes back); otherwise a fuzzy name search.
-        const isPasscode = /^\d+$/.test(q);
-        if (isPasscode) {
-            // Gedruckt wird achtstellig mit fuehrenden Nullen (02463794), gefuehrt wird ohne sie:
-            // ohne das Abschneiden findet die Passcode-Suche die Karte nicht (Nutzer 19.09.2026).
-            const id = q.replace(/^0+/, '') || '0';
-            return await fetchCards(`${base}?id=${encodeURIComponent(id)}&language=de`);
-        }
-        // The collection is mostly German, but YGOPRODeck's language=de only matches German
-        // names -> search the German DB first, fall back to the English DB, and merge by id
-        // (keeping the German-named hit when a card matches in both).
-        const [de, en] = await Promise.all([
-            fetchCards(`${base}?fname=${encodeURIComponent(q)}&language=de`),
-            fetchCards(`${base}?fname=${encodeURIComponent(q)}`),
-        ]);
-        // Dritte Quelle: der Offline-Katalog kennt die deutschen Namen vollstaendig und faengt die
-        // Faelle ab, die YGOPRODecks Suche mit language=de auslaesst. Seine Treffer holen wir in EINEM
-        // Abruf (cardinfo.php nimmt mehrere ids, komma-getrennt).
-        const catalogIds = catalogSearchNames(userDataPath, q).filter(id => !de.some(c => String(c.id) === id));
-        const fromCatalog = catalogIds.length > 0
-            ? await fetchCards(`${base}?id=${encodeURIComponent(catalogIds.join(','))}&language=de`)
-            : [];
-        const seen = new Set();
-        const out = [];
-        for (const c of [...de, ...fromCatalog, ...en]) {
-            if (seen.has(c.id)) continue;
-            seen.add(c.id);
-            out.push(c);
-        }
-        return out;
+        // Bei einer Namenssuche kommt der Offline-Katalog als dritte Quelle dazu (deutsche Namen, die
+        // YGOPRODecks fname-Suche auslaesst); bei einem Passcode braucht es ihn nicht.
+        const catalogIds = /^\d+$/.test(q) ? [] : catalogSearchNames(userDataPath, q);
+        return await onlineSearch(fetchCards, q, catalogIds);
     } catch (e) { return []; }
 });
 
