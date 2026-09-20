@@ -12,6 +12,7 @@ export default function CopyChip({ edition = 'unknown', condition = 'NM', onChan
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const containerRef = useRef(null);
+  const panelRef = useRef(null);
   const std = edition === 'unknown' && condition === 'NM';
   const PANEL_W = 300;
   const PANEL_H = 150;
@@ -22,7 +23,15 @@ export default function CopyChip({ edition = 'unknown', condition = 'NM', onChan
 
   useEffect(() => {
     if (!open) return undefined;
-    const close = (e) => { if (!containerRef.current?.contains(e.target)) setOpen(false); };
+    // ACHTUNG (Portal): Das Panel haengt am <body>, NICHT im Container -- ein Klick darauf ist
+    // fuer den Container "ausserhalb". Ohne die zweite Pruefung schliesst mousedown das Panel,
+    // bevor der click auf dem Knopf ankommt, und die Auswahl verpufft (Nutzer 20.09.). Gleiches
+    // Muster wie CustomSelect.jsx (containerRef + menuRef).
+    const close = (e) => {
+      if (containerRef.current?.contains(e.target)) return;
+      if (panelRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
     const reposition = () => setOpen(false);
     document.addEventListener('mousedown', close);
     window.addEventListener('scroll', reposition, true);
@@ -47,7 +56,7 @@ export default function CopyChip({ edition = 'unknown', condition = 'NM', onChan
   }
 
   const panel = (
-    <div style={panelStyle} className="z-50 bg-[#1E1E1E] border border-gray-700 rounded-xl p-2 shadow-xl">
+    <div ref={panelRef} style={panelStyle} className="z-50 bg-[#1E1E1E] border border-gray-700 rounded-xl p-2 shadow-xl">
       <div className="text-[9px] uppercase tracking-wider text-gray-500 mb-1">Zustand</div>
       <div className="flex gap-1 mb-2">
         {CONDITIONS.map(c => (
