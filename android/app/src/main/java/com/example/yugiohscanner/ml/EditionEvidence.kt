@@ -51,9 +51,27 @@ class EditionEvidence {
         // `_AUFLAGE`, still anchored by 5 literal letters.
         private const val AUFLAGE = "AU.LAG."
 
+        // Gemessen am 20.09.2026 an 40 echten Zonenlesungen aus der Halterung (Detektor + EDITION-Zone
+        // + OcrPrep.enhance am PC nachgebaut, ueber ml/data/scanlog + stapel_fotos): die beiden Muster
+        // darueber erkannten 3 davon. Was die OCR hier liefert, ist einen Schritt kaputter, als die
+        // eBay-Fotos es nahelegten -- "AUFLA", "AUSLAE", "AUTLAS" (G und E zerfallen BEIDE, nicht nur
+        // eines) und "EDFDOU", "EDHUOP" (duenne Serifenschrift der Folienzeile: i->f, t->d, i->u).
+        // Diese zwei Muster fangen sie und heben die Erkennung auf 8 von 40.
+        //
+        // Die WORTGRENZE ist der ganze Trick, nicht Zierde: ohne sie trifft AU.LA auch
+        // "Elementaraufladung", "Batterieaufladegeraet" und "Traumland". Mit ihr kostet die Toleranz
+        // im echten Kartenkorpus (43.698 deutsche und englische Namen + Kartentexte aus dem
+        // Offline-Katalog) 14 statt 6 moegliche Falschtreffer, also 0,032 % statt 0,014 %.
+        // Bemerkenswert: die 6 von heute gehen auf "EDITION" selbst zurueck, das in "Galaxy
+        // Expedition" steckt -- die tolerante Variante mit Wortgrenze ist dort SAUBERER.
+        private const val EDITION_ZERFALLEN = "\\bED.{1,2}O"
+        private const val AUFLAGE_ZERFALLEN = "\\bAU.LA"
+
         private val FIRST_PATTERNS = listOf(
             Regex("EDITION"),
             Regex(AUFLAGE),
+            Regex(EDITION_ZERFALLEN),
+            Regex(AUFLAGE_ZERFALLEN),
             Regex(LEAD + "A\\s*EDICION"),
             Regex(LEAD + "ERE\\s*EDITION"),
             Regex(LEAD + "A\\s*EDIZIONE"),
@@ -63,6 +81,12 @@ class EditionEvidence {
         private val LIMITED_PATTERNS = listOf(
             Regex("LIMITED\\s*EDITION"),
             Regex("LIMITIERTE\\s*$AUFLAGE"),
+            // Mitgezogen, damit die Reihenfolge traegt: LIMITED wird VOR FIRST geprueft, damit
+            // FIRSTs blosses "EDITION"/"AU.LAG." eine limitierte Karte nicht als erste Auflage
+            // ausweist. Waere nur FIRST toleranter geworden, traefe dieselbe Zerfallsstufe auf
+            // einer "LIMITIERTE AUFLAGE" jetzt FIRST, bevor LIMITED ueberhaupt greift.
+            Regex("LIMITED\\s*" + EDITION_ZERFALLEN),
+            Regex("LIMITIERTE\\s*" + AUFLAGE_ZERFALLEN),
             Regex("EDICION\\s*LIMITADA"),
             Regex("EDITION\\s*LIMITEE"),
         )

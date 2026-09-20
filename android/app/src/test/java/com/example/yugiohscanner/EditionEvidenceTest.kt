@@ -258,4 +258,46 @@ class EditionEvidenceTest {
         ev.add("a dent")
         assertEquals(Confidence.LOW, ev.result().confidence)
     }
+
+    // --- Messung vom 20.09.2026 an 40 echten Zonenlesungen aus der Halterung -----------------
+    // Die Lesungen unten sind WOERTLICH das, was die OCR auf den Bildern des Nutzers ausgab
+    // (ml/data/scanlog/*/meldung-*.jpg, ml/data/stapel_fotos/*_halterung.jpg), nicht erfunden.
+
+    @Test fun `die zerfallenen Lesungen echter Halterungs-Bilder gelten als erste Auflage`() {
+        // "EDFDOU"/"EDHUOP": duenne Serifenschrift, i->f, t->d, i->u. Bei meldung-1789839041427
+        // steht im Bild nachweislich "1st Edition" -- mit blossem Auge geprueft.
+        for (lesung in listOf("It Edfdon", "EDFDOU", "EDHUOP", "1 AUFLA IVICIUCIVS", "94 1 AUSLAE INNST", "1 AUTLAS AUFLASY")) {
+            val ev = EditionEvidence()
+            ev.add(lesung)
+            assertEquals("first bei '$lesung'", "first", ev.result().edition)
+        }
+    }
+
+    @Test fun `Kartentext aus denselben Bildern loest KEINE Auflage aus`() {
+        // Ebenfalls woertliche Lesungen derselben Messreihe -- die Zone liest oben den Kartentext mit.
+        for (lesung in listOf("ber of Tokens des", "DESTROY", "ol Tokens destre", "TURN", "control cannot be destroyed")) {
+            val ev = EditionEvidence()
+            ev.add(lesung)
+            assertEquals("kein Marker in '$lesung'", "unknown", ev.result().edition)
+        }
+    }
+
+    @Test fun `die Wortgrenze schuetzt vor echten Kartennamen`() {
+        // Ohne \b traefe AU.LA diese drei (im Katalog gefunden: 43.698 Namen und Kartentexte).
+        for (lesung in listOf("Elementaraufladung", "Batterieaufladegeraet", "Traumland", "Dinonebel")) {
+            val ev = EditionEvidence()
+            ev.add(lesung)
+            assertEquals("kein Marker in '$lesung'", "unknown", ev.result().edition)
+        }
+    }
+
+    @Test fun `limitierte Auflage gewinnt weiter, auch zerfallen`() {
+        // Sonst wuerde die tolerantere FIRST-Regel eine limitierte Karte als erste Auflage ausweisen.
+        val ev = EditionEvidence()
+        ev.add("LIMITED EDFDO")
+        assertEquals("limited", ev.result().edition)
+        val ev2 = EditionEvidence()
+        ev2.add("LIMITIERTE AUFLA")
+        assertEquals("limited", ev2.result().edition)
+    }
 }
