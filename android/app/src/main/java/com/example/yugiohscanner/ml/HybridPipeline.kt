@@ -77,6 +77,7 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
             val sim = embed?.sim ?: 1f
             if (passcode > 0 && out.none { it.passcode == passcode }) {
                 out.add(Detection(b, passcode, sim, zoneTexts, legacyText))
+                protokolliereGlanz(frame, b, passcode)
             }
         }
         // Last-resort whole-frame OCR — for a card that fills the frame and slips past the detector,
@@ -135,6 +136,47 @@ class HybridPipeline(context: Context, minSim: Float = 0.6f) : CardPipeline {
      * Every zone bitmap [CardZones] hands back is already enhanced; this function OCRs each and
      * recycles it immediately after, exactly as the old single-band read did.
      */
+    // Vorerst NUR eine Messung, keine Entscheidung: das Glanzmass wandert ins Scan-Protokoll,
+    // damit ein echter Lauf mit gemischtem Stapel die Grundlage fuer eine Schwelle liefert. Warum
+    // es ueberhaupt Aussicht hat und warum es ohne konstante Bedingungen nichts taugt, steht in
+    // Glanzmass. Nur einmal je Karte, nicht je Bild -- sonst flutet es das Protokoll.
+    private val glanzGesehen = HashSet<Int>()
+
+    private fun protokolliereGlanz(frame: Bitmap, b: Box, passcode: Int) {
+        if (!glanzGesehen.add(passcode)) return
+        runCatching {
+            val x1 = b.x1.toInt().coerceIn(0, frame.width - 1)
+            val y1 = b.y1.toInt().coerceIn(0, frame.height - 1)
+            val w = (b.x2.toInt() - x1).coerceIn(1, frame.width - x1)
+            val h = (b.y2.toInt() - y1).coerceIn(1, frame.height - y1)
+            if (w < 16 || h < 16) return
+            // Auf 64x64 verkleinert gerechnet: das Mass ist ein Anteil, keine Kante -- die
+            // Aufloesung kostet nur Zeit.
+            val klein = Bitmap.createScaledBitmap(Bitmap.createBitmap(frame, x1, y1, w, h), 64, 64, true)
+            val pixel = IntArray(64 * 64)
+            klein.getPixels(pixel, 0, 64, 0, 0, 64, 64)
+            klein.recycle()
+            val g = Glanzmass.aus(pixel)
+            // Dazu der Namenszug: er sitzt gut eine Boxhoehe UEBER der Artwork-Unterkante (an einer
+            // vermessenen Aufnahme nachgesehen) und war in der Messreihe das staerkste Einzelmerkmal.
+            val nx1 = (b.x1 - 0.06f * (b.x2 - b.x1)).toInt().coerceIn(0, frame.width - 1)
+            val ny1 = (b.y2 - 1.27f * (b.y2 - b.y1)).toInt().coerceIn(0, frame.height - 1)
+            val nw = ((b.x1 + 0.80f * (b.x2 - b.x1)).toInt() - nx1).coerceIn(1, frame.width - nx1)
+            val nh = ((b.y2 - 1.08f * (b.y2 - b.y1)).toInt() - ny1).coerceIn(1, frame.height - ny1)
+            val name = if (nw >= 16 && nh >= 6) {
+                val nb = Bitmap.createScaledBitmap(Bitmap.createBitmap(frame, nx1, ny1, nw, nh), 64, 16, true)
+                val np = IntArray(64 * 16)
+                nb.getPixels(np, 0, 64, 0, 0, 64, 16)
+                nb.recycle()
+                Glanzmass.namensMass(np)
+            } else null
+            ScanLog.line("Glanz", "pc=%d hell=%.4f bunt=%.4f schrift=%s namensatt=%s box=%dx%d".format(
+                passcode, g.hell, g.bunt,
+                name?.let { "%.1f".format(it.schrift) } ?: "-",
+                name?.let { "%.1f".format(it.saettigung) } ?: "-", w, h))
+        }
+    }
+
     private fun readZones(frame: Bitmap, b: Box, knownPasscode: Int?, trustShape: Boolean = false): Pair<Map<Zone, String>, String> {
         // Key the safety net off whether the TYPE actually resolved, not off whether `layout` is
         // null: CardLayout.layoutFor(null) returns STANDARD, a concrete value, so keying off the
