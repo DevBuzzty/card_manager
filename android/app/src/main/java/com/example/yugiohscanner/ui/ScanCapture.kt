@@ -383,6 +383,10 @@ private fun sendScanToDesktop(socket: Socket, pc: String, r: ResolvedScan, mode:
     if (r.match.candidates.isNotEmpty()) {
         data.put("setCodeCandidates", JSONArray(r.match.candidates.map { it.setCode }))
     }
+    // IMMER mitschicken, nicht nur im Streitfall: der PC prueft selbst, ob der Code zur erkannten
+    // Karte gehoert, und korrigiert den Passcode nur, wenn er sich eindeutig aufloest. So faellt
+    // die Entscheidung an EINER Stelle (desktop/electron/setcode-resolve.cjs) statt an zweien.
+    r.readSetCode?.let { data.put("readSetCode", it) }
     data.put("edition", r.confidence.effectiveEdition)
     data.put("editionConfidence", r.confidence.editionConfidence.name.lowercase(Locale.ROOT))
     data.put("confidence", r.confidence.light.name.lowercase(Locale.ROOT))

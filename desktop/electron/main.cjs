@@ -4,7 +4,8 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 const os = require('os');
 const { initDatabase, getDb } = require('./database.cjs');
-const { fetchCardData, fetchYugipediaSets, fetchJapaneseSets } = require('./api-handler.cjs');
+const { fetchCardData, fetchYugipediaSets, fetchJapaneseSets, cachedFetch } = require('./api-handler.cjs');
+const { belongsToCard, resolveSetCode } = require('./setcode-resolve.cjs');
 const { startSync } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape, runFirstEdPass } = require('./cardmarket-scraper.cjs');
@@ -75,6 +76,49 @@ function getLocalIpAddress() {
   return '127.0.0.1';
 }
 
+// Der Set-Code schlaegt das Bild. Das Handy meldet in `readSetCode`, was es WIRKLICH gelesen hat
+// (unabhaengig davon, ob das zur erkannten Karte passt). Zeigt der Code auf eine andere Karte und
+// loest er sich EINDEUTIG auf, wird der Passcode hier getauscht -- noch bevor der Renderer die
+// Meldung sieht, damit in der Staging-Liste gleich die richtige Karte steht (Nutzerentscheid
+// 20.09.: still korrigieren, nur klein vermerken).
+//
+// Alles daran ist zurueckhaltend: ohne gelesenen Code, bei einem Code, der zur erkannten Karte
+// passt, bei einer uneindeutigen Aufloesung, bei einem Netzfehler oder nach 2 s bleibt die Meldung
+// unveraendert. Eine stille Falschkorrektur waere schlimmer als der Fehler, den sie behebt.
+const SETCODE_KORREKTUR_MS = 2000;
+async function korrigiereNachSetCode(data) {
+  try {
+    const gelesen = data && data.readSetCode;
+    if (!gelesen || !data.passcode) return data;
+    const arbeit = (async () => {
+      const karte = await fetchCardData(String(data.passcode));
+      const sets = (karte && karte.data && karte.data[0] && karte.data[0].card_sets) || [];
+      if (belongsToCard(gelesen, sets)) return data;   // Bild und Code sind sich einig
+      const treffer = await resolveSetCode({
+        listSets: () => cachedFetch('https://db.ygoprodeck.com/api/v7/cardsets.php', 'ygo_sets', 24 * 7),
+        cardsOfSet: async (name) => {
+          const j = await cachedFetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?cardset=${encodeURIComponent(name)}`, 'ygo_setcards', 24 * 7);
+          return (j && j.data) || [];
+        },
+      }, gelesen);
+      if (!treffer || treffer.id === String(data.passcode)) return data;
+      console.log(`[set-code] ${gelesen} -> ${treffer.id} ${treffer.name} (Bild sagte ${data.passcode})`);
+      // Set-Code und Rarity des Handys gehoerten zur FALSCHEN Karte: der gelesene Code ersetzt sie,
+      // die Rarity faellt weg und wird aus den Drucken des richtigen Codes geholt. Sprache und
+      // Auflage kommen aus dem Kartentext und bleiben gueltig.
+      const korrigiert = { ...data, passcode: treffer.id, setCode: gelesen, setCodeCandidates: [gelesen],
+        correctedFrom: String(data.passcode), correctedBy: gelesen };
+      delete korrigiert.rarity;
+      return korrigiert;
+    })();
+    const zeit = new Promise(r => setTimeout(() => r(data), SETCODE_KORREKTUR_MS));
+    return await Promise.race([arbeit, zeit]);
+  } catch (e) {
+    console.error('[set-code] Korrektur fehlgeschlagen:', e && e.message);
+    return data;
+  }
+}
+
 function startSocketServer() {
   io = new Server(4000, {
     cors: { origin: "*", methods: ["GET", "POST"] }
@@ -83,8 +127,15 @@ function startSocketServer() {
   io.on('connection', (socket) => {
     console.log('New client connected:', socket.id);
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('phone-connected');
+    // Eine Kette statt nebenlaeufiger Bearbeitung: die Korrektur darf warten (Netz), die
+    // REIHENFOLGE darf nicht kippen. Im Stapel-Modus zaehlt sie -- kaeme eine Wiederholung vor
+    // ihrer Erstsichtung an, legte applyScan zwei Eintraege statt einer "+1" an.
+    let kette = Promise.resolve();
     socket.on('card_scanned', (data) => {
-      if (mainWindow) mainWindow.webContents.send('card-scanned', data);
+      kette = kette
+        .then(() => korrigiereNachSetCode(data))
+        .then((korrigiert) => { if (mainWindow) mainWindow.webContents.send('card-scanned', korrigiert); })
+        .catch((e) => console.error('[card_scanned]', e && e.message));
     });
     socket.on('disconnect', () => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('phone-disconnected');

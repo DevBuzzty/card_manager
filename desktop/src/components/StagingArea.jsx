@@ -561,6 +561,14 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                 {card.scannedReason && (
                                     <p className="text-xs text-gray-500 -mt-1 mb-2 truncate">{card.scannedReason}</p>
                                 )}
+                                {/* Der gelesene Set-Code hat die Bilderkennung ueberstimmt (main.cjs:
+                                    korrigiereNachSetCode). Still korrigiert, hier nur vermerkt -- damit
+                                    nachvollziehbar bleibt, warum eine andere Karte dasteht. */}
+                                {card.correctedBy && (
+                                    <p className="text-xs text-space-violet -mt-1 mb-2 truncate" title={`Bild erkannte Passcode ${card.correctedFrom}`}>
+                                        Set-Code {card.correctedBy} hat entschieden
+                                    </p>
+                                )}
 
                                 <div className="flex gap-2 items-center">
                                     {/* Quantity */}
