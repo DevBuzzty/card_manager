@@ -40,8 +40,20 @@ class MlScanAnalyzer(
     // Nur auf dem Analyse-Thread benutzt.
     private var prevStrip: FloatArray? = null
     private val chuteGate = ChuteGate()
+    private var lastFrameMs = 0L
 
     // Einwuerfe, die noch keinem Erkennungsergebnis mitgegeben wurden (Analyse- -> Erkennungs-Thread).
+    /**
+     * Ruhepause der Erkennung (19.09.2026, Handy wurde beim Stapel-Scan 43,6 °C heiss): solange > 0 und kein
+     * Einwurf wartet, startet die Erkennung hoechstens alle [mlPauseMs]. Die Lichtschranke laeuft weiter
+     * auf jedem Bild -- ein Einwurf hebt die Pause sofort auf. ScanScreen setzt den Wert.
+     */
+    @Volatile var mlPauseMs: Long = 0L
+    private var lastMlStart = 0L
+
+    /** Schwacher Stoss (ChuteGate.Burst.schwach), Zeitpunkt -- auf dem Analyse-Thread gerufen. */
+    @Volatile var onSchwacherStoss: (Long) -> Unit = {}
+
     private val einwurfLock = Any()
     private var einwurfAnzahl = 0
     private var einwurfStart = 0L
@@ -53,6 +65,9 @@ class MlScanAnalyzer(
 
     override fun analyze(image: ImageProxy) {
         val tFrame = System.currentTimeMillis()
+        // Kamera-Aussetzer: ein Einwurf dauert nur ~200 ms, eine Luecke kann ihn verschlucken.
+        if (lastFrameMs != 0L && tFrame - lastFrameMs > 300) ScanLog.line("Bildluecke", "${tFrame - lastFrameMs}ms")
+        lastFrameMs = tFrame
         try {
             val rot = image.imageInfo.rotationDegrees
             val gv = guideView
@@ -69,7 +84,10 @@ class MlScanAnalyzer(
                 strip = meanAbsDiff(prevStrip, s)
                 prevStrip = s
                 chuteGate.update(strip, tFrame)?.let { b ->
-                    Log.i("StapelScan", "stoss start=${b.startMs} dauer=${b.dauerMs} spitze=${"%.1f".format(b.peak)} einwurf=${b.einwurf}")
+                    if (b.einwurf || b.peak >= 10) {
+                        ScanLog.line("Stoss", "start=${b.startMs} dauer=${b.dauerMs} spitze=${"%.1f".format(b.peak)} einwurf=${b.einwurf} schwach=${b.schwach}")
+                    }
+                    if (b.schwach) onSchwacherStoss(b.startMs)
                     if (b.einwurf) synchronized(einwurfLock) {
                         if (einwurfAnzahl == 0) einwurfStart = b.startMs
                         einwurfAnzahl++
@@ -78,7 +96,10 @@ class MlScanAnalyzer(
                 }
             }
 
+            val einwurfWartet = synchronized(einwurfLock) { einwurfAnzahl > 0 }
+            if (!einwurfWartet && tFrame - lastMlStart < mlPauseMs) return
             if (!mlBusy.compareAndSet(false, true)) return
+            lastMlStart = tFrame
 
             val raw = try { image.toBitmap() } catch (e: Throwable) { mlBusy.set(false); throw e }
             try {

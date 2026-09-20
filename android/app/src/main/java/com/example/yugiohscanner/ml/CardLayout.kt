@@ -6,7 +6,15 @@ import android.graphics.RectF
 enum class Layout { STANDARD, SPELL_TRAP, PENDULUM, LINK, SKILL, LEGACY }
 
 /** A region of text to OCR, in the box-relative coordinates [CardLayout.zones] returns. */
-enum class Zone { SET_CODE, PASSCODE, EDITION }
+enum class Zone { SET_CODE, PASSCODE, EDITION, SPRACHE }
+
+/**
+ * [Zone.SPRACHE] (19.09.2026): der obere Teil des Textfelds direkt unter dem Artwork (Typzeile bzw. erste
+ * Effektzeilen) -- nur fuer [SprachHinweis], nicht fuer Codes. Aus der festen Rahmen-Geometrie (Artwork
+ * 0,1156/0,1797/0,8856/0,708 der Karte, ml/data/artwork_window.json) und an Fotos aus der Halterung
+ * geprueft; kein Pendel (dort liegt das Textfeld anders).
+ */
+private val SPRACHE_RECT get() = RectF().apply { left = -0.06f; top = 0.07f; right = 1.06f; bottom = 0.40f }
 
 /**
  * Per-layout OCR zone geometry, in artwork-box units — same convention as [CardStrip]: x is
@@ -95,6 +103,7 @@ object CardLayout {
         Zone.SET_CODE to rect(0.7285f, -0.0725f, 1.0536f, 0.0909f),
         // n=273, std x1=0.0225 y1=0.0403 x2=0.0142 y2=0.0436
         Zone.EDITION to rect(0.0957f, 0.3408f, 0.3459f, 0.575f),
+        Zone.SPRACHE to SPRACHE_RECT,
     )
 
     private fun spellTrapZones() = mapOf(
@@ -104,6 +113,7 @@ object CardLayout {
         Zone.SET_CODE to rect(0.725f, -0.0739f, 1.0467f, 0.0826f),
         // n=243, std x1=0.0215 y1=0.0417 x2=0.0161 y2=0.0445
         Zone.EDITION to rect(0.1013f, 0.3264f, 0.3545f, 0.5562f),
+        Zone.SPRACHE to SPRACHE_RECT,
     )
 
     /**
@@ -139,6 +149,7 @@ object CardLayout {
         Zone.SET_CODE to rect(0.6237f, -0.0832f, 0.9489f, 0.0793f),
         // n=73, std x1=0.019 y1=0.0488 x2=0.0136 y2=0.0516
         Zone.EDITION to rect(0.1141f, 0.3001f, 0.3485f, 0.5438f),
+        Zone.SPRACHE to SPRACHE_RECT,
     )
 
     // RectF's 4-float constructor is a silent no-op under the Android unit-test stub jar used by

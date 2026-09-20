@@ -135,15 +135,24 @@ class SetCodeMatchTest {
         assertEquals("BLGG-DE053", r.selected?.setCode)
     }
 
-    @Test fun `Fall 3 Ausnahme greift nicht bei nur einem Bild mit der abweichenden Region`() {
+    @Test fun `Fall 3 -- eine einzige saubere Lesung ohne Gegenstimme gilt, wenn der Druck existiert`() {
+        // Scan-Protokoll 19.09.: nach dem Einwurf oft nur ein lesbares Bild.
         val known = listOf(
             SetOption("BLGG-DE053", "Ultra Rare", 0.0, "DE", verified = true),
             SetOption("BLGG-EN053", "Ultra Rare", 0.0, "EN", verified = false),
         )
         val frames = listOf("BLGG-EN053", "BLGG053")
         val result = SetCodeMatch.best(frames, known, frames)
-        assertEquals(SetCodeMatch.MatchReason.REGION_CONTRADICTS_VERIFIED, result.reason)
-        assertEquals("BLGG-DE053", result.selected?.setCode)
+        assertEquals("BLGG-EN053", result.selected?.setCode)
+    }
+
+    @Test fun `Fall 3 -- eine Lesung mit Gegenstimme bleibt beim verifizierten Druck`() {
+        val known = listOf(
+            SetOption("BLGG-DE053", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN053", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("BLGG-EN053", "BLGG-DE053")
+        assertEquals("BLGG-DE053", SetCodeMatch.best(frames, known, frames).selected?.setCode)
     }
 
     // -- verified schlaegt abgeleitet -------------------------------------------------------------
@@ -303,5 +312,24 @@ class SetCodeMatchTest {
         val result = SetCodeMatch.best(listOf("LOB-F005", "LOB-F005"), known)
         assertEquals(SetCodeMatch.MatchReason.MATCHED, result.reason)
         assertEquals("EN", result.selected?.language)
+    }
+
+    @Test fun `Sprache aus dem Kartentext schlaegt eine falsch gelesene Region`() {
+        // Scan-Protokoll 19.09.: Region schwankt, der englische Effekttext ist eindeutig.
+        val known = listOf(
+            SetOption("BLGG-DE135", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN135", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("BLGG-DE135 | Once per Chain, if an Effect Monster is Special Summoned", "you can send this card to the GY")
+        assertEquals("BLGG-EN135", SetCodeMatch.best(frames, known, frames).selected?.setCode)
+    }
+
+    @Test fun `deutscher Kartentext haelt eine faelschlich als EN gelesene Region beim deutschen Druck`() {
+        val known = listOf(
+            SetOption("BLGG-DE135", "Ultra Rare", 0.0, "DE", verified = true),
+            SetOption("BLGG-EN135", "Ultra Rare", 0.0, "EN", verified = false),
+        )
+        val frames = listOf("BLGG-EN135 | auf den Friedhof", "2000 oder weniger beschwören")
+        assertEquals("BLGG-DE135", SetCodeMatch.best(frames, known, frames).selected?.setCode)
     }
 }

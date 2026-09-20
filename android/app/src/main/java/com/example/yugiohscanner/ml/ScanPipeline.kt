@@ -53,7 +53,7 @@ class ScanPipeline(context: Context, private val minSim: Float = 0.5f) : CardPip
     fun detectBoxes(frame: Bitmap): List<Box> = detector.detect(frame)
 
     /** Embed one detector box and match it against the index; null if below [minSim]. */
-    fun embedBox(frame: Bitmap, b: Box, minSim: Float = this.minSim): Detection? {
+    fun embedBox(frame: Bitmap, b: Box, minSim: Float = this.minSim, abstandsregel: Boolean = true): Detection? {
         val x = b.x1.toInt().coerceIn(0, frame.width - 1)
         val y = b.y1.toInt().coerceIn(0, frame.height - 1)
         val w = (b.x2 - b.x1).toInt().coerceIn(1, frame.width - x)
@@ -61,9 +61,9 @@ class ScanPipeline(context: Context, private val minSim: Float = 0.5f) : CardPip
         val crop = Bitmap.createBitmap(frame, x, y, w, h)
         val square = ImagePrep.padToSquare224(crop)
         if (crop != frame) crop.recycle()  // guard: createBitmap may return `frame` for a full-frame box
-        val (pc, sim) = index.search(embedder.embed(square))
+        val (pc, sim, zweite) = index.searchTop2(embedder.embed(square))
         square.recycle()  // consumed synchronously by embed()
-        return if (sim >= minSim) Detection(b, pc, sim) else null
+        return if (akzeptiert(sim, zweite, minSim, abstandsregel)) Detection(b, pc, sim) else null
     }
 
     override fun process(frame: Bitmap): List<Detection> =
@@ -74,3 +74,14 @@ class ScanPipeline(context: Context, private val minSim: Float = 0.5f) : CardPip
         embedder.close()
     }
 }
+
+/**
+ * Abstandsregel (19.09.2026): Glitzer-Karten landen oft knapp unter [minSim] (0,49-0,55), obwohl der beste
+ * Treffer richtig ist -- dann liegt die zweitbeste ANDERE Karte aber deutlich darunter. Gemessen an 1 302
+ * Fotos (eigene + eBay): ab [ABSTAND_MIN_SIM] mit mindestens [ABSTAND] Vorsprung +75 richtige, 5 falsche.
+ */
+const val ABSTAND_MIN_SIM = 0.45f
+const val ABSTAND = 0.08f
+
+fun akzeptiert(sim: Float, zweite: Float, minSim: Float, abstandsregel: Boolean): Boolean =
+    sim >= minSim || (abstandsregel && sim >= ABSTAND_MIN_SIM && sim - zweite >= ABSTAND)

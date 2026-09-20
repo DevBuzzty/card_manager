@@ -198,4 +198,18 @@ class ChuteGateTest {
         pruefe(nachgebaut(stoesse),
             listOf(45_972L, 49_529, 54_363, 58_857, 74_149, 99_402, 105_397, 109_096, 121_521, 131_744), listOf(11_322L))
     }
+
+    @Test fun `kurzer allein stehender Stoss unter der Einwurf-Schwelle ist schwach`() {
+        // Scan-Protokoll 19.09.: Adreus landete mit Spitze 35, Dauer 231 ms.
+        val gate = ChuteGate()
+        val out = ArrayList<ChuteGate.Burst>()
+        var t = 0L
+        fun feed(s: Double) { gate.update(s, t)?.let { out.add(it) }; t += 35 }
+        repeat(20) { feed(0.3) }
+        repeat(7) { feed(35.0) }
+        repeat(30) { feed(0.3) }
+        assertEquals(1, out.size)
+        assertFalse(out[0].einwurf)
+        assertTrue(out[0].schwach)
+    }
 }

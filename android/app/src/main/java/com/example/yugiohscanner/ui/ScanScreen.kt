@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.CenterFocusWeak
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Keyboard
@@ -285,6 +286,16 @@ fun ScanScreen(onClose: () -> Unit) {
     var stapelCount by remember { mutableStateOf(0) }
     val tone = remember { try { android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 80) } catch (e: RuntimeException) { null } }
     val vibrator = remember { context.getSystemService(android.os.Vibrator::class.java) }
+    // Scan-Protokoll (ScanLog): seit wann ein Einwurf auf seine Buchung wartet (0 = keiner), ob sein Foto
+    // schon abgelegt ist, und das letzte Analysebild fuer "Fehler melden".
+    val einwurfOffenSeit = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+    val einwurfFoto = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    // Zeitpunkt des letzten schwachen Stosses (Analyse-Thread -> Erkennungs-Thread), 0 = keiner.
+    val schwacherStoss = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+    val letzteBuchung = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+    // Der Analyzer selbst, fuer Einstellungen aus seinem eigenen Ergebnis-Callback (dort ist er noch nicht zugewiesen).
+    val mlAnalyzerRef = remember { java.util.concurrent.atomic.AtomicReference<com.example.yugiohscanner.ml.MlScanAnalyzer?>(null) }
+    val letztesBild = remember { java.util.concurrent.atomic.AtomicReference<android.graphics.Bitmap?>(null) }
     var mlDetections by remember { mutableStateOf<List<com.example.yugiohscanner.ml.Detection>>(emptyList()) }
     var mlFrameW by remember { mutableStateOf(1) }
     var mlFrameH by remember { mutableStateOf(1) }
@@ -301,8 +312,9 @@ fun ScanScreen(onClose: () -> Unit) {
                 )
             }
         }
-        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, _, w, h, ms, einwuerfe, einwurfStartMs ->
+        com.example.yugiohscanner.ml.MlScanAnalyzer(pipeline) { dets, frame, w, h, ms, einwuerfe, einwurfStartMs ->
             mlDetections = dets
+            letztesBild.set(frame)
             mlFrameW = w
             mlFrameH = h
             val now = System.currentTimeMillis()
@@ -316,20 +328,37 @@ fun ScanScreen(onClose: () -> Unit) {
                 // OCR-Belege vergessen, bevor setEvidence.record() unten den ersten der neuen schreibt.
                 val rearmed = tracker.rearmAll(einwurfStartMs)
                 for (pc in rearmed) setEvidence.forget(pc)
-                Log.i("StapelScan", "einwurf anzahl=$einwuerfe rearmt=$rearmed t=$now")
+                com.example.yugiohscanner.ml.ScanLog.line("Einwurf", "anzahl=$einwuerfe rearmt=$rearmed start=$einwurfStartMs")
+                if (einwurfOffenSeit.get() == 0L) { einwurfOffenSeit.set(now); einwurfFoto.set(false) }
+            }
+            // Einwurf wartet: nach 2 s ohne Buchung ein Foto (was sieht die Erkennung?), nach 15 s verfaellt
+            // er (StackCounter) -- beides ins Protokoll.
+            val offen = einwurfOffenSeit.get()
+            if (offen != 0L && now - offen > 15_000) {
+                com.example.yugiohscanner.ml.ScanLog.line("Einwurf", "verfallen nach ${now - offen}ms ohne Erkennung")
+                einwurfOffenSeit.set(0L)
+            } else if (offen != 0L && now - offen >= 2_000 && einwurfFoto.compareAndSet(false, true)) {
+                val foto = com.example.yugiohscanner.ml.ScanLog.photo(frame, "offen-$offen")
+                com.example.yugiohscanner.ml.ScanLog.line("Einwurf", "offen seit ${now - offen}ms erkannt=${dets.map { "${it.passcode}@${"%.2f".format(it.sim)}" }} foto=$foto")
+            }
+            if (scanMode == "stapel") {
+                val w = schwacherStoss.getAndSet(0L)
+                if (w != 0L) stackCounter.schwach(w)
             }
             // Pool each visible card's bottom-band OCR text (set-code voting across frames).
             for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
             // On confirmation, resolve the set code from ALL pooled evidence for that card, then
             // emit passcode + evidence downstream (constrained matching happens in onConfirmed).
             for (d in tracker.update(dets, now)) {
-                Log.i("MlScan", "confirmed card ${d.passcode}")
+                com.example.yugiohscanner.ml.ScanLog.line("Bestaetigt", "${d.passcode} sim=${"%.2f".format(d.sim)}")
                 // Modus "stapel": so oft buchen, wie Einwuerfe offen sind; ohne Einwurf gar nicht.
                 // Rueckmeldung sofort, Senden erst mit Set-Code (PendingSends, unten).
                 if (scanMode == "stapel") {
-                    val times = stackCounter.claim(now)
-                    Log.i("StapelScan", "gebucht ${d.passcode} x$times")
+                    val times = stackCounter.claim(now, d.passcode)
+                    com.example.yugiohscanner.ml.ScanLog.line("Gebucht", "${d.passcode} x$times")
                     if (times > 0) {
+                        einwurfOffenSeit.set(0L)
+                        letzteBuchung.set(now)
                         stapelCount += times
                         capture.blink()
                         tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
@@ -355,10 +384,17 @@ fun ScanScreen(onClose: () -> Unit) {
             // Wartende Stapel-Karten senden, sobald ein Set-Code-Kandidat da ist oder 1,5 s um sind --
             // vor dem Abraeumen unten, das die Belege einer verschwundenen Karte verwirft.
             for ((pc, n) in pendingSends.due(now) { setEvidence.setCodeCandidates(it).isNotEmpty() }) {
-                Log.i("StapelScan", "gesendet $pc x$n kandidaten=${setEvidence.setCodeCandidates(pc)}")
+                com.example.yugiohscanner.ml.ScanLog.line("Gesendet", "$pc x$n kandidaten=${setEvidence.setCodeCandidates(pc)}")
                 sendConfirmed(pc, n)
             }
             for (gone in tracker.droppedThisFrame) setEvidence.forget(gone)
+            // Ruhepause (MlScanAnalyzer.mlPauseMs): im Stapel-Modus, wenn weder ein Einwurf noch eine Sendung
+            // wartet und seit 2 s nichts gebucht wurde, nur noch ~1,5 Erkennungen pro Sekunde.
+            if (scanMode == "stapel" && einwurfOffenSeit.get() == 0L && pendingSends.isEmpty() && now - letzteBuchung.get() > 2_000) {
+                mlAnalyzerRef.get()?.mlPauseMs = 700L
+            } else {
+                mlAnalyzerRef.get()?.mlPauseMs = 0L
+            }
 
             // Silent improvement (Spec D3 Task 6, plan Section 6.2): a card already staged
             // (`seen`) but still visible gets its set code re-resolved from ALL evidence gathered
@@ -400,6 +436,15 @@ fun ScanScreen(onClose: () -> Unit) {
                     (top?.let { String.format("%d@%.2f", it.passcode, it.sim) } ?: "-"))
             }
         }
+    }
+
+    remember { mlAnalyzer.onSchwacherStoss = { t -> schwacherStoss.set(t) } }
+    remember { mlAnalyzerRef.set(mlAnalyzer) }
+
+    // Scan-Protokoll: eine Datei je Scanner-Sitzung (ScanLog).
+    DisposableEffect(Unit) {
+        com.example.yugiohscanner.ml.ScanLog.start(context.filesDir, scanMode)
+        onDispose { com.example.yugiohscanner.ml.ScanLog.stop() }
     }
 
     DisposableEffect(Unit) {
@@ -554,7 +599,8 @@ fun ScanScreen(onClose: () -> Unit) {
                         style = Stroke(width = 4f)
                     )
                     drawContext.canvas.nativeCanvas.drawText(
-                        if (d.passcode >= 0) d.passcode.toString() else "…",
+                        // Passcodes sind achtstellig; als Zahl verliert z. B. 02463794 die fuehrende 0.
+                        if (d.passcode >= 0) "%08d".format(d.passcode) else "…",
                         l, (t - 10f).coerceAtLeast(30f),
                         android.graphics.Paint().apply {
                             color = android.graphics.Color.rgb(0, 255, 102)
@@ -639,6 +685,18 @@ fun ScanScreen(onClose: () -> Unit) {
                     contentDescription = "Scan-Modus",
                     tint = if (scanMode == "stapel") Color.Yellow else Color.White,
                 )
+            }
+            // "Fehler melden": Markierung + aktuelles Bild ins Scan-Protokoll.
+            IconButton(
+                onClick = {
+                    val bild = letztesBild.get()
+                    val foto = bild?.let { com.example.yugiohscanner.ml.ScanLog.photo(it, "meldung-${System.currentTimeMillis()}") }
+                    com.example.yugiohscanner.ml.ScanLog.line("MELDUNG", "Nutzer meldet Fehler, zaehler=$stapelCount foto=$foto")
+                    Toast.makeText(context, "Fehler vermerkt", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50)),
+            ) {
+                Icon(Icons.Default.Flag, contentDescription = "Fehler melden", tint = Color(0xFFFF8A65))
             }
             // Auto Focus Reset
             IconButton(
