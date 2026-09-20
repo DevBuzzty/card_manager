@@ -420,7 +420,17 @@ fun ScanScreen(onClose: () -> Unit) {
                 if (d.passcode <= 0) continue
                 val pc = d.passcode.toString()
                 if (pc !in capture.seen) continue
-                val entry = capture.stagingCards.find { it.passcode == pc } ?: continue
+                val entry = capture.stagingCards.find { it.passcode == pc }
+                if (entry == null) {
+                    // Bei verbundenem PC gibt es keinen Handy-Eintrag, also lief die Nachbesserung
+                    // unten NIE -- im Lauf vom 20.09. 164 mal "stage=erst", null mal "verbessert".
+                    // Vorerst wird nur mitgerechnet und protokolliert, nicht eingegriffen.
+                    capture.schattenrechnung(
+                        pc, setEvidence.setCodeCandidates(d.passcode) + setEvidence.rawTexts(d.passcode),
+                        setEvidence.rawTexts(d.passcode), setEvidence.editionTexts(d.passcode),
+                    )
+                    continue
+                }
                 if (entry.loading) continue // still resolving its first hit — nothing to compare yet
                 val frames = setEvidence.rawTexts(d.passcode)
                 val result = SetCodeMatch.best(

@@ -305,6 +305,7 @@ class ScanCapture(
                     return@launch
                 }
                 sendScanToDesktop(s, pc, r, mode())
+                gesendeteAufloesung[pc] = r
                 sentCount++
                 lastLight = r.confidence.light
                 // Modus "stapel": der grosse Zaehler ist die Rueckmeldung, keine zusaetzliche Meldung.
@@ -333,6 +334,46 @@ class ScanCapture(
 
     fun blink(strength: Float = 0.45f) {
         scope.launch { flash.snapTo(strength); flash.animateTo(0f, animationSpec = tween(300)) }
+    }
+
+    /**
+     * Was zuletzt an den PC ging, je Passcode -- Grundlage fuer [schattenrechnung].
+     * Begrenzt, damit ein langer Stapel den Speicher nicht vollaeuft.
+     */
+    private val gesendeteAufloesung = object : LinkedHashMap<String, ResolvedScan>(16, 0.75f, false) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ResolvedScan>?) = size > 64
+    }
+
+    /**
+     * NUR MESSUNG, greift nicht ein (20.09.2026).
+     *
+     * Bei verbundenem PC faellt die Ampel genau EINMAL -- mit der Evidenz, die im Moment der
+     * ersten Aufloesung vorliegt. Die Nachbesserung ("silent improvement" in ScanScreen) haengt am
+     * Handy-Staging-Eintrag, den es im PC-Betrieb nicht gibt: im Lauf vom 20.09. stand 164 mal
+     * "stage=erst" und kein einziges Mal "verbessert". Dabei liegt die Karte danach weiter ruhig
+     * im Bild und liefert weitere Bilder.
+     *
+     * Was das kostet, zeigt derselbe Lauf: 86 von 164 Entscheidungen hatten NULL Bilder mit
+     * lesbarem Set-Code, 31 hatten genau eines -- und die waren alle exakt gelesen, nur eben
+     * einmal, waehrend GRUEN zwei verlangt. Ob Nachbessern diese 31 wirklich einsammelt, ist
+     * damit noch nicht gezeigt. Diese Funktion rechnet es deshalb erst einmal nur mit und schreibt
+     * es ins Protokoll; entschieden wird nach dem naechsten Lauf, mit Zahlen statt Vermutung.
+     */
+    fun schattenrechnung(pc: String, evidence: List<String>, framesEvidence: List<String>, editionTexts: List<String>) {
+        val alt = gesendeteAufloesung[pc] ?: return
+        val neu = SetCodeMatch.best(evidence, alt.knownSets, framesEvidence)
+        val neueAmpel = com.example.yugiohscanner.ml.ScanConfidence.fromEvidence(
+            neu, alt.knownSets, editionTexts, com.example.yugiohscanner.Prefs.defaultEdition(context),
+        )
+        if (neueAmpel.light == alt.confidence.light && neu.codeFrameCount == alt.match.codeFrameCount) return
+        com.example.yugiohscanner.ml.ScanLog.line(
+            "Schatten",
+            "pc=$pc ampel=${alt.confidence.light}->${neueAmpel.light} " +
+                "bilder=${alt.match.codeFrameCount}->${neu.codeFrameCount} " +
+                "exakt=${alt.match.codeExactMatch}->${neu.codeExactMatch} " +
+                "code=${alt.match.selected?.setCode ?: "-"}->${neu.selected?.setCode ?: "-"}",
+        )
+        gesendeteAufloesung[pc] = ResolvedScan(alt.base, alt.knownSets, neu, neueAmpel, alt.readSetCode)
     }
 
     // Der einzige Einstieg fuer eine erfasste Karte -- autonome Erkennung wie manuelle Eingabe.
