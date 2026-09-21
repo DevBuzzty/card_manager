@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { aggregateTarget, applyScan } from './scanAggregate.js';
+import { aggregateTarget, applyScan, werteFuerZusatz } from './scanAggregate.js';
 
 const lob = { set_code: 'LOB-DE005', set_rarity: 'Common', language: 'DE' };
 const sdy = { set_code: 'SDY-G005', set_rarity: 'Common', language: 'DE' };
@@ -217,4 +217,33 @@ test('ein Druck auf einen anderen Druck laesst die Ampel der Hauptzeile in Ruhe'
   const [out] = applyScan([card], scan({ setCode: 'SDY-G005', mode: 'foto', confidence: 'green' }));
   assert.equal(out.scannedConfidence, 'yellow');
   assert.equal(out.extraPrintings.length, 1);
+});
+
+// Staging-Werte (Nutzer 19.09.): eine neue Zusatzzeile zeigt nicht mehr stur "NM · unbekannt".
+const std = { edition: 'unknown', condition: 'NM' };
+
+test('Zusatzzeile: die am Exemplar erkannte Auflage gewinnt', () => {
+  assert.deepEqual(werteFuerZusatz({ edition: 'unlimited', condition: 'EX' }, { edition: 'first' }, std),
+    { edition: 'first', condition: 'EX' });
+});
+
+test('Zusatzzeile: ohne Erkennung die Werte der Hauptzeile', () => {
+  // "unknown" vom Handy ist dessen Rueckfall, keine Erkennung.
+  assert.deepEqual(werteFuerZusatz({ edition: 'first', condition: 'NM' }, { edition: 'unknown' }, std),
+    { edition: 'first', condition: 'NM' });
+  assert.deepEqual(werteFuerZusatz({ edition: 'first', condition: 'LP' }, null, std),
+    { edition: 'first', condition: 'LP' });
+});
+
+test('Zusatzzeile: erst ganz ohne Anhaltspunkt die Voreinstellung', () => {
+  assert.deepEqual(werteFuerZusatz({}, null, std), std);
+  assert.deepEqual(werteFuerZusatz({ edition: 'unknown' }, { edition: 'unknown' }, { edition: 'unlimited', condition: 'NM' }),
+    { edition: 'unlimited', condition: 'NM' });
+});
+
+test('ein automatisch angelegter Zusatzdruck uebernimmt die erkannte Auflage', () => {
+  const card = loaded({ edition: 'unlimited', condition: 'NM' });
+  const [out] = applyScan([card], scan({ setCode: 'SDY-G005', mode: 'foto', edition: 'first' }), std);
+  assert.equal(out.extraPrintings[0].edition, 'first');
+  assert.equal(out.extraPrintings[0].condition, 'NM');
 });

@@ -109,12 +109,30 @@ export function applyScan(cards, scanned, defaults = FALLBACK_DEFAULTS) {
       id: `${Date.now()}-${Math.random()}`,
       selectedSet: target.set,
       quantity: 1,
-      edition: defaults.edition,
-      condition: defaults.condition,
+      ...werteFuerZusatz(card, scanned, defaults),
     };
     updated = { ...card, extraPrintings: [...(card.extraPrintings || []), extra] };
   }
   return cards.map((c, i) => (i === idx ? updated : c));
+}
+
+/**
+ * Auflage und Zustand einer NEUEN Zusatzzeile (Nutzer 19.09.2026: "wenn eine zweite Sprache erkannt
+ * wird, steht da NM unbekannt"). Bisher erbte sie stur die PC-Voreinstellung, und die steht meist auf
+ * "unknown". Jetzt, in dieser Reihenfolge:
+ *   Auflage: was das Handy an DIESEM Exemplar erkannt hat -> die der Hauptzeile -> Voreinstellung
+ *   Zustand: der der Hauptzeile -> Voreinstellung
+ * "unknown" vom Handy zaehlt nicht als Erkennung -- es ist dessen eigener Rueckfall, wenn die
+ * Auflagenzeile nicht lesbar war. Der Zustand wird nie erkannt, nur uebernommen.
+ * Auch fuer den "+ Weitere Druckvariante"-Knopf (StagingArea.addPrinting, dort ohne `scanned`).
+ */
+export function werteFuerZusatz(card, scanned, defaults = FALLBACK_DEFAULTS) {
+  const erkannt = scanned && scanned.edition && scanned.edition !== 'unknown' ? scanned.edition : null;
+  const haupt = card && card.edition && card.edition !== 'unknown' ? card.edition : null;
+  return {
+    edition: erkannt || haupt || defaults.edition,
+    condition: (card && card.condition) || defaults.condition,
+  };
 }
 
 // Rangfolge der Handy-Ampel. Unbekannt (aelteres Handy, kein Feld) steht unter Rot.

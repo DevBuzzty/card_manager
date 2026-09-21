@@ -7,6 +7,7 @@ import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
 import { matchCandidates, phoneSelectedSet, mapPhoneConfidence } from '../utils/setCodeMatch';
 import { fuelleRarityAusGeschwistern } from '../utils/printingRarity';
+import { werteFuerZusatz } from '../utils/scanAggregate';
 import Flag from './Flag';
 import CopyChip from './CopyChip';
 
@@ -367,7 +368,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   const addPrinting = (tempId) => {
       setScannedCards(prev => prev.map(c => {
           if (c.tempId !== tempId) return c;
-          const printing = { id: `${Date.now()}-${Math.random()}`, quantity: 1, selectedSet: null, edition: defaults.edition, condition: defaults.condition };
+          const printing = { id: `${Date.now()}-${Math.random()}`, quantity: 1, selectedSet: null, ...werteFuerZusatz(c, null, defaults) };
           return { ...c, extraPrintings: [...(c.extraPrintings || []), printing] };
       }));
   };
