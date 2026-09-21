@@ -16,6 +16,19 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, onClose,
   const [preview, setPreview] = useState(null);
   const [form, setForm] = useState(() => ({ channel_id: 'cardmarket', sold_on: todayLocal(), gross: '', fees: '', shipping: '', note: '', feesTouched: false, grossTouched: false }));
 
+  // Eigener Escape-Handler: solange der Dialog offen ist, soll Escape NUR ihn schliessen, nicht das
+  // dahinterliegende CopySheet (das seinen eigenen Handler waehrend sellingOpen aussetzt).
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // idsKey statt copyIds selbst in den Deps: CopySheet.jsx uebergibt copyIds={[copy.copy_id]} als
+  // Inline-Array-Literal, das bei JEDEM Rendern eine neue Referenz ist -- ein Effekt auf [copyIds]
+  // wuerde Vorschau/Kanaele bei jedem Tastendruck im Sheet neu laden und die Eingaben zuruecksetzen.
+  // Gleiches Muster wie ExportDialog.jsx (dort mit `scope`, ebenfalls eine bei jedem Rendern neue Referenz).
+  const idsKey = copyIds.join(',');
   useEffect(() => {
     let alive = true;
     Promise.all([window.api.listSaleChannels(), window.api.previewSale(copyIds)])
@@ -31,7 +44,8 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, onClose,
       })
       .catch((e) => { if (alive) setError(e?.message || 'Laden fehlgeschlagen.'); });
     return () => { alive = false; };
-  }, [copyIds, initialGrossCents]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey, initialGrossCents]);
 
   const feeOf = (id) => channels?.find((c) => c.channel_id === id)?.fee_percent ?? 0;
   const set = (patch) => setForm((f) => {

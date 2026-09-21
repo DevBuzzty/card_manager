@@ -65,11 +65,15 @@ export default function CopySheet({ copy, onClose, onSaved }) {
 
   // Waehrend das Sheet offen ist, soll Escape nur das Sheet schliessen -- nicht (zusaetzlich)
   // die dahinterliegende CardDetailPanel-Ansicht, die selbst einen globalen Escape-Handler hat.
+  // Solange SaleDialog obendrauf offen ist, gehoert Escape IHM (eigener Handler dort) -- sonst
+  // wuerde ein Druck das ganze Sheet schliessen und den laufenden Verkaufs-Dialog mit wegreissen
+  // (gleiches Muster wie CardDetailPanel.jsx: paletteOpen/sheetCopy).
   useEffect(() => {
+    if (sellingOpen) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, sellingOpen]);
 
   const selectedContainer = containers.find(c => c.container_id === containerId);
   const isBinder = selectedContainer?.kind === 'binder';
