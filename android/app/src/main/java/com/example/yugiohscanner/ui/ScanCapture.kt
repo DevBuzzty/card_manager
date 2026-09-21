@@ -276,7 +276,7 @@ class ScanCapture(
     // verhaltensgleicher Umbau restrukturiert den Kontrollfluss nicht.
     private fun sendScan(
         pc: String, evidence: List<String>, framesEvidence: List<String>,
-        editionTexts: List<String>, isRepeat: Boolean,
+        editionTexts: List<String>, isRepeat: Boolean, modus: String = mode(),
     ) {
         blinkUnlessStapel(if (isRepeat) 0.45f else 0.8f)
         scope.launch {
@@ -304,12 +304,12 @@ class ScanCapture(
                     }
                     return@launch
                 }
-                sendScanToDesktop(s, pc, r, mode())
+                sendScanToDesktop(s, pc, r, modus)
                 gesendeteAufloesung[pc] = r
                 sentCount++
                 lastLight = r.confidence.light
                 // Modus "stapel": der grosse Zaehler ist die Rueckmeldung, keine zusaetzliche Meldung.
-                if (isRepeat && mode() != "stapel") {
+                if (isRepeat && modus == "einzeln") {
                     // §7: bei verbundenem PC ist die Meldung NUR informativ -- kein Knopf.
                     // Korrigiert wird am PC, wo der Eintrag mit seinen +/--Knoepfen sichtbar in
                     // der Liste steht. Die neue Menge steht bewusst NICHT hier: sie zaehlt am PC,
@@ -374,6 +374,26 @@ class ScanCapture(
                 "code=${alt.match.selected?.setCode ?: "-"}->${neu.selected?.setCode ?: "-"}",
         )
         gesendeteAufloesung[pc] = ResolvedScan(alt.base, alt.knownSets, neu, neueAmpel, alt.readSetCode)
+    }
+
+    /**
+     * Einstieg fuer den FOTOMODUS (Modus "einzeln" seit 21.09.2026): ein Knopfdruck ist eine
+     * bewusste Aktion, also eine Karte -- anders als [onCapture] im Modus "einzeln" wird eine
+     * Wiederholung NICHT verworfen, sondern zusammengefasst wie im Stapel (Nutzerentscheid: jedes
+     * Foto zaehlt +1). Auf der Leitung heisst das Modus "foto", den der PC (scanAggregate.js)
+     * genauso zusammenfasst wie "stapel".
+     */
+    fun onFoto(pc: String, evidence: List<String>, frames: List<String>, editionTexts: List<String>) {
+        val isRepeat = !seen.add(pc)
+        if (connected()) {
+            sendScan(pc, evidence, frames, editionTexts, isRepeat, modus = "foto")
+        } else if (isRepeat && stagingCards.any { it.passcode == pc }) {
+            aggregateRepeat(pc, evidence, frames, editionTexts)
+        } else {
+            // Kein Eintrag, obwohl schon gesehen: die fruehere Kopie ging an den PC, als der noch
+            // verbunden war. Dann wird diese hier ein eigener Eintrag, statt still zu verschwinden.
+            stageScan(pc, evidence, frames, editionTexts)
+        }
     }
 
     // Der einzige Einstieg fuer eine erfasste Karte -- autonome Erkennung wie manuelle Eingabe.
