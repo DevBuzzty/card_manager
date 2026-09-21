@@ -101,12 +101,14 @@ object ScanResolver {
         // bei HIGH, sonst den Standard -- und beide Wege schreiben am Ende dieselbe "first"-Buchung.
         // Genau diese Frage war am 20.09.2026 nicht zu beantworten (193x "first" an einem Tag, ohne
         // Beleg, woher). `texte` leer heisst: die EDITION-Zone gab nichts her, es war der Standard.
+        // Das ENDE jedes Zonentexts, nicht der Anfang (21.09.): der Auflagen-Marker steht in der
+        // untersten Zeile, darueber liegt Kartentext -- mit den ersten 40 Zeichen war er abgeschnitten.
         val lesbar = editionTexts.count { it.isNotBlank() }
         com.example.yugiohscanner.ml.ScanLog.line(
             "Auflage",
             "pc=$pc bilder=${editionTexts.size} lesbar=$lesbar ergebnis=${confidence.effectiveEdition} " +
                 "sicher=${confidence.editionConfidence} standard=$defaultEdition " +
-                "texte='${editionTexts.filter { it.isNotBlank() }.joinToString(" | ") { it.take(40).replace('\n', ' ') }}'",
+                "texte='${editionTexts.filter { it.isNotBlank() }.joinToString(" | ") { it.takeLast(60).replace('\n', ' ') }}'",
         )
         return ResolvedScan(base, knownSets, match, confidence, readSetCode)
     }
