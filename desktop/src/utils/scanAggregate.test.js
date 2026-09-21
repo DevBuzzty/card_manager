@@ -156,3 +156,25 @@ test('applyScan fasst im Modus "stapel" nur den passenden Eintrag an', () => {
   assert.equal(out[0].quantity, 1);
   assert.equal(out[1].quantity, 2);
 });
+
+// Fotomodus (21.09.2026): jeder Knopfdruck ist eine Karte.
+test('Modus "foto": dieselbe Karte nochmal fotografiert erhoeht die Menge', () => {
+  let cards = applyScan([], scan({ mode: 'foto' }));
+  assert.equal(cards.length, 1, 'erste Aufnahme legt an');
+  cards = cards.map(c => ({ ...loaded(), tempId: c.tempId }));
+  const out = applyScan(cards, scan({ mode: 'foto' }));
+  assert.equal(out.length, 1);
+  assert.equal(out[0].quantity, 2);
+});
+
+test('Modus "foto": ein anderer Druck derselben Karte wird Zusatzzeile, nicht +1', () => {
+  const out = applyScan([loaded()], scan({ setCode: 'SDY-G005', mode: 'foto' }));
+  assert.equal(out[0].quantity || 1, 1, 'Hauptdruck unveraendert');
+  assert.equal((out[0].extraPrintings || []).length, 1);
+});
+
+test('ein unbekannter Modus faellt weiter auf "nicht zusammenfassen" zurueck', () => {
+  const cards = [loaded()];
+  assert.equal(applyScan(cards, scan({ mode: 'Foto' })), cards, 'Gross/Klein zaehlt -- nur woertlich "foto"');
+  assert.equal(applyScan(cards, scan({ mode: 'irgendwas' })), cards);
+});

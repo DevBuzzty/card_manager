@@ -19,6 +19,8 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.UseCase
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -43,6 +45,7 @@ import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LooksOne
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -463,6 +466,75 @@ fun ScanScreen(onClose: () -> Unit) {
     }
 
     remember { mlAnalyzer.onSchwacherStoss = { t -> schwacherStoss.set(t) } }
+
+    // Kamera je Modus binden (21.09.2026). Stapel: Vorschau + Live-Analyse (Lichtschranke). Einzeln:
+    // Vorschau + FOTO in voller Aufloesung, OHNE Live-Analyse -- im Einzel-Modus rechnet im
+    // Hintergrund nichts, gewertet wird nur, was der Auslöser aufnimmt. Anlass: ohne Halterung
+    // hielt der Nutzer Karten im Stapel-Modus hin, sie wurden erkannt, aber nie gebucht
+    // ("Bestaetigt ... Gebucht x0"), weil der Stapel absichtlich nur zaehlt, was durch die
+    // Lichtschranke faellt. Der Auslöser macht den Modus zugleich unuebersehbar.
+    val kamera = remember { KameraTeile() }
+    val fotoAufnahme = remember { com.example.yugiohscanner.ml.FotoAufnahme(pipeline) }
+    var fotoLaeuft by remember { mutableStateOf(false) }
+
+    fun binde(modus: String) {
+        val provider = kamera.provider ?: return
+        val preview = kamera.preview ?: return
+        val zweiter: UseCase = (if (modus == "stapel") kamera.analyse else kamera.foto) ?: return
+        try {
+            provider.unbindAll()
+            val camera = provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, zweiter)
+            cameraControl = camera.cameraControl
+            cameraInfo = camera.cameraInfo
+            // Gemerkten Zoom wiederherstellen (Prefs.zoom). Der Halter steht fest, die Karte liegt
+            // immer gleich weit weg -- einmal eingestellt soll das bleiben, statt vor jedem Stapel
+            // neu gekniffen zu werden. Gilt im Fotomodus genauso.
+            val z = camera.cameraInfo.zoomState.value
+            val gewuenscht = com.example.yugiohscanner.Prefs.zoomGeklemmt(
+                com.example.yugiohscanner.Prefs.zoom(context),
+                z?.minZoomRatio ?: 1f, z?.maxZoomRatio ?: 1f,
+            )
+            if (gewuenscht > 1f) camera.cameraControl.setZoomRatio(gewuenscht)
+            com.example.yugiohscanner.ml.ScanLog.line(
+                "Kamera", "modus=%s zoom=%.2f moeglich=%.2f..%.2f".format(
+                    modus, gewuenscht, z?.minZoomRatio ?: 1f, z?.maxZoomRatio ?: 1f))
+        } catch (exc: Exception) {
+            Log.e("Scanner", "Use case binding failed", exc)
+        }
+    }
+
+    LaunchedEffect(scanMode) {
+        // Im Fotomodus liefert die Live-Analyse nichts mehr -- alte Rahmen nicht stehen lassen.
+        if (scanMode != "stapel") mlDetections = emptyList()
+        binde(scanMode)
+    }
+
+    val fotoAusloesen: () -> Unit = {
+        val cap = kamera.foto
+        if (cap != null && !fotoLaeuft) {
+            fotoLaeuft = true
+            scope.launch {
+                try {
+                    val erg = fotoAufnahme.serie(cap, executor)
+                    if (erg == null) {
+                        snackbar.showSnackbar("Keine Karte erkannt")
+                    } else {
+                        capture.onFoto(erg.passcode.toString(), erg.evidence, erg.frames, erg.editionTexts)
+                        tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
+                        vibrator?.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                    }
+                } catch (e: OutOfMemoryError) {
+                    com.example.yugiohscanner.ml.ScanLog.line("Foto", "Speicher reicht nicht: ${e.message}")
+                    snackbar.showSnackbar("Foto zu gross für den Speicher")
+                } catch (e: Exception) {
+                    com.example.yugiohscanner.ml.ScanLog.line("Foto", "Fehler: ${e.message}")
+                    snackbar.showSnackbar("Foto fehlgeschlagen: ${e.message}")
+                } finally {
+                    fotoLaeuft = false
+                }
+            }
+        }
+    }
     remember { mlAnalyzerRef.set(mlAnalyzer) }
 
     // Scan-Protokoll: eine Datei je Scanner-Sitzung (ScanLog).
@@ -608,31 +680,24 @@ fun ScanScreen(onClose: () -> Unit) {
                             it.setAnalyzer(executor, mlAnalyzer)
                         }
 
-                    try {
-                        cameraProvider.unbindAll()
-                        val camera = cameraProvider.bindToLifecycle(
-                            lifecycleOwner,
-                            CameraSelector.DEFAULT_BACK_CAMERA,
-                            preview,
-                            imageAnalyzer
+                    // Fotoaufnahme fuer den Einzel-Modus: volle Sensor-Aufloesung, weil dort die kleine
+                    // Auflagenzeile gelesen werden muss (siehe FotoAufnahme). Kurze Ausloeseverzoegerung,
+                    // weil ein Druck drei Fotos hintereinander nimmt.
+                    val imageCapture = ImageCapture.Builder()
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                        .setJpegQuality(95)
+                        .setResolutionSelector(
+                            ResolutionSelector.Builder()
+                                .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                                .build()
                         )
-                        cameraControl = camera.cameraControl
-                        cameraInfo = camera.cameraInfo
-                        // Gemerkten Zoom wiederherstellen (Prefs.zoom). Der Halter steht fest, die
-                        // Karte liegt immer gleich weit weg -- einmal eingestellt soll das bleiben,
-                        // statt vor jedem Stapel neu gekniffen zu werden.
-                        val z = camera.cameraInfo.zoomState.value
-                        val gewuenscht = com.example.yugiohscanner.Prefs.zoomGeklemmt(
-                            com.example.yugiohscanner.Prefs.zoom(ctx),
-                            z?.minZoomRatio ?: 1f, z?.maxZoomRatio ?: 1f,
-                        )
-                        if (gewuenscht > 1f) camera.cameraControl.setZoomRatio(gewuenscht)
-                        com.example.yugiohscanner.ml.ScanLog.line(
-                            "Zoom", "gesetzt=%.2f moeglich=%.2f..%.2f".format(
-                                gewuenscht, z?.minZoomRatio ?: 1f, z?.maxZoomRatio ?: 1f))
-                    } catch (exc: Exception) {
-                        Log.e("Scanner", "Use case binding failed", exc)
-                    }
+                        .build()
+
+                    kamera.provider = cameraProvider
+                    kamera.preview = preview
+                    kamera.analyse = imageAnalyzer
+                    kamera.foto = imageCapture
+                    binde(scanMode)
                 }, ContextCompat.getMainExecutor(ctx))
 
                 previewView
@@ -706,6 +771,25 @@ fun ScanScreen(onClose: () -> Unit) {
             )
         }
 
+        // Auslöser des Fotomodus -- nur im Einzel-Modus sichtbar, und damit zugleich die Anzeige,
+        // in welchem Modus der Scanner steht. Ueber der Fusszeile, damit er sie nicht verdeckt.
+        if (scanMode != "stapel") {
+            Button(
+                onClick = fotoAusloesen,
+                enabled = !fotoLaeuft,
+                shape = CircleShape,
+                contentPadding = PaddingValues(0.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+                    .padding(bottom = 128.dp).size(84.dp),
+            ) {
+                if (fotoLaeuft) {
+                    CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
+                } else {
+                    Icon(Icons.Default.PhotoCamera, contentDescription = "Foto aufnehmen", modifier = Modifier.size(40.dp))
+                }
+            }
+        }
+
         // Header: close, title, desktop-status dot, flash, focus, keyboard.
         Row(
             Modifier.fillMaxWidth().align(Alignment.TopCenter)
@@ -739,7 +823,7 @@ fun ScanScreen(onClose: () -> Unit) {
                     Toast.makeText(
                         context,
                         if (scanMode == "stapel") "Stapel: Wiederholungen zählen"
-                        else "Einzeln: jede Karte einmal",
+                        else "Einzeln: Karte hinhalten, Auslöser drücken",
                         Toast.LENGTH_SHORT,
                     ).show()
                 },
@@ -1040,4 +1124,12 @@ class CardAnalyzer(
     fun close() {
         recognizer.close()
     }
+}
+
+/** Die gebauten Kamera-Bausteine, damit ScanScreen sie beim Moduswechsel neu binden kann. */
+private class KameraTeile {
+    var provider: ProcessCameraProvider? = null
+    var preview: Preview? = null
+    var analyse: ImageAnalysis? = null
+    var foto: ImageCapture? = null
 }

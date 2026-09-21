@@ -19,6 +19,9 @@ import { phoneSelectedSet } from './setCodeMatch.js';
 // Verglichen wird die volle Druck-Identitaet, nicht nur der Set-Code: die Sammlung schluesselt auf
 // (id, set_code, language, rarity) -- ein Secret Rare in einen Common zu falten schriebe den
 // falschen Preis fort.
+// Modi, in denen eine Wiederholung "+1" bucht. Alles andere (auch ein fehlendes Feld) verwirft sie.
+const ZUSAMMENFASSEN = new Set(['stapel', 'foto']);
+
 const keyOf = (s) => (s ? `${s.set_code}|${s.set_rarity}|${s.language}` : null);
 
 /**
@@ -82,10 +85,13 @@ export function applyScan(cards, scanned, defaults = FALLBACK_DEFAULTS) {
   if (idx < 0) {
     return [...cards, newEntry(scanned)];
   }
-  // Spec-Fix I2: eine Wiederholung wird nur im Modus "stapel" zusammengefasst. Ist `scanned.mode`
-  // etwas anderes oder fehlt es ganz, bleibt die Liste unveraendert (dieselbe Array-Referenz) --
-  // sicherer, als stillschweigend eine Menge zu erhoehen.
-  if (scanned.mode !== 'stapel') return cards;
+  // Spec-Fix I2: eine Wiederholung wird nur in den Modi "stapel" und "foto" zusammengefasst. Ist
+  // `scanned.mode` etwas anderes oder fehlt es ganz, bleibt die Liste unveraendert (dieselbe
+  // Array-Referenz) -- sicherer, als stillschweigend eine Menge zu erhoehen.
+  // "foto" (21.09.2026): im Fotomodus ist jeder Knopfdruck eine bewusste Aktion, also eine Karte
+  // -- dreimal dieselbe Karte fotografiert heisst drei Stueck (Nutzerentscheid). Der Kotlin-Zwilling
+  // der Entscheidung steht in ScanCapture.onFoto.
+  if (!ZUSAMMENFASSEN.has(scanned.mode)) return cards;
   const card = cards[idx];
   const target = aggregateTarget(card, scanned);
   let updated;
