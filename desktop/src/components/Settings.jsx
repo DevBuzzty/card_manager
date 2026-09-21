@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers, Cpu, UploadCloud } from 'lucide-react';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { KEEP_DEFAULT, keepPerCard } from '../utils/duplicates';
+import { normalizeDiscount, normalizeMinPrice } from '../utils/saleMath';
 import { T } from '../utils/i18n-de';
 import { createBusyGate } from '../utils/busyGate';
 import PriceAlertSettings from './PriceAlertSettings';
@@ -35,6 +36,9 @@ export default function Settings() {
     const [defaults, setDefaults] = useState({ edition: 'unknown', condition: 'NM' });
     // Spec H1 §4: keep_per_card als Text im Eingabefeld; gespeichert wird der normalisierte Wert (ungültig -> 3).
     const [keepInput, setKeepInput] = useState(String(KEEP_DEFAULT));
+    // Spec H2 §9: Preisvorschlag-Einstellungen, gleiche Bauart wie keepInput (Text im Feld, normalisiert beim Speichern).
+    const [discountInput, setDiscountInput] = useState('5');
+    const [minPriceInput, setMinPriceInput] = useState('0,10');
     const [ipAddress, setIpAddress] = useState('…');
     const [catalogStatus, setCatalogStatus] = useState({ lastRun: null, version: 0, bytes: 0 });
     const [catalogResult, setCatalogResult] = useState(null); // { ok, text }
@@ -55,6 +59,8 @@ export default function Settings() {
                     sync_enabled: settings?.sync_enabled ?? 'false',
                 }));
                 setKeepInput(String(keepPerCard(settings?.keep_per_card)));
+                setDiscountInput(String(normalizeDiscount(settings?.sale_discount_percent)));
+                setMinPriceInput((normalizeMinPrice(settings?.sale_min_price) / 100).toFixed(2).replace('.', ','));
             });
             window.api.getDefaults?.().then(d => d && setDefaults(d));
 
@@ -92,6 +98,18 @@ export default function Settings() {
         const k = keepPerCard(keepInput);
         setKeepInput(String(k));
         if (window.api) await window.api.saveSetting({ key: 'keep_per_card', value: String(k) });
+    };
+
+    const saveDiscount = async () => {
+        const n = normalizeDiscount(discountInput);
+        setDiscountInput(String(n));
+        if (window.api) await window.api.saveSetting({ key: 'sale_discount_percent', value: String(n) });
+    };
+
+    const saveMinPrice = async () => {
+        const c = normalizeMinPrice(minPriceInput);
+        setMinPriceInput((c / 100).toFixed(2).replace('.', ','));
+        if (window.api) await window.api.saveSetting({ key: 'sale_min_price', value: (c / 100).toFixed(2) });
     };
 
     const handleSaveSource = async (e) => {
@@ -545,6 +563,19 @@ export default function Settings() {
                             <p className="text-xs text-gray-500 mt-2">Alles über dieser Anzahl je Karte (über alle Printings) erscheint unter „Duplikate“. Ganze Zahl 1–99, Standard 3. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.</p>
                         </div>
                         <SaleChannelSettings />
+                        <div className="mt-6 pt-6 border-t border-gray-800">
+                            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Preisvorschlag: Abschlag in %</label>
+                            <input type="number" min="0" max="90" step="1" value={discountInput}
+                                onChange={e => setDiscountInput(e.target.value)} onBlur={saveDiscount}
+                                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                className="w-24 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-space-violet" />
+                            <label className="block text-sm font-bold text-gray-400 mb-2 mt-4 uppercase tracking-wider">Mindestpreis in €</label>
+                            <input inputMode="decimal" value={minPriceInput}
+                                onChange={e => setMinPriceInput(e.target.value)} onBlur={saveMinPrice}
+                                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                className="w-24 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-space-violet" />
+                            <p className="text-xs text-gray-500 mt-2">Vorschlag = Marktwert minus Abschlag, auf 5 Cent abgerundet, nie unter dem Mindestpreis. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.</p>
+                        </div>
                     </div>
                 )}
 

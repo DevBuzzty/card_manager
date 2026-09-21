@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download } from 'lucide-react';
 import ExportDialog from './ExportDialog';
 import SaleDialog from './SaleDialog';
@@ -6,6 +6,7 @@ import { LOADING, forSaleSummary, forSaleGroups, forSaleHeaderText, copyValueTex
 import { createBusyGate } from '../utils/busyGate';
 import { EDITION_LABELS } from '../utils/valuation';
 import { formatCopyLocation } from '../utils/copyLocation';
+import { marketValueCents, suggestionCents, normalizeDiscount, normalizeMinPrice, euroCentsText } from '../utils/saleMath';
 
 // Spec H1 §5.1 -- Sammlung › Karten › Zum Verkauf. copies: Zeilen aus list-sale-copies (null = laedt), containers fuer
 // den Standort, reload(): Promise, onOpenCard(copy). "Exportieren" oeffnet den F1-Export mit Format Verkaufsliste und
@@ -19,11 +20,34 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
   const [picked, setPicked] = useState(() => new Set());
   const [selling, setSelling] = useState(null); // copyIds | null
   const [undo, setUndo] = useState(null); // { saleId, n }
+  // Spec H2 §9 -- Preisvorschlag: Einstellungen einmal laden, Standard wie saleMath.js.
+  const [rule, setRule] = useState({ discount: 5, minCents: 10 });
+
+  useEffect(() => {
+    window.api?.getSettings?.().then((s) => {
+      setRule({ discount: normalizeDiscount(s?.sale_discount_percent), minCents: normalizeMinPrice(s?.sale_min_price) });
+    });
+  }, []);
 
   const byId = useMemo(() => new Map((copies || []).map((c) => [c.copy_id, c])), [copies]);
   const groups = useMemo(() => (copies ? forSaleGroups(copies) : null), [copies]);
   const summary = useMemo(() => (copies ? forSaleSummary(copies) : null), [copies]);
   const pickedLive = useMemo(() => new Set([...picked].filter((id) => byId.has(id))), [picked, byId]);
+  const suggestionOf = (c) => suggestionCents(marketValueCents(c, c), rule.discount, rule.minCents);
+  // Summe der Vorschlaege der ausgewaehlten Exemplare; null bleibt null (kein gewaehltes Exemplar
+  // hat einen Vorschlag) -- SaleDialog belegt dann selbst mit dem Marktwert vor.
+  const sellingInitialGrossCents = useMemo(() => {
+    if (!selling) return null;
+    let sum = null;
+    for (const id of selling) {
+      const c = byId.get(id);
+      if (!c) continue;
+      const sugg = suggestionOf(c);
+      if (sugg != null) sum = (sum ?? 0) + sugg;
+    }
+    return sum;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selling, byId, rule]);
 
   const giveBack = (copyId) => gate.run(async () => {
     setBusy(true);
@@ -74,7 +98,7 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
         <ExportDialog filterCopyIds={exportIds} initialFormat="salelist" filterLabel="Zum Verkauf" onClose={() => setExportIds(null)} />
       )}
       {selling && (
-        <SaleDialog copyIds={selling} onClose={() => setSelling(null)} onBooked={async (saleId) => {
+        <SaleDialog copyIds={selling} initialGrossCents={sellingInitialGrossCents} onClose={() => setSelling(null)} onBooked={async (saleId) => {
           setUndo({ saleId, n: selling.length });
           setSelling(null);
           setPicked(new Set());
@@ -108,12 +132,14 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
                 <div className="mt-2 space-y-1">
                   {g.copy_ids.map((id) => {
                     const c = byId.get(id);
+                    const sugg = suggestionOf(c);
                     return (
                       <div key={id} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-black/20 border border-gray-800 text-[11px]">
                         <input type="checkbox" checked={pickedLive.has(id)} onChange={() => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; })} aria-label="Für Verkauf auswählen" />
                         <span className="font-mono text-ink-muted">{c.condition} · {EDITION_LABELS[c.edition] || c.edition}</span>
                         <span className="font-mono text-ink-faint truncate">{formatCopyLocation(c, (containers || []).find((ct) => ct.container_id === c.container_id))}</span>
                         <span className="ml-auto font-mono text-gold">{copyValueText(c)}</span>
+                        <span className="font-mono text-ink-muted">Vorschlag {sugg == null ? '–' : euroCentsText(sugg)}</span>
                         <button type="button" onClick={() => giveBack(id)} disabled={busy}
                           className="px-2 py-0.5 rounded text-[11px] bg-obsidian-600 border border-line text-ink-muted hover:text-ink disabled:opacity-50">
                           Zurück in die Sammlung

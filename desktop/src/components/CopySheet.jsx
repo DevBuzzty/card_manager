@@ -3,6 +3,7 @@ import { X, Trash2, AlertCircle } from 'lucide-react';
 import { parseTags, addTag, removeTag } from '../utils/tags';
 import { EDITION_LABELS } from '../utils/valuation';
 import { KIND_LABELS } from '../utils/containerKinds';
+import { suggestionCents, normalizeDiscount, normalizeMinPrice } from '../utils/saleMath';
 import SaleDialog from './SaleDialog';
 
 // Spec B1 §7.3: Das Exemplar-Sheet ist die EINZIGE Stelle, an der Standort, Tags und Notiz eines
@@ -36,7 +37,25 @@ export default function CopySheet({ copy, onClose, onSaved }) {
   const [markingSale, setMarkingSale] = useState(false);
   // Spec H2 §5.1: Spontanverkauf direkt aus dem Sheet, unabhaengig von "Zum Verkauf".
   const [sellingOpen, setSellingOpen] = useState(false);
+  // Spec H2 §9 -- Preisvorschlag als Vorbelegung des Buchungsdialogs. copy traegt hier keine
+  // Preisfelder (copies.cjs#listCopies/#listAllCopies liefern nur die Exemplarspalten), daher der
+  // Umweg ueber previewSale (denselben Marktwert, den SaleDialog sonst selbst nachlaedt); die
+  // Einstellungen laedt das Sheet selbst, nach demselben Muster wie ForSaleList.jsx.
+  const [saleInitialCents, setSaleInitialCents] = useState(null);
   const busyRef = useRef(false); // gleiche Bauart wie Binders.jsx's savingRef -- wirkt synchron, eine State-Flag kaeme zu spaet gegen einen zweiten Klick
+
+  useEffect(() => {
+    let alive = true;
+    if (!copy?.copy_id) return undefined;
+    Promise.all([window.api?.getSettings?.() ?? {}, window.api?.previewSale?.([copy.copy_id]) ?? null])
+      .then(([s, pv]) => {
+        if (!alive || !pv) return;
+        const rule = { discount: normalizeDiscount(s?.sale_discount_percent), minCents: normalizeMinPrice(s?.sale_min_price) };
+        setSaleInitialCents(suggestionCents(pv.marketCents, rule.discount, rule.minCents));
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [copy?.copy_id]);
 
   useEffect(() => {
     let alive = true;
@@ -296,7 +315,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
         </div>
       </div>
       {sellingOpen && (
-        <SaleDialog copyIds={[copy.copy_id]} onClose={() => setSellingOpen(false)} onBooked={() => { setSellingOpen(false); onSaved?.(); onClose?.(); }} />
+        <SaleDialog copyIds={[copy.copy_id]} initialGrossCents={saleInitialCents} onClose={() => setSellingOpen(false)} onBooked={() => { setSellingOpen(false); onSaved?.(); onClose?.(); }} />
       )}
     </div>
   );

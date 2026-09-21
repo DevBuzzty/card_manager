@@ -47,6 +47,16 @@ test('Verkaufsliste: ohne Preis, Einzahl, Tausenderpunkt; leer ohne bekannte Pri
   assert.deepEqual(saleListText([IN.copies[5]]), { text: '', omitted: 1 });
 });
 
+// Spec H2 §9, Plan-Abweichung 6 -- die Preisspalte der Verkaufsliste zeigt den Preisvorschlag
+// (Marktwert minus Abschlag, nie unter dem Mindestpreis), nicht mehr den Marktwert.
+test('Verkaufsliste zeigt den Preisvorschlag (Spec H2 §9, Plan-Abweichung 6)', () => {
+  const cp = { card_id: '1', name: 'Dunkler Magier', set_code: 'LOB-DE005', language: 'DE', rarity: 'Common', edition: 'unlimited', condition: 'NM', price: 2, price_first_ed: null };
+  const { text } = saleListText([cp, { ...cp, price: null }], { discount: 5, minCents: 10 });
+  assert.match(text, /1× Dunkler Magier – LOB-DE005 – Common – Unlimitiert – NM – 1,90 €/);
+  assert.match(text, /– ohne Preis/);
+  assert.match(text, /Summe: 2 Karten · 1,90 €/);
+});
+
 // I1 -- nameEn ruft main.cjs#exportBuild ueber den Katalog auf (fs.statSync je Aufruf); sortGroups darf es daher
 // hoechstens einmal je Gruppe aufrufen, nicht im Comparator (der O(n log n)-mal laeuft). Zaehler-Fake ueber nameEn.
 test('I1: nameEn wird höchstens einmal je Gruppe aufgerufen (Dragon Shield: 6 Gruppen, YGOPRODeck: 4 Gruppen)', () => {

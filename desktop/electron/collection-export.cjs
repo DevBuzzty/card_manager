@@ -2,6 +2,13 @@
 // main.cjs; die Formatierer stehen in carddex-format.cjs und export-formats.cjs.
 const { carddexGroups, writeCarddex } = require('./carddex-format.cjs');
 const { dragonShieldCsv, ygoprodeckCsv, cardmarketWantslist, saleListText, isUnknown } = require('./export-formats.cjs');
+const { normalizeDiscount, normalizeMinPrice } = require('./sales-math.cjs');
+
+// Kein Settings-Zugriff in dieser Datei bisher -- gleiches Fallback-Muster wie main.cjs#getSetting.
+function getSetting(db, key) {
+  try { return db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value; }
+  catch { return null; }
+}
 
 // Dateiname und Endung je Format; die Beschriftungen fuer den Dialog stehen in src/utils/exportScope.js.
 const EXPORT_FORMATS = {
@@ -51,7 +58,8 @@ function buildExport(db, { format, scope } = {}, deps = {}) {
   if (format === 'carddex') return done(writeCarddex(carddexGroups(list)));
   if (format === 'dragonshield') return done(dragonShieldCsv(list, deps.nameEn));
   if (format === 'ygoprodeck') return done(ygoprodeckCsv(list, deps.nameEn));
-  const sale = saleListText(list);
+  const rule = { discount: normalizeDiscount(getSetting(db, 'sale_discount_percent')), minCents: normalizeMinPrice(getSetting(db, 'sale_min_price')) };
+  const sale = saleListText(list, rule);
   return done(sale.text, sale.omitted);
 }
 
