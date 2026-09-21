@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Euro
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -476,6 +477,9 @@ fun ScanScreen(onClose: () -> Unit) {
     val kamera = remember { KameraTeile() }
     val fotoAufnahme = remember { com.example.yugiohscanner.ml.FotoAufnahme(pipeline) }
     var fotoLaeuft by remember { mutableStateOf(false) }
+    // Karten-Info (21.09.2026): die zuletzt fotografierte Karte -- nur im Einzel-Modus.
+    var letzteFotoKarte by remember { mutableStateOf<String?>(null) }
+    var zeigeKartenInfo by remember { mutableStateOf(false) }
 
     fun binde(modus: String) {
         val provider = kamera.provider ?: return
@@ -520,6 +524,7 @@ fun ScanScreen(onClose: () -> Unit) {
                         snackbar.showSnackbar("Keine Karte erkannt")
                     } else {
                         capture.onFoto(erg.passcode.toString(), erg.evidence, erg.frames, erg.editionTexts)
+                        letzteFotoKarte = erg.passcode.toString()
                         tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
                         vibrator?.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
                     }
@@ -787,6 +792,22 @@ fun ScanScreen(onClose: () -> Unit) {
                 } else {
                     Icon(Icons.Default.PhotoCamera, contentDescription = "Foto aufnehmen", modifier = Modifier.size(40.dp))
                 }
+            }
+        }
+
+        // Karten-Info der zuletzt fotografierten Karte -- rechts unten, auf Hoehe des Auslösers.
+        if (scanMode != "stapel" && letzteFotoKarte != null) {
+            FilledTonalIconButton(
+                onClick = { zeigeKartenInfo = true },
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
+                    .padding(end = 24.dp, bottom = 146.dp).size(48.dp),
+            ) {
+                Icon(Icons.Default.Euro, contentDescription = "Karten-Info und Preise")
+            }
+        }
+        if (zeigeKartenInfo) {
+            letzteFotoKarte?.let { pc ->
+                ModalBottomSheet(onDismissRequest = { zeigeKartenInfo = false }) { KartenInfoSheet(pc) }
             }
         }
 
