@@ -6,6 +6,7 @@ import RarityGuide from './RarityGuide';
 import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
 import { matchCandidates, phoneSelectedSet, mapPhoneConfidence } from '../utils/setCodeMatch';
+import { fuelleRarityAusGeschwistern } from '../utils/printingRarity';
 import Flag from './Flag';
 import CopyChip from './CopyChip';
 
@@ -24,7 +25,10 @@ function mergePrintings(cardSets, germanSets, japaneseSets) {
         seen.add(key);
         out.push(s);
     }
-    return out;
+    // Deutsche/japanische Drucke ohne Rarity uebernehmen die ihres gleichnummerigen Geschwisters --
+    // sonst findet die Handy-Meldung ("MAMO-DE072, Ultra Rare") keinen Eintrag, und das Auswahlfeld
+    // bleibt trotz gruener Ampel leer (siehe utils/printingRarity.js).
+    return fuelleRarityAusGeschwistern(out);
 }
 
 const printingKey = (s) => s ? `${s.set_code}|${s.set_rarity}|${s.language}` : '';

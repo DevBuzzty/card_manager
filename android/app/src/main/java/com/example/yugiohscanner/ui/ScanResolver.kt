@@ -4,6 +4,7 @@ import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CardSearchRepository
 import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.PrintingRepository
+import com.example.yugiohscanner.cloud.RarityQuellen
 import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
 import com.example.yugiohscanner.ml.ScanConfidence
@@ -65,7 +66,10 @@ object ScanResolver {
         val knownSets: List<SetOption>
         if (catalogCard != null && catalogSets != null) {
             base = catalogCard.toCardRow()
-            knownSets = catalogSets.map { it.toSetOption() }
+            // Durch RarityQuellen, wie jeder andere Weg auch. Dieser Pfad liest den Katalog DIREKT
+            // und ging bisher an der Korrektur in PrintingRepository vorbei -- im Lauf vom 21.09.
+            // kam deshalb YGOPRODecks Platzhalter "New" als Rarity durch ("Grand Master Rare/New/...").
+            knownSets = RarityQuellen.ohneErfundeneRarity(catalogSets.map { it.toSetOption() })
         } else {
             base = catalogCard?.toCardRow()
                 ?: CardSearchRepository.search(pc).firstOrNull()
@@ -77,7 +81,7 @@ object ScanResolver {
             } ?: run {
                 com.example.yugiohscanner.ml.ScanLog.line("Drucke", "pc=$pc Netz > ${NETZ_WARTEN_MS}ms, Katalog-Drucke genutzt")
                 hintergrund.launch { runCatching { PrintingRepository.fetchAllSets(pc) } }
-                catalogCard?.printings?.map { it.toSetOption() } ?: emptyList()
+                RarityQuellen.ohneErfundeneRarity(catalogCard?.printings?.map { it.toSetOption() } ?: emptyList())
             }
         }
 
