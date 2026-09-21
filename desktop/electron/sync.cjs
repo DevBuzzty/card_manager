@@ -126,6 +126,11 @@ function applyRemoteCopy(db, r) {
   }
   const changed = COPY_COLS.some(c => c !== 'copy_id' && (cur[c] ?? null) !== (l[c] ?? null));
   if (!changed) return;
+  // Abschluss-Fixwelle I3c: ein lokal verkauftes, noch nicht geschobenes Exemplar (updated_at nach dem
+  // Push-Cursor, im lokalen Format wie ceiling) darf eine Cloud-Zeile ohne sold_in nicht zuruecksetzen --
+  // sonst stuende ein Verkauf ohne verkauftes Exemplar da. Der lokale Verkauf gewinnt, der naechste Schub
+  // traegt ihn in die Cloud.
+  if (cur.deleted && cur.sold_in != null && l.sold_in == null && cur.updated_at > ceiling) return;
   l.updated_at = pulledUpdatedAtFor(ceiling, cur.updated_at);
   const sets = COPY_COLS.filter(c => c !== 'copy_id').map(c => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
   db.prepare(`UPDATE card_copies SET ${sets} WHERE copy_id = @copy_id`).run(l);

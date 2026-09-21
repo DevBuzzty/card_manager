@@ -42,7 +42,14 @@ function ensureSalesSchema(db) {
     BEGIN UPDATE sale_items SET updated_at = CURRENT_TIMESTAMP WHERE sale_id = NEW.sale_id AND copy_id = NEW.copy_id; END;
   `);
   const cols = db.prepare('PRAGMA table_info(card_copies)').all().map((c) => c.name);
-  if (!cols.includes('sold_in')) db.exec('ALTER TABLE card_copies ADD COLUMN sold_in TEXT');
+  if (!cols.includes('sold_in')) {
+    db.exec('ALTER TABLE card_copies ADD COLUMN sold_in TEXT');
+    // Rollout-Luecke (Abschluss-Fixwelle I1): ein Desktop ohne diese Spalte hat Handy-Verkaeufe schon als
+    // geloeschte Exemplare OHNE sold_in gezogen; der Pull-Cursor stuende hinter ihnen und holte sold_in nie
+    // nach -- der Verkauf zaehlte am PC nicht. Zeiger loeschen, damit der naechste Abgleich alle Exemplare
+    // neu zieht. Nur einmal, weil die Spalte danach existiert. settings kann (in Tests) fehlen.
+    try { db.prepare("DELETE FROM settings WHERE key = 'sync_copies_last_pull'").run(); } catch { /* keine settings-Tabelle */ }
+  }
   // Feste Kanaele mit altem Stempel: die Cloud legt dieselben Zeilen selbst an, ein Push waere ueberfluessig.
   const ins = db.prepare(`INSERT OR IGNORE INTO sale_channels (channel_id, name, fee_percent, builtin, sort, created_at, updated_at)
     VALUES (?, ?, ?, 1, ?, '1970-01-01 00:00:00', '1970-01-01 00:00:00')`);
