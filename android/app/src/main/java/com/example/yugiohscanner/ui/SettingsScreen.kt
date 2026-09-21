@@ -230,6 +230,45 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
                 style = MaterialTheme.typography.bodySmall, color = Muted)
         }
 
+        // ---- Preisvorschlag (Spec H2 §9 / Abweichung 5) --------------------
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionHeader("Preisvorschlag")
+            Text("Vorschlag beim Verkaufen = Marktwert abzüglich Abschlag, mindestens der Mindestpreis.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
+
+            var discountInput by remember { mutableStateOf(com.example.yugiohscanner.Prefs.saleDiscount(ctx).toString()) }
+            var discountFocused by remember { mutableStateOf(false) }
+            fun saveDiscount() { discountInput = com.example.yugiohscanner.Prefs.setSaleDiscount(ctx, discountInput).toString() }
+            Text("Abschlag (%)", style = MaterialTheme.typography.labelSmall, color = Muted)
+            OutlinedTextField(
+                value = discountInput, onValueChange = { discountInput = it.filter(Char::isDigit).take(2) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { saveDiscount() }),
+                modifier = Modifier.width(96.dp).onFocusChanged { f ->
+                    if (discountFocused && !f.isFocused) saveDiscount()
+                    discountFocused = f.isFocused
+                },
+            )
+            Text("Ganze Zahl 0–90, Standard 5. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
+
+            var minInput by remember { mutableStateOf(String.format(java.util.Locale.GERMANY, "%.2f", com.example.yugiohscanner.Prefs.saleMinCents(ctx) / 100.0)) }
+            var minFocused by remember { mutableStateOf(false) }
+            fun saveMin() { minInput = String.format(java.util.Locale.GERMANY, "%.2f", com.example.yugiohscanner.Prefs.setSaleMinPrice(ctx, minInput) / 100.0) }
+            Text("Mindestpreis (€)", style = MaterialTheme.typography.labelSmall, color = Muted)
+            OutlinedTextField(
+                value = minInput, onValueChange = { minInput = it.filter { c -> c.isDigit() || c == ',' || c == '.' }.take(6) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { saveMin() }),
+                modifier = Modifier.width(96.dp).onFocusChanged { f ->
+                    if (minFocused && !f.isFocused) saveMin()
+                    minFocused = f.isFocused
+                },
+            )
+            Text("0,00–100,00 €, Standard 0,10 €. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
+        }
+
         // ---- Verkaufskanäle (Spec H2 §8) ---------------------------------------
         SaleChannelSettings()
 

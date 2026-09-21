@@ -30,6 +30,7 @@ import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.ml.DuplicateEntry
 import com.example.yugiohscanner.ml.Duplicates
 import com.example.yugiohscanner.ml.SaleCopy
+import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Gold
@@ -208,6 +209,7 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashM
  */
 @Composable
 fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyListState, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
     val (busy, mutate) = rememberMutation { error = it }
     val store by CollectionStore.state.collectAsState()
@@ -233,6 +235,10 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     val summary = remember(data) { Duplicates.forSaleSummary(data.sale) }
     val groups = remember(data) { Duplicates.forSaleGroups(data.sale) }
     val livePicked = picked.filter { data.byId.containsKey(it) }
+    // Spec H2 §9: Vorschlag je Exemplar, einmal je Speicherstand berechnet (nicht bei jeder Neuzeichnung).
+    val suggestions = remember(data) {
+        data.sale.associate { s -> s.copy.copyId to Prefs.saleSuggestion(ctx, s.card?.let { SalesMath.marketValueCents(it, s.copy) }) }
+    }
 
     Column(modifier) {
         Text(Duplicates.forSaleHeaderText(summary), color = OnSurface, style = MaterialTheme.typography.bodyMedium)
@@ -280,6 +286,8 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                         Text(CopyLocation.format(s.copy, containers.find { it.containerId == s.copy.containerId }), color = Muted,
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                        Text(suggestions[id]?.let { "Vorschlag ${SalesMath.euroCentsText(it)}" } ?: "–", color = Muted,
+                                            fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                     }
                                     Text(Duplicates.copyValueText(s), color = Gold, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                     Spacer(Modifier.width(6.dp))

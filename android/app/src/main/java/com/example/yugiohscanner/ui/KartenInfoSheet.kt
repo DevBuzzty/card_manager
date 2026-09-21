@@ -7,18 +7,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CatalogCard
 import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.PrintingRepository
 import com.example.yugiohscanner.cloud.SetOption
 import com.example.yugiohscanner.cloud.StoreState
+import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ui.components.RarityChip
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
+import com.example.yugiohscanner.ui.theme.Muted
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -33,6 +37,7 @@ import java.util.Locale
  */
 @Composable
 fun KartenInfoSheet(passcode: String) {
+    val ctx = LocalContext.current
     val store by CollectionStore.state.collectAsState()
     val besitz = remember((store as? StoreState.Ready)?.cards, passcode) {
         (store as? StoreState.Ready)?.cards?.filter { it.id == passcode && !it.deleted && it.quantity > 0 } ?: emptyList()
@@ -78,15 +83,24 @@ fun KartenInfoSheet(passcode: String) {
             zeilen.isEmpty() -> Text(fehler?.let { "Drucke nicht ladbar: $it" } ?: "Keine Drucke bekannt",
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             else -> zeilen.forEach { z ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${langFlag(z.language)} ${z.setCode}", fontFamily = MonoFontFamily,
-                        style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(150.dp))
-                    Box(Modifier.weight(1f)) { RarityChip(z.rarity) }
-                    if (z.anzahl > 0) {
-                        Text("du hast ${z.anzahl}", style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 6.dp))
+                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${langFlag(z.language)} ${z.setCode}", fontFamily = MonoFontFamily,
+                            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(150.dp))
+                        Box(Modifier.weight(1f)) { RarityChip(z.rarity) }
+                        if (z.anzahl > 0) {
+                            Text("du hast ${z.anzahl}", style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 6.dp))
+                        }
+                        Text(preisText(z), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
                     }
-                    Text(preisText(z), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                    // Task 13: Preisvorschlag je Druck -- ohne Zustandsfaktor, weil die Karten-Info
+                    // je Druck zeigt, nicht je Exemplar (anders als die Verkaufsliste/Karten-Detail).
+                    if (z.anzahl > 0 && z.waehrung == KartenInfo.Waehrung.EUR) {
+                        val vorschlag = Prefs.saleSuggestion(ctx, SalesMath.toCents(z.preis))
+                        Text("Vorschlag ${vorschlag?.let { SalesMath.euroCentsText(it) } ?: "–"} (je NM-Exemplar)",
+                            style = MaterialTheme.typography.labelSmall, color = Muted)
+                    }
                 }
             }
         }

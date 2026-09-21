@@ -8,9 +8,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SaleChannel
 import com.example.yugiohscanner.cloud.SaleHeadInput
@@ -58,6 +60,7 @@ private fun feeLabel(c: SaleChannel): String {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss: () -> Unit, onBooked: (saleId: String, count: Int) -> Unit) {
+    val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val inFlight = remember { InFlight() }
     var busy by remember { mutableStateOf(false) }
@@ -72,6 +75,11 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
     val values = remember(ready, copyIds) { ready?.let { saleValues(it, copyIds) } }
     val missing = ready != null && values == null
     val marketCents = values?.sumOf { it.second }
+    // Spec H2 §9: Vorbelegung mit der Summe der Preisvorschlaege, sofern mindestens ein Exemplar
+    // einen hat -- sonst wie bisher der Marktwert (Task-13-Brief).
+    val suggestionSum = remember(values, ctx) {
+        values?.map { (_, v) -> Prefs.saleSuggestion(ctx, v) }?.let { list -> if (list.any { it != null }) list.sumOf { it ?: 0L } else null }
+    }
 
     val channels = sales.value?.channels ?: emptyList()
     var channelId by remember { mutableStateOf<String?>(null) }
@@ -101,9 +109,9 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
 
     // Vorbelegung wie am PC: Gesamtpreis = initialGrossCents oder Marktwert, Gebuehren = Preis x Kanalgebuehr --
     // je bis der Nutzer das Feld anfasst. Laeuft erneut, sobald Marktwert oder Kanal (nach dem Laden) da sind.
-    LaunchedEffect(marketCents, channel?.channelId, channel?.feePercent) {
+    LaunchedEffect(marketCents, suggestionSum, channel?.channelId, channel?.feePercent) {
         if (!grossTouched) {
-            val g = initialGrossCents ?: marketCents
+            val g = initialGrossCents ?: suggestionSum ?: marketCents
             gross = if (g == null) "" else SaleInput.centsInput(g)
         }
         followFees(channel)
