@@ -190,8 +190,11 @@ function salesOverview(db, { period = 'monat', today } = {}) {
     byMonth: M.byMonth(sales, items, soldInOf, today, 12),
     sales: inPeriod.map((s) => {
       const v = M.saleListValues(s, items, soldInOf);
-      return { ...s, netCents: v.netCents, marketCents: v.marketCents,
-        cards: items.filter((i) => i.sale_id === s.sale_id && !i.deleted).length, doubleSold: doubles.has(s.sale_id) };
+      // Karten wie saleListValues: aktiv -> nur gezaehlte Positionen (Doppelverkauf), sonst alle lebenden.
+      const cards = s.status === 'aktiv' && !s.deleted
+        ? M.countedItems(s, items, soldInOf).length
+        : items.filter((i) => i.sale_id === s.sale_id && !i.deleted).length;
+      return { ...s, netCents: v.netCents, marketCents: v.marketCents, cards, doubleSold: doubles.has(s.sale_id) };
     }),
   };
 }

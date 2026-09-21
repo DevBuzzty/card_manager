@@ -12,7 +12,7 @@ const Row = ({ label, children, className = 'text-ink' }) => (
 
 // Spec H2 §6/§7 -- ein Verkauf mit Positionen; Bearbeiten, Teil-Rückgabe und Storno (nur aktive Verkäufe).
 // Verteilt wird im Hauptprozess (sales.cjs); value_at_sale bleibt eingefroren.
-export default function SaleDetail({ saleId, onClose, onChanged }) {
+export default function SaleDetail({ saleId, doubleSold = false, onClose, onChanged }) {
   const [gate] = useState(createBusyGate);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -101,6 +101,7 @@ export default function SaleDetail({ saleId, onClose, onChanged }) {
                   </div>
                   {sale.note && <div className="text-ink-muted">{sale.note}</div>}
                 </div>
+                {doubleSold && <p className="text-sm text-crit">Karte doppelt verkauft – eine Position zählt beim anderen Verkauf.</p>}
                 <div className="text-sm space-y-0.5 bg-obsidian-800 border border-line rounded-lg p-3">
                   <Row label="Preis">{euroCentsText(toCents(sale.gross) || 0)}</Row>
                   <Row label="Gebühren">{euroCentsText(toCents(sale.fees) || 0)}</Row>

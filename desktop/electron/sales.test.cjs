@@ -130,7 +130,13 @@ test('Doppelverkauf: Storno des einen laesst das Exemplar im anderen verkauft', 
     VALUES ('s2', ?, 3, 5, '1', 'LOB-DE001', 'DE', 'Common', 'unknown', 'NM')`).run(a);
   const ov = S.salesOverview(db, { period: 'gesamt', today: '2026-09-21' });
   assert.deepEqual(ov.sales.filter((s) => s.doubleSold).map((s) => s.sale_id).sort(), [s1, 's2'].sort());
+  const cardsOf = (o, id) => o.sales.find((s) => s.sale_id === id).cards;
+  assert.equal(cardsOf(ov, s1), 1, 'Position zaehlt beim Verkauf, auf den sold_in zeigt');
+  assert.equal(cardsOf(ov, 's2'), 0, 'im anderen Verkauf zaehlt sie nicht');
   S.cancelSale(db, s1);
+  const ov2 = S.salesOverview(db, { period: 'gesamt', today: '2026-09-21' });
+  assert.equal(cardsOf(ov2, s1), 1, 'storniert: alle lebenden Positionen');
+  assert.equal(cardsOf(ov2, 's2'), 1, 'sold_in zeigt jetzt auf s2');
   assert.equal(copy(db, a).deleted, 1, 'bleibt verkauft');
   assert.equal(copy(db, a).sold_in, 's2', 'sold_in wandert zum anderen Verkauf');
 });

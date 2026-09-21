@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import SaleDetail from './SaleDetail';
 import { euroCentsText, diffText } from '../utils/saleMath';
 import { createLatestOnly } from '../utils/busyGate';
@@ -10,6 +10,7 @@ const PERIODS = [{ id: 'monat', label: 'Dieser Monat' }, { id: 'jahr', label: 'D
 const signed = (c) => (c > 0 ? `+${euroCentsText(c)}` : euroCentsText(c));
 const dateText = (iso) => String(iso || '').split('-').reverse().join('.');
 const monthText = (m) => `${m.slice(5, 7)}/${m.slice(2, 4)}`;
+const axisEuro = (v) => `${String(v).replace('.', ',')} €`;
 
 const Tile = ({ label, children, className = 'text-ink' }) => (
   <div className="bg-obsidian-700 border border-line rounded-xl p-4">
@@ -99,10 +100,11 @@ export default function SalesPanel() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.byMonth.map((m) => ({ label: monthText(m.month), euro: m.netCents / 100, cents: m.netCents }))}>
                   <XAxis dataKey="label" stroke="#888" fontSize={11} />
-                  <YAxis stroke="#888" fontSize={11} width={48} />
+                  <YAxis stroke="#888" fontSize={11} width={56} tickFormatter={axisEuro} />
+                  <ReferenceLine y={0} stroke="#666" />
                   <Tooltip contentStyle={{ backgroundColor: '#121212', borderRadius: '8px', border: '1px solid #333' }} itemStyle={{ color: '#fff' }}
                     formatter={(_v, _n, item) => [euroCentsText(item.payload.cents), 'Netto']} />
-                  <Bar dataKey="euro" fill="#9D00FF" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="euro" fill="#9D00FF" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -128,7 +130,7 @@ export default function SalesPanel() {
         </>
       )}
 
-      {openId && <SaleDetail saleId={openId} onClose={() => setOpenId(null)} onChanged={load} />}
+      {openId && <SaleDetail saleId={openId} onClose={() => setOpenId(null)} onChanged={load} doubleSold={!!data?.sales.find((s) => s.sale_id === openId)?.doubleSold} />}
     </div>
   );
 }
