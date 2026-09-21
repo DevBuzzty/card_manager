@@ -216,8 +216,17 @@ object SetCodeMatch {
         // the pooled haystack and can be 0 even when only one frame ever read anything legible.
         val normGroupPrefix = norm(groupPrefix)
         val normGroupNumber = norm(groupNumber)
+        // Ein Bild zaehlt als fehlerfrei, wenn sein roher Text ODER seine grammatik-korrigierte Lesung
+        // den Code exakt traegt. Gemessen am 21.09.2026 an den ersten Fotos des Fotomodus (3072x4096):
+        // die OCR liest die Null direkt hinter der Region meist als Buchstabe O -- "DOOD-ENO96",
+        // "DOOD-ENO96", "DOOD-EN096". SetCodeOcr.extract biegt genau das zurueck (VARIANT_AS_DIGIT:
+        // nur O->0 und Y->1, nur an dieser einen Stelle), und fuer die Abstimmung der Kandidaten gilt
+        // diese Korrektur laengst. Nur hier zaehlte der ROHE Text, und dort kostet O/0 einen halben
+        // Punkt -- drei gute Fotos ergaben "1 Bild", und die Ampel blieb gelb. Mit der Korrektur
+        // haetten alle vier Karten jenes Laufs zwei oder drei Bilder gehabt. Keine Lockerung der
+        // Gruen-Regel: der Code muss weiterhin auf zwei Bildern EXAKT stehen.
         val codeFrameCount = framesEvidence.count { frame ->
-            val frameHay = norm(frame)
+            val frameHay = norm(frame + " " + com.example.yugiohscanner.ml.SetCodeOcr.extract(frame).joinToString(" "))
             frameHay.length >= 4 && prefixNumberDist(normGroupPrefix, normGroupNumber, frameHay) <= 0f
         }
         val codeExactMatch = codeFrameCount >= 1
