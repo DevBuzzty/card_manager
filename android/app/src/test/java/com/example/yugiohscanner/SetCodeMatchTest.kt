@@ -356,4 +356,31 @@ class SetCodeMatchTest {
         val bilder = listOf("DOODENDA", "DOOD-ENO74", "DOOD-ENO74")
         assertEquals(2, SetCodeMatch.best(bilder, known, bilder).codeFrameCount)
     }
+
+    // --- Zaehl-Lesarten, 21.09.2026: woertliche Rohlesungen eines MAMO-Fotolaufs ------------------
+
+    @Test fun `S als 5 gelesen bestaetigt den gewaehlten Code`() {
+        val known = listOf(SetOption("MAMO-DE057", "Ultra Rare", 0.0, "DE"))
+        val bilder = listOf("MAMO-DEOS7", "MAMO-DEOS7", "MAMO-DE0S0")
+        assertEquals(2, SetCodeMatch.best(bilder, known, bilder).codeFrameCount)
+    }
+
+    @Test fun `eine Nummer ganz aus Buchstaben bestaetigt nichts`() {
+        // "MAMO-DEIIS" war DE118; mit S->5 waere daraus DE115 geworden.
+        val known = listOf(SetOption("MAMO-DE115", "Ultra Rare", 0.0, "DE"))
+        val bilder = listOf("MAMO-DEIIS", "MAMO-DEIIS")
+        assertEquals(0, SetCodeMatch.best(bilder, known, bilder).codeFrameCount)
+    }
+
+    @Test fun `ein Leerzeichen am Bindestrich stoert das Zaehlen nicht`() {
+        val known = listOf(SetOption("DOOD-EN077", "Common", 0.0, "EN"))
+        val bilder = listOf("DOOD- ENO77", "DOOD-ENO77")
+        assertEquals(2, SetCodeMatch.best(bilder, known, bilder).codeFrameCount)
+    }
+
+    @Test fun `die Zaehl-Lesarten erreichen die Meldung an den PC nicht`() {
+        // extract() ist, was als gelesener Set-Code an den PC geht und dort eine Karte tauschen kann.
+        assertTrue(com.example.yugiohscanner.ml.SetCodeOcr.extract("MAMO-DEOS7").isEmpty())
+        assertEquals(listOf("MAMO-DE057"), com.example.yugiohscanner.ml.SetCodeOcr.zaehlLesarten("MAMO-DEOS7"))
+    }
 }

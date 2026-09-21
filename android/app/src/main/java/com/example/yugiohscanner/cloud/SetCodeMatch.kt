@@ -226,7 +226,12 @@ object SetCodeMatch {
         // haetten alle vier Karten jenes Laufs zwei oder drei Bilder gehabt. Keine Lockerung der
         // Gruen-Regel: der Code muss weiterhin auf zwei Bildern EXAKT stehen.
         val codeFrameCount = framesEvidence.count { frame ->
-            val frameHay = norm(frame + " " + com.example.yugiohscanner.ml.SetCodeOcr.extract(frame).joinToString(" "))
+            // Dazu die weiteren Zaehl-Lesarten (S->5, I/l->1 ...), siehe SetCodeOcr.zaehlLesarten --
+            // sie duerfen hier einen schon gewaehlten Code bestaetigen, nie einen neuen erfinden.
+            val frameHay = norm(
+                frame + " " + com.example.yugiohscanner.ml.SetCodeOcr.extract(frame).joinToString(" ") +
+                    " " + com.example.yugiohscanner.ml.SetCodeOcr.zaehlLesarten(frame).joinToString(" ")
+            )
             frameHay.length >= 4 && prefixNumberDist(normGroupPrefix, normGroupNumber, frameHay) <= 0f
         }
         val codeExactMatch = codeFrameCount >= 1

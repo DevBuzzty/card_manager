@@ -44,4 +44,38 @@ object SetCodeOcr {
         }
         return codes.toList()
     }
+
+    // --- NUR fuers Zaehlen der Ampel (21.09.2026) -------------------------------------------------
+    //
+    // Die OCR verwechselt in der Kartennummer mehr als nur das O an erster Stelle: gemessen an 39
+    // Rohlesungen eines Fotomodus-Laufs (MAMO, 3072x4096) standen dort "MAMO-DEOS7", "MAMO-DE0S0",
+    // "MAMO-DEl18". Mit dieser Karte gelesen bestaetigen 31 statt 26 Lesungen den Code, und keine
+    // ergibt einen ANDEREN existierenden Code.
+    //
+    // Bewusst NICHT in [extract]: dessen Ergebnis geht als gelesener Set-Code an den PC, und der
+    // tauscht damit notfalls die ganze Karte aus ("der Set-Code schlaegt das Bild"). Eine falsch
+    // korrigierte Nummer koennte dort eine andere Karte einsetzen. Beim Zaehlen kann eine Lesart
+    // dagegen hoechstens einen Code BESTAETIGEN, den der Abgleich schon gewaehlt hat.
+    //
+    // Die Nummer muss mindestens eine echte Ziffer enthalten: "MAMO-DEIIS" (gemeint DE118) waere
+    // sonst zu DE115 geworden -- S steht mal fuer 5, mal fuer 8, und eine Nummer ganz aus
+    // Buchstaben ist keine Lesung, sondern Rauschen. T bleibt aussen vor: es stand fuer 7 UND fuer 1.
+    private val ZAEHL_CODE: Pattern = Pattern.compile("\\b([A-Z0-9]{2,5})\\s*-\\s*([A-Z]{1,2})([A-Z0-9]{2,4})\\b")
+    private val ZIFFER_FUER = mapOf(
+        'O' to '0', 'Q' to '0', 'D' to '0', 'I' to '1', 'L' to '1', 'Y' to '1',
+        'S' to '5', 'B' to '8', 'Z' to '2', 'G' to '6',
+    )
+
+    /** Lesarten fuer den Ampel-Abgleich (siehe oben) -- NICHT fuer die Weitergabe an den PC. */
+    fun zaehlLesarten(text: String): List<String> {
+        val out = LinkedHashSet<String>()
+        val m = ZAEHL_CODE.matcher(text.uppercase(Locale.ROOT))
+        while (m.find()) {
+            val nummer = m.group(3)
+            if (nummer.none { it.isDigit() }) continue
+            val ziffern = nummer.map { ZIFFER_FUER[it] ?: it }.joinToString("")
+            if (ziffern.all { it.isDigit() }) out.add("${m.group(1)}-${m.group(2)}$ziffern")
+        }
+        return out.toList()
+    }
 }
