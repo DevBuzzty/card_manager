@@ -6,6 +6,7 @@ const { rowToRemote, remoteToLocalPatch, remoteToLocalFull, applyRemoteRow,
   containerToRemote, _recentlyPushedContainers, _applyPulledContainers } = require('./sync.cjs');
 const { ensureCopiesSchema } = require('./copies-schema.cjs');
 const { ensureContainersSchema } = require('./containers-schema.cjs');
+const { ensureSalesSchema } = require('./sales-schema.cjs');
 
 // Local SQLite row -> remote upsert payload: booleans, only mirrored columns.
 const local = { id: '1', set_code: 'LOB-EN001', language: 'DE', name: 'X',
@@ -89,10 +90,11 @@ assert.deepStrictEqual(
 {
   const { copyToRemote, remoteToLocalCopy } = require('./sync.cjs');
   const c = copyToRemote({ copy_id: 'u1', card_id: '1', set_code: 'LOB-EN001', language: 'DE', rarity: 'Common', edition: 'first', condition: 'GD',
-    deleted: 0, container_id: null, page: null, slot: null, tags: null, note: null, needs_review: 0, review_reason: null, for_sale: 0, created_at: 'x', updated_at: 'y' });
+    deleted: 0, container_id: null, page: null, slot: null, tags: null, note: null, needs_review: 0, review_reason: null, for_sale: 0, sold_in: 's1', created_at: 'x', updated_at: 'y' });
   assert.strictEqual(c.deleted, false); assert.strictEqual(c.needs_review, false); assert.strictEqual(c.for_sale, false);
   assert.ok(!('updated_at' in c) && !('created_at' in c), 'timestamps are not pushed');
   assert.strictEqual(c.edition, 'first');
+  assert.strictEqual(c.sold_in, 's1');
   const l = remoteToLocalCopy({ copy_id: 'u1', card_id: '1', set_code: 'LOB-EN001', language: 'DE', rarity: 'Common', edition: 'first', condition: 'GD', deleted: true, needs_review: false, for_sale: true, updated_at: 'z' });
   assert.strictEqual(l.deleted, 1); assert.strictEqual(l.for_sale, 1); assert.strictEqual(l.needs_review, 0);
 }
@@ -114,6 +116,7 @@ function freshSyncDb() {
   `);
   ensureCopiesSchema(db); // creates card_copies + price_history; containers' index needs card_copies first
   ensureContainersSchema(db);
+  ensureSalesSchema(db); // adds card_copies.sold_in (Spec H2), like database.cjs does after ensureCopiesSchema
   return db;
 }
 
