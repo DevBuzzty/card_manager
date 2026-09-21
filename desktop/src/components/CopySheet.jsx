@@ -3,6 +3,7 @@ import { X, Trash2, AlertCircle } from 'lucide-react';
 import { parseTags, addTag, removeTag } from '../utils/tags';
 import { EDITION_LABELS } from '../utils/valuation';
 import { KIND_LABELS } from '../utils/containerKinds';
+import SaleDialog from './SaleDialog';
 
 // Spec B1 §7.3: Das Exemplar-Sheet ist die EINZIGE Stelle, an der Standort, Tags und Notiz eines
 // Exemplars geschrieben werden -- kein zweiter Schreibweg irgendwo sonst. Gleiche Ueberlagerung,
@@ -33,6 +34,8 @@ export default function CopySheet({ copy, onClose, onSaved }) {
   // Spec H1 §5.3: Schalter "Zum Verkauf" schreibt sofort (eigener Knopfzustand, dasselbe busyRef wie Speichern/Entfernen).
   const [forSale, setForSale] = useState(!!copy?.for_sale);
   const [markingSale, setMarkingSale] = useState(false);
+  // Spec H2 §5.1: Spontanverkauf direkt aus dem Sheet, unabhaengig von "Zum Verkauf".
+  const [sellingOpen, setSellingOpen] = useState(false);
   const busyRef = useRef(false); // gleiche Bauart wie Binders.jsx's savingRef -- wirkt synchron, eine State-Flag kaeme zu spaet gegen einen zweiten Klick
 
   useEffect(() => {
@@ -267,10 +270,18 @@ export default function CopySheet({ copy, onClose, onSaved }) {
         </div>
 
         <div className="p-6 border-t border-gray-700 bg-[#252525] flex items-center justify-between">
-          <button type="button" onClick={removeExemplar} disabled={removing || saving || markingSale}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-crit hover:bg-crit/10 rounded-lg transition-colors disabled:opacity-50">
-            <Trash2 className="w-3.5 h-3.5" /> {removing ? 'Wird entfernt…' : 'Entfernen'}
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={removeExemplar} disabled={removing || saving || markingSale}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-crit hover:bg-crit/10 rounded-lg transition-colors disabled:opacity-50">
+              <Trash2 className="w-3.5 h-3.5" /> {removing ? 'Wird entfernt…' : 'Entfernen'}
+            </button>
+            {copy?.copy_id && (
+              <button type="button" onClick={() => setSellingOpen(true)} disabled={saving || removing || markingSale}
+                className="px-3 py-2 text-sm text-ink-muted hover:text-ink rounded-lg transition-colors disabled:opacity-50">
+                Verkauft…
+              </button>
+            )}
+          </div>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors">Abbrechen</button>
             <button type="button" onClick={save} disabled={saving || removing || markingSale}
@@ -280,6 +291,9 @@ export default function CopySheet({ copy, onClose, onSaved }) {
           </div>
         </div>
       </div>
+      {sellingOpen && (
+        <SaleDialog copyIds={[copy.copy_id]} onClose={() => setSellingOpen(false)} onBooked={() => { setSellingOpen(false); onSaved?.(); onClose?.(); }} />
+      )}
     </div>
   );
 }
