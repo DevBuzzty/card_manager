@@ -69,7 +69,7 @@ class SalesRepositoryTest {
     @Test fun `Verkaeufe-Seite ohne Filter, Folgeseite nach sale_id`() {
         assertEquals(
             listOf(
-                "select" to "sale_id,sold_on,channel_id,channel_name,gross,fees,shipping,status,note,deleted",
+                "select" to "sale_id,sold_on,channel_id,channel_name,gross,fees,shipping,status,note,created_at,deleted",
                 "deleted" to "eq.false", "order" to "sale_id.asc", "limit" to "1000",
             ),
             SalesRepository.salesPageParams(null),
@@ -99,6 +99,21 @@ class SalesRepositoryTest {
         val got = KeysetPager.all(1000, fetch)
         assertEquals(2500, got.size)
         assertEquals(3, calls) // 1000 + 1000 + 500 (kurz, beendet ohne weitere Anfrage)
+    }
+
+    // Task 11, Controller-Vorgabe 1: Reihenfolge wie sales.cjs#salesOverview (sold_on DESC, created_at DESC, sale_id).
+    @Test fun `displayOrder sortiert nach Datum, am selben Tag nach created_at absteigend, dann sale_id`() {
+        fun row(id: String, on: String, at: String?) = """{"sale_id":"$id","sold_on":"$on","channel_id":"ebay","channel_name":"eBay","gross":1,"fees":null,"shipping":null,"status":"aktiv","note":null,${if (at == null) "\"created_at\":null" else "\"created_at\":\"$at\""},"deleted":false}"""
+        val parsed = SalesRepository.parseSales("[" + listOf(
+            row("a", "2026-09-20", "2026-09-20T08:00:00+00:00"),
+            row("b", "2026-09-21", "2026-09-21T07:00:00+00:00"),
+            row("c", "2026-09-21", "2026-09-21T09:00:00+00:00"),
+            row("e", "2026-09-21", "2026-09-21T08:00:00+00:00"),
+            row("d", "2026-09-21", "2026-09-21T08:00:00+00:00"),
+            row("f", "2026-09-21", null),
+        ).joinToString(",") + "]")
+        assertEquals("2026-09-21T09:00:00+00:00", parsed[2].createdAt)
+        assertEquals(listOf("c", "d", "e", "b", "f", "a"), SalesRepository.displayOrder(parsed).map { it.head.saleId })
     }
 
     // Fix-Runde 1, Befund 3: leerer Fehlerrumpf darf keine leere Meldung ergeben.

@@ -24,12 +24,17 @@ import com.example.yugiohscanner.BuildConfig
 import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CatalogState
 import com.example.yugiohscanner.cloud.CatalogSync
+import com.example.yugiohscanner.cloud.SaleChannel
+import com.example.yugiohscanner.cloud.SalesRepository
+import com.example.yugiohscanner.cloud.SideStores
+import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -225,6 +230,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
                 style = MaterialTheme.typography.bodySmall, color = Muted)
         }
 
+        // ---- Verkaufskanäle (Spec H2 §8) ---------------------------------------
+        SaleChannelSettings()
+
         // ---- Über -------------------------------------------------------------
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionHeader("Über")
@@ -236,5 +244,112 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
                 }
             }
         }
+    }
+}
+
+private fun feeText(v: Double): String =
+    if (v == Math.floor(v)) v.toLong().toString() else v.toString().replace('.', ',')
+
+/**
+ * Spec H2 §8 -- Verkaufskanäle wie am PC (Settings.jsx#SaleChannelSettings): Gebühr je Kanal ändern,
+ * eigene Kanäle anlegen, umbenennen und ausblenden. Feste Kanäle behalten ihren Namen und lassen sich
+ * nicht ausblenden (die Cloud ignorierte es still). Schreibvorgänge durch [InFlight], danach neu laden.
+ */
+@Composable
+private fun SaleChannelSettings() {
+    val scope = rememberCoroutineScope()
+    val inFlight = remember { InFlight() }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val state by SideStores.sales.state.collectAsState()
+    LaunchedEffect(Unit) { SideStores.sales.ensureLoaded() }
+    val channels = state.value?.channels
+    // Entwürfe je Kanal (Name, Gebühr), neu vorbelegt bei jedem Laden -- wie setDrafts am PC.
+    val drafts = remember(channels) {
+        mutableStateMapOf<String, Pair<String, String>>().apply { channels?.forEach { put(it.channelId, it.name to feeText(it.feePercent)) } }
+    }
+    var newName by remember { mutableStateOf("") }
+    var newFee by remember { mutableStateOf("") }
+
+    fun write(action: suspend () -> Unit) {
+        if (!inFlight.tryStart()) return
+        busy = true
+        error = null
+        scope.launch {
+            try {
+                action()
+                SideStores.sales.refreshAndWait()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                error = e.message ?: "Speichern fehlgeschlagen."
+            } finally {
+                inFlight.finish()
+                busy = false
+            }
+        }
+    }
+
+    fun save(c: SaleChannel) {
+        val (name, feeRaw) = drafts[c.channelId] ?: (c.name to feeText(c.feePercent))
+        val fee = SaleInput.parsePercent(feeRaw) ?: run { error = "Die Gebühr muss zwischen 0 und 100 % liegen."; return }
+        write { SalesRepository.saveChannel(c.channelId, if (c.builtin) c.name else name, fee) }
+    }
+
+    fun create() {
+        val fee = SaleInput.parsePercent(newFee) ?: run { error = "Die Gebühr muss zwischen 0 und 100 % liegen."; return }
+        write {
+            SalesRepository.saveChannel(null, newName, fee)
+            newName = ""
+            newFee = ""
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionHeader("Verkaufskanäle")
+        if (channels == null) {
+            if (state.error != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Kanäle konnten nicht geladen werden.", color = ErrorColor, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f))
+                    TextButton(onClick = { SideStores.sales.refresh() }, enabled = !state.loading) { Text("Erneut versuchen") }
+                }
+            } else {
+                Text("…", color = Muted)
+            }
+        } else {
+            channels.forEach { c ->
+                val d = drafts[c.channelId] ?: (c.name to feeText(c.feePercent))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (c.builtin) {
+                        Text(c.name, color = OnSurface, modifier = Modifier.weight(1f))
+                    } else {
+                        OutlinedTextField(value = d.first, onValueChange = { drafts[c.channelId] = it to d.second }, singleLine = true,
+                            modifier = Modifier.weight(1f))
+                    }
+                    OutlinedTextField(value = d.second, onValueChange = { drafts[c.channelId] = d.first to it }, singleLine = true,
+                        isError = SaleInput.parsePercent(d.second) == null, suffix = { Text("%") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(88.dp))
+                    TextButton(onClick = { save(c) }, enabled = !busy, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Speichern") }
+                }
+                if (!c.builtin) {
+                    TextButton(onClick = { write { SalesRepository.hideChannel(c.channelId) } }, enabled = !busy,
+                        contentPadding = PaddingValues(0.dp)) { Text("Ausblenden", color = Muted) }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(value = newName, onValueChange = { newName = it }, placeholder = { Text("Neuer Kanal") }, singleLine = true,
+                    modifier = Modifier.weight(1f))
+                OutlinedTextField(value = newFee, onValueChange = { newFee = it }, placeholder = { Text("0") }, singleLine = true,
+                    isError = SaleInput.parsePercent(newFee) == null, suffix = { Text("%") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(88.dp))
+                TextButton(onClick = { create() }, enabled = !busy && newName.isNotBlank(), contentPadding = PaddingValues(horizontal = 6.dp)) {
+                    Text("Anlegen")
+                }
+            }
+        }
+        error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
+        Text("Gebühren sind vorbelegt – bitte mit deinen eigenen Konditionen abgleichen. Alte Verkäufe behalten den Namen, den der Kanal beim Buchen hatte.",
+            style = MaterialTheme.typography.bodySmall, color = Muted)
     }
 }

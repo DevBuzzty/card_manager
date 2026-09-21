@@ -37,6 +37,7 @@ import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.WishlistRepository
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.SalesOverview
 import com.example.yugiohscanner.ml.Tags
 import com.example.yugiohscanner.ui.components.RarityChip
 import com.example.yugiohscanner.ui.components.SectionHeader
@@ -79,6 +80,17 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
 
     LaunchedEffect(Unit) { SideStores.wishlist.ensureLoaded() }
 
+    // Spec H2 §7: eine komplett verkaufte Karte hat keinen lebenden Druck mehr, die Ansicht bleibt aber
+    // offen, solange der Verkaufs-Speicher Positionen dieser Karte hat (SalesOverview.cardSold -- dieselbe
+    // Auswahl wie CardSoldSection, damit "offen" nie mit einem leeren Abschnitt zusammenfaellt).
+    val salesState by SideStores.sales.state.collectAsState()
+    LaunchedEffect(Unit) { SideStores.sales.ensureLoaded() }
+    val salesData = salesState.value
+    val soldHere = remember(salesData, cardId) { salesData?.let { SalesOverview.cardSold(it, cardId).isNotEmpty() } == true }
+    // "Entschieden" = geladen oder gescheitert, und gerade kein Nachladen (z. B. direkt nach dem Verkauf des
+    // letzten Exemplars, bevor der neue Verkauf im Speicher steht). Gescheitert ohne Wert: soldHere = false.
+    val salesSettled = !salesState.loading && (salesData != null || salesState.error != null)
+
     LaunchedEffect(cardId) {
         catalogCard = withContext(Dispatchers.IO) { runCatching { CatalogRepository.card(cardId) }.getOrNull() }
     }
@@ -91,11 +103,34 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
 
     val base = printings.firstOrNull()
     // Nur schliessen, wenn der Speicher bereit ist und die Karte wirklich keine Drucke mehr hat
-    // (z. B. der letzte wurde geloescht). Ohne Ready zeigt AppNav den Ladebildschirm. Als Effekt,
-    // nicht waehrend der Komposition -- die darf keine Navigation ausloesen.
-    val gone = ready != null && base == null
+    // (z. B. der letzte wurde geloescht) und auch nicht verkauft wurde. Ohne Ready zeigt AppNav den
+    // Ladebildschirm. Als Effekt, nicht waehrend der Komposition -- die darf keine Navigation ausloesen.
+    // Solange ein Exemplar-Sheet offen ist (z. B. Verkauf des letzten Exemplars, das Sheet laedt danach die
+    // Verkaeufe nach), wird nicht geschlossen -- sonst entschiede ein veralteter Verkaufs-Stand.
+    val gone = ready != null && base == null && !soldHere && salesSettled && sheetCopy == null
     LaunchedEffect(gone) { if (gone) onClose() }
-    if (base == null) return
+    if (base == null) {
+        if (ready != null && soldHere) {
+            val soldName = catalogCard?.nameDe
+                ?: salesData?.let { SalesOverview.cardSold(it, cardId).firstOrNull()?.item?.name } ?: cardId
+            Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState())) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück") }
+                    Text(soldName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Nicht mehr in der Sammlung", color = Muted, style = MaterialTheme.typography.bodyMedium)
+                CardSoldSection(cardId)
+            }
+        } else if (ready != null && !gone) {
+            // Die Verkaeufe laden noch -- erst danach steht fest, ob die Ansicht schliesst.
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("…", color = Muted) }
+        }
+        // Ein offenes Exemplar-Sheet (mit Verkaufs-Sheet darueber) bleibt stehen, bis es selbst schliesst --
+        // sonst braeche das Verlassen der Komposition das Nachladen nach dem Verkauf des letzten Exemplars ab.
+        sheetCopy?.let { c -> CopySheet(copy = c, onDismiss = { sheetCopy = null }, onSaved = { scope.launch { refresh() } }) }
+        return
+    }
 
     val displayName = catalogCard?.nameDe ?: base.name ?: base.id
     val displayDesc = catalogCard?.descDe ?: base.desc
@@ -210,6 +245,8 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                 }
             }
         }
+
+        CardSoldSection(cardId)
 
         Spacer(Modifier.height(16.dp))
         AddPrintingSection(base = base, owned = printings, onError = { error = it }, onAdded = { scope.launch { refresh() } })

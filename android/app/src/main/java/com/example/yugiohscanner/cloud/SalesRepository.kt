@@ -15,7 +15,7 @@ import org.json.JSONObject
 import java.util.UUID
 
 /** Zeile aus sales + ihre Notiz (SalesMath.SaleHead selbst kennt keine Notiz -- Zwilling mit sales-math.cjs/saleMath.js). */
-internal data class ParsedSale(val head: SalesMath.SaleHead, val note: String?)
+internal data class ParsedSale(val head: SalesMath.SaleHead, val note: String?, val createdAt: String? = null)
 
 /**
  * Spec H2 §4.2/§8 -- Verkaeufe ueber REST (supabase/sales_schema.sql) plus die Cloud-Funktionen
@@ -52,6 +52,7 @@ object SalesRepository {
                     deleted = o.optBoolean("deleted", false),
                 ),
                 note = if (o.isNull("note")) null else o.getString("note"),
+                createdAt = if (!o.has("created_at") || o.isNull("created_at")) null else o.getString("created_at"),
             )
         }
     }
@@ -110,7 +111,7 @@ object SalesRepository {
     // Keyset-Blaettern ueber mehrere Spalten. sale_channels bleibt eine kleine, eingebaute Liste ohne Blaettern.
     internal fun salesPageParams(after: String?): List<Pair<String, String>> {
         val p = arrayListOf(
-            "select" to "sale_id,sold_on,channel_id,channel_name,gross,fees,shipping,status,note,deleted",
+            "select" to "sale_id,sold_on,channel_id,channel_name,gross,fees,shipping,status,note,created_at,deleted",
             "deleted" to "eq.false",
             "order" to "sale_id.asc",
             "limit" to StoreQueries.PAGE.toString(),
@@ -140,6 +141,19 @@ object SalesRepository {
         return p
     }
 
+    /**
+     * Anzeige-Reihenfolge wie am PC (sales.cjs#salesOverview: `ORDER BY sold_on DESC, created_at DESC, sale_id`):
+     * neuestes Datum zuerst, am selben Tag der zuletzt angelegte zuerst, dann sale_id aufsteigend.
+     * created_at kommt von PostgREST in einheitlichem ISO-Format, daher genuegt der Textvergleich; fehlt es, steht
+     * die Zeile am Ende ihres Tages (wie NULL bei DESC in SQLite).
+     */
+    internal fun displayOrder(parsed: List<ParsedSale>): List<ParsedSale> =
+        parsed.sortedWith(
+            compareByDescending<ParsedSale> { it.head.soldOn }
+                .thenByDescending { it.createdAt ?: "" }
+                .thenBy { it.head.saleId },
+        )
+
     suspend fun load(): SalesData {
         val parsed = KeysetPager.all(StoreQueries.PAGE) { after: ParsedSale? ->
             parseSales(getText("sales", salesPageParams(after?.head?.saleId), "Verkäufe laden"))
@@ -159,9 +173,9 @@ object SalesRepository {
             "Kanäle laden",
         )
 
-        // Anzeige-Reihenfolge (neuestes zuerst) erst nach dem Blaettern herstellen -- die Anfragen selbst
-        // sind nach sale_id sortiert (siehe salesPageParams).
-        val sorted = parsed.sortedWith(compareByDescending<ParsedSale> { it.head.soldOn }.thenByDescending { it.head.saleId })
+        // Anzeige-Reihenfolge erst nach dem Blaettern herstellen -- die Anfragen selbst sind nach sale_id
+        // sortiert (siehe salesPageParams).
+        val sorted = displayOrder(parsed)
         return SalesData(
             sales = sorted.map { it.head },
             notes = sorted.associate { it.head.saleId to it.note },
