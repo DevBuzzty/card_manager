@@ -309,7 +309,8 @@ private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, onClick: ()
             Spacer(Modifier.width(4.dp))
         }
         Text(
-            CopyLocation.format(copy, container),
+            // Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile.
+            if (copy.containerId == null) "ohne Standort" else CopyLocation.format(copy, container),
             style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = Muted,
             maxLines = 1, modifier = Modifier.weight(1f),
         )
