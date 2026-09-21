@@ -1,5 +1,5 @@
 import { ChevronUp, ChevronDown, X, Minus, Plus, Trash2, Tag } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import CustomSelect from './CustomSelect';
 import Flag from './Flag';
@@ -13,6 +13,8 @@ import { printingFromParams, cardRoute, ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
 import { formatCopyLocation } from '../utils/copyLocation';
 import { formatPasscode } from '../utils/passcode';
+import { euroCentsText, toCents } from '../utils/saleMath';
+import { createLatestOnly } from '../utils/busyGate';
 
 export default function CardDetailPanel({ paletteOpen = false }) {
   const params = useParams();
@@ -28,12 +30,23 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   const [copiesByKey, setCopiesByKey] = useState({}); // "set|rarity|lang" -> [copy rows]
   const [containers, setContainers] = useState([]); // fuer den Standort-Chip -- Name/Art je Behaelter
   const [sheetCopy, setSheetCopy] = useState(null); // das im Exemplar-Sheet geoeffnete Exemplar, oder null
+  const [sold, setSold] = useState([]); // Spec H2 §7: verkaufte Exemplare dieser Karte
+  const soldSeq = useRef(createLatestOnly()); // eine spaete Antwort fuer Karte A landet nie bei Karte B
   const vKey = (v) => `${v.set_code}|${v.rarity}|${v.language || 'DE'}`;
   const printingOf = (v) => ({ id: String(card.id), set_code: v.set_code, language: v.language || 'DE', rarity: v.rarity });
+
+  // Spec H2 §7 -- „Verkauft"-Abschnitt; nur die zuletzt gestartete Abfrage darf setzen.
+  const loadSold = (cardId) => {
+    if (!window.api?.cardSales) return;
+    const token = soldSeq.current.start();
+    const apply = (r) => { if (soldSeq.current.isCurrent(token)) setSold(Array.isArray(r) ? r : []); };
+    window.api.cardSales(cardId).then(apply).catch(() => apply([]));
+  };
 
   // Rebuild the grouped card for this passcode from the collection.
   const loadCard = async () => {
     if (!window.api) return;
+    loadSold(printing.id);
     const rows = (await window.api.getCollection()).filter(r => String(r.id) === String(printing.id));
     if (rows.length === 0) { setCard(null); return; }
     const primary = rows.find(r => r.set_code === printing.set_code && r.rarity === printing.rarity
@@ -41,6 +54,13 @@ export default function CardDetailPanel({ paletteOpen = false }) {
     setCard({ ...primary, variants: rows });
   };
   useEffect(() => { loadCard(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [params.id]);
+  // Verkauf/Storno/Abgleich an anderer Stelle: „Verkauft" frisch halten.
+  useEffect(() => {
+    const onChange = () => loadSold(printing.id);
+    const off = window.api?.onSalesChanged?.(onChange);
+    window.addEventListener('collection-dirty', onChange);
+    return () => { off?.(); window.removeEventListener('collection-dirty', onChange); };
+  }, [printing.id]);
 
   // Going back is right when we opened over a page; when /karte/… is the first history entry
   // there is nothing behind it, so fall back to the collection instead of doing nothing.
@@ -405,6 +425,21 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           </div>
       </div>
 
+      {sold.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-300 mb-2">Verkauft</h3>
+          <div className="space-y-1">
+            {sold.map((s) => (
+              <div key={`${s.sale_id}|${s.copy_id}`} className={`flex items-center gap-2 text-[11px] font-mono ${s.status === 'storniert' ? 'line-through text-ink-faint' : 'text-ink-muted'}`}>
+                <span>{s.sold_on.split('-').reverse().join('.')}</span><span>{s.channel_name}</span>
+                <span>{s.set_code} · {s.rarity} · {s.condition}</span>
+                <span className="ml-auto text-gold">{euroCentsText(toCents(s.share))}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="prose prose-invert max-w-none">
           <h3 className="text-lg font-semibold text-gray-300 mb-2">Beschreibung</h3>
           <p className="text-gray-400 leading-relaxed whitespace-pre-wrap font-serif text-base bg-black/20 p-4 rounded-lg border border-gray-800 max-h-[200px] overflow-y-auto custom-scrollbar">
@@ -417,7 +452,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
         <CopySheet
             copy={sheetCopy}
             onClose={() => setSheetCopy(null)}
-            onSaved={() => refreshVariant({ set_code: sheetCopy.set_code, rarity: sheetCopy.rarity, language: sheetCopy.language })}
+            onSaved={() => { refreshVariant({ set_code: sheetCopy.set_code, rarity: sheetCopy.rarity, language: sheetCopy.language }); loadSold(printing.id); }}
         />
     )}
     </>

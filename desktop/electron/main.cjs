@@ -20,6 +20,7 @@ const { alertText } = require('./alert-text.cjs');
 const copies = require('./copies.cjs');
 const { deleteContainer } = require('./containers-schema.cjs');
 const sealed = require('./sealed-items.cjs');
+const sales = require('./sales.cjs');
 const { readSealedProducts, searchSealedProducts, sealedProductsAvailable } = require('./sealed-products.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck, saveDeck } = require('./decks.cjs');
@@ -880,6 +881,32 @@ ipcMain.handle('set-for-sale', (event, d) => {
     try { return { success: true, changed: copies.setForSale(db, d || {}) }; }
     catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'set-for-sale') }; }
 });
+
+// --- Spec H2: Verkaufs-Historie ---
+// Regeln in sales.cjs/sales-math.cjs; hier nur die Kanaele. Erwartete Fehler (SaleError) tragen eine deutsche Meldung.
+function saleErrorMessage(e, channel) {
+    if (e instanceof sales.SaleError) return e.message;
+    console.error(`[${channel}]`, e);
+    return CONTAINER_COPY_ERROR_MSG;
+}
+const saleWrite = (channel, fn) => (event, d) => {
+    try { return { success: true, ...fn(d) }; }
+    catch (e) { return { success: false, error: saleErrorMessage(e, channel) }; }
+};
+const saleRead = (channel, fn) => (event, d) => {
+    try { return fn(d); }
+    catch (e) { throw new Error(saleErrorMessage(e, channel)); }
+};
+ipcMain.handle('sale-channels', saleRead('sale-channels', () => sales.listChannels(db)));
+ipcMain.handle('sale-channel-save', saleWrite('sale-channel-save', (d) => ({ channel_id: sales.saveChannel(db, d || {}) })));
+ipcMain.handle('sale-channel-hide', saleWrite('sale-channel-hide', (id) => { sales.hideChannel(db, id); return {}; }));
+ipcMain.handle('sale-preview', saleRead('sale-preview', (ids) => sales.previewSale(db, ids)));
+ipcMain.handle('sale-book', saleWrite('sale-book', (d) => ({ sale_id: sales.bookSale(db, d || {}) })));
+ipcMain.handle('sale-update', saleWrite('sale-update', (d) => { sales.updateSale(db, d || {}); return {}; }));
+ipcMain.handle('sale-cancel', saleWrite('sale-cancel', (id) => { sales.cancelSale(db, id); return {}; }));
+ipcMain.handle('sales-overview', saleRead('sales-overview', (d) => sales.salesOverview(db, d || {})));
+ipcMain.handle('sale-detail', saleRead('sale-detail', (id) => sales.saleDetail(db, id)));
+ipcMain.handle('card-sales', saleRead('card-sales', (id) => sales.cardSales(db, id)));
 
 // --- Other Handlers ---
 

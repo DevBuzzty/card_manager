@@ -32,7 +32,7 @@ test('Cardmarket-Wantslist: eine Zeile je Wunsch, englischer Name, Rückfall auf
   assert.equal(cardmarketWantslist([], nameEn), '');
 });
 
-test('Verkaufsliste: Stückwert wie die Wertanzeige (1.-Auflage-Preis, Zustandsfaktor), Summe, Unknown weggelassen', () => {
+test('Verkaufsliste: Preisvorschlag je Stück (Marktwert mit 1.-Auflage-Preis und Zustandsfaktor, minus 5 % Abschlag, auf 5 Cent abgerundet), Summe, Unknown weggelassen', () => {
   const { text, omitted } = saleListText(IN.copies);
   assert.ok(!text.startsWith(BOM));
   assert.equal(text, expected('export-verkaufsliste.txt'));
@@ -45,6 +45,16 @@ test('Verkaufsliste: ohne Preis, Einzahl, Tausenderpunkt; leer ohne bekannte Pri
   assert.equal(text, '1× Blauäugiger w. Drache – SDK-DE001 – Ultra Rare – Unlimitiert – GD – ohne Preis\n\nSumme: 1 Karte · 0,00 €\n');
   assert.equal(euroText(1234.5), '1.234,50 €');
   assert.deepEqual(saleListText([IN.copies[5]]), { text: '', omitted: 1 });
+});
+
+// Spec H2 §9, Plan-Abweichung 6 -- die Preisspalte der Verkaufsliste zeigt den Preisvorschlag
+// (Marktwert minus Abschlag, nie unter dem Mindestpreis), nicht mehr den Marktwert.
+test('Verkaufsliste zeigt den Preisvorschlag (Spec H2 §9, Plan-Abweichung 6)', () => {
+  const cp = { card_id: '1', name: 'Dunkler Magier', set_code: 'LOB-DE005', language: 'DE', rarity: 'Common', edition: 'unlimited', condition: 'NM', price: 2, price_first_ed: null };
+  const { text } = saleListText([cp, { ...cp, price: null }], { discount: 5, minCents: 10 });
+  assert.match(text, /1× Dunkler Magier – LOB-DE005 – Common – Unlimitiert – NM – 1,90 €/);
+  assert.match(text, /– ohne Preis/);
+  assert.match(text, /Summe: 2 Karten · 1,90 €/);
 });
 
 // I1 -- nameEn ruft main.cjs#exportBuild ueber den Katalog auf (fs.statSync je Aufruf); sortGroups darf es daher

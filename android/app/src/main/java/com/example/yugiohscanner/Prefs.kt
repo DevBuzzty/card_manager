@@ -3,6 +3,7 @@ package com.example.yugiohscanner
 import android.content.Context
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.ml.Duplicates
+import com.example.yugiohscanner.ml.SalesMath
 
 object Prefs {
     private fun p(ctx: Context) = ctx.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE)
@@ -56,4 +57,25 @@ object Prefs {
     /** Speichert den normalisierten Wert und liefert ihn zurueck (fuer das Eingabefeld). */
     fun setKeepPerCard(ctx: Context, raw: String): Int =
         Duplicates.keepPerCard(raw).also { p(ctx).edit().putString("keep_per_card", it.toString()).apply() }
+
+    /**
+     * Spec H2 §9 / Abweichung 5: Preisvorschlag = Marktwert abzueglich Abschlag, auf 5 Cent
+     * abgerundet, mindestens der Mindestpreis. Abschlag ganze Zahl 0–90 (Standard 5), Mindestpreis
+     * 0,00–100,00 € (Standard 0,10 €). Beide gespeichert als Text, wie keep_per_card, kein Sync.
+     */
+    fun saleDiscount(ctx: Context): Int = SalesMath.normalizeDiscount(p(ctx).getString("sale_discount_percent", null))
+    fun setSaleDiscount(ctx: Context, raw: String): Int =
+        SalesMath.normalizeDiscount(raw).also { p(ctx).edit().putString("sale_discount_percent", it.toString()).apply() }
+
+    fun saleMinCents(ctx: Context): Long = SalesMath.normalizeMinPrice(p(ctx).getString("sale_min_price", null))
+    fun setSaleMinPrice(ctx: Context, raw: String): Long =
+        SalesMath.normalizeMinPrice(raw)
+            .also { p(ctx).edit().putString("sale_min_price", String.format(java.util.Locale.ROOT, "%.2f", it / 100.0)).apply() }
+
+    /** Reine Verbindung ohne Context, fuer PrefsSaleTest. */
+    internal fun suggestionFor(valueCents: Long?, rawDiscount: String?, rawMin: String?): Long? =
+        SalesMath.suggestionCents(valueCents, SalesMath.normalizeDiscount(rawDiscount), SalesMath.normalizeMinPrice(rawMin))
+
+    fun saleSuggestion(ctx: Context, valueCents: Long?): Long? =
+        SalesMath.suggestionCents(valueCents, saleDiscount(ctx), saleMinCents(ctx))
 }

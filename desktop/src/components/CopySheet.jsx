@@ -3,6 +3,8 @@ import { X, Trash2, AlertCircle } from 'lucide-react';
 import { parseTags, addTag, removeTag } from '../utils/tags';
 import { EDITION_LABELS } from '../utils/valuation';
 import { KIND_LABELS } from '../utils/containerKinds';
+import { suggestionCents, normalizeDiscount, normalizeMinPrice } from '../utils/saleMath';
+import SaleDialog from './SaleDialog';
 
 // Spec B1 §7.3: Das Exemplar-Sheet ist die EINZIGE Stelle, an der Standort, Tags und Notiz eines
 // Exemplars geschrieben werden -- kein zweiter Schreibweg irgendwo sonst. Gleiche Ueberlagerung,
@@ -33,7 +35,27 @@ export default function CopySheet({ copy, onClose, onSaved }) {
   // Spec H1 §5.3: Schalter "Zum Verkauf" schreibt sofort (eigener Knopfzustand, dasselbe busyRef wie Speichern/Entfernen).
   const [forSale, setForSale] = useState(!!copy?.for_sale);
   const [markingSale, setMarkingSale] = useState(false);
+  // Spec H2 §5.1: Spontanverkauf direkt aus dem Sheet, unabhaengig von "Zum Verkauf".
+  const [sellingOpen, setSellingOpen] = useState(false);
+  // Spec H2 §9 -- Preisvorschlag als Vorbelegung des Buchungsdialogs. copy traegt hier keine
+  // Preisfelder (copies.cjs#listCopies/#listAllCopies liefern nur die Exemplarspalten), daher der
+  // Umweg ueber previewSale (denselben Marktwert, den SaleDialog sonst selbst nachlaedt); die
+  // Einstellungen laedt das Sheet selbst, nach demselben Muster wie ForSaleList.jsx.
+  const [saleInitialCents, setSaleInitialCents] = useState(null);
   const busyRef = useRef(false); // gleiche Bauart wie Binders.jsx's savingRef -- wirkt synchron, eine State-Flag kaeme zu spaet gegen einen zweiten Klick
+
+  useEffect(() => {
+    let alive = true;
+    if (!copy?.copy_id) return undefined;
+    Promise.all([window.api?.getSettings?.() ?? {}, window.api?.previewSale?.([copy.copy_id]) ?? null])
+      .then(([s, pv]) => {
+        if (!alive || !pv) return;
+        const rule = { discount: normalizeDiscount(s?.sale_discount_percent), minCents: normalizeMinPrice(s?.sale_min_price) };
+        setSaleInitialCents(suggestionCents(pv.marketCents, rule.discount, rule.minCents));
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [copy?.copy_id]);
 
   useEffect(() => {
     let alive = true;
@@ -62,11 +84,15 @@ export default function CopySheet({ copy, onClose, onSaved }) {
 
   // Waehrend das Sheet offen ist, soll Escape nur das Sheet schliessen -- nicht (zusaetzlich)
   // die dahinterliegende CardDetailPanel-Ansicht, die selbst einen globalen Escape-Handler hat.
+  // Solange SaleDialog obendrauf offen ist, gehoert Escape IHM (eigener Handler dort) -- sonst
+  // wuerde ein Druck das ganze Sheet schliessen und den laufenden Verkaufs-Dialog mit wegreissen
+  // (gleiches Muster wie CardDetailPanel.jsx: paletteOpen/sheetCopy).
   useEffect(() => {
+    if (sellingOpen) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, sellingOpen]);
 
   const selectedContainer = containers.find(c => c.container_id === containerId);
   const isBinder = selectedContainer?.kind === 'binder';
@@ -267,10 +293,18 @@ export default function CopySheet({ copy, onClose, onSaved }) {
         </div>
 
         <div className="p-6 border-t border-gray-700 bg-[#252525] flex items-center justify-between">
-          <button type="button" onClick={removeExemplar} disabled={removing || saving || markingSale}
-            className="flex items-center gap-1.5 px-3 py-2 text-sm text-crit hover:bg-crit/10 rounded-lg transition-colors disabled:opacity-50">
-            <Trash2 className="w-3.5 h-3.5" /> {removing ? 'Wird entfernt…' : 'Entfernen'}
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={removeExemplar} disabled={removing || saving || markingSale}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-crit hover:bg-crit/10 rounded-lg transition-colors disabled:opacity-50">
+              <Trash2 className="w-3.5 h-3.5" /> {removing ? 'Wird entfernt…' : 'Entfernen'}
+            </button>
+            {copy?.copy_id && (
+              <button type="button" onClick={() => setSellingOpen(true)} disabled={saving || removing || markingSale}
+                className="px-3 py-2 text-sm text-ink-muted hover:text-ink rounded-lg transition-colors disabled:opacity-50">
+                Verkauft…
+              </button>
+            )}
+          </div>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors">Abbrechen</button>
             <button type="button" onClick={save} disabled={saving || removing || markingSale}
@@ -280,6 +314,9 @@ export default function CopySheet({ copy, onClose, onSaved }) {
           </div>
         </div>
       </div>
+      {sellingOpen && (
+        <SaleDialog copyIds={[copy.copy_id]} initialGrossCents={saleInitialCents} onClose={() => setSellingOpen(false)} onBooked={() => { setSellingOpen(false); onSaved?.(); onClose?.(); }} />
+      )}
     </div>
   );
 }

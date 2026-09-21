@@ -1,6 +1,7 @@
 const assert = require('assert');
 const Database = require('better-sqlite3');
 const { ensureCopiesSchema } = require('./copies-schema.cjs');
+const { ensureSalesSchema } = require('./sales-schema.cjs');
 const { applyRemoteCopy } = require('./sync.cjs');
 
 const db = new Database(':memory:');
@@ -8,6 +9,7 @@ db.exec(`CREATE TABLE cards (id TEXT, quantity INTEGER DEFAULT 1, rarity TEXT DE
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, deleted INTEGER DEFAULT 0, PRIMARY KEY (id,set_code,language,rarity));
   CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY, total_value REAL);`);
 ensureCopiesSchema(db);
+ensureSalesSchema(db); // card_copies.sold_in -- COPY_COLS in sync.cjs schreibt die Spalte
 db.exec("INSERT INTO cards (id, set_code, language, rarity, quantity) VALUES ('1','LOB-DE001','DE','Common',0)");
 const remote = { copy_id: 'u1', card_id: '1', set_code: 'LOB-DE001', language: 'DE', rarity: 'Common', edition: 'unknown', condition: 'NM', deleted: false,
   container_id: null, page: null, slot: null, tags: null, note: null, needs_review: false, review_reason: null, for_sale: false, updated_at: '2026-01-01T00:00:00Z' };

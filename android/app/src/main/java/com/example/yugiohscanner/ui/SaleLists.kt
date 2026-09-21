@@ -23,11 +23,14 @@ import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.SalesRepository
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.ml.DuplicateEntry
 import com.example.yugiohscanner.ml.Duplicates
 import com.example.yugiohscanner.ml.SaleCopy
+import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Gold
@@ -206,10 +209,24 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashM
  */
 @Composable
 fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyListState, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
     var error by remember { mutableStateOf<String?>(null) }
     val (busy, mutate) = rememberMutation { error = it }
     val store by CollectionStore.state.collectAsState()
     val containers = (store as? StoreState.Ready)?.containers ?: emptyList()
+    // Spec H2 §5.1/§5.4: anhaken -> "Verkauft buchen"; danach "Rückgängig" = sofortiges Storno.
+    var picked by remember { mutableStateOf(setOf<String>()) }
+    var selling by remember { mutableStateOf<List<String>?>(null) }
+    var undo by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    val sales by SideStores.sales.state.collectAsState()
+    // Plan-Abweichung 4: Storno gesperrt, solange die Verkaeufe nicht geladen sind oder das letzte Laden scheiterte.
+    val salesOffline = sales.value == null || sales.error != null
+
+    // VOR dem fruehen Return: ein kurzes Flackern des Speichers (data == null) waehrend des Buchens darf
+    // das Sheet nicht aus der Komposition werfen (sein Scope wuerde die laufende Buchung abbrechen).
+    selling?.let {
+        SaleSheet(it, onDismiss = { selling = null }, onBooked = { id, n -> undo = id to n; selling = null; picked = emptySet() })
+    }
 
     if (data == null) {
         Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
@@ -217,9 +234,37 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     }
     val summary = remember(data) { Duplicates.forSaleSummary(data.sale) }
     val groups = remember(data) { Duplicates.forSaleGroups(data.sale) }
+    val livePicked = picked.filter { data.byId.containsKey(it) }
+    // Spec H2 §9: Vorschlag je Exemplar, einmal je Speicherstand berechnet (nicht bei jeder Neuzeichnung).
+    val suggestions = remember(data) {
+        data.sale.associate { s -> s.copy.copyId to Prefs.saleSuggestion(ctx, s.card?.let { SalesMath.marketValueCents(it, s.copy) }) }
+    }
 
     Column(modifier) {
         Text(Duplicates.forSaleHeaderText(summary), color = OnSurface, style = MaterialTheme.typography.bodyMedium)
+        Button(onClick = { selling = livePicked }, enabled = !busy && livePicked.isNotEmpty()) {
+            Text("Verkauft buchen (${livePicked.size})")
+        }
+        undo?.let { (saleId, n) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("$n ${if (n == 1) "Karte" else "Karten"} als verkauft gebucht", color = OnSurface,
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    mutate {
+                        SalesRepository.cancel(saleId)
+                        SideStores.sales.refreshAndWait()
+                        undo = null
+                    }
+                }, enabled = !busy && !salesOffline) { Text("Rückgängig") }
+            }
+            if (salesOffline) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Keine Verbindung – Verkäufe nicht geladen", color = ErrorColor, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f))
+                    TextButton(onClick = { SideStores.sales.refresh() }, enabled = !sales.loading) { Text("Erneut versuchen") }
+                }
+            }
+        }
         error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
         if (groups.isEmpty()) {
             Text("Keine Exemplare zum Verkauf.", color = Muted, modifier = Modifier.padding(top = 16.dp))
@@ -235,11 +280,14 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
                             g.copyIds.forEach { id ->
                                 val s = data.byId[id] ?: return@forEach
                                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(checked = id in picked, onCheckedChange = { picked = if (it) picked + id else picked - id }, enabled = !busy)
                                     Column(Modifier.weight(1f)) {
                                         Text("${s.copy.condition} · ${Valuation.EDITION_LABELS[s.copy.edition] ?: s.copy.edition}", color = OnSurface,
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                         Text(CopyLocation.format(s.copy, containers.find { it.containerId == s.copy.containerId }), color = Muted,
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                        Text(suggestions[id]?.let { "Vorschlag ${SalesMath.euroCentsText(it)}" } ?: "–", color = Muted,
+                                            fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                     }
                                     Text(Duplicates.copyValueText(s), color = Gold, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                     Spacer(Modifier.width(6.dp))

@@ -24,7 +24,11 @@ const F1_CHANNELS = ['import-open', 'import-resolve', 'import-run', 'export-coun
 // Spec H1 §6: Exemplare fuer Duplikate/Verkaufsliste laden, Verkaufsliste umschalten.
 const H1_CHANNELS = ['list-sale-copies', 'set-for-sale'];
 
-for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS]) {
+// Spec H2 §5–§7: Kanaele, Vorschau, Buchen, Bearbeiten, Storno, Uebersicht, Detail, Kartenansicht.
+const H2_CHANNELS = ['sale-channels', 'sale-channel-save', 'sale-channel-hide', 'sale-preview', 'sale-book', 'sale-update',
+  'sale-cancel', 'sales-overview', 'sale-detail', 'card-sales'];
+
+for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS, ...H2_CHANNELS]) {
   test(`Kanal ${ch} steht in main.cjs und preload.cjs`, () => {
     assert.ok(MAIN.includes(`ipcMain.handle('${ch}'`), `main.cjs fehlt ipcMain.handle('${ch}'`);
     assert.ok(PRELOAD.includes(`ipcRenderer.invoke('${ch}'`), `preload.cjs fehlt ipcRenderer.invoke('${ch}'`);

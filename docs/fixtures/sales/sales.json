@@ -1,0 +1,122 @@
+{
+  "_comment": "Spec H2 §5.3/§7/§8/§9 -- gemeinsame Fixture fuer desktop/electron/sales-math.cjs, desktop/src/utils/saleMath.js und android ml/SalesMath.kt. Geld in Cent. soldIn: copy_id -> sale_id, fehlt = null.",
+  "marketValue": [
+    { "name": "NM unlimitiert", "card": { "price": 2.0, "price_first_ed": null }, "copy": { "edition": "unlimited", "condition": "NM" }, "cents": 200 },
+    { "name": "EX Faktor 0,85", "card": { "price": 1.99, "price_first_ed": null }, "copy": { "edition": "unlimited", "condition": "EX" }, "cents": 169 },
+    { "name": "1st Ed nimmt price_first_ed", "card": { "price": 2.0, "price_first_ed": 5.5 }, "copy": { "edition": "first", "condition": "GD" }, "cents": 385 },
+    { "name": "1st Ed ohne price_first_ed nimmt price", "card": { "price": 2.0, "price_first_ed": null }, "copy": { "edition": "first", "condition": "NM" }, "cents": 200 },
+    { "name": "kein Preis", "card": { "price": null, "price_first_ed": null }, "copy": { "edition": "unknown", "condition": "NM" }, "cents": 0 }
+  ],
+  "net": [
+    { "sale": { "gross": 10.0, "fees": 0.5, "shipping": 1.6 }, "cents": 790 },
+    { "sale": { "gross": 10.0, "fees": null, "shipping": null }, "cents": 1000 },
+    { "sale": { "gross": 1.0, "fees": 0.05, "shipping": 1.6 }, "cents": -65 },
+    { "sale": { "gross": 0, "fees": "", "shipping": "" }, "cents": 0 }
+  ],
+  "feeDefault": [
+    { "grossCents": 1000, "percent": 5, "cents": 50 },
+    { "grossCents": 999, "percent": 5, "cents": 50 },
+    { "grossCents": 1234, "percent": 0, "cents": 0 },
+    { "grossCents": 110, "percent": 5, "cents": 6 }
+  ],
+  "distribute": [
+    { "name": "proportional", "net": 1000, "values": [300, 100], "shares": [750, 250] },
+    { "name": "Rest-Cent an die groesste Position", "net": 1000, "values": [100, 100, 100], "shares": [334, 333, 333] },
+    { "name": "Gleichstand: erste groesste bekommt den Rest", "net": 100, "values": [50, 200, 200], "shares": [11, 45, 44] },
+    { "name": "alle 0 -> gleichmaessig", "net": 1000, "values": [0, 0, 0], "shares": [334, 333, 333] },
+    { "name": "negatives Netto", "net": -65, "values": [200, 100], "shares": [-43, -22] },
+    { "name": "eine Position", "net": 790, "values": [0], "shares": [790] }
+  ],
+  "suggestion": [
+    { "name": "5 % Abschlag, auf 5 ct abgerundet", "value": 200, "discount": 5, "min": 10, "cents": 190 },
+    { "name": "abrunden 1,69 -> 1,65", "value": 169, "discount": 0, "min": 10, "cents": 165 },
+    { "name": "nie unter Mindestpreis", "value": 8, "discount": 5, "min": 10, "cents": 10 },
+    { "name": "kein Marktwert -> kein Vorschlag", "value": 0, "discount": 5, "min": 10, "cents": null },
+    { "name": "null -> kein Vorschlag", "value": null, "discount": 5, "min": 10, "cents": null },
+    { "name": "10 % von 12,34", "value": 1234, "discount": 10, "min": 10, "cents": 1110 }
+  ],
+  "normalize": {
+    "discount": [ { "raw": "5", "out": 5 }, { "raw": "", "out": 5 }, { "raw": "-1", "out": 5 }, { "raw": "91", "out": 5 }, { "raw": "12", "out": 12 }, { "raw": "7.5", "out": 5 }, { "raw": null, "out": 5 }, { "raw": "0", "out": 0 } ],
+    "minPrice": [ { "raw": "0,10", "out": 10 }, { "raw": "0.25", "out": 25 }, { "raw": "", "out": 10 }, { "raw": "-1", "out": 10 }, { "raw": "100,01", "out": 10 }, { "raw": "0", "out": 0 }, { "raw": null, "out": 10 }, { "raw": "abc", "out": 10 } ]
+  },
+  "texts": [
+    { "net": 790, "market": 700, "diff": "+0,90 € (+12,9 %)" },
+    { "net": 600, "market": 700, "diff": "−1,00 € (−14,3 %)" },
+    { "net": 500, "market": 0, "diff": "+5,00 €" },
+    { "net": 0, "market": 0, "diff": "±0,00 €" }
+  ],
+  "euro": [ { "cents": 123456, "text": "1.234,56 €" }, { "cents": -65, "text": "−0,65 €" }, { "cents": 0, "text": "0,00 €" } ],
+  "stats": {
+    "today": "2026-09-21",
+    "sales": [
+      { "sale_id": "s1", "sold_on": "2026-09-02", "channel_id": "cardmarket", "channel_name": "Cardmarket", "gross": 10.0, "fees": 0.5, "shipping": 1.6, "status": "aktiv", "deleted": false },
+      { "sale_id": "s2", "sold_on": "2026-08-30", "channel_id": "ebay", "channel_name": "eBay", "gross": 5.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s3", "sold_on": "2026-09-10", "channel_id": "ebay", "channel_name": "eBay", "gross": 50.0, "fees": null, "shipping": null, "status": "storniert", "deleted": false },
+      { "sale_id": "s4", "sold_on": "2025-12-31", "channel_id": "privat", "channel_name": "Privat", "gross": 3.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s5", "sold_on": "2026-09-15", "channel_id": "tausch", "channel_name": "Tausch", "gross": 4.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s6", "sold_on": "2026-09-16", "channel_id": "tausch", "channel_name": "Tausch", "gross": 2.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false }
+    ],
+    "items": [
+      { "sale_id": "s1", "copy_id": "c1", "value_at_sale": 5.0, "share": 5.93, "deleted": false },
+      { "sale_id": "s1", "copy_id": "c2", "value_at_sale": 2.0, "share": 1.97, "deleted": false },
+      { "sale_id": "s1", "copy_id": "c9", "value_at_sale": 1.0, "share": 0.0, "deleted": true },
+      { "sale_id": "s2", "copy_id": "c3", "value_at_sale": 4.0, "share": 5.0, "deleted": false },
+      { "sale_id": "s3", "copy_id": "c4", "value_at_sale": 40.0, "share": 50.0, "deleted": false },
+      { "sale_id": "s4", "copy_id": "c5", "value_at_sale": 3.0, "share": 3.0, "deleted": false },
+      { "sale_id": "s5", "copy_id": "c6", "value_at_sale": 3.0, "share": 4.0, "deleted": false },
+      { "sale_id": "s6", "copy_id": "c6", "value_at_sale": 3.0, "share": 2.0, "deleted": false }
+    ],
+    "soldIn": { "c1": "s1", "c2": "s1", "c3": "s2", "c4": null, "c5": "s4", "c6": "s5" },
+    "doubleSold": ["s5", "s6"],
+    "periods": {
+      "monat": { "netCents": 1190, "marketCents": 1000, "feesCents": 50, "sales": 2, "cards": 3 },
+      "jahr": { "netCents": 1690, "marketCents": 1400, "feesCents": 50, "sales": 3, "cards": 4 },
+      "gesamt": { "netCents": 1990, "marketCents": 1700, "feesCents": 50, "sales": 4, "cards": 5 }
+    },
+    "byChannelGesamt": [
+      { "channel_id": "cardmarket", "channel_name": "Cardmarket", "sales": 1, "netCents": 790, "feesCents": 50, "diffCents": 90 },
+      { "channel_id": "ebay", "channel_name": "eBay", "sales": 1, "netCents": 500, "feesCents": 0, "diffCents": 100 },
+      { "channel_id": "tausch", "channel_name": "Tausch", "sales": 1, "netCents": 400, "feesCents": 0, "diffCents": 100 },
+      { "channel_id": "privat", "channel_name": "Privat", "sales": 1, "netCents": 300, "feesCents": 0, "diffCents": 0 }
+    ],
+    "byMonthLast3": [
+      { "month": "2026-07", "netCents": 0 },
+      { "month": "2026-08", "netCents": 500 },
+      { "month": "2026-09", "netCents": 1190 }
+    ],
+    "listValues": [
+      { "sale_id": "s1", "netCents": 790, "marketCents": 700 },
+      { "sale_id": "s3", "netCents": 5000, "marketCents": 4000 },
+      { "sale_id": "s6", "netCents": 0, "marketCents": 0 }
+    ]
+  },
+  "orphaned": {
+    "_comment": "orphanedSales: aktive, nicht geloeschte Verkaeufe mit mindestens einer lebenden Position, deren Exemplar mit sold_in auf KEINEN aktiven Verkauf zeigt (null, stornierter oder unbekannter Verkauf). s1 normal -> nein; s2 c3 ohne sold_in -> ja; s3 storniert -> nie; s5/s6 Doppelverkauf, c6 zeigt auf aktiven s5 -> nein; s7 c7 zeigt auf stornierten s3 -> ja; s8 c8 zeigt auf unbekannten Verkauf -> ja; s9 geloescht -> nie; s10 nur die zurueckgenommene Position c10 ohne sold_in -> nein.",
+    "sales": [
+      { "sale_id": "s1", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s2", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s3", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "storniert", "deleted": false },
+      { "sale_id": "s5", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s6", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s7", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s8", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s9", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": true },
+      { "sale_id": "s10", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false }
+    ],
+    "items": [
+      { "sale_id": "s1", "copy_id": "c1", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s2", "copy_id": "c2", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s2", "copy_id": "c3", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s3", "copy_id": "c4", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s5", "copy_id": "c6", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s6", "copy_id": "c6", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s7", "copy_id": "c7", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s8", "copy_id": "c8", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s9", "copy_id": "c9", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s10", "copy_id": "c10", "value_at_sale": 1.0, "share": 1.0, "deleted": true },
+      { "sale_id": "s10", "copy_id": "c11", "value_at_sale": 1.0, "share": 1.0, "deleted": false }
+    ],
+    "soldIn": { "c1": "s1", "c2": "s2", "c3": null, "c4": null, "c6": "s5", "c7": "s3", "c8": "sX", "c10": null, "c11": "s10" },
+    "expected": ["s2", "s7", "s8"]
+  }
+}

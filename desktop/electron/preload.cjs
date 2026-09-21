@@ -99,6 +99,19 @@ contextBridge.exposeInMainWorld('api', {
   listSaleCopies: () => ipcRenderer.invoke('list-sale-copies'),
   setForSale: (data) => ipcRenderer.invoke('set-for-sale', data),
 
+  // Spec H2: Verkaeufe
+  listSaleChannels: () => ipcRenderer.invoke('sale-channels'),
+  saveSaleChannel: (data) => ipcRenderer.invoke('sale-channel-save', data),
+  hideSaleChannel: (id) => ipcRenderer.invoke('sale-channel-hide', id),
+  previewSale: (copyIds) => ipcRenderer.invoke('sale-preview', copyIds),
+  bookSale: (data) => ipcRenderer.invoke('sale-book', data),
+  updateSale: (data) => ipcRenderer.invoke('sale-update', data),
+  cancelSale: (saleId) => ipcRenderer.invoke('sale-cancel', saleId),
+  salesOverview: (data) => ipcRenderer.invoke('sales-overview', data),
+  saleDetail: (saleId) => ipcRenderer.invoke('sale-detail', saleId),
+  cardSales: (cardId) => ipcRenderer.invoke('card-sales', cardId),
+  onSalesChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('sales-changed', s); return () => ipcRenderer.removeListener('sales-changed', s); },
+
   // Wishlist
   getWishlist: () => ipcRenderer.invoke('get-wishlist'),
   addToWishlist: (card) => ipcRenderer.invoke('add-to-wishlist', card),

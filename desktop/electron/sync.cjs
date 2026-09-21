@@ -6,6 +6,7 @@ const { toUtcMillis } = require('./sealed-value.cjs');
 const { CONTAINER_COLS, clearContainerLocations } = require('./containers-schema.cjs');
 const { mergeRemotePriceHistory } = require('./price-history.cjs');
 const { nextNotification, openSignature } = require('./alert-notify.cjs');
+const { CHANNEL_COLS, SALE_COLS, ITEM_COLS } = require('./sales-schema.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
@@ -17,7 +18,7 @@ const MIRROR_COLS = ['id', 'set_code', 'language', 'name', 'type', 'desc',
   'rarity', 'price', 'deleted', 'cm_product_id', 'price_locked', 'price_first_ed', 'cm_first_ed_factor'];
 
 const COPY_COLS = ['copy_id', 'card_id', 'set_code', 'language', 'rarity', 'edition', 'condition', 'deleted',
-  'container_id', 'page', 'slot', 'tags', 'note', 'needs_review', 'review_reason', 'for_sale'];
+  'container_id', 'page', 'slot', 'tags', 'note', 'needs_review', 'review_reason', 'for_sale', 'sold_in'];
 const COPY_BOOLS = new Set(['deleted', 'needs_review', 'for_sale']);
 
 // CONTAINER_COLS (from containers-schema.cjs) is the full local column set -- used as-is only for
@@ -125,6 +126,11 @@ function applyRemoteCopy(db, r) {
   }
   const changed = COPY_COLS.some(c => c !== 'copy_id' && (cur[c] ?? null) !== (l[c] ?? null));
   if (!changed) return;
+  // Abschluss-Fixwelle I3c: ein lokal verkauftes, noch nicht geschobenes Exemplar (updated_at nach dem
+  // Push-Cursor, im lokalen Format wie ceiling) darf eine Cloud-Zeile ohne sold_in nicht zuruecksetzen --
+  // sonst stuende ein Verkauf ohne verkauftes Exemplar da. Der lokale Verkauf gewinnt, der naechste Schub
+  // traegt ihn in die Cloud.
+  if (cur.deleted && cur.sold_in != null && l.sold_in == null && cur.updated_at > ceiling) return;
   l.updated_at = pulledUpdatedAtFor(ceiling, cur.updated_at);
   const sets = COPY_COLS.filter(c => c !== 'copy_id').map(c => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
   db.prepare(`UPDATE card_copies SET ${sets} WHERE copy_id = @copy_id`).run(l);
@@ -240,6 +246,60 @@ function applyRemoteSealed(db, r) {
   l.updated_at = pulledUpdatedAtFor(ceiling, cur.updated_at);
   const sets = SEALED_SYNC_COLS.filter(c => c !== 'sealed_id').map(c => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
   db.prepare(`UPDATE sealed_items SET ${sets} WHERE sealed_id = @sealed_id`).run(l);
+}
+
+// Spec H2 §4.3 — Verkaeufe, Positionen und Kanaele als drei weitere Stroeme, gebaut wie Sealed (G3).
+// created_at/updated_at wandern aus denselben Gruenden wie bei CONTAINER_PUSH_COLS in keine Richtung mit.
+const noStamps = (cols) => cols.filter((c) => c !== 'updated_at' && c !== 'created_at');
+const SALES_STREAMS = {
+  sale_channels: { cols: noStamps(CHANNEL_COLS), bools: new Set(['builtin', 'deleted']), key: ['channel_id'], cursor: 'sync_sale_channels' },
+  sales: { cols: noStamps(SALE_COLS), bools: new Set(['deleted']), key: ['sale_id'], cursor: 'sync_sales' },
+  sale_items: { cols: noStamps(ITEM_COLS), bools: new Set(['was_for_sale', 'deleted']), key: ['sale_id', 'copy_id'], cursor: 'sync_sale_items' },
+};
+const recentlyPushedSalesByTable = { sale_channels: new Map(), sales: new Map(), sale_items: new Map() };
+const echoKey = (table, r) => SALES_STREAMS[table].key.map((k) => String(r[k])).join('|');
+
+function salesRowToRemote(table, row) {
+  const s = SALES_STREAMS[table]; const out = {};
+  for (const c of s.cols) out[c] = s.bools.has(c) ? !!row[c] : (row[c] ?? null);
+  return out;
+}
+function remoteToLocalSalesRow(table, r) {
+  const s = SALES_STREAMS[table]; const out = {};
+  for (const c of s.cols) out[c] = s.bools.has(c) ? (r[c] ? 1 : 0) : (r[c] ?? null);
+  for (const k of ['gross', 'fees', 'shipping', 'value_at_sale', 'share', 'fee_percent']) if (k in out && out[k] != null) out[k] = Number(out[k]);
+  if ('sold_on' in out && out.sold_on) out.sold_on = String(out.sold_on).slice(0, 10);
+  return out;
+}
+function applyRemoteSalesRow(db, table, r) {
+  const s = SALES_STREAMS[table];
+  const l = remoteToLocalSalesRow(table, r);
+  const where = s.key.map((k) => `${k} = @${k}`).join(' AND ');
+  const cur = db.prepare(`SELECT * FROM ${table} WHERE ${where}`).get(l);
+  const ceiling = pulledUpdatedAtCeiling(db, `${s.cursor}_last_push`);
+  if (!cur) {
+    l.updated_at = ceiling;
+    db.prepare(`INSERT INTO ${table} (${s.cols.join(',')}, updated_at) VALUES (${s.cols.map((c) => '@' + c).join(',')}, @updated_at)`).run(l);
+    return;
+  }
+  if (!s.cols.some((c) => !s.key.includes(c) && (cur[c] ?? null) !== (l[c] ?? null))) return;
+  l.updated_at = pulledUpdatedAtFor(ceiling, cur.updated_at);
+  const sets = s.cols.filter((c) => !s.key.includes(c)).map((c) => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
+  db.prepare(`UPDATE ${table} SET ${sets} WHERE ${where}`).run(l);
+}
+function applyPulledSalesRows(db, table, rows) {
+  let applied = 0;
+  const echo = recentlyPushedSalesByTable[table];
+  for (const r of rows) {
+    const k = echoKey(table, r);
+    if (echo.get(k) === r.updated_at) { echo.delete(k); continue; }
+    applyRemoteSalesRow(db, table, r);
+    applied++;
+  }
+  return applied;
+}
+function salesPushRows(db, table, cursor) {
+  return db.prepare(`SELECT * FROM ${table} WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')`).all(cursor);
 }
 
 function getSetting(db, key) {
@@ -522,6 +582,51 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     catch (e) { console.error('[sync] sealed push:', e.message); }
   }
 
+  async function pullSalesTable(c, table) {
+    const s = SALES_STREAMS[table];
+    const cursor = getSetting(db, `${s.cursor}_last_pull`) || '1970-01-01T00:00:00Z';
+    const PAGE = 1000; let applied = 0; let lastTs = null;
+    for (let from = 0; ; from += PAGE) {
+      let q = c.from(table).select('*').gt('updated_at', cursor).order('updated_at', { ascending: true });
+      for (const k of s.key) q = q.order(k, { ascending: true });
+      const { data, error } = await q.range(from, from + PAGE - 1);
+      if (error) throw new Error(`Pull ${table} failed: ` + error.message);
+      if (!data || data.length === 0) break;
+      db.transaction(() => { applied += applyPulledSalesRows(db, table, data); })();
+      lastTs = data[data.length - 1].updated_at;
+      if (data.length < PAGE) break;
+    }
+    if (lastTs) setSetting(db, `${s.cursor}_last_pull`, lastTs);
+    return applied;
+  }
+  async function pushSalesTable(c, table) {
+    const s = SALES_STREAMS[table];
+    const cursor = getSetting(db, `${s.cursor}_last_push`) || '1970-01-01T00:00:00Z';
+    const changed = salesPushRows(db, table, cursor);
+    if (changed.length === 0) return;
+    for (let i = 0; i < changed.length; i += 500) {
+      const { data, error } = await c.from(table)
+        .upsert(changed.slice(i, i + 500).map((r) => salesRowToRemote(table, r)), { onConflict: s.key.join(',') })
+        .select(`${s.key.join(',')},updated_at`);
+      if (error) throw new Error(`Push ${table} failed: ` + error.message);
+      for (const r of (data || [])) recentlyPushedSalesByTable[table].set(echoKey(table, r), r.updated_at);
+    }
+    setSetting(db, `${s.cursor}_last_push`, changed.reduce((m, r) => (r.updated_at > m ? r.updated_at : m), cursor));
+  }
+  // Spec H2 §4.3: fehlen die Cloud-Tabellen (SQL nicht eingespielt), laufen alle anderen Stroeme weiter.
+  async function pullSalesSafe(c) {
+    let n = 0;
+    for (const t of ['sale_channels', 'sales', 'sale_items']) {
+      try { n += await pullSalesTable(c, t); } catch (e) { console.error(`[sync] ${t} pull:`, e.message); }
+    }
+    return n;
+  }
+  async function pushSalesSafe(c) {
+    for (const t of ['sale_channels', 'sales', 'sale_items']) {
+      try { await pushSalesTable(c, t); } catch (e) { console.error(`[sync] ${t} push:`, e.message); }
+    }
+  }
+
   // Spec G1 §4.12 — the daily cloud Edge Function writes source='cloud' rows the desktop would
   // otherwise never see; pull them first (INSERT OR IGNORE via mergeRemotePriceHistory, so an
   // existing local row with the same key is left untouched), then push local rows as before.
@@ -625,10 +730,12 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       const pulledCopies = await pullCopies(c);
       // Spec G3 §7.1: Sealed als vierter Strom nach den Exemplaren, in beide Richtungen; nie fatal.
       const pulledSealed = await pullSealedSafe(c);
+      const pulledSales = await pullSalesSafe(c);
       await push(c);
       await pushContainers(c);
       await pushCopies(c);
       await pushSealedSafe(c);
+      await pushSalesSafe(c);
       await pullPriceHistory(c);
       await pushPriceHistory(c);
       await syncSnapshot(c);
@@ -641,7 +748,8 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
         const w = getWindow(); if (w) w.webContents.send('sealed-changed');
         try { recordPortfolioValue(db); } catch (e) { console.error('[sync] recordPortfolioValue:', e.message); }
       }
-      const totalPulled = pulledCollection + pulledSealed;
+      if (pulledSales > 0) { const w = getWindow(); if (w) w.webContents.send('sales-changed'); }
+      const totalPulled = pulledCollection + pulledSealed + pulledSales;
       emit('idle', totalPulled > 0 ? `pulled ${totalPulled}` : 'up to date');
     } catch (e) {
       // Only drop the session on auth/token failures; keep it through transient
@@ -668,6 +776,16 @@ module.exports = {
   copyToRemote, remoteToLocalCopy, applyRemoteCopy,
   containerToRemote, remoteToLocalContainer, applyRemoteContainer,
   sealedToRemote, remoteToLocalSealed, applyRemoteSealed,
+  saleToRemote: (r) => salesRowToRemote('sales', r), remoteToLocalSale: (r) => remoteToLocalSalesRow('sales', r),
+  itemToRemote: (r) => salesRowToRemote('sale_items', r), remoteToLocalItem: (r) => remoteToLocalSalesRow('sale_items', r),
+  channelToRemote: (r) => salesRowToRemote('sale_channels', r), remoteToLocalChannel: (r) => remoteToLocalSalesRow('sale_channels', r),
+  _applyPulledSales: (db, rows) => applyPulledSalesRows(db, 'sales', rows),
+  _applyPulledItems: (db, rows) => applyPulledSalesRows(db, 'sale_items', rows),
+  _applyPulledChannels: (db, rows) => applyPulledSalesRows(db, 'sale_channels', rows),
+  _recentlyPushedSales: recentlyPushedSalesByTable.sales,
+  _recentlyPushedItems: recentlyPushedSalesByTable.sale_items,
+  _recentlyPushedChannels: recentlyPushedSalesByTable.sale_channels,
+  _salesPushRows: salesPushRows,
   // Test-only hooks into the containers echo-lock (see test-sync.cjs): the module-level map and
   // apply function that pullContainers itself uses internally. Not called by production code
   // outside sync.cjs; calling startSync() just to reach them would also start its real timers.
