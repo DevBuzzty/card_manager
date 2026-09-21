@@ -232,16 +232,20 @@ object SalesRepository {
         rpc("cancel_sale", JSONObject().put("p_sale_id", saleId))
     }
 
-    suspend fun saveChannel(channelId: String?, name: String, feePercent: Double) {
+    /** Legt einen Kanal an ([channelId] null) oder aendert ihn. Gibt die channel_id zurueck (neu vergeben oder [channelId]). */
+    suspend fun saveChannel(channelId: String?, name: String, feePercent: Double): String {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) throw IllegalArgumentException("Der Kanal braucht einen Namen.")
         if (feePercent.isNaN() || feePercent < 0 || feePercent > 100) throw IllegalArgumentException("Die Gebühr muss zwischen 0 und 100 % liegen.")
         if (channelId == null) {
-            val body = JSONObject().put("channel_id", UUID.randomUUID().toString()).put("name", trimmed).put("fee_percent", feePercent)
+            val id = UUID.randomUUID().toString()
+            val body = JSONObject().put("channel_id", id).put("name", trimmed).put("fee_percent", feePercent)
             post("sale_channels", body, "Kanal speichern")
+            return id
         } else {
             val body = JSONObject().put("name", trimmed).put("fee_percent", feePercent)
             patch("sale_channels", listOf("channel_id" to "eq.$channelId", "deleted" to "eq.false"), body, "Kanal speichern")
+            return channelId
         }
     }
 

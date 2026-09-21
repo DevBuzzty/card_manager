@@ -44,6 +44,17 @@ class SaleInputTest {
         assertEquals(1250L, Math.round(SaleInput.parseMoney(SaleInput.centsInput(1250))!! * 100))
     }
 
+    @Test fun gebuehrProzent() {
+        assertEquals(5.0, SaleInput.parsePercent("5")!!, 0.0)
+        assertEquals(2.5, SaleInput.parsePercent("2,5")!!, 0.0)
+        assertEquals(2.5, SaleInput.parsePercent("2.5")!!, 0.0)
+        assertEquals(0.0, SaleInput.parsePercent("")!!, 0.0)
+        assertEquals(100.0, SaleInput.parsePercent("100")!!, 0.0)
+        assertNull(SaleInput.parsePercent("100,01"))
+        assertNull(SaleInput.parsePercent("-1"))
+        assertNull(SaleInput.parsePercent("x"))
+    }
+
     @Test fun datum() {
         assertTrue(SaleInput.dateOk("2026-09-21"))
         assertFalse(SaleInput.dateOk("2026-9-21"))

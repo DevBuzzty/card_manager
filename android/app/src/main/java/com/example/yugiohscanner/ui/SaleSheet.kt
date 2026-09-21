@@ -59,7 +59,10 @@ private fun feeLabel(c: SaleChannel): String {
 @Composable
 fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss: () -> Unit, onBooked: (saleId: String, count: Int) -> Unit) {
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val inFlight = remember { InFlight() }
+    var busy by remember { mutableStateOf(false) }
+    // Waehrend gebucht wird, laesst sich das Sheet auch per Wischen nicht schliessen.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !busy })
     val sales by SideStores.sales.state.collectAsState()
     LaunchedEffect(Unit) { SideStores.sales.ensureLoaded() }
     val offline = sales.value == null || sales.error != null
@@ -74,6 +77,11 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
     var channelId by remember { mutableStateOf<String?>(null) }
     val channel = channels.find { it.channelId == channelId } ?: channels.find { it.channelId == "cardmarket" } ?: channels.firstOrNull()
     var channelOpen by remember { mutableStateOf(false) }
+    // Spec H2 §5.2 "Neuer Kanal…": Mini-Formular unter der Kanal-Auswahl.
+    var newChannelOpen by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+    var newFee by remember { mutableStateOf("") }
+    var newError by remember { mutableStateOf<String?>(null) }
 
     val today = remember { LocalDate.now().toString() }
     var date by remember { mutableStateOf(today) }
@@ -84,8 +92,6 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
     var shipping by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
 
-    val inFlight = remember { InFlight() }
-    var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     fun grossCents() = SalesMath.toCents(SaleInput.parseMoney(gross)) ?: 0L
@@ -108,8 +114,37 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
     val grossOk = SaleInput.moneyOk(gross, required = true)
     val feesOk = SaleInput.moneyOk(fees, required = false)
     val shippingOk = SaleInput.moneyOk(shipping, required = false)
+    // Platzhalter statt "0,00 €", solange Marktwert oder Betraege nicht feststehen.
+    val netKnown = marketCents != null && grossOk && feesOk && shippingOk
     val canBook = !busy && !offline && ready != null && !missing && channel != null && copyIds.isNotEmpty() &&
         dateOk && grossOk && feesOk && shippingOk
+
+    fun createChannel() {
+        val fee = SaleInput.parsePercent(newFee)
+        if (fee == null) { newError = "Die Gebühr muss zwischen 0 und 100 % liegen."; return }
+        if (!inFlight.tryStart()) return
+        busy = true
+        newError = null
+        scope.launch {
+            try {
+                val id = SalesRepository.saveChannel(null, newName, fee)
+                SideStores.sales.refreshAndWait()
+                channelId = id
+                newChannelOpen = false
+                newName = ""
+                newFee = ""
+                // Gebuehren folgen dem neuen Kanal, sofern unberuehrt (der LaunchedEffect oben zieht bei Kanalwechsel ohnehin nach).
+                followFees(SideStores.sales.state.value.value?.channels?.find { it.channelId == id })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                newError = e.message ?: "Kanal speichern fehlgeschlagen."
+            } finally {
+                inFlight.finish()
+                busy = false
+            }
+        }
+    }
 
     fun book() {
         val chosen = channel?.channelId ?: return
@@ -176,7 +211,7 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
                 }
             }
             if (ready == null) Text("Sammlung ist nicht geladen.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
-            if (missing) Text("Karte nicht mehr in der Sammlung", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+            if (missing && !busy) Text("Karte nicht mehr in der Sammlung", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
 
             ExposedDropdownMenuBox(expanded = channelOpen, onExpandedChange = { if (channels.isNotEmpty()) channelOpen = it }) {
                 OutlinedTextField(
@@ -192,6 +227,26 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
                             channelOpen = false
                             followFees(c)
                         })
+                    }
+                    if (channels.isNotEmpty()) {
+                        DropdownMenuItem(text = { Text("Neuer Kanal…") }, onClick = { channelOpen = false; newChannelOpen = true; newError = null })
+                    }
+                }
+            }
+            if (newChannelOpen) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Name") }, singleLine = true,
+                            modifier = Modifier.weight(2f))
+                        OutlinedTextField(value = newFee, onValueChange = { newFee = it }, label = { Text("Gebühr %") }, singleLine = true,
+                            isError = SaleInput.parsePercent(newFee) == null,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+                    }
+                    newError?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { newChannelOpen = false; newError = null }, enabled = !busy) { Text("Abbrechen") }
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = { createChannel() }, enabled = !busy && !offline && newName.isNotBlank()) { Text("Anlegen") }
                     }
                 }
             }
@@ -220,12 +275,14 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
             OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Notiz") }, modifier = Modifier.fillMaxWidth())
 
             Column {
-                Text("Netto ${SalesMath.euroCentsText(net)}", color = OnSurface, fontFamily = MonoFontFamily)
-                if (marketCents != null) {
+                Text("Netto ${if (netKnown) SalesMath.euroCentsText(net) else "…"}", color = OnSurface, fontFamily = MonoFontFamily)
+                if (netKnown && marketCents != null) {
                     Text("${SalesMath.diffText(net, marketCents)} gegenüber Marktwert",
                         color = if (net >= marketCents) Good else ErrorColor, fontFamily = MonoFontFamily, style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text("… gegenüber Marktwert", color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.bodySmall)
                 }
-                if (net < 0) Text("Verlust: Gebühren und Versand übersteigen den Preis.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+                if (netKnown && net < 0) Text("Verlust: Gebühren und Versand übersteigen den Preis.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
             }
 
             error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }

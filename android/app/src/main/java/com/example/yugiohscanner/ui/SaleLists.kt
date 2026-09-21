@@ -220,6 +220,12 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     // Plan-Abweichung 4: Storno gesperrt, solange die Verkaeufe nicht geladen sind oder das letzte Laden scheiterte.
     val salesOffline = sales.value == null || sales.error != null
 
+    // VOR dem fruehen Return: ein kurzes Flackern des Speichers (data == null) waehrend des Buchens darf
+    // das Sheet nicht aus der Komposition werfen (sein Scope wuerde die laufende Buchung abbrechen).
+    selling?.let {
+        SaleSheet(it, onDismiss = { selling = null }, onBooked = { id, n -> undo = id to n; selling = null; picked = emptySet() })
+    }
+
     if (data == null) {
         Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
         return
@@ -245,7 +251,13 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
                     }
                 }, enabled = !busy && !salesOffline) { Text("Rückgängig") }
             }
-            if (salesOffline) Text("Keine Verbindung – Verkäufe nicht geladen", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+            if (salesOffline) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Keine Verbindung – Verkäufe nicht geladen", color = ErrorColor, style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f))
+                    TextButton(onClick = { SideStores.sales.refresh() }, enabled = !sales.loading) { Text("Erneut versuchen") }
+                }
+            }
         }
         error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
         if (groups.isEmpty()) {
@@ -281,9 +293,5 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
                 }
             }
         }
-    }
-
-    selling?.let {
-        SaleSheet(it, onDismiss = { selling = null }, onBooked = { id, n -> undo = id to n; selling = null; picked = emptySet() })
     }
 }

@@ -33,6 +33,17 @@ object SaleInput {
         return if (cents < 0) "-$txt" else txt
     }
 
+    private val PERCENT = Regex("^[0-9]{1,3}([.,][0-9]{1,2})?$")
+
+    /** Kanalgebuehr in Prozent mit Komma oder Punkt, 0..100; leer = 0; ungueltig = null. */
+    fun parsePercent(raw: String?): Double? {
+        val s = raw?.trim() ?: ""
+        if (s.isEmpty()) return 0.0
+        if (!PERCENT.matches(s)) return null
+        val v = s.replace(',', '.').toDouble()
+        return if (v <= 100.0) v else null
+    }
+
     /** JJJJ-MM-TT und ein echtes Kalenderdatum. */
     fun dateOk(raw: String?): Boolean {
         val s = raw?.trim() ?: return false
