@@ -27,12 +27,14 @@ object DeckFormats {
     private const val MAX_UINT32 = 4294967295L
     // Standard-Base64 mit Auffuellung; dasselbe Muster wie der JS-Zwilling (java.util.Base64 ist nachsichtiger).
     private val BASE64 = Regex("^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$")
-    // (?U): \s wie im JS-Zwilling auch fuer geschuetzte Leerzeichen aus Webseiten; Ziffern bewusst [0-9].
-    private val HEADING = Regex("(?U)^(main|extra|side)(?:\\s+deck)?\\s*(?::|\\([0-9]+\\))?$", RegexOption.IGNORE_CASE)
-    private val COUNT_FIRST = Regex("(?U)^([0-9]+)(?:\\s*[xX])?\\s+(\\S.*)$")
-    private val COUNT_LAST = Regex("(?U)^(.+?)\\s+[xX]([0-9]+)$")
+    // [\s\p{Z}] statt \s: wie im JS-Zwilling auch geschuetzte Leerzeichen aus Webseiten; Ziffern bewusst [0-9].
+    // NICHT (?U) -- das kennt Androids ICU-Regex nicht, es warf beim ersten Zugriff (Absturz 21.09.2026);
+    // die JVM der Unit-Tests versteht es, deshalb fiel es dort nie auf. Siehe AndroidRegexWaechterTest.
+    private val HEADING = Regex("^(main|extra|side)(?:[\\s\\p{Z}]+deck)?[\\s\\p{Z}]*(?::|\\([0-9]+\\))?$", RegexOption.IGNORE_CASE)
+    private val COUNT_FIRST = Regex("^([0-9]+)(?:[\\s\\p{Z}]*[xX])?[\\s\\p{Z}]+([^\\s\\p{Z}].*)$")
+    private val COUNT_LAST = Regex("^(.+?)[\\s\\p{Z}]+[xX]([0-9]+)$")
     private val LINE_BREAK = Regex("\\r?\\n")
-    private val WHITESPACE = Regex("(?U)\\s+")
+    private val WHITESPACE = Regex("[\\s\\p{Z}]+")
     private val PASSCODE = Regex("^[0-9]{1,10}$")
     private val SECTIONS = listOf("main", "extra", "side")
 
