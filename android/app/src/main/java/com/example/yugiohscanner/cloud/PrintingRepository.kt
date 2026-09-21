@@ -47,6 +47,13 @@ object PrintingRepository {
     // Every printing across languages, tagged [DE]/[EN]/[JP]. German first (collection is German-first).
     // The independent lookups run CONCURRENTLY (the phone has no request cache, so parallelism is
     // what keeps this fast) — total latency ≈ the slowest source, not the sum.
+    // Neuer Name statt "sets" (21.09.2026): der Plattenspeicher haelt Drucklisten bis zu 14 Tage,
+    // und die vor dem Rarity-Fix vom 20.09. gebauten tragen ein ERFUNDENES "Common", das wie eine
+    // echte Angabe aussieht -- RarityQuellen kann es nachtraeglich nicht mehr erkennen. Im Lauf vom
+    // 21.09. stand deshalb 13 mal "Rarity mehrdeutig: Ultra Rare/.../Common". Mit neuem Namen werden
+    // die alten Eintraege schlicht nicht mehr gelesen; die erste Abfrage je Karte ist einmal langsamer.
+    private const val SETS_CACHE = "sets-v2"
+
     suspend fun fetchAllSets(passcode: String): List<SetOption> = coroutineScope {
         // Catalog first (Task 9), but only on CONFIRMED German data: unverified catalog printings
         // come straight from the English YGOPRODeck dump, and only 1.890 of 14.523 passcodes carry
@@ -71,7 +78,7 @@ object PrintingRepository {
         }
         // Disk cache: the 3-source union is the scan flow's slowest step (seconds). It's
         // deterministic per passcode, so a cached result makes a re-scanned card instant.
-        ScanCache.read("sets", passcode)?.let { cached ->
+        ScanCache.read(SETS_CACHE, passcode)?.let { cached ->
             // Ebenso der Plattenspeicher: er haelt Unions bis zu 14 Tage, also auch solche, die vor
             // dieser Korrektur entstanden sind.
             runCatching { deserializeSets(cached) }.getOrNull()
@@ -92,7 +99,7 @@ object PrintingRepository {
         val result = RarityQuellen.ohneErfundeneRarity(deD.await() + en + jpD.await())
             .filter { seen.add("${it.setCode}|${it.rarity}") }
         // Only cache a real, non-empty union so a transient failure can't poison it for 14 days.
-        if (result.isNotEmpty()) ScanCache.write("sets", passcode, serializeSets(result))
+        if (result.isNotEmpty()) ScanCache.write(SETS_CACHE, passcode, serializeSets(result))
         result
     }
 
