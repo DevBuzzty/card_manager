@@ -38,6 +38,9 @@ object SideStores {
     // Preis-Alarmen), per Ziehen und nach eigenem Speichern (refreshAndWait).
     val sealedItems = ListCache(scope) { SealedRepository.loadLive() }
 
+    // Spec H2 §8: Verkaeufe. Kleine Liste, voll neu laden wie sealedItems.
+    val sales = ListCache(scope) { SalesRepository.load() }
+
     private val historyCaches = BoundedMap<String, ListCache<List<PriceRef>>>(20)
 
     fun history(card: CardRow): ListCache<List<PriceRef>> =
@@ -57,6 +60,7 @@ object SideStores {
         reference7.clear(); reference30.clear(); snapshots.clear()
         priceAlertEvents.clear(); priceAlertMoveRule.clear(); priceAlertTargets.clear()
         sealedItems.clear()
+        sales.clear()
         historyCaches.values().forEach { it.clear() }
         historyCaches.clear()
         synchronized(deckCardCaches) {
