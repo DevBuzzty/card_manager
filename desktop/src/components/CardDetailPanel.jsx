@@ -329,7 +329,8 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                           {/* Spec H1 §5.3: Preisschild an markierten Exemplaren */}
                                           {!!c.for_sale && <Tag className="w-3 h-3 text-gold shrink-0" aria-label="Zum Verkauf" />}
                                           <span className="text-[11px] text-gray-400 font-mono truncate">
-                                              {formatCopyLocation(c, containers.find(ct => ct.container_id === c.container_id))}
+                                              {/* Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile. */}
+                                              {c.container_id ? formatCopyLocation(c, containers.find(ct => ct.container_id === c.container_id)) : 'ohne Standort'}
                                           </span>
                                           <div className="ml-auto flex gap-1 flex-wrap justify-end">
                                               {parseTags(c.tags).map(t => (
