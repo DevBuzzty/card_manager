@@ -77,6 +77,19 @@ object SalesMath {
         return byCopy.values.filter { it.size > 1 }.flatten().toSet()
     }
 
+    /**
+     * Abschluss-Fixwelle I3: aktive, nicht geloeschte Verkaeufe mit mindestens einer lebenden Position, deren
+     * Exemplar mit sold_in auf KEINEN aktiven Verkauf zeigt (null, storniert, geloescht oder unbekannt).
+     * Ein Doppelverkauf (sold_in zeigt auf den anderen, aktiven Verkauf) ist das nicht.
+     * ZWILLING: sales-math.cjs#orphanedSales.
+     */
+    fun orphanedSales(sales: List<SaleHead>, items: List<SaleLine>, soldInOf: (String) -> String?): Set<String> {
+        val active = sales.filter { it.live() }.map { it.saleId }.toSet()
+        val out = LinkedHashSet<String>()
+        for (it in items) if (!it.deleted && it.saleId in active && soldInOf(it.copyId) !in active) out.add(it.saleId)
+        return out
+    }
+
     fun totals(sales: List<SaleHead>, items: List<SaleLine>, soldInOf: (String) -> String?): Totals {
         var net = 0L; var market = 0L; var fees = 0L; var n = 0; var cards = 0
         for (s in sales.filter { it.live() }) {

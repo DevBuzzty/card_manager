@@ -98,4 +98,19 @@ class SalesMathTest {
                 SalesMath.listValues(sale, items, soldInOf))
         }
     }
+    @Test fun ohneVerkauftesExemplar() {
+        val o = fix.getJSONObject("orphaned")
+        val oSales = o.getJSONArray("sales").objects().map {
+            SalesMath.SaleHead(it.getString("sale_id"), it.getString("sold_on"), it.getString("channel_id"), it.getString("channel_name"),
+                it.getDouble("gross"), dbl(it, "fees"), dbl(it, "shipping"), it.getString("status"), it.getBoolean("deleted"))
+        }
+        val oItems = o.getJSONArray("items").objects().map {
+            SalesMath.SaleLine(it.getString("sale_id"), it.getString("copy_id"), it.getDouble("value_at_sale"), it.getDouble("share"), it.getBoolean("deleted"))
+        }
+        val oSoldIn = o.getJSONObject("soldIn")
+        val of: (String) -> String? = { id -> if (!oSoldIn.has(id) || oSoldIn.isNull(id)) null else oSoldIn.getString(id) }
+        val exp = (0 until o.getJSONArray("expected").length()).map { o.getJSONArray("expected").getString(it) }
+        assertEquals(exp, SalesMath.orphanedSales(oSales, oItems, of).sorted())
+        assertEquals(emptyList<String>(), SalesMath.orphanedSales(sales, items, soldInOf).sorted())
+    }
 }

@@ -89,5 +89,34 @@
       { "sale_id": "s3", "netCents": 5000, "marketCents": 4000 },
       { "sale_id": "s6", "netCents": 0, "marketCents": 0 }
     ]
+  },
+  "orphaned": {
+    "_comment": "orphanedSales: aktive, nicht geloeschte Verkaeufe mit mindestens einer lebenden Position, deren Exemplar mit sold_in auf KEINEN aktiven Verkauf zeigt (null, stornierter oder unbekannter Verkauf). s1 normal -> nein; s2 c3 ohne sold_in -> ja; s3 storniert -> nie; s5/s6 Doppelverkauf, c6 zeigt auf aktiven s5 -> nein; s7 c7 zeigt auf stornierten s3 -> ja; s8 c8 zeigt auf unbekannten Verkauf -> ja; s9 geloescht -> nie; s10 nur die zurueckgenommene Position c10 ohne sold_in -> nein.",
+    "sales": [
+      { "sale_id": "s1", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s2", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s3", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "storniert", "deleted": false },
+      { "sale_id": "s5", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s6", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s7", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s8", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false },
+      { "sale_id": "s9", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": true },
+      { "sale_id": "s10", "sold_on": "2026-09-10", "channel_id": "privat", "channel_name": "Privat", "gross": 1.0, "fees": null, "shipping": null, "status": "aktiv", "deleted": false }
+    ],
+    "items": [
+      { "sale_id": "s1", "copy_id": "c1", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s2", "copy_id": "c2", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s2", "copy_id": "c3", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s3", "copy_id": "c4", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s5", "copy_id": "c6", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s6", "copy_id": "c6", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s7", "copy_id": "c7", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s8", "copy_id": "c8", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s9", "copy_id": "c9", "value_at_sale": 1.0, "share": 1.0, "deleted": false },
+      { "sale_id": "s10", "copy_id": "c10", "value_at_sale": 1.0, "share": 1.0, "deleted": true },
+      { "sale_id": "s10", "copy_id": "c11", "value_at_sale": 1.0, "share": 1.0, "deleted": false }
+    ],
+    "soldIn": { "c1": "s1", "c2": "s2", "c3": null, "c4": null, "c6": "s5", "c7": "s3", "c8": "sX", "c10": null, "c11": "s10" },
+    "expected": ["s2", "s7", "s8"]
   }
 }

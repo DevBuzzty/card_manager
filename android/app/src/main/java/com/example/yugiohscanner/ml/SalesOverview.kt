@@ -12,7 +12,8 @@ import com.example.yugiohscanner.cloud.SalesData
  * Kanalauswahl beim Bearbeiten). Kein Fixture-Zwilling -- die Regeln sind am PC SQL bzw. Oberflaeche.
  */
 object SalesOverview {
-    data class ListRow(val sale: SalesMath.SaleHead, val netCents: Long, val marketCents: Long, val cards: Int, val doubleSold: Boolean)
+    data class ListRow(val sale: SalesMath.SaleHead, val netCents: Long, val marketCents: Long, val cards: Int, val doubleSold: Boolean,
+                       val orphaned: Boolean = false)
     data class Overview(
         val totals: SalesMath.Totals,
         val byChannel: List<SalesMath.ChannelRow>,
@@ -34,11 +35,12 @@ object SalesOverview {
         val soldInOf: (String) -> String? = data::soldInOf
         val inPeriod = SalesMath.periodFilter(data.sales, period, today)
         val doubles = SalesMath.doubleSold(data.sales, lines)
+        val orphans = SalesMath.orphanedSales(data.sales, lines, soldInOf)
         val rows = inPeriod.map { s ->
             val v = SalesMath.listValues(s, lines, soldInOf)
             val cards = if (s.live()) SalesMath.countedItems(s, lines, soldInOf).size
                         else lines.count { it.saleId == s.saleId && !it.deleted }
-            ListRow(s, v.netCents, v.marketCents, cards, s.saleId in doubles)
+            ListRow(s, v.netCents, v.marketCents, cards, s.saleId in doubles, s.saleId in orphans)
         }
         return Overview(
             totals = SalesMath.totals(inPeriod, lines, soldInOf),
@@ -50,6 +52,9 @@ object SalesOverview {
 
     /** Ist [saleId] an einem Doppelverkauf beteiligt (SalesMath.doubleSold)? */
     fun isDoubleSold(data: SalesData, saleId: String): Boolean = saleId in SalesMath.doubleSold(data.sales, data.lines())
+
+    /** Hat [saleId] eine Position ohne verkauftes Exemplar (SalesMath.orphanedSales)? */
+    fun isOrphaned(data: SalesData, saleId: String): Boolean = saleId in SalesMath.orphanedSales(data.sales, data.lines(), data::soldInOf)
 
     /**
      * „Verkauft" in der Kartenansicht: lebende Positionen dieser Karte samt Verkaufskopf, in der

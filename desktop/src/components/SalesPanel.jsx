@@ -121,6 +121,7 @@ export default function SalesPanel() {
                   <span className="text-ink-muted">{s.cards} {s.cards === 1 ? 'Karte' : 'Karten'}</span>
                   {cancelled && <span className="inline-block text-xs">storniert</span>}
                   {s.doubleSold && <span className="inline-block text-xs px-2 py-0.5 rounded bg-crit/20 text-crit">Karte doppelt verkauft</span>}
+                  {s.orphaned && <span className="inline-block text-xs px-2 py-0.5 rounded bg-crit/20 text-crit">Position ohne verkauftes Exemplar – bitte prüfen</span>}
                   <span className="ml-auto font-mono">{euroCentsText(s.netCents)}</span>
                   <span className={`font-mono ${cancelled ? '' : s.netCents >= s.marketCents ? 'text-emerald-400' : 'text-crit'}`}>{diffText(s.netCents, s.marketCents)}</span>
                 </button>
@@ -130,7 +131,8 @@ export default function SalesPanel() {
         </>
       )}
 
-      {openId && <SaleDetail saleId={openId} onClose={() => setOpenId(null)} onChanged={load} doubleSold={!!data?.sales.find((s) => s.sale_id === openId)?.doubleSold} />}
+      {openId && <SaleDetail saleId={openId} onClose={() => setOpenId(null)} onChanged={load} doubleSold={!!data?.sales.find((s) => s.sale_id === openId)?.doubleSold}
+        orphaned={!!data?.sales.find((s) => s.sale_id === openId)?.orphaned} />}
     </div>
   );
 }

@@ -47,6 +47,15 @@ class SalesOverviewTest {
         assertEquals(12, o.byMonth.size)
     }
 
+    @Test fun `Liste und Detail -- aktiver Verkauf ohne verkauftes Exemplar markiert (I3)`() {
+        val o = SalesOverview.overview(data, "gesamt", "2026-09-21").rows.associateBy { it.sale.saleId }
+        assertFalse(o.values.any { it.orphaned }) // s4 ist Doppelverkauf (c4 -> aktiver s3), s2 storniert
+        val lost = data.copy(soldIn = mapOf("c4" to "s3")) // c1 zeigt nicht mehr auf s1
+        assertTrue(SalesOverview.overview(lost, "gesamt", "2026-09-21").rows.single { it.sale.saleId == "s1" }.orphaned)
+        assertTrue(SalesOverview.isOrphaned(lost, "s1"))
+        assertFalse(SalesOverview.isOrphaned(data, "s1"))
+    }
+
     @Test fun `Zeitraum filtert Liste und Kennzahlen, Monatsbalken bleiben ueber alle`() {
         val o = SalesOverview.overview(data, "monat", "2026-09-21")
         assertEquals(listOf("s4", "s3", "s2"), o.rows.map { it.sale.saleId })

@@ -61,3 +61,9 @@ test('Verteilung: Summe exakt auch bei vielen Positionen', () => {
   const values = Array.from({ length: 37 }, (_, i) => (i * 37) % 101);
   for (const net of [1, 999, -1234, 100000]) assert.equal(M.distribute(net, values).reduce((a, b) => a + b, 0), net);
 });
+test('Verkauf ohne verkauftes Exemplar (orphanedSales)', () => {
+  const O = FIX.orphaned;
+  const of = (id) => (id in O.soldIn ? O.soldIn[id] : null);
+  assert.deepEqual([...M.orphanedSales(O.sales, O.items, of)].sort(), O.expected);
+  assert.deepEqual([...M.orphanedSales(S.sales, S.items, soldInOf)], [], 'stats-Fixture: s4 zeigt auf sich, s3 storniert, s5/s6 Doppelverkauf');
+});

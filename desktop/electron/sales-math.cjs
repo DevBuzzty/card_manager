@@ -72,6 +72,21 @@ function doubleSold(sales, items) {
   return out;
 }
 
+// Abschluss-Fixwelle I3: aktive, nicht geloeschte Verkaeufe mit mindestens einer lebenden Position, deren
+// Exemplar mit sold_in auf KEINEN aktiven Verkauf zeigt (null, storniert, geloescht oder unbekannt) -- die
+// Position zaehlt nirgends. Ein Doppelverkauf (sold_in zeigt auf den anderen, aktiven Verkauf) ist das nicht.
+// ZWILLING: SalesMath.kt#orphanedSales (saleMath.js braucht sie nicht: der Renderer bekommt das Kennzeichen
+// aus salesOverview).
+function orphanedSales(sales, items, soldInOf) {
+  const active = new Set(sales.filter(live).map((s) => s.sale_id));
+  const out = new Set();
+  for (const it of items) {
+    if (it.deleted || !active.has(it.sale_id)) continue;
+    if (!active.has(soldInOf(it.copy_id))) out.add(it.sale_id);
+  }
+  return out;
+}
+
 function saleTotals(sales, items, soldInOf) {
   const t = { netCents: 0, marketCents: 0, feesCents: 0, sales: 0, cards: 0 };
   for (const s of sales.filter(live)) {
@@ -155,6 +170,6 @@ function diffText(net, market) {
 
 module.exports = {
   toCents, fromCents, marketValueCents, netCents, feeDefaultCents, distribute, countedItems, saleListValues,
-  doubleSold, saleTotals, periodFilter, byChannel, byMonth, suggestionCents, normalizeDiscount, normalizeMinPrice,
+  doubleSold, orphanedSales, saleTotals, periodFilter, byChannel, byMonth, suggestionCents, normalizeDiscount, normalizeMinPrice,
   euroCentsText, diffText,
 };

@@ -184,6 +184,7 @@ function salesOverview(db, { period = 'monat', today } = {}) {
   const soldInOf = soldInLookup(db);
   const inPeriod = M.periodFilter(sales, period, today);
   const doubles = M.doubleSold(sales, items);
+  const orphans = M.orphanedSales(sales, items, soldInOf);
   return {
     totals: M.saleTotals(inPeriod, items, soldInOf),
     byChannel: M.byChannel(inPeriod, items, soldInOf),
@@ -194,7 +195,8 @@ function salesOverview(db, { period = 'monat', today } = {}) {
       const cards = s.status === 'aktiv' && !s.deleted
         ? M.countedItems(s, items, soldInOf).length
         : items.filter((i) => i.sale_id === s.sale_id && !i.deleted).length;
-      return { ...s, netCents: v.netCents, marketCents: v.marketCents, cards, doubleSold: doubles.has(s.sale_id) };
+      return { ...s, netCents: v.netCents, marketCents: v.marketCents, cards, doubleSold: doubles.has(s.sale_id),
+        orphaned: orphans.has(s.sale_id) };
     }),
   };
 }

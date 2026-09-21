@@ -200,3 +200,18 @@ test('Kanaele: eigener Kanal anlegen, ausblenden; feste nicht ausblendbar', () =
   assert.throws(() => S.saveChannel(db, { name: ' ', fee_percent: 0 }), /Namen/);
   assert.throws(() => S.saveChannel(db, { name: 'X', fee_percent: 101 }), /Gebühr/);
 });
+
+test('I3: Uebersicht kennzeichnet einen aktiven Verkauf, dessen Exemplar nicht (mehr) auf ihn zeigt', () => {
+  const db = freshDb();
+  const [a] = addCard(db, '1', 3, 1);
+  const [b] = addCard(db, '2', 2, 1);
+  const s1 = S.bookSale(db, { ...base, copyIds: [a] });
+  const s2 = S.bookSale(db, { ...base, copyIds: [b] });
+  // Wie nach einem alten Cloud-Stand: das Exemplar lebt wieder, sold_in leer -- die Position zaehlt nirgends.
+  db.prepare('UPDATE card_copies SET sold_in = NULL, deleted = 0 WHERE copy_id = ?').run(b);
+  const rows = S.salesOverview(db, { period: 'gesamt', today: '2026-09-21' }).sales;
+  assert.equal(rows.find((r) => r.sale_id === s1).orphaned, false);
+  assert.equal(rows.find((r) => r.sale_id === s2).orphaned, true);
+  S.cancelSale(db, s2);
+  assert.equal(S.salesOverview(db, { period: 'gesamt', today: '2026-09-21' }).sales.find((r) => r.sale_id === s2).orphaned, false, 'storniert -> nie');
+});
