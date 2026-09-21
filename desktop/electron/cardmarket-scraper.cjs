@@ -14,6 +14,19 @@ const FRESH_MS = 7 * 24 * 3600 * 1000; // skip printings priced < 7 days ago
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// Hoeflicheres Tempo nach einer Cloudflare-Pruefung (21.09.2026). Am 19.09. verlangte ein Durchlauf
+// per Knopf die Pruefung "alle 3-4 Karten" -- das Muster einer Ratenbremse, denn der Knopf laedt
+// alle 2-4 s eine Seite. Nach jeder Pruefung verdoppelt sich die Pause bis hoechstens
+// PAUSE_MAX_MS. Das ist schlicht LANGSAMER, keine Umgehung: geklickt wird die Pruefung weiterhin
+// ausschliesslich vom Nutzer, und nichts an Kennung oder Verhalten des Browsers wird verstellt.
+const PAUSE_MAX_MS = 16000;
+function pauseNachPruefungen(pruefungen) {
+  const faktor = Math.min(2 ** Math.max(0, pruefungen), PAUSE_MAX_MS / DELAY_MIN_MS);
+  const lo = Math.min(DELAY_MIN_MS * faktor, PAUSE_MAX_MS);
+  const hi = Math.min(DELAY_MAX_MS * faktor, PAUSE_MAX_MS);
+  return { lo, hi };
+}
+
 // In-page DOM extraction — pinned against the real /Cards/{name}/Versions grid (2026-09-01).
 // Each printing is a `.card-column` in `#ReprintSection` carrying the expansion name + symbol code,
 // the rarity (inside the image alt parenthetical, e.g. "... (V.4 - Secret Rare)"), and the "Ab"
@@ -71,13 +84,14 @@ async function makeWindow() {
 //  - interactive (manual run): surface the window and give a human up to ~2 min to solve;
 //  - headless (background poller): stay invisible, wait ~10s for a non-interactive auto-clear,
 //    then give up on this card silently and let a later tick / manual run refresh the session.
-async function loadPage(win, url, onChallenge, headless = false) {
+async function loadPage(win, url, onChallenge, headless = false, zaehler = null) {
   await win.loadURL(url);
   const maxTries = headless ? 5 : 60; // ~10s silent vs ~2 min human-solvable
   for (let i = 0; i < maxTries; i++) {
     const title = win.webContents.getTitle();
     const html = await win.webContents.executeJavaScript('document.documentElement.outerHTML').catch(() => '');
     if (!looksLikeChallenge(html, title)) return true;
+    if (i === 0 && zaehler) zaehler.pruefungen++;
     if (i === 0 && !headless) { onChallenge && onChallenge(win); } // notify; window is revealed only if the user opts in
     await sleep(2000);
   }
@@ -106,6 +120,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
   const now = Date.now();
   let updated = 0, noMatch = 0, errors = 0, scraped = 0, idMissed = 0;
   const noMatchList = []; // card names/set codes that couldn't be matched -> user sets them manually
+  const zaehler = { pruefungen: 0 };
   const win = await makeWindow();
   try {
     for (let i = 0; i < cards.length; i++) {
@@ -130,7 +145,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
         if (!name) { noMatch++; continue; }
         const url = resolveUrl(name);
         if (!url) { noMatch++; continue; }
-        if (!(await loadPage(win, url, onChallenge, headless))) { errors++; continue; }
+        if (!(await loadPage(win, url, onChallenge, headless, zaehler))) { errors++; continue; }
         scraped++; // a page was actually loaded — counts toward the poller's per-tick budget
         const rows = await win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []);
         for (const p of stale) {
@@ -154,10 +169,12 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
           }
         }
       } catch (e) { errors++; }
-      await sleep(DELAY_MIN_MS + Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS));
+      const { lo, hi } = pauseNachPruefungen(zaehler.pruefungen);
+      await sleep(lo + Math.random() * (hi - lo));
     }
   } finally { win.destroy(); }
-  return { updated, noMatch, errors, noMatchList, idMissed };
+  if (zaehler.pruefungen > 0) console.log(`[cardmarket] ${zaehler.pruefungen} Pruefung(en) bei ${scraped} Seiten`);
+  return { updated, noMatch, errors, noMatchList, idMissed, pruefungen: zaehler.pruefungen, seiten: scraped };
 }
 
 // Spec G4 §4 — Kandidaten des 1st-Ed-Durchgangs: Printings mit mindestens einem lebenden Exemplar edition = 'first',
@@ -250,4 +267,4 @@ async function setNameFor(id, setCode) {
   } catch { return null; }
 }
 
-module.exports = { runCardmarketScrape, runFirstEdPass, firstEdCandidates };
+module.exports = { runCardmarketScrape, runFirstEdPass, firstEdCandidates, pauseNachPruefungen };
