@@ -32,7 +32,7 @@ test('Cardmarket-Wantslist: eine Zeile je Wunsch, englischer Name, Rückfall auf
   assert.equal(cardmarketWantslist([], nameEn), '');
 });
 
-test('Verkaufsliste: Stückwert wie die Wertanzeige (1.-Auflage-Preis, Zustandsfaktor), Summe, Unknown weggelassen', () => {
+test('Verkaufsliste: Preisvorschlag je Stück (Marktwert mit 1.-Auflage-Preis und Zustandsfaktor, minus 5 % Abschlag, auf 5 Cent abgerundet), Summe, Unknown weggelassen', () => {
   const { text, omitted } = saleListText(IN.copies);
   assert.ok(!text.startsWith(BOM));
   assert.equal(text, expected('export-verkaufsliste.txt'));

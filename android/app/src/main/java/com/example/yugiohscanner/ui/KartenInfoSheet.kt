@@ -98,7 +98,7 @@ fun KartenInfoSheet(passcode: String) {
                     // je Druck zeigt, nicht je Exemplar (anders als die Verkaufsliste/Karten-Detail).
                     if (z.anzahl > 0 && z.waehrung == KartenInfo.Waehrung.EUR) {
                         val vorschlag = Prefs.saleSuggestion(ctx, SalesMath.toCents(z.preis))
-                        Text("Vorschlag ${vorschlag?.let { SalesMath.euroCentsText(it) } ?: "–"} (je NM-Exemplar)",
+                        Text(if (vorschlag != null) "Vorschlag ${SalesMath.euroCentsText(vorschlag)} (je NM-Exemplar)" else "Vorschlag –",
                             style = MaterialTheme.typography.labelSmall, color = Muted)
                     }
                 }

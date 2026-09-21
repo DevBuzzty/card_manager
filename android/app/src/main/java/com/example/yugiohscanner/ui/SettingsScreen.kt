@@ -233,7 +233,8 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
         // ---- Preisvorschlag (Spec H2 §9 / Abweichung 5) --------------------
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionHeader("Preisvorschlag")
-            Text("Vorschlag beim Verkaufen = Marktwert abzüglich Abschlag, mindestens der Mindestpreis.",
+            // Wortgleich zu desktop/src/components/Settings.jsx (Preisvorschlag-Hinweis).
+            Text("Vorschlag = Marktwert minus Abschlag, auf 5 Cent abgerundet, nie unter dem Mindestpreis. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.",
                 style = MaterialTheme.typography.bodySmall, color = Muted)
 
             var discountInput by remember { mutableStateOf(com.example.yugiohscanner.Prefs.saleDiscount(ctx).toString()) }

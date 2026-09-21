@@ -215,3 +215,28 @@ test('I3: Uebersicht kennzeichnet einen aktiven Verkauf, dessen Exemplar nicht (
   S.cancelSale(db, s2);
   assert.equal(S.salesOverview(db, { period: 'gesamt', today: '2026-09-21' }).sales.find((r) => r.sale_id === s2).orphaned, false, 'storniert -> nie');
 });
+
+test('T4: Bearbeiten gelingt, wenn der eigene (eigene, nicht feste) Kanal inzwischen ausgeblendet ist', () => {
+  const db = freshDb();
+  const [a, b] = addCard(db, '1', 3, 2);
+  const ch = S.saveChannel(db, { name: 'Flohmarkt', fee_percent: 0 });
+  const saleId = S.bookSale(db, { ...base, channel_id: ch, copyIds: [a, b] });
+  S.hideChannel(db, ch);
+  S.updateSale(db, { sale_id: saleId, ...base, channel_id: ch, gross: 12, returnCopyIds: [b] });
+  const s = db.prepare('SELECT channel_id, channel_name, gross FROM sales WHERE sale_id = ?').get(saleId);
+  assert.deepEqual({ ...s }, { channel_id: ch, channel_name: 'Flohmarkt', gross: 12 });
+  assert.throws(() => S.bookSale(db, { ...base, channel_id: ch, copyIds: [b] }), /Kanal nicht gefunden/, 'neu buchen darauf weiter nicht');
+});
+
+test('T4: Buchen mit copyIds in umgekehrter Reihenfolge ergibt dieselben Anteile je copy_id', () => {
+  const shares = (order) => {
+    const db = freshDb();
+    const ids = addCard(db, '1', 1, 3); // 1 € auf drei gleiche Positionen -> ein Rest-Cent
+    const saleId = S.bookSale(db, { ...base, gross: 1, fees: null, shipping: null, copyIds: order(ids) });
+    return Object.fromEntries(db.prepare('SELECT copy_id, share FROM sale_items WHERE sale_id = ?').all(saleId).map((r) => [r.copy_id, r.share]));
+  };
+  const fwd = shares((ids) => ids);
+  const rev = shares((ids) => [...ids].reverse());
+  assert.deepEqual(rev, fwd);
+  assert.equal(Math.round(Object.values(fwd).reduce((x, y) => x + y, 0) * 100), 100, 'Summe = Netto');
+});
