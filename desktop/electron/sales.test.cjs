@@ -81,6 +81,10 @@ test('Teil-Rueckgabe: Exemplar kommt zurueck, Rest neu verteilt', () => {
   assert.equal(copy(db, a).for_sale, 1, 'was_for_sale wiederhergestellt');
   assert.equal(db.prepare('SELECT share FROM sale_items WHERE copy_id = ?').get(b).share, 7.9);
   assert.throws(() => S.updateSale(db, { sale_id: saleId, ...base, returnCopyIds: [b] }), /sonst stornieren/);
+  // Rollback: der gescheiterte Versuch, auch b zurueckzugeben, darf nichts veraendert haben.
+  assert.equal(copy(db, b).deleted, 1, 'b bleibt verkauft (Rollback)');
+  assert.equal(copy(db, b).sold_in, saleId, 'b bleibt beim Verkauf (Rollback)');
+  assert.equal(db.prepare('SELECT deleted FROM sale_items WHERE sale_id = ? AND copy_id = ?').get(saleId, b).deleted, 0, 'Position b bleibt aktiv (Rollback)');
 });
 
 test('Storno: alle zurueck, Status storniert, nicht mehr aenderbar', () => {
@@ -104,6 +108,16 @@ test('Fach-Konflikt: Rueckkehr ohne Fach, needs_review', () => {
   S.cancelSale(db, saleId);
   const r = copy(db, a);
   assert.deepEqual([r.deleted, r.container_id, r.page, r.slot, r.needs_review, r.review_reason], [0, 'B', null, null, 1, 'Fach inzwischen belegt']);
+});
+
+test('Kein Fach-Konflikt ohne Behaelter: zwei nicht einsortierte Exemplare teilen sich kein Fach', () => {
+  const db = freshDb();
+  const [a] = addCard(db, '1', 3, 1, { page: 1, slot: 4 });
+  const saleId = S.bookSale(db, { ...base, copyIds: [a] });
+  addCard(db, '2', 1, 1, { page: 1, slot: 4 });
+  S.cancelSale(db, saleId);
+  const r = copy(db, a);
+  assert.deepEqual([r.deleted, r.container_id, r.page, r.slot, r.needs_review, r.review_reason], [0, null, 1, 4, 0, null]);
 });
 
 test('Doppelverkauf: Storno des einen laesst das Exemplar im anderen verkauft', () => {
@@ -132,6 +146,40 @@ test('Uebersicht und Kartenansicht', () => {
   assert.equal(S.salesOverview(db, { period: 'gesamt', today: '2026-09-21' }).sales[0].sale_id, s1, 'neueste zuerst');
   assert.equal(S.cardSales(db, '1').length, 2);
   assert.equal(S.saleDetail(db, s1).items.length, 1);
+});
+
+test('Uebersicht nach Storno: Zeile zeigt weiterhin den Nettobetrag der Positionen', () => {
+  const db = freshDb();
+  const [a] = addCard(db, '1', 3, 1);
+  const saleId = S.bookSale(db, { ...base, copyIds: [a] });
+  S.cancelSale(db, saleId);
+  const row = S.salesOverview(db, { period: 'gesamt', today: '2026-09-21' }).sales.find((s) => s.sale_id === saleId);
+  assert.equal(row.netCents, 790);
+  assert.equal(row.marketCents, 300);
+});
+
+test('Buchen: unendliche Gebühren/Versand werden abgelehnt', () => {
+  const db = freshDb();
+  const [a] = addCard(db, '1', 3, 1);
+  assert.throws(() => S.bookSale(db, { ...base, fees: Infinity, copyIds: [a] }), /Gebühren/);
+  assert.throws(() => S.bookSale(db, { ...base, shipping: Infinity, copyIds: [a] }), /Versand/);
+});
+
+test('Buchen auf ausgeblendetem Kanal scheitert', () => {
+  const db = freshDb();
+  const id = S.saveChannel(db, { name: 'Flohmarkt', fee_percent: 0 });
+  S.hideChannel(db, id);
+  const [a] = addCard(db, '1', 3, 1);
+  assert.throws(() => S.bookSale(db, { ...base, channel_id: id, copyIds: [a] }), /Kanal nicht gefunden/);
+});
+
+test('Bearbeiten: Kanalname bleibt die Momentaufnahme vom Buchen, auch nach Umbenennen', () => {
+  const db = freshDb();
+  const [a] = addCard(db, '1', 3, 1);
+  const saleId = S.bookSale(db, { ...base, copyIds: [a] });
+  S.saveChannel(db, { channel_id: 'cardmarket', name: 'CM Neu', fee_percent: 5 });
+  S.updateSale(db, { sale_id: saleId, ...base, note: 'Notiz', returnCopyIds: [] });
+  assert.equal(db.prepare('SELECT channel_name FROM sales WHERE sale_id = ?').get(saleId).channel_name, 'Cardmarket');
 });
 
 test('Kanaele: eigener Kanal anlegen, ausblenden; feste nicht ausblendbar', () => {

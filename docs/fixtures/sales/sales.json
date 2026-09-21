@@ -83,6 +83,11 @@
       { "month": "2026-07", "netCents": 0 },
       { "month": "2026-08", "netCents": 500 },
       { "month": "2026-09", "netCents": 1190 }
+    ],
+    "listValues": [
+      { "sale_id": "s1", "netCents": 790, "marketCents": 700 },
+      { "sale_id": "s3", "netCents": 5000, "marketCents": 4000 },
+      { "sale_id": "s6", "netCents": 0, "marketCents": 0 }
     ]
   }
 }

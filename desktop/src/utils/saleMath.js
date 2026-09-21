@@ -19,6 +19,21 @@ export function feeDefaultCents(grossCents, feePercent) {
   return Math.round(grossCents * (Number(feePercent) || 0) / 100);
 }
 
+// Zeile der Verkaufsliste: Netto/Marktwert EINES Verkaufs. Aktiver, nicht geloeschter Verkauf: nur
+// Positionen, deren Exemplar noch auf DIESEN Verkauf zeigt (Doppelverkauf). Jeder andere Status
+// (storniert): alle lebenden Positionen OHNE die sold_in-Pruefung -- ein Storno raeumt sold_in am
+// Exemplar, die Positionen bleiben stehen. ZWILLING: sales-math.cjs#saleListValues, SalesMath.kt#listValues.
+export function saleListValues(sale, items, soldInOf) {
+  const live = items.filter((it) => it.sale_id === sale.sale_id && !it.deleted);
+  const counted = sale.status === 'aktiv' && !sale.deleted
+    ? live.filter((it) => soldInOf(it.copy_id) === sale.sale_id)
+    : live;
+  return {
+    netCents: counted.reduce((a, it) => a + (toCents(it.share) || 0), 0),
+    marketCents: counted.reduce((a, it) => a + (toCents(it.value_at_sale) || 0), 0),
+  };
+}
+
 // Vorschlag = Marktwert x (1 - Abschlag), auf 5 ct abgerundet, nie unter dem Mindestpreis. Kein Marktwert -> null.
 export function suggestionCents(valueCents, discountPercent, minCents) {
   if (valueCents == null || valueCents <= 0) return null;

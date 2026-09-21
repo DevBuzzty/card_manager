@@ -57,17 +57,26 @@ function previewSale(db, copyIds) {
   };
 }
 
-function checkHead(db, h) {
+// `current` (nur beim Bearbeiten): { channel_id, channel_name } des Verkaufs vor der Aenderung.
+function checkHead(db, h, current) {
   if (!DATE.test(String(h.sold_on || ''))) throw new SaleError('Ungültiges Datum.');
   const gross = Number(h.gross);
   if (blank(h.gross) || !Number.isFinite(gross) || gross < 0) throw new SaleError('Der Preis muss 0 € oder mehr sein.');
   for (const [k, label] of [['fees', 'Gebühren'], ['shipping', 'Versand']]) {
-    if (!blank(h[k]) && !(Number(h[k]) >= 0)) throw new SaleError(`${label} müssen 0 € oder mehr sein.`);
+    const v = Number(h[k]);
+    if (!blank(h[k]) && !(Number.isFinite(v) && v >= 0)) throw new SaleError(`${label} müssen 0 € oder mehr sein.`);
   }
-  const ch = db.prepare('SELECT channel_id, name FROM sale_channels WHERE channel_id = ?').get(h.channel_id);
-  if (!ch) throw new SaleError('Kanal nicht gefunden.');
+  // Ein unveraendert gebliebener Kanal darf inzwischen ausgeblendet worden sein (Bearbeiten); ein neu
+  // gewaehlter oder beim Buchen gewaehlter Kanal muss aktiv sein.
+  const unchanged = !!current && current.channel_id === h.channel_id;
+  const ch = db.prepare('SELECT channel_id, name, deleted FROM sale_channels WHERE channel_id = ?').get(h.channel_id);
+  if (!ch || (ch.deleted && !unchanged)) throw new SaleError('Kanal nicht gefunden.');
   return {
-    sold_on: h.sold_on, channel_id: ch.channel_id, channel_name: ch.name, gross: M.toCents(gross) / 100,
+    sold_on: h.sold_on, channel_id: ch.channel_id,
+    // Kanalname ist die Momentaufnahme vom Buchen (Spec §4.1): bleibt der Kanal derselbe, behaelt der
+    // Verkauf seinen alten Namen, auch wenn der Kanal seither umbenannt wurde.
+    channel_name: unchanged ? current.channel_name : ch.name,
+    gross: M.toCents(gross) / 100,
     fees: blank(h.fees) ? null : M.toCents(h.fees) / 100, shipping: blank(h.shipping) ? null : M.toCents(h.shipping) / 100,
     note: blank(h.note) ? null : String(h.note).trim() || null,
   };
@@ -81,6 +90,9 @@ function bookSale(db, input = {}) {
   db.transaction(() => {
     const rows = liveCopies(db, ids);
     if (rows.some((r) => !r)) throw new SaleError('Karte bereits verkauft oder gelöscht.');
+    // Deterministische Reihenfolge fuer distribute()/den Rest-Cent -- unabhaengig von der Reihenfolge, in
+    // der die Karten ausgewaehlt wurden. Das Handy muss beim Buchen dieselbe Sortierung (nach copy_id) verwenden.
+    rows.sort((a, b) => (a.copy_id < b.copy_id ? -1 : a.copy_id > b.copy_id ? 1 : 0));
     const shares = M.distribute(M.netCents(head), rows.map((r) => r.valueCents));
     db.prepare(`INSERT INTO sales (sale_id, sold_on, channel_id, channel_name, gross, fees, shipping, note)
       VALUES (@sale_id, @sold_on, @channel_id, @channel_name, @gross, @fees, @shipping, @note)`).run({ sale_id: saleId, ...head });
@@ -109,8 +121,10 @@ function returnCopy(db, saleId, copyId, wasForSale) {
     db.prepare('UPDATE card_copies SET sold_in = ?, updated_at = CURRENT_TIMESTAMP WHERE copy_id = ?').run(other.sale_id, copyId);
     return;
   }
+  // `=` statt `IS`, wortgleich zu SQL `o.container_id = cc.container_id`: NULL matcht NULL nie, zwei
+  // nicht einsortierte Exemplare (container_id NULL) auf "demselben" Seite/Fach-Paar sind kein Konflikt.
   const occupied = cc.page != null && cc.slot != null && db.prepare(`SELECT 1 FROM card_copies
-     WHERE copy_id <> ? AND deleted = 0 AND container_id IS ? AND page = ? AND slot = ?`).get(copyId, cc.container_id, cc.page, cc.slot);
+     WHERE copy_id <> ? AND deleted = 0 AND container_id = ? AND page = ? AND slot = ?`).get(copyId, cc.container_id, cc.page, cc.slot);
   if (occupied) {
     db.prepare(`UPDATE card_copies SET deleted = 0, sold_in = NULL, for_sale = ?, page = NULL, slot = NULL, needs_review = 1,
       review_reason = 'Fach inzwischen belegt', updated_at = CURRENT_TIMESTAMP WHERE copy_id = ?`).run(wasForSale ? 1 : 0, copyId);
@@ -127,14 +141,15 @@ function activeSale(db, saleId) {
 }
 
 function updateSale(db, input = {}) {
-  const head = checkHead(db, input);
   const returned = new Set(Array.isArray(input.returnCopyIds) ? input.returnCopyIds : []);
   db.transaction(() => {
     const s = activeSale(db, input.sale_id);
     if (s.status !== 'aktiv') throw new SaleError('Ein stornierter Verkauf lässt sich nicht ändern.');
+    const head = checkHead(db, input, { channel_id: s.channel_id, channel_name: s.channel_name });
     db.prepare(`UPDATE sales SET sold_on = @sold_on, channel_id = @channel_id, channel_name = @channel_name, gross = @gross,
       fees = @fees, shipping = @shipping, note = @note WHERE sale_id = @sale_id`).run({ sale_id: s.sale_id, ...head });
-    const items = db.prepare('SELECT * FROM sale_items WHERE sale_id = ? AND deleted = 0 ORDER BY created_at, copy_id').all(s.sale_id);
+    // Nach copy_id, nicht created_at: dieselbe deterministische Reihenfolge wie bookSale fuer den Rest-Cent.
+    const items = db.prepare('SELECT * FROM sale_items WHERE sale_id = ? AND deleted = 0 ORDER BY copy_id').all(s.sale_id);
     for (const it of items.filter((i) => returned.has(i.copy_id))) {
       db.prepare('UPDATE sale_items SET deleted = 1, share = 0 WHERE sale_id = ? AND copy_id = ?').run(s.sale_id, it.copy_id);
       returnCopy(db, s.sale_id, it.copy_id, it.was_for_sale);
@@ -174,8 +189,8 @@ function salesOverview(db, { period = 'monat', today } = {}) {
     byChannel: M.byChannel(inPeriod, items, soldInOf),
     byMonth: M.byMonth(sales, items, soldInOf, today, 12),
     sales: inPeriod.map((s) => {
-      const t = M.saleTotals([{ ...s, status: 'aktiv' }], items, soldInOf);
-      return { ...s, netCents: t.netCents, marketCents: t.marketCents,
+      const v = M.saleListValues(s, items, soldInOf);
+      return { ...s, netCents: v.netCents, marketCents: v.marketCents,
         cards: items.filter((i) => i.sale_id === s.sale_id && !i.deleted).length, doubleSold: doubles.has(s.sale_id) };
     }),
   };

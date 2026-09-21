@@ -42,6 +42,22 @@ function countedItems(sale, items, soldInOf) {
   return items.filter((it) => it.sale_id === sale.sale_id && !it.deleted && soldInOf(it.copy_id) === sale.sale_id);
 }
 
+// Zeile der Verkaufsliste: Netto/Marktwert EINES Verkaufs (anders als saleTotals, das ueber mehrere summiert).
+// Aktiver, nicht geloeschter Verkauf: nur gezaehlte Positionen (countedItems -- sold_in zeigt auf DIESEN
+// Verkauf, wegen Doppelverkauf). Jeder andere Status (storniert): alle lebenden Positionen OHNE die
+// sold_in-Pruefung -- ein Storno raeumt sold_in am Exemplar, die Positionen selbst bleiben stehen und
+// zeigen weiterhin ihren Betrag (die Oberflaeche streicht ihn durch). ZWILLING: saleMath.js#saleListValues,
+// SalesMath.kt#listValues.
+function saleListValues(sale, items, soldInOf) {
+  const counted = sale.status === 'aktiv' && !sale.deleted
+    ? countedItems(sale, items, soldInOf)
+    : items.filter((it) => it.sale_id === sale.sale_id && !it.deleted);
+  return {
+    netCents: counted.reduce((a, it) => a + (toCents(it.share) || 0), 0),
+    marketCents: counted.reduce((a, it) => a + (toCents(it.value_at_sale) || 0), 0),
+  };
+}
+
 // Verkaeufe, die ein Exemplar mit einem anderen aktiven Verkauf teilen (beide lebende Positionen).
 function doubleSold(sales, items) {
   const active = new Set(sales.filter(live).map((s) => s.sale_id));
@@ -138,7 +154,7 @@ function diffText(net, market) {
 }
 
 module.exports = {
-  toCents, fromCents, marketValueCents, netCents, feeDefaultCents, distribute, countedItems, doubleSold,
-  saleTotals, periodFilter, byChannel, byMonth, suggestionCents, normalizeDiscount, normalizeMinPrice,
+  toCents, fromCents, marketValueCents, netCents, feeDefaultCents, distribute, countedItems, saleListValues,
+  doubleSold, saleTotals, periodFilter, byChannel, byMonth, suggestionCents, normalizeDiscount, normalizeMinPrice,
   euroCentsText, diffText,
 };

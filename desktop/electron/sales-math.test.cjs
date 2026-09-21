@@ -39,6 +39,12 @@ test('Texte', () => {
 test('Doppelverkauf', () => {
   assert.deepEqual([...M.doubleSold(S.sales, S.items)].sort(), S.doubleSold);
 });
+test('Verkaufsliste je Zeile (Storno ohne sold_in-Pruefung, Doppelverkauf ausgeblendet)', () => {
+  for (const c of S.listValues) {
+    const sale = S.sales.find((s) => s.sale_id === c.sale_id);
+    assert.deepEqual(M.saleListValues(sale, S.items, soldInOf), { netCents: c.netCents, marketCents: c.marketCents }, c.sale_id);
+  }
+});
 test('Kennzahlen je Zeitraum', () => {
   for (const p of ['monat', 'jahr', 'gesamt']) {
     const sales = M.periodFilter(S.sales, p, S.today);

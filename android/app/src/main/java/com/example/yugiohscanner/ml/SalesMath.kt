@@ -53,6 +53,23 @@ object SalesMath {
     fun countedItems(sale: SaleHead, items: List<SaleLine>, soldInOf: (String) -> String?): List<SaleLine> =
         items.filter { it.saleId == sale.saleId && !it.deleted && soldInOf(it.copyId) == sale.saleId }
 
+    data class ListValues(val netCents: Long, val marketCents: Long)
+
+    /**
+     * Zeile der Verkaufsliste: Netto/Marktwert EINES Verkaufs (anders als [totals], das ueber mehrere
+     * summiert). Aktiver, nicht geloeschter Verkauf: nur gezaehlte Positionen ([countedItems] -- sold_in
+     * zeigt auf DIESEN Verkauf, wegen Doppelverkauf). Jeder andere Status (storniert): alle lebenden
+     * Positionen OHNE die sold_in-Pruefung -- ein Storno raeumt sold_in am Exemplar, die Positionen
+     * bleiben stehen. ZWILLING: sales-math.cjs#saleListValues, saleMath.js#saleListValues.
+     */
+    fun listValues(sale: SaleHead, items: List<SaleLine>, soldInOf: (String) -> String?): ListValues {
+        val counted = if (sale.live()) countedItems(sale, items, soldInOf)
+                      else items.filter { it.saleId == sale.saleId && !it.deleted }
+        var net = 0L; var market = 0L
+        for (it in counted) { net += toCents(it.share) ?: 0; market += toCents(it.valueAtSale) ?: 0 }
+        return ListValues(net, market)
+    }
+
     fun doubleSold(sales: List<SaleHead>, items: List<SaleLine>): Set<String> {
         val active = sales.filter { it.live() }.map { it.saleId }.toSet()
         val byCopy = HashMap<String, MutableSet<String>>()

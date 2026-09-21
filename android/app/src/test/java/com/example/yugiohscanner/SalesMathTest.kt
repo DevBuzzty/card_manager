@@ -89,4 +89,13 @@ class SalesMathTest {
         val exp = stats.getJSONArray("byMonthLast3").objects().map { SalesMath.MonthRow(it.getString("month"), it.getLong("netCents")) }
         assertEquals(exp, SalesMath.byMonth(sales, items, soldInOf, today, 3))
     }
+    @Test fun verkaufsliste() {
+        val bySaleId = sales.associateBy { it.saleId }
+        for (c in stats.getJSONArray("listValues").objects()) {
+            val sale = bySaleId.getValue(c.getString("sale_id"))
+            assertEquals(c.getString("sale_id"),
+                SalesMath.ListValues(c.getLong("netCents"), c.getLong("marketCents")),
+                SalesMath.listValues(sale, items, soldInOf))
+        }
+    }
 }

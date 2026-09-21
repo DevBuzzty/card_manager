@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   marketValueCents, netCents, feeDefaultCents, suggestionCents,
-  normalizeDiscount, normalizeMinPrice, diffText, euroCentsText,
+  normalizeDiscount, normalizeMinPrice, diffText, euroCentsText, saleListValues,
 } from './saleMath.js';
 
 // ZWILLING: desktop/electron/sales-math.test.cjs und android SalesMathTest.kt lesen dieselbe Fixture.
 const FIX = JSON.parse(readFileSync(new URL('../../../docs/fixtures/sales/sales.json', import.meta.url), 'utf8'));
+const S = FIX.stats;
+const soldInOf = (id) => (id in S.soldIn ? S.soldIn[id] : null);
 
 test('Marktwert je Exemplar in Cent', () => {
   for (const c of FIX.marketValue) assert.equal(marketValueCents(c.card, c.copy), c.cents, c.name);
@@ -28,4 +30,10 @@ test('Einstellungen normalisieren', () => {
 test('Texte', () => {
   for (const c of FIX.texts) assert.equal(diffText(c.net, c.market), c.diff);
   for (const c of FIX.euro) assert.equal(euroCentsText(c.cents), c.text);
+});
+test('Verkaufsliste je Zeile (Storno ohne sold_in-Pruefung, Doppelverkauf ausgeblendet)', () => {
+  for (const c of S.listValues) {
+    const sale = S.sales.find((s) => s.sale_id === c.sale_id);
+    assert.deepEqual(saleListValues(sale, S.items, soldInOf), { netCents: c.netCents, marketCents: c.marketCents }, c.sale_id);
+  }
 });
