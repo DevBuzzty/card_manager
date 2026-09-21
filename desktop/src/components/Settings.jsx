@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { NavLink, Navigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers, Cpu, UploadCloud } from 'lucide-react';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { KEEP_DEFAULT, keepPerCard } from '../utils/duplicates';
 import { T } from '../utils/i18n-de';
+import { createBusyGate } from '../utils/busyGate';
 import PriceAlertSettings from './PriceAlertSettings';
 import ImportDialog from './ImportDialog';
 import ExportDialog from './ExportDialog';
@@ -543,6 +544,7 @@ export default function Settings() {
                                 className="w-24 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-space-violet" />
                             <p className="text-xs text-gray-500 mt-2">Alles über dieser Anzahl je Karte (über alle Printings) erscheint unter „Duplikate“. Ganze Zahl 1–99, Standard 3. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.</p>
                         </div>
+                        <SaleChannelSettings />
                     </div>
                 )}
 
@@ -597,6 +599,75 @@ export default function Settings() {
                     </div>
                 )}
             </div>
+        </div>
+    );
+}
+
+// Spec H2 §8 -- Verkaufskanäle: Gebühr je Kanal, eigene Kanäle anlegen/umbenennen/ausblenden. Feste Kanäle behalten ihren Namen.
+const feeText = (v) => String(v ?? 0).replace('.', ',');
+const feeValue = (s) => (String(s ?? '').trim() === '' ? 0 : Number(String(s).trim().replace(',', '.')));
+
+function SaleChannelSettings() {
+    const [gate] = useState(createBusyGate);
+    const [channels, setChannels] = useState(null);
+    const [drafts, setDrafts] = useState({}); // channel_id -> { name, fee }
+    const [fresh, setFresh] = useState({ name: '', fee: '' });
+    const [error, setError] = useState(null);
+
+    const load = useCallback(() => (window.api?.listSaleChannels ? window.api.listSaleChannels() : Promise.resolve([]))
+        .then((ch) => {
+            const list = Array.isArray(ch) ? ch : [];
+            setChannels(list);
+            setDrafts(Object.fromEntries(list.map((c) => [c.channel_id, { name: c.name, fee: feeText(c.fee_percent) }])));
+        })
+        .catch(() => setError('Kanäle konnten nicht geladen werden.')), []);
+    useEffect(() => { load(); }, [load]);
+
+    const write = (call) => gate.run(async () => {
+        setError(null);
+        try {
+            const res = await call();
+            if (!res?.success) { setError(res?.error || 'Speichern fehlgeschlagen.'); return; }
+            await load();
+        } catch (e) { setError(e?.message || 'Speichern fehlgeschlagen.'); }
+    });
+    const setDraft = (id, patch) => setDrafts((d) => ({ ...d, [id]: { ...d[id], ...patch } }));
+    const save = (c) => write(() => window.api.saveSaleChannel({ channel_id: c.channel_id, name: c.builtin ? c.name : drafts[c.channel_id]?.name, fee_percent: feeValue(drafts[c.channel_id]?.fee) }));
+    const hide = (c) => write(() => window.api.hideSaleChannel(c.channel_id));
+    const create = () => write(async () => {
+        const res = await window.api.saveSaleChannel({ name: fresh.name, fee_percent: feeValue(fresh.fee) });
+        if (res?.success) setFresh({ name: '', fee: '' });
+        return res;
+    });
+
+    const input = 'bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet';
+    const btn = 'px-3 py-2 rounded-lg text-sm bg-black/40 text-gray-300 border border-gray-700 hover:bg-gray-800';
+    return (
+        <div className="mt-6 pt-6 border-t border-gray-800">
+            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Verkaufskanäle</label>
+            {!channels ? <p className="text-sm text-gray-500">…</p> : (
+                <div className="space-y-2">
+                    {channels.map((c) => (
+                        <div key={c.channel_id} className="flex flex-wrap items-center gap-2">
+                            {c.builtin
+                                ? <span className="w-48 text-sm text-white">{c.name}</span>
+                                : <input className={`w-48 ${input}`} value={drafts[c.channel_id]?.name ?? ''} onChange={(e) => setDraft(c.channel_id, { name: e.target.value })} />}
+                            <input inputMode="decimal" className={`w-20 font-mono ${input}`} value={drafts[c.channel_id]?.fee ?? ''} onChange={(e) => setDraft(c.channel_id, { fee: e.target.value })} />
+                            <span className="text-sm text-gray-500">%</span>
+                            <button type="button" onClick={() => save(c)} className={btn}>Speichern</button>
+                            {!c.builtin && <button type="button" onClick={() => hide(c)} className={btn}>Ausblenden</button>}
+                        </div>
+                    ))}
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                        <input className={`w-48 ${input}`} placeholder="Neuer Kanal" value={fresh.name} onChange={(e) => setFresh((f) => ({ ...f, name: e.target.value }))} />
+                        <input inputMode="decimal" className={`w-20 font-mono ${input}`} placeholder="0" value={fresh.fee} onChange={(e) => setFresh((f) => ({ ...f, fee: e.target.value }))} />
+                        <span className="text-sm text-gray-500">%</span>
+                        <button type="button" onClick={create} className={btn}>Anlegen</button>
+                    </div>
+                </div>
+            )}
+            {error && <p className="text-sm text-crit mt-2">{error}</p>}
+            <p className="text-xs text-gray-500 mt-2">Gebühren sind vorbelegt – bitte mit deinen eigenen Konditionen abgleichen. Alte Verkäufe behalten den Namen, den der Kanal beim Buchen hatte.</p>
         </div>
     );
 }

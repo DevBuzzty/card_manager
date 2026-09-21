@@ -2,11 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { createBusyGate } from '../utils/busyGate';
 import { toCents, netCents, feeDefaultCents, diffText, euroCentsText } from '../utils/saleMath';
+import { todayLocal } from '../utils/today';
 
-const todayLocal = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 const toInput = (cents) => (cents == null ? '' : (cents / 100).toFixed(2).replace('.', ','));
 const parse = (s) => (String(s ?? '').trim() === '' ? null : Number(String(s).replace(',', '.')));
 

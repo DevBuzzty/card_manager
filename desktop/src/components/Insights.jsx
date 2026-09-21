@@ -1,10 +1,11 @@
 import { useState, lazy, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
-import { TrendingUp, BarChart3, ArrowUpDown, BellRing, Loader2 } from 'lucide-react';
+import { TrendingUp, BarChart3, ArrowUpDown, BellRing, Loader2, Receipt } from 'lucide-react';
 import Statistics from './Statistics';
 import MoversPanel from './MoversPanel';
 import ValueBreakdown from './ValueBreakdown';
 import PriceAlertsPanel from './PriceAlertsPanel';
+import SalesPanel from './SalesPanel';
 
 const Portfolio = lazy(() => import('./Portfolio'));
 
@@ -41,6 +42,7 @@ export default function Insights() {
         <Tab id="bewegungen" icon={ArrowUpDown} label="Bewegungen" view={view} setView={setView} />
         <Tab id="breakdown" icon={BarChart3} label="Aufteilung" view={view} setView={setView} />
         <Tab id="alarme" icon={BellRing} label="Alarme" view={view} setView={setView} />
+        <Tab id="verkaeufe" icon={Receipt} label="Verkäufe" view={view} setView={setView} />
       </div>
       <div className="flex-1 overflow-auto">
         {view === 'value' && (
@@ -61,6 +63,7 @@ export default function Insights() {
           </div>
         )}
         {view === 'alarme' && <PriceAlertsPanel />}
+        {view === 'verkaeufe' && <SalesPanel />}
       </div>
     </div>
   );

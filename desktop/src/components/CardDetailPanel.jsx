@@ -13,6 +13,7 @@ import { printingFromParams, cardRoute, ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
 import { formatCopyLocation } from '../utils/copyLocation';
 import { formatPasscode } from '../utils/passcode';
+import { euroCentsText, toCents } from '../utils/saleMath';
 
 export default function CardDetailPanel({ paletteOpen = false }) {
   const params = useParams();
@@ -28,12 +29,14 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   const [copiesByKey, setCopiesByKey] = useState({}); // "set|rarity|lang" -> [copy rows]
   const [containers, setContainers] = useState([]); // fuer den Standort-Chip -- Name/Art je Behaelter
   const [sheetCopy, setSheetCopy] = useState(null); // das im Exemplar-Sheet geoeffnete Exemplar, oder null
+  const [sold, setSold] = useState([]); // Spec H2 §7: verkaufte Exemplare dieser Karte
   const vKey = (v) => `${v.set_code}|${v.rarity}|${v.language || 'DE'}`;
   const printingOf = (v) => ({ id: String(card.id), set_code: v.set_code, language: v.language || 'DE', rarity: v.rarity });
 
   // Rebuild the grouped card for this passcode from the collection.
   const loadCard = async () => {
     if (!window.api) return;
+    window.api.cardSales?.(printing.id).then((r) => setSold(Array.isArray(r) ? r : [])).catch(() => setSold([]));
     const rows = (await window.api.getCollection()).filter(r => String(r.id) === String(printing.id));
     if (rows.length === 0) { setCard(null); return; }
     const primary = rows.find(r => r.set_code === printing.set_code && r.rarity === printing.rarity
@@ -404,6 +407,21 @@ export default function CardDetailPanel({ paletteOpen = false }) {
               <span className="text-xl font-mono text-gray-300">{formatPasscode(card.id)}</span>
           </div>
       </div>
+
+      {sold.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold text-gray-300 mb-2">Verkauft</h3>
+          <div className="space-y-1">
+            {sold.map((s) => (
+              <div key={`${s.sale_id}|${s.copy_id}`} className={`flex items-center gap-2 text-[11px] font-mono ${s.status === 'storniert' ? 'line-through text-ink-faint' : 'text-ink-muted'}`}>
+                <span>{s.sold_on.split('-').reverse().join('.')}</span><span>{s.channel_name}</span>
+                <span>{s.set_code} · {s.rarity} · {s.condition}</span>
+                <span className="ml-auto text-gold">{euroCentsText(toCents(s.share))}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="prose prose-invert max-w-none">
           <h3 className="text-lg font-semibold text-gray-300 mb-2">Beschreibung</h3>
