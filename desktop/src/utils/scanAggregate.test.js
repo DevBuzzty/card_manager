@@ -178,3 +178,43 @@ test('ein unbekannter Modus faellt weiter auf "nicht zusammenfassen" zurueck', (
   assert.equal(applyScan(cards, scan({ mode: 'Foto' })), cards, 'Gross/Klein zaehlt -- nur woertlich "foto"');
   assert.equal(applyScan(cards, scan({ mode: 'irgendwas' })), cards);
 });
+
+// Ampel nachziehen (21.09.2026): ein weiterer Druck auf denselben Druck hebt die Ampel -- nur nach oben.
+test('ein gruener zweiter Druck macht eine gelbe Zeile gruen', () => {
+  const card = loaded({ scannedConfidence: 'yellow', scannedReason: 'Code unsicher: LOB-DE005', setMatchConfidence: 'fuzzy', setAutoDetected: true });
+  const [out] = applyScan([card], scan({ mode: 'foto', confidence: 'green', reason: null }));
+  assert.equal(out.quantity, 2);
+  assert.equal(out.scannedConfidence, 'green');
+  assert.equal(out.scannedReason, null);
+  assert.equal(out.setMatchConfidence, 'exact', 'die "Erkannt"-Anzeige zieht mit');
+});
+
+test('ein schlechterer zweiter Druck macht eine gruene Zeile NICHT gelb', () => {
+  const card = loaded({ scannedConfidence: 'green', scannedReason: null, setMatchConfidence: 'exact' });
+  const [out] = applyScan([card], scan({ mode: 'foto', confidence: 'yellow', reason: 'Code unsicher' }));
+  assert.equal(out.quantity, 2);
+  assert.equal(out.scannedConfidence, 'green');
+  assert.equal(out.setMatchConfidence, 'exact');
+});
+
+test('eine Handkorrektur bleibt stehen, auch wenn der neue Druck gruen ist', () => {
+  const card = loaded({ scannedConfidence: 'yellow', setMatchConfidence: 'fuzzy', setTouched: true });
+  const [out] = applyScan([card], scan({ mode: 'foto', confidence: 'green' }));
+  assert.equal(out.quantity, 2);
+  assert.equal(out.scannedConfidence, 'yellow');
+  assert.equal(out.setMatchConfidence, 'fuzzy');
+});
+
+test('eine noch ladende Zeile bekommt nur die Handy-Ampel, fetchCard leitet den Rest ab', () => {
+  const pending = { tempId: 1, passcode: '46986414', status: 'pending', quantity: 1, scannedConfidence: 'yellow' };
+  const [out] = applyScan([pending], scan({ mode: 'foto', confidence: 'green' }));
+  assert.equal(out.scannedConfidence, 'green');
+  assert.equal(out.setMatchConfidence, undefined);
+});
+
+test('ein Druck auf einen anderen Druck laesst die Ampel der Hauptzeile in Ruhe', () => {
+  const card = loaded({ scannedConfidence: 'yellow' });
+  const [out] = applyScan([card], scan({ setCode: 'SDY-G005', mode: 'foto', confidence: 'green' }));
+  assert.equal(out.scannedConfidence, 'yellow');
+  assert.equal(out.extraPrintings.length, 1);
+});

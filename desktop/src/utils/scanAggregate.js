@@ -1,4 +1,4 @@
-import { phoneSelectedSet } from './setCodeMatch.js';
+import { phoneSelectedSet, mapPhoneConfidence } from './setCodeMatch.js';
 
 // Spec D4 §4/§5: wohin ein WIEDERHOLTER Scan derselben Karte sein "+1" bucht, solange der PC das
 // Staging fuehrt.
@@ -96,7 +96,7 @@ export function applyScan(cards, scanned, defaults = FALLBACK_DEFAULTS) {
   const target = aggregateTarget(card, scanned);
   let updated;
   if (target.kind === 'primary') {
-    updated = { ...card, quantity: (card.quantity || 1) + 1 };
+    updated = { ...zieheAmpelNach(card, scanned), quantity: (card.quantity || 1) + 1 };
   } else if (target.kind === 'extra') {
     const extras = card.extraPrintings.map((p, i) =>
       i === target.index ? { ...p, quantity: (p.quantity || 1) + 1 } : p);
@@ -115,6 +115,33 @@ export function applyScan(cards, scanned, defaults = FALLBACK_DEFAULTS) {
     updated = { ...card, extraPrintings: [...(card.extraPrintings || []), extra] };
   }
   return cards.map((c, i) => (i === idx ? updated : c));
+}
+
+// Rangfolge der Handy-Ampel. Unbekannt (aelteres Handy, kein Feld) steht unter Rot.
+const AMPEL_RANG = { red: 1, yellow: 2, green: 3 };
+
+/**
+ * Ein weiterer Druck auf DENSELBEN Druck einer Zeile zieht deren Ampel nach -- aber nur nach oben
+ * (Nutzerentscheid 21.09.2026). Anlass: im Fotomodus war der zweite Druck einer Karte gruen, die
+ * Zeile am PC zeigte aber weiter das Gelb des ersten, weil "+1" bisher nur die Menge anfasste.
+ *
+ * Nie nach unten: ein spaeterer, schlechterer Druck widerlegt den besseren nicht, er hat nur
+ * weniger gesehen. Und nie ueber eine Handkorrektur (`setTouched`, `isManualEntry`): hat der
+ * Nutzer den Druck selbst gewaehlt, beschreibt die Ampel des Handys nicht mehr, was dasteht.
+ */
+function zieheAmpelNach(card, scanned) {
+  if (card.setTouched || card.isManualEntry) return card;
+  const neu = AMPEL_RANG[scanned.confidence] || 0;
+  const alt = AMPEL_RANG[card.scannedConfidence] || 0;
+  if (neu <= alt) return card;
+  const out = { ...card, scannedConfidence: scanned.confidence, scannedReason: scanned.reason };
+  // Ist die Karte schon geladen, sind die angezeigten Werte bereits aus der alten Ampel abgeleitet
+  // (StagingArea.fetchCard) -- sie muessen mit. Laedt sie noch, liest fetchCard die neue selbst.
+  if (card.status === 'loaded') {
+    out.setMatchConfidence = mapPhoneConfidence(scanned.confidence);
+    out.setAutoDetected = scanned.confidence !== 'red';
+  }
+  return out;
 }
 
 // Spec D3 Task 8: die Felder, die ein aktuelles Handy mitschickt -- Set-Code, Rarity, Sprache,
