@@ -30,7 +30,8 @@ fun InsightsScreen(initialTab: String = "bewegungen", onBack: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
     var byValue by rememberSaveable { mutableStateOf(false) }
     BackHandler(detailId != null) { detailId = null }
-    LaunchedEffect(tab) { if (tab == "verkaeufe") SideStores.sales.ensureLoaded() }
+    // Abschluss-Fixwelle I2: beim Oeffnen des Reiters frisch laden, nicht nur den ersten Stand.
+    LaunchedEffect(tab) { if (tab == "verkaeufe") SideStores.sales.refresh() }
     detailId?.let { id ->
         CardDetailScreen(cardId = id, onClose = { detailId = null })
         return

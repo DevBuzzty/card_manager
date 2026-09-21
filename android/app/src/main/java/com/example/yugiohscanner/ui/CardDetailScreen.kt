@@ -84,7 +84,8 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
     // offen, solange der Verkaufs-Speicher Positionen dieser Karte hat (SalesOverview.cardSold -- dieselbe
     // Auswahl wie CardSoldSection, damit "offen" nie mit einem leeren Abschnitt zusammenfaellt).
     val salesState by SideStores.sales.state.collectAsState()
-    LaunchedEffect(Unit) { SideStores.sales.ensureLoaded() }
+    // Abschluss-Fixwelle I2: frisch laden -- die Schliesslogik unten haengt am aktuellen Verkaufsstand.
+    LaunchedEffect(Unit) { SideStores.sales.refresh() }
     val salesData = salesState.value
     val soldHere = remember(salesData, cardId) { salesData?.let { SalesOverview.cardSold(it, cardId).isNotEmpty() } == true }
     // "Entschieden" = geladen oder gescheitert, und gerade kein Nachladen (z. B. direkt nach dem Verkauf des

@@ -204,6 +204,7 @@ private fun SaleRowView(r: SalesOverview.ListRow, onClick: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall)
             if (cancelled) Text("storniert", color = Muted, style = MaterialTheme.typography.labelSmall)
             if (r.doubleSold) DoubleBadge()
+            if (r.orphaned) OrphanBadge()
             Spacer(Modifier.weight(1f))
             Text(SalesMath.diffText(r.netCents, r.marketCents), fontFamily = MonoFontFamily, textDecoration = deco,
                 color = if (cancelled) Muted else if (r.netCents >= r.marketCents) Good else ErrorColor,
@@ -215,6 +216,13 @@ private fun SaleRowView(r: SalesOverview.ListRow, onClick: () -> Unit) {
 @Composable
 private fun DoubleBadge() {
     Text("Karte doppelt verkauft", color = ErrorColor, style = MaterialTheme.typography.labelSmall,
+        modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(ErrorColor.copy(alpha = 0.2f)).padding(horizontal = 6.dp, vertical = 1.dp))
+}
+
+/** Abschluss-Fixwelle I3 -- wie DoubleBadge; Gegenstueck zur Marke in SalesPanel.jsx. */
+@Composable
+private fun OrphanBadge() {
+    Text("Position ohne verkauftes Exemplar – bitte prüfen", color = ErrorColor, style = MaterialTheme.typography.labelSmall,
         modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(ErrorColor.copy(alpha = 0.2f)).padding(horizontal = 6.dp, vertical = 1.dp))
 }
 
@@ -235,6 +243,8 @@ private class EditForm(
         EditForm(channelId, soldOn, gross, fees, shipping, note, returned)
 }
 
+private const val CHANGED_MEANWHILE = "Verkauf wurde inzwischen geändert – bitte neu öffnen."
+
 private fun moneyInput(v: Double?): String = SalesMath.toCents(v)?.let { SaleInput.centsInput(it) } ?: ""
 
 /**
@@ -250,13 +260,15 @@ fun SaleDetailSheet(saleId: String, onDismiss: () -> Unit, onOpenCard: ((String)
     var busy by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !busy })
     val state by SideStores.sales.state.collectAsState()
-    LaunchedEffect(Unit) { SideStores.sales.ensureLoaded() }
+    // Abschluss-Fixwelle I2: beim Oeffnen frisch laden -- ein anderes Geraet kann den Verkauf inzwischen geaendert haben.
+    LaunchedEffect(Unit) { SideStores.sales.refresh() }
     val data = state.value
     val offline = data == null || state.error != null
 
     val sale = remember(data, saleId) { data?.sales?.find { it.saleId == saleId } }
     val items = remember(data, saleId) { data?.let { SalesOverview.detailItems(it, saleId) } ?: emptyList() }
     val doubleSold = remember(data, saleId) { data?.let { SalesOverview.isDoubleSold(it, saleId) } == true }
+    val orphaned = remember(data, saleId) { data?.let { SalesOverview.isOrphaned(it, saleId) } == true }
     val active = sale?.status == "aktiv"
 
     var form by remember { mutableStateOf<EditForm?>(null) }
@@ -279,12 +291,14 @@ fun SaleDetailSheet(saleId: String, onDismiss: () -> Unit, onOpenCard: ((String)
         scope.launch {
             try {
                 try {
-                    // Frischer Stand, nicht der Kompositions-Schnappschuss.
+                    // Abschluss-Fixwelle I2: erst frisch laden (ein anderes Geraet kann den Verkauf inzwischen
+                    // geaendert haben), dann den frischen Stand lesen -- nicht den Kompositions-Schnappschuss.
+                    SideStores.sales.refreshAndWait()
                     val s = SideStores.sales.state.value
                     val d = s.value
                     if (d == null || s.error != null) throw IllegalStateException("Keine Verbindung – Verkäufe nicht geladen.")
-                    val cur = d.sales.find { it.saleId == saleId } ?: throw IllegalStateException("Verkauf nicht gefunden.")
-                    if (cur.status != "aktiv") throw IllegalStateException("Ein stornierter Verkauf lässt sich nicht ändern.")
+                    val cur = d.sales.find { it.saleId == saleId }
+                    if (cur == null || cur.status != "aktiv") { error = CHANGED_MEANWHILE; return@launch }
                     val fresh = SalesOverview.detailItems(d, saleId)
                     val live = fresh.filter { !it.deleted }.map { it.copyId }.toSet()
                     val returned = f.returned.filter { it in live }
@@ -324,11 +338,13 @@ fun SaleDetailSheet(saleId: String, onDismiss: () -> Unit, onOpenCard: ((String)
         scope.launch {
             try {
                 try {
+                    // Abschluss-Fixwelle I2: wie save() -- erst frisch laden, dann pruefen.
+                    SideStores.sales.refreshAndWait()
                     val s = SideStores.sales.state.value
                     val d = s.value
                     if (d == null || s.error != null) throw IllegalStateException("Keine Verbindung – Verkäufe nicht geladen.")
-                    val cur = d.sales.find { it.saleId == saleId } ?: throw IllegalStateException("Verkauf nicht gefunden.")
-                    if (cur.status != "aktiv") throw IllegalStateException("Der Verkauf ist bereits storniert.")
+                    val cur = d.sales.find { it.saleId == saleId }
+                    if (cur == null || cur.status != "aktiv") { error = CHANGED_MEANWHILE; return@launch }
                     SalesRepository.cancel(saleId)
                 } catch (e: CancellationException) {
                     throw e
@@ -378,6 +394,10 @@ fun SaleDetailSheet(saleId: String, onDismiss: () -> Unit, onOpenCard: ((String)
                 }
                 if (doubleSold) {
                     Text("Karte doppelt verkauft – eine Position zählt beim anderen Verkauf.", color = ErrorColor,
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                if (orphaned) {
+                    Text("Position ohne verkauftes Exemplar – bitte prüfen. Sie zählt in der Übersicht nicht mit.", color = ErrorColor,
                         style = MaterialTheme.typography.bodySmall)
                 }
                 val net = SalesMath.netCents(sale.gross, sale.fees, sale.shipping)
