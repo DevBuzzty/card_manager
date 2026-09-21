@@ -124,6 +124,9 @@ begin
   if p_items is null or jsonb_array_length(p_items) = 0 then
     raise exception 'Mindestens eine Karte auswählen.';
   end if;
+  if exists (select 1 from public.sales where sale_id = sid) then
+    raise exception 'Verkauf bereits gebucht.';
+  end if;
   insert into public.sales (sale_id, sold_on, channel_id, channel_name, gross, fees, shipping, note)
   values (sid, (p_sale->>'sold_on')::date, p_sale->>'channel_id', p_sale->>'channel_name',
           (p_sale->>'gross')::numeric, nullif(p_sale->>'fees', '')::numeric, nullif(p_sale->>'shipping', '')::numeric,
@@ -131,7 +134,8 @@ begin
   for it in select value from jsonb_array_elements(p_items) loop
     insert into public.sale_items (sale_id, copy_id, value_at_sale, share, was_for_sale, card_id, set_code, language,
                                    rarity, edition, condition, name, image_url)
-    select sid, cc.copy_id, (it->>'value_at_sale')::numeric, (it->>'share')::numeric, cc.for_sale, cc.card_id,
+    select sid, cc.copy_id, coalesce(nullif(it->>'value_at_sale', ''), '0')::numeric,
+           coalesce(nullif(it->>'share', ''), '0')::numeric, cc.for_sale, cc.card_id,
            cc.set_code, cc.language, cc.rarity, cc.edition, cc.condition, c.name, c.image_url
       from public.card_copies cc
       left join public.cards c on c.id = cc.card_id and c.set_code = cc.set_code
@@ -139,7 +143,9 @@ begin
      where cc.copy_id = it->>'copy_id' and cc.deleted = false and cc.sold_in is null;
     get diagnostics n = row_count;
     if n = 0 then raise exception 'Karte bereits verkauft oder gelöscht (%).', it->>'copy_id'; end if;
-    update public.card_copies set deleted = true, sold_in = sid, for_sale = false where copy_id = it->>'copy_id';
+    update public.card_copies set deleted = true, sold_in = sid, for_sale = false
+     where copy_id = it->>'copy_id' and deleted = false and sold_in is null;
+    if not found then raise exception 'Karte bereits verkauft oder gelöscht (%).', it->>'copy_id'; end if;
   end loop;
 end $$;
 
@@ -166,7 +172,7 @@ begin
   if not exists (select 1 from public.sale_items where sale_id = sid and deleted = false) then
     raise exception 'Mindestens eine Karte muss im Verkauf bleiben – sonst stornieren.';
   end if;
-  update public.sale_items si set share = (x->>'share')::numeric
+  update public.sale_items si set share = coalesce(nullif(x->>'share', ''), '0')::numeric
     from jsonb_array_elements(coalesce(p_shares, '[]'::jsonb)) x
    where si.sale_id = sid and si.copy_id = x->>'copy_id' and si.deleted = false;
 end $$;
