@@ -332,4 +332,28 @@ class SetCodeMatchTest {
         val frames = listOf("BLGG-EN135 | auf den Friedhof", "2000 oder weniger beschwören")
         assertEquals("BLGG-DE135", SetCodeMatch.best(frames, known, frames).selected?.setCode)
     }
+
+    // --- Fotomodus, 21.09.2026: woertliche Rohlesungen der ersten vier Fotoserien -----------------
+
+    @Test fun `die als O gelesene Null zaehlt als fehlerfreies Bild`() {
+        val known = listOf(SetOption("DOOD-EN096", "Common", 0.0, "EN"))
+        val bilder = listOf("DOOD-ENO96", "DOOD-ENO96", "DOOD-EN096")
+        val r = SetCodeMatch.best(bilder, known, bilder)
+        assertEquals("DOOD-EN096", r.selected?.setCode)
+        assertEquals(3, r.codeFrameCount)
+        assertTrue(r.codeExactMatch)
+    }
+
+    @Test fun `die Korrektur macht keine falsche Nummer passend`() {
+        // ENO97 wird zu EN097 -- das ist nicht DOOD-EN096 und darf nicht als fehlerfrei zaehlen.
+        val known = listOf(SetOption("DOOD-EN096", "Common", 0.0, "EN"))
+        val bilder = listOf("DOOD-ENO97", "DOOD-ENO97")
+        assertEquals(0, SetCodeMatch.best(bilder, known, bilder).codeFrameCount)
+    }
+
+    @Test fun `ein voellig zerlesenes Bild zaehlt weiterhin nicht`() {
+        val known = listOf(SetOption("DOOD-EN074", "Common", 0.0, "EN"))
+        val bilder = listOf("DOODENDA", "DOOD-ENO74", "DOOD-ENO74")
+        assertEquals(2, SetCodeMatch.best(bilder, known, bilder).codeFrameCount)
+    }
 }
