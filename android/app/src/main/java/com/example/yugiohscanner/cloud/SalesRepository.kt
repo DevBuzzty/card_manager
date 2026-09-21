@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.cloud
 
+import com.example.yugiohscanner.ml.Keyset
+import com.example.yugiohscanner.ml.KeysetPager
 import com.example.yugiohscanner.ml.SalesMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -91,46 +93,80 @@ object SalesRepository {
         }
     }
 
-    private fun parseSoldIn(text: String): Map<String, String?> {
+    private fun parseSoldInRows(text: String): List<Pair<String, String?>> {
         val arr = JSONArray(text)
-        val m = HashMap<String, String?>()
-        for (i in 0 until arr.length()) {
+        return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
-            m[o.getString("copy_id")] = if (o.isNull("sold_in")) null else o.getString("sold_in")
+            o.getString("copy_id") to (if (o.isNull("sold_in")) null else o.getString("sold_in"))
         }
-        return m
+    }
+
+    // Supabase deckelt `limit` bei 1000 Zeilen (PostgREST max-rows), egal was angefragt wird -- sales,
+    // sale_items und die sold_in-Zeilen von card_copies koennen das mit der Zeit ueberschreiten und
+    // wuerden dann still abgeschnitten (soldIn faelschlich null -> Positionen zaehlen nicht mehr mit).
+    // Darum ueber KeysetPager blaettern, mit derselben Bauart wie StoreQueries/Keyset. Fuer `sales` wird
+    // dabei nach der eindeutigen sale_id aufsteigend geblaettert (statt nach sold_on/created_at absteigend
+    // mit Gleichstaenden) und danach in load() fuer die Anzeige umsortiert -- einfacher als absteigendes
+    // Keyset-Blaettern ueber mehrere Spalten. sale_channels bleibt eine kleine, eingebaute Liste ohne Blaettern.
+    internal fun salesPageParams(after: String?): List<Pair<String, String>> {
+        val p = arrayListOf(
+            "select" to "sale_id,sold_on,channel_id,channel_name,gross,fees,shipping,status,note,deleted",
+            "deleted" to "eq.false",
+            "order" to "sale_id.asc",
+            "limit" to StoreQueries.PAGE.toString(),
+        )
+        if (after != null) p += "or" to Keyset.after(listOf("sale_id"), listOf(after))
+        return p
+    }
+
+    internal fun itemsPageParams(after: SaleItemRow?): List<Pair<String, String>> {
+        val p = arrayListOf(
+            "select" to "*",
+            "order" to "sale_id.asc,copy_id.asc",
+            "limit" to StoreQueries.PAGE.toString(),
+        )
+        if (after != null) p += "or" to Keyset.after(listOf("sale_id", "copy_id"), listOf(after.saleId, after.copyId))
+        return p
+    }
+
+    internal fun soldInPageParams(after: String?): List<Pair<String, String>> {
+        val p = arrayListOf(
+            "select" to "copy_id,sold_in",
+            "sold_in" to "not.is.null",
+            "order" to "copy_id.asc",
+            "limit" to StoreQueries.PAGE.toString(),
+        )
+        if (after != null) p += "or" to Keyset.after(listOf("copy_id"), listOf(after))
+        return p
     }
 
     suspend fun load(): SalesData {
-        val salesText = getText(
-            "sales",
-            listOf(
-                "select" to "sale_id,sold_on,channel_id,channel_name,gross,fees,shipping,status,note,deleted",
-                "deleted" to "eq.false", "order" to "sold_on.desc,created_at.desc", "limit" to "10000",
-            ),
-            "Verkäufe laden",
-        )
-        val itemsText = getText("sale_items", listOf("select" to "*", "limit" to "10000"), "Positionen laden")
-        val soldInText = getText(
-            "card_copies",
-            listOf("select" to "copy_id,sold_in", "sold_in" to "not.is.null", "limit" to "10000"),
-            "Exemplare laden",
-        )
+        val parsed = KeysetPager.all(StoreQueries.PAGE) { after: ParsedSale? ->
+            parseSales(getText("sales", salesPageParams(after?.head?.saleId), "Verkäufe laden"))
+        }
+        val items = KeysetPager.all(StoreQueries.PAGE) { after: SaleItemRow? ->
+            parseItems(getText("sale_items", itemsPageParams(after), "Positionen laden"))
+        }
+        val soldInRows = KeysetPager.all(StoreQueries.PAGE) { after: Pair<String, String?>? ->
+            parseSoldInRows(getText("card_copies", soldInPageParams(after?.first), "Exemplare laden"))
+        }
         val channelsText = getText(
             "sale_channels",
             listOf(
                 "select" to "channel_id,name,fee_percent,builtin,sort", "deleted" to "eq.false",
-                "order" to "sort.asc,name.asc", "limit" to "10000",
+                "order" to "sort.asc,name.asc", "limit" to StoreQueries.PAGE.toString(),
             ),
             "Kanäle laden",
         )
 
-        val parsed = parseSales(salesText)
+        // Anzeige-Reihenfolge (neuestes zuerst) erst nach dem Blaettern herstellen -- die Anfragen selbst
+        // sind nach sale_id sortiert (siehe salesPageParams).
+        val sorted = parsed.sortedWith(compareByDescending<ParsedSale> { it.head.soldOn }.thenByDescending { it.head.saleId })
         return SalesData(
-            sales = parsed.map { it.head },
-            notes = parsed.associate { it.head.saleId to it.note },
-            items = parseItems(itemsText),
-            soldIn = parseSoldIn(soldInText),
+            sales = sorted.map { it.head },
+            notes = sorted.associate { it.head.saleId to it.note },
+            items = items,
+            soldIn = soldInRows.toMap(),
             channels = parseChannels(channelsText),
         )
     }
@@ -156,13 +192,23 @@ object SalesRepository {
             .put("p_returned", JSONArray(returned))
 
     /**
-     * Bucht einen neuen Verkauf: Anteile ueber SalesMath.distribute auf den Netto-Erloes, [items] davor
-     * nach copyId sortiert (Controller-Vorgabe: gleiche Reihenfolge wie der Desktop-Sortierung nach
-     * copy_id) -- die sortierte Reihenfolge steht danach auch in der Nutzlast. Gibt die neue sale_id zurueck.
+     * Sortiert [items] nach copyId (String-Ordnung, wie der Desktop-Sort nach copy_id -- Controller-
+     * Vorgabe 1) und verteilt darueber den Netto-Erloes von [head] (SalesMath.distribute). Geteilt
+     * zwischen [book] und [update], damit ein versehentlich entferntes Sortieren an EINER Stelle beide
+     * Aufrufer und ihre Tests bricht, statt sich unbemerkt in einem der beiden einzuschleichen.
      */
-    suspend fun book(head: SaleHeadInput, items: List<Pair<String, Long>>): String {
+    internal fun prepareItems(head: SaleHeadInput, items: List<Pair<String, Long>>): Pair<List<Pair<String, Long>>, List<Long>> {
         val sorted = items.sortedBy { it.first }
         val shares = SalesMath.distribute(SalesMath.netCents(head.gross, head.fees, head.shipping), sorted.map { it.second })
+        return sorted to shares
+    }
+
+    /**
+     * Bucht einen neuen Verkauf: Anteile ueber [prepareItems] (sortiert nach copyId, dann verteilt) --
+     * die sortierte Reihenfolge steht danach auch in der Nutzlast. Gibt die neue sale_id zurueck.
+     */
+    suspend fun book(head: SaleHeadInput, items: List<Pair<String, Long>>): String {
+        val (sorted, shares) = prepareItems(head, items)
         val saleId = UUID.randomUUID().toString()
         rpc("book_sale", bookBody(saleId, head, sorted, shares))
         return saleId
@@ -172,13 +218,12 @@ object SalesRepository {
      * Aendert Kopf, Anteile und Rueckgaben eines aktiven Verkaufs. [remaining] sind ALLE nicht
      * zurueckgegebenen, lebenden Positionen -- update_sale setzt share nur fuer Zeilen aus p_shares, darum
      * muss [remaining] wirklich jede verbleibende Position enthalten, sonst behaelt sie ihren alten Anteil.
-     * [remaining] wird vor der Verteilung nach copyId sortiert, wie [book]. [head.channelName] ist eine
-     * Momentaufnahme: bleibt der Kanal unveraendert, uebergibt die Oberflaeche den am Verkauf gespeicherten
-     * Namen unveraendert weiter (kein Nachschlagen ueber channelId).
+     * [remaining] wird ueber [prepareItems] wie [book] nach copyId sortiert, bevor verteilt wird.
+     * [head.channelName] ist eine Momentaufnahme: bleibt der Kanal unveraendert, uebergibt die Oberflaeche
+     * den am Verkauf gespeicherten Namen unveraendert weiter (kein Nachschlagen ueber channelId).
      */
     suspend fun update(saleId: String, head: SaleHeadInput, remaining: List<Pair<String, Long>>, returned: List<String>) {
-        val sorted = remaining.sortedBy { it.first }
-        val shareCents = SalesMath.distribute(SalesMath.netCents(head.gross, head.fees, head.shipping), sorted.map { it.second })
+        val (sorted, shareCents) = prepareItems(head, remaining)
         val shares = sorted.mapIndexed { i, (id, _) -> id to shareCents[i] }
         rpc("update_sale", updateBody(saleId, head, shares, returned))
     }
@@ -190,7 +235,7 @@ object SalesRepository {
     suspend fun saveChannel(channelId: String?, name: String, feePercent: Double) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) throw IllegalArgumentException("Der Kanal braucht einen Namen.")
-        if (feePercent < 0 || feePercent > 100) throw IllegalArgumentException("Die Gebühr muss zwischen 0 und 100 % liegen.")
+        if (feePercent.isNaN() || feePercent < 0 || feePercent > 100) throw IllegalArgumentException("Die Gebühr muss zwischen 0 und 100 % liegen.")
         if (channelId == null) {
             val body = JSONObject().put("channel_id", UUID.randomUUID().toString()).put("name", trimmed).put("fee_percent", feePercent)
             post("sale_channels", body, "Kanal speichern")
@@ -243,11 +288,13 @@ object SalesRepository {
         }.use { r -> if (!r.isSuccessful) throw dbError(r) }
     }
 
-    private fun dbError(r: Response): RuntimeException {
-        val text = r.body?.string() ?: ""
-        val message = runCatching { JSONObject(text).optString("message") }.getOrNull()?.takeIf { it.isNotEmpty() } ?: text
-        return RuntimeException(message)
+    /** Reine Nachrichtenwahl fuer [dbError]: message aus dem PostgREST-Fehler-JSON, sonst der Rohtext, sonst -- bei leerem Rumpf -- ein Standardtext. */
+    internal fun dbErrorMessage(body: String?, code: Int): String {
+        val text = body?.takeIf { it.isNotBlank() } ?: return "Cloud-Aufruf fehlgeschlagen ($code)"
+        return runCatching { JSONObject(text).optString("message") }.getOrNull()?.takeIf { it.isNotEmpty() } ?: text
     }
+
+    private fun dbError(r: Response): RuntimeException = RuntimeException(dbErrorMessage(r.body?.string(), r.code))
 
     private fun base(url: HttpUrl): Request.Builder =
         Request.Builder().url(url)

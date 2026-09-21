@@ -1,9 +1,14 @@
 package com.example.yugiohscanner
 
 import com.example.yugiohscanner.cloud.SaleHeadInput
+import com.example.yugiohscanner.cloud.SaleItemRow
 import com.example.yugiohscanner.cloud.SalesRepository
+import com.example.yugiohscanner.ml.KeysetPager
+import com.example.yugiohscanner.ml.SalesMath
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class SalesRepositoryTest {
@@ -47,5 +52,74 @@ class SalesRepositoryTest {
         val returned = body.getJSONArray("p_returned")
         assertEquals(1, returned.length())
         assertEquals("c3", returned.getString(0))
+    }
+
+    // Fix-Runde 1, Befund 2: prepareItems ist die von book() UND update() geteilte Sortier-/Verteilstelle
+    // (Controller-Vorgabe 1). Bewusst UNSORTIERT uebergeben -- ein Sabotage-Test (sortedBy entfernt) hat
+    // bestaetigt, dass genau dieser Test ohne die Sortierung scheitert (siehe Fix-Bericht).
+    @Test fun `prepareItems sortiert unsortierte Positionen nach copyId vor der Verteilung`() {
+        val head = SaleHeadInput("2026-09-21", "ebay", "eBay", 10.0, null, null, null)
+        val (sorted, shares) = SalesRepository.prepareItems(head, listOf("c2" to 400L, "c1" to 600L))
+        assertEquals(listOf("c1", "c2"), sorted.map { it.first })
+        assertEquals(SalesMath.distribute(SalesMath.netCents(10.0, null, null), listOf(600L, 400L)), shares)
+    }
+
+    // Fix-Runde 1, Befund 1: Supabase deckelt `limit` bei 1000 -- sales/sale_items/card_copies muessen
+    // blaettern. Die Query-Bauer sind rein, wie StoreQueries/StoreQueriesTest.
+    @Test fun `Verkaeufe-Seite ohne Filter, Folgeseite nach sale_id`() {
+        assertEquals(
+            listOf(
+                "select" to "sale_id,sold_on,channel_id,channel_name,gross,fees,shipping,status,note,deleted",
+                "deleted" to "eq.false", "order" to "sale_id.asc", "limit" to "1000",
+            ),
+            SalesRepository.salesPageParams(null),
+        )
+        assertEquals("or" to "(sale_id.gt.\"s1\")", SalesRepository.salesPageParams("s1").last())
+    }
+    @Test fun `Positionen-Seite blaettert nach zusammengesetztem Schluessel sale_id,copy_id`() {
+        val after = SaleItemRow("s1", "c7", 0.0, 0.0, false, "1", "X", "DE", "Common", "unknown", "NM", null, null, false)
+        assertEquals("select" to "*", SalesRepository.itemsPageParams(null).first())
+        assertEquals(
+            "or" to "(sale_id.gt.\"s1\",and(sale_id.eq.\"s1\",copy_id.gt.\"c7\"))",
+            SalesRepository.itemsPageParams(after).last(),
+        )
+    }
+    @Test fun `sold_in-Seite blaettert nach copy_id`() {
+        assertEquals("sold_in" to "not.is.null", SalesRepository.soldInPageParams(null)[1])
+        assertEquals("or" to "(copy_id.gt.\"c9\")", SalesRepository.soldInPageParams("c9").last())
+    }
+    @Test fun `KeysetPager blaettert Verkaufsseiten -- volle Seite fordert eine weitere Anfrage an, kurze Seite beendet`() = runBlocking {
+        val allIds = (1..2500).map { "s%05d".format(it) }
+        var calls = 0
+        val fetch: suspend (String?) -> List<String> = { after ->
+            calls++
+            val from = if (after == null) 0 else allIds.indexOf(after) + 1
+            allIds.subList(from, minOf(from + 1000, allIds.size))
+        }
+        val got = KeysetPager.all(1000, fetch)
+        assertEquals(2500, got.size)
+        assertEquals(3, calls) // 1000 + 1000 + 500 (kurz, beendet ohne weitere Anfrage)
+    }
+
+    // Fix-Runde 1, Befund 3: leerer Fehlerrumpf darf keine leere Meldung ergeben.
+    @Test fun `dbErrorMessage nutzt die DB-Nachricht, sonst Rohtext, sonst einen Standardtext bei leerem Rumpf`() {
+        assertEquals(
+            "Verkauf bereits gebucht.",
+            SalesRepository.dbErrorMessage("""{"message":"Verkauf bereits gebucht.","code":"P0001"}""", 400),
+        )
+        assertEquals("kaputtes json", SalesRepository.dbErrorMessage("kaputtes json", 400))
+        assertEquals("Cloud-Aufruf fehlgeschlagen (500)", SalesRepository.dbErrorMessage(null, 500))
+        assertEquals("Cloud-Aufruf fehlgeschlagen (500)", SalesRepository.dbErrorMessage("", 500))
+        assertEquals("Cloud-Aufruf fehlgeschlagen (500)", SalesRepository.dbErrorMessage("   ", 500))
+    }
+
+    // Fix-Runde 1, Befund 4: NaN schluepft an `< 0 || > 100` vorbei (IEEE754-Vergleiche mit NaN sind immer false).
+    @Test fun `saveChannel lehnt NaN-Gebuehr ab`() = runBlocking {
+        try {
+            SalesRepository.saveChannel(null, "Testkanal", Double.NaN)
+            fail("erwartete IllegalArgumentException")
+        } catch (e: IllegalArgumentException) {
+            assertEquals("Die Gebühr muss zwischen 0 und 100 % liegen.", e.message)
+        }
     }
 }
