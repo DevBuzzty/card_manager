@@ -85,6 +85,8 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
     // Spec H1 §5.3: Schalter "Zum Verkauf" schreibt sofort -- dieselbe Doppel-Tap-Sperre (savingRef) wie Speichern/Entfernen.
     var forSale by remember { mutableStateOf(copy.forSale) }
     var markingSale by remember { mutableStateOf(false) }
+    // Spec H2 §5.1: "Verkauft…" oeffnet das Buchungs-Sheet fuer genau dieses Exemplar (Spontanverkauf).
+    var selling by remember { mutableStateOf(false) }
     // Plain (non-Compose-state) guard, geprueft SYNCHRON ganz am Anfang von save()/remove() -- ein
     // Doppel-Tap auf "Speichern" bzw. "Entfernen" waehrend eine der beiden Aktionen noch laeuft
     // wird sofort verworfen, nicht erst nach der naechsten Neuzeichnung. Gleiches Muster wie
@@ -285,10 +287,15 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = { pendingRemove = true }, enabled = !saving && !removing) {
-                    Icon(Icons.Default.Delete, "Entfernen", tint = ErrorColor, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (removing) "Wird entfernt…" else "Entfernen", color = ErrorColor)
+                Row {
+                    TextButton(onClick = { pendingRemove = true }, enabled = !saving && !removing) {
+                        Icon(Icons.Default.Delete, "Entfernen", tint = ErrorColor, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (removing) "Wird entfernt…" else "Entfernen", color = ErrorColor)
+                    }
+                    TextButton(onClick = { if (!savingRef[0]) selling = true }, enabled = !saving && !removing && !markingSale) {
+                        Text("Verkauft…")
+                    }
                 }
                 Row {
                     TextButton(onClick = onDismiss, enabled = !saving && !removing) { Text("Abbrechen") }
@@ -299,6 +306,10 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (selling) {
+        SaleSheet(listOf(copy.copyId), onDismiss = { selling = false }, onBooked = { _, _ -> selling = false; onSaved(); onDismiss() })
     }
 
     if (pendingRemove) {

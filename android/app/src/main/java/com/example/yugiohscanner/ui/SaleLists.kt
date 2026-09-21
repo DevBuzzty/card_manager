@@ -23,6 +23,8 @@ import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.CopyLocation
 import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.SalesRepository
+import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.ml.DuplicateEntry
@@ -210,6 +212,13 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     val (busy, mutate) = rememberMutation { error = it }
     val store by CollectionStore.state.collectAsState()
     val containers = (store as? StoreState.Ready)?.containers ?: emptyList()
+    // Spec H2 §5.1/§5.4: anhaken -> "Verkauft buchen"; danach "Rückgängig" = sofortiges Storno.
+    var picked by remember { mutableStateOf(setOf<String>()) }
+    var selling by remember { mutableStateOf<List<String>?>(null) }
+    var undo by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    val sales by SideStores.sales.state.collectAsState()
+    // Plan-Abweichung 4: Storno gesperrt, solange die Verkaeufe nicht geladen sind oder das letzte Laden scheiterte.
+    val salesOffline = sales.value == null || sales.error != null
 
     if (data == null) {
         Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
@@ -217,9 +226,27 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     }
     val summary = remember(data) { Duplicates.forSaleSummary(data.sale) }
     val groups = remember(data) { Duplicates.forSaleGroups(data.sale) }
+    val livePicked = picked.filter { data.byId.containsKey(it) }
 
     Column(modifier) {
         Text(Duplicates.forSaleHeaderText(summary), color = OnSurface, style = MaterialTheme.typography.bodyMedium)
+        Button(onClick = { selling = livePicked }, enabled = !busy && livePicked.isNotEmpty()) {
+            Text("Verkauft buchen (${livePicked.size})")
+        }
+        undo?.let { (saleId, n) ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("$n ${if (n == 1) "Karte" else "Karten"} als verkauft gebucht", color = OnSurface,
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    mutate {
+                        SalesRepository.cancel(saleId)
+                        SideStores.sales.refreshAndWait()
+                        undo = null
+                    }
+                }, enabled = !busy && !salesOffline) { Text("Rückgängig") }
+            }
+            if (salesOffline) Text("Keine Verbindung – Verkäufe nicht geladen", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+        }
         error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
         if (groups.isEmpty()) {
             Text("Keine Exemplare zum Verkauf.", color = Muted, modifier = Modifier.padding(top = 16.dp))
@@ -235,6 +262,7 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
                             g.copyIds.forEach { id ->
                                 val s = data.byId[id] ?: return@forEach
                                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(checked = id in picked, onCheckedChange = { picked = if (it) picked + id else picked - id }, enabled = !busy)
                                     Column(Modifier.weight(1f)) {
                                         Text("${s.copy.condition} · ${Valuation.EDITION_LABELS[s.copy.edition] ?: s.copy.edition}", color = OnSurface,
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
@@ -253,5 +281,9 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
                 }
             }
         }
+    }
+
+    selling?.let {
+        SaleSheet(it, onDismiss = { selling = null }, onBooked = { id, n -> undo = id to n; selling = null; picked = emptySet() })
     }
 }
