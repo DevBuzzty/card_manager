@@ -34,8 +34,8 @@ object Duplicates {
 
     /** Schlechtester Zustand zuerst; ein unbekannter Zustand ordnet wie NM. */
     private val CONDITION_RANK = listOf("PO", "PL", "LP", "GD", "EX", "NM", "MT")
-    private val KEEP_RE = Regex("(?U)^\\s*([0-9]{1,2})\\s*$")
-    private val BLANK_RE = Regex("(?U)^\\s*$")
+    private val KEEP_RE = Regex("^[\\s\\p{Z}]*([0-9]{1,2})[\\s\\p{Z}]*$")
+    private val BLANK_RE = Regex("^[\\s\\p{Z}]*$")
 
     private fun round2(v: Double) = Math.round(v * 100.0) / 100.0
     private fun rank(condition: String): Int = CONDITION_RANK.indexOf(condition).let { if (it < 0) CONDITION_RANK.indexOf("NM") else it }
