@@ -226,6 +226,10 @@ fun AppNav() {
                     onOpenBinder = { nav.navigateTop(Routes.sammlung("binder")) },
                     onOpenInsights = { nav.navigate(Routes.insights()) { launchSingleTop = true } },
                     onOpenAlerts = { nav.navigate(Routes.insights("alarme")) { launchSingleTop = true } },
+                    // Spec H1 §5.3: wie das Deck-Postfach (F2) ohne restoreState -- sonst stellt navigateTop einen
+                    // gespeicherten Sammlungs-Reiter (z. B. Binder) wieder her und der Chip erscheint nie.
+                    onOpenForSale = { CollectionChip.open(CollectionChip.VERKAUF); nav.openSammlungKarten() },
+                    onOpenDuplicates = { CollectionChip.open(CollectionChip.DUPLIKATE); nav.openSammlungKarten() },
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
@@ -314,6 +318,12 @@ fun AppNav() {
             }
         }
     }
+}
+
+// Spec H1 §5.3: Sammlung › Karten sicher oeffnen (ohne gespeicherten Reiter wiederherzustellen).
+private fun NavHostController.openSammlungKarten() = navigate(Routes.sammlung()) {
+    popUpTo(graph.findStartDestination().id) { saveState = false }
+    launchSingleTop = true
 }
 
 // Switching tabs must not stack them: pop to the graph's start, keep each tab's own state.

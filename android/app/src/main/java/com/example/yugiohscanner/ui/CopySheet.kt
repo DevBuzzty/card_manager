@@ -82,6 +82,9 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
     // Entfernen waehrend gerade gespeichert wird (oder umgekehrt) wird sofort verworfen.
     var removing by remember { mutableStateOf(false) }
     var pendingRemove by remember { mutableStateOf(false) }
+    // Spec H1 §5.3: Schalter "Zum Verkauf" schreibt sofort -- dieselbe Doppel-Tap-Sperre (savingRef) wie Speichern/Entfernen.
+    var forSale by remember { mutableStateOf(copy.forSale) }
+    var markingSale by remember { mutableStateOf(false) }
     // Plain (non-Compose-state) guard, geprueft SYNCHRON ganz am Anfang von save()/remove() -- ein
     // Doppel-Tap auf "Speichern" bzw. "Entfernen" waehrend eine der beiden Aktionen noch laeuft
     // wird sofort verworfen, nicht erst nach der naechsten Neuzeichnung. Gleiches Muster wie
@@ -139,6 +142,25 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
                 error = e.message ?: "Speichern fehlgeschlagen."
             } finally {
                 saving = false
+                savingRef[0] = false
+            }
+        }
+    }
+
+    fun toggleForSale(next: Boolean) {
+        if (savingRef[0]) return
+        savingRef[0] = true
+        markingSale = true
+        error = null
+        scope.launch {
+            try {
+                CollectionRepository.setForSale(listOf(copy.copyId), next)
+                forSale = next
+                onSaved()
+            } catch (e: Exception) {
+                error = e.message ?: "Speichern fehlgeschlagen."
+            } finally {
+                markingSale = false
                 savingRef[0] = false
             }
         }
@@ -240,6 +262,11 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
                         }
                     }
                 }
+            }
+
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Zum Verkauf", style = MaterialTheme.typography.labelMedium, color = Muted, modifier = Modifier.weight(1f))
+                Switch(checked = forSale, onCheckedChange = { toggleForSale(it) }, enabled = !saving && !removing && !markingSale)
             }
 
             Column {

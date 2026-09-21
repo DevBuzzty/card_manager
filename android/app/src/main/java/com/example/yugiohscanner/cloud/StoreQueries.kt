@@ -18,7 +18,7 @@ object StoreQueries {
     const val PAGE = 1000
 
     const val COPY_COLS =
-        "copy_id,card_id,set_code,language,rarity,edition,condition,deleted,container_id,page,slot,tags,note,created_at,updated_at"
+        "copy_id,card_id,set_code,language,rarity,edition,condition,deleted,container_id,page,slot,tags,note,for_sale,created_at,updated_at"
     const val CONTAINER_COLS = "container_id,name,kind,pockets_per_page,color,sort_order,deleted,updated_at"
 
     private val CARD_KEY = listOf("id", "set_code", "language", "rarity")

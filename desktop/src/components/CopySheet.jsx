@@ -30,6 +30,9 @@ export default function CopySheet({ copy, onClose, onSaved }) {
   const [loadError, setLoadError] = useState(null); // Lade- oder Umsortierfehler -- eigener Zustand, gleiche Bauart wie Binders.jsx
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
+  // Spec H1 §5.3: Schalter "Zum Verkauf" schreibt sofort (eigener Knopfzustand, dasselbe busyRef wie Speichern/Entfernen).
+  const [forSale, setForSale] = useState(!!copy?.for_sale);
+  const [markingSale, setMarkingSale] = useState(false);
   const busyRef = useRef(false); // gleiche Bauart wie Binders.jsx's savingRef -- wirkt synchron, eine State-Flag kaeme zu spaet gegen einen zweiten Klick
 
   useEffect(() => {
@@ -124,6 +127,26 @@ export default function CopySheet({ copy, onClose, onSaved }) {
     } finally {
       busyRef.current = false;
       setSaving(false);
+    }
+  };
+
+  const toggleForSale = async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setMarkingSale(true);
+    setError(null);
+    try {
+      const next = !forSale;
+      const result = await window.api?.setForSale?.({ copyIds: [copy.copy_id], value: next });
+      if (!result?.success) {
+        setError(result?.error || 'Speichern fehlgeschlagen.');
+        return;
+      }
+      setForSale(next);
+      onSaved?.();
+    } finally {
+      busyRef.current = false;
+      setMarkingSale(false);
     }
   };
 
@@ -224,6 +247,12 @@ export default function CopySheet({ copy, onClose, onSaved }) {
             </datalist>
           </div>
 
+          <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Zum Verkauf</span>
+            <input type="checkbox" role="switch" checked={forSale} disabled={markingSale || saving || removing}
+              onChange={toggleForSale} className="accent-space-violet w-4 h-4" />
+          </label>
+
           <div>
             <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Notiz</label>
             <textarea
@@ -238,13 +267,13 @@ export default function CopySheet({ copy, onClose, onSaved }) {
         </div>
 
         <div className="p-6 border-t border-gray-700 bg-[#252525] flex items-center justify-between">
-          <button type="button" onClick={removeExemplar} disabled={removing || saving}
+          <button type="button" onClick={removeExemplar} disabled={removing || saving || markingSale}
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-crit hover:bg-crit/10 rounded-lg transition-colors disabled:opacity-50">
             <Trash2 className="w-3.5 h-3.5" /> {removing ? 'Wird entfernt…' : 'Entfernen'}
           </button>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors">Abbrechen</button>
-            <button type="button" onClick={save} disabled={saving || removing}
+            <button type="button" onClick={save} disabled={saving || removing || markingSale}
               className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {saving ? 'Wird gespeichert…' : 'Speichern'}
             </button>

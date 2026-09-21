@@ -1,7 +1,8 @@
 import { getFrameColor, getRarityInfo } from '../utils/rarity.js';
 import { fmtEUR } from '../utils/format';
 
-export default function CardTile({ card, onClick }) {
+// saleNote: Spec H1 §5.3 Zusatz "(2 zum Verkauf)" der Sammlungszeile, sonst null.
+export default function CardTile({ card, onClick, saleNote = null }) {
   const frame = getFrameColor(card.type);
   const qty = card.quantity || 1;
   const total = card.totalValue != null ? card.totalValue
@@ -67,6 +68,7 @@ export default function CardTile({ card, onClick }) {
       {/* Meta */}
       <div className="p-2.5">
         <h4 className="text-xs font-bold text-ink leading-tight truncate">{card.name}</h4>
+        {saleNote && <div className="text-[9.5px] text-gold truncate">{saleNote}</div>}
         <div className="flex justify-between items-center mt-1 mb-1.5">
           <span className="text-[9px] uppercase tracking-wide text-ink-faint font-display">Gesamt</span>
           <span className="font-mono text-[12px] font-bold text-gold">{fmtEUR(total)}</span>

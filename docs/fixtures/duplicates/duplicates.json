@@ -1,0 +1,301 @@
+{
+  "_comment": "Spec H1 §4/§5 -- gemeinsame Fixture fuer desktop/src/utils/duplicates.js und android ml/Duplicates.kt. Jedes Exemplar in cases[].copies und forSale.copies ist `base` plus die angegebenen Felder. catalog = true: Artwork-Passcodes laufen ueber `aliases` zur Hauptkarte. Die Kriterien-Faelle stellen das gepruefte Kriterium gegen alle spaeteren (das andere Exemplar gewinnt dort jedes Mal).",
+  "base": {
+    "card_id": "46986414", "name": "Dunkler Magier", "set_code": "LOB-DE005", "language": "DE", "rarity": "Common",
+    "edition": "unlimited", "condition": "NM", "container_id": null, "tags": null, "note": null,
+    "for_sale": false, "deleted": false, "created_at": "2026-09-01 10:00:00", "price": 2, "price_first_ed": null
+  },
+  "aliases": { "46986415": "46986414" },
+  "cases": [
+    {
+      "name": "Playset-Grenze: 3 Exemplare, kein Überschuss",
+      "keep": "3", "catalog": true,
+      "copies": [
+        { "copy_id": "a1", "created_at": "2026-09-01 10:00:01" },
+        { "copy_id": "a2", "created_at": "2026-09-01 10:00:02" },
+        { "copy_id": "a3", "created_at": "2026-09-01 10:00:03" }
+      ],
+      "expected": [],
+      "texts": { "header": "0 Karten · 0 Exemplare über Playset · ca. 0 €", "confirm": "0 Exemplare von 0 Karten markieren?", "startDuplicates": "Duplikate: 0 Karten", "rows": [], "proposals": [] }
+    },
+    {
+      "name": "Playset-Grenze: 4 Exemplare, 1 über Playset (das neueste)",
+      "keep": "3", "catalog": true,
+      "copies": [
+        { "copy_id": "b1", "created_at": "2026-09-01 10:00:01" },
+        { "copy_id": "b2", "created_at": "2026-09-01 10:00:02" },
+        { "copy_id": "b3", "created_at": "2026-09-01 10:00:03" },
+        { "copy_id": "b4", "created_at": "2026-09-01 10:00:04" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 4, "surplus": 1, "copy_ids": ["b4"], "value": 2 }],
+      "texts": {
+        "header": "1 Karte · 1 Exemplar über Playset · ca. 2 €", "confirm": "1 Exemplar von 1 Karte markieren?", "startDuplicates": "Duplikate: 1 Karte",
+        "rows": ["4 Exemplare · 1 über Playset"], "proposals": [["1× LOB-DE005 Common · NM · Unlimited"]]
+      }
+    },
+    {
+      "name": "Kriterium 1: bereits markiert vor nicht markiert",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c1a", "for_sale": true, "container_id": "k1", "edition": "first", "condition": "MT", "rarity": "Ultra Rare", "price": 10, "price_first_ed": 12, "created_at": "2026-09-01 09:00:00" },
+        { "copy_id": "c1b", "set_code": "SDK-DE001", "condition": "PO", "price": 1, "created_at": "2026-09-05 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c1a"], "value": 12 }],
+      "texts": {
+        "header": "1 Karte · 1 Exemplar über Playset · ca. 12 €", "confirm": "1 Exemplar von 1 Karte markieren?", "startDuplicates": "Duplikate: 1 Karte",
+        "rows": ["2 Exemplare · 1 über Playset"], "proposals": [["1× LOB-DE005 Ultra Rare · MT · 1st Ed"]]
+      }
+    },
+    {
+      "name": "Kriterium 2: Standort schont",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c2a", "edition": "first", "condition": "MT", "rarity": "Ultra Rare", "price": 10, "price_first_ed": 12, "created_at": "2026-09-01 09:00:00" },
+        { "copy_id": "c2b", "container_id": "k1", "set_code": "SDK-DE001", "condition": "PO", "price": 1, "created_at": "2026-09-05 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c2a"], "value": 12 }]
+    },
+    {
+      "name": "Kriterium 2: Tags schonen",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c3a", "edition": "first", "condition": "MT", "rarity": "Ultra Rare", "price": 10, "price_first_ed": 12, "created_at": "2026-09-01 09:00:00" },
+        { "copy_id": "c3b", "tags": "[\"Deck\"]", "set_code": "SDK-DE001", "condition": "PO", "price": 1, "created_at": "2026-09-05 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c3a"], "value": 12 }]
+    },
+    {
+      "name": "Kriterium 2: Notiz schont",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c4a", "edition": "first", "condition": "MT", "rarity": "Ultra Rare", "price": 10, "price_first_ed": 12, "created_at": "2026-09-01 09:00:00" },
+        { "copy_id": "c4b", "note": "Tausch", "set_code": "SDK-DE001", "condition": "PO", "price": 1, "created_at": "2026-09-05 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c4a"], "value": 12 }]
+    },
+    {
+      "name": "Kriterium 2: leerer Standort, leere Tags und leere Notiz zählen als ohne",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c5a", "container_id": "", "tags": "[]", "note": "  ", "edition": "first", "condition": "MT", "rarity": "Ultra Rare", "price": 10, "price_first_ed": 12, "created_at": "2026-09-01 09:00:00" },
+        { "copy_id": "c5b", "tags": "[\"Deck\"]", "set_code": "SDK-DE001", "condition": "PO", "price": 1, "created_at": "2026-09-05 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c5a"], "value": 12 }]
+    },
+    {
+      "name": "Kriterium 3: nicht 1. Auflage vor 1. Auflage",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c6a", "condition": "MT", "price": 10, "created_at": "2026-09-01 09:00:00" },
+        { "copy_id": "c6b", "set_code": "SDK-DE001", "edition": "first", "condition": "PO", "price": 1, "created_at": "2026-09-05 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c6a"], "value": 10 }]
+    },
+    {
+      "name": "Kriterium 4: schlechterer Zustand zuerst",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c7a", "condition": "PL", "price": 10, "created_at": "2026-09-01 09:00:00" },
+        { "copy_id": "c7b", "set_code": "SDK-DE001", "condition": "NM", "price": 1, "created_at": "2026-09-05 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c7a"], "value": 3.5 }]
+    },
+    {
+      "name": "Kriterium 4: Rangfolge PO < PL < LP < GD < EX < NM < MT",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "r1", "condition": "MT" },
+        { "copy_id": "r2", "condition": "NM" },
+        { "copy_id": "r3", "condition": "EX" },
+        { "copy_id": "r4", "condition": "GD" },
+        { "copy_id": "r5", "condition": "LP" },
+        { "copy_id": "r6", "condition": "PL" },
+        { "copy_id": "r7", "condition": "PO" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 7, "surplus": 6, "copy_ids": ["r7", "r6", "r5", "r4", "r3", "r2"], "value": 7.2 }],
+      "texts": {
+        "header": "1 Karte · 6 Exemplare über Playset · ca. 7 €", "confirm": "6 Exemplare von 1 Karte markieren?", "startDuplicates": "Duplikate: 1 Karte",
+        "rows": ["7 Exemplare · 6 über Playset"],
+        "proposals": [[
+          "1× LOB-DE005 Common · PO · Unlimited", "1× LOB-DE005 Common · PL · Unlimited", "1× LOB-DE005 Common · LP · Unlimited",
+          "1× LOB-DE005 Common · GD · Unlimited", "1× LOB-DE005 Common · EX · Unlimited", "1× LOB-DE005 Common · NM · Unlimited"
+        ]]
+      }
+    },
+    {
+      "name": "Kriterium 5: billigeres Printing zuerst, ohne Preis = 0",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c8a", "price": null, "created_at": "2026-09-01 09:00:00" },
+        { "copy_id": "c8b", "set_code": "SDK-DE001", "price": 3, "created_at": "2026-09-05 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c8a"], "value": 0 }]
+    },
+    {
+      "name": "Kriterium 5: bei 1. Auflage zählt der 1.-Auflage-Preis",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c9a", "edition": "first", "price": 1, "price_first_ed": 9, "created_at": "2026-09-05 09:00:00" },
+        { "copy_id": "c9b", "set_code": "SDK-DE001", "edition": "first", "price": 5, "created_at": "2026-09-01 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c9b"], "value": 5 }]
+    },
+    {
+      "name": "Kriterium 6: zuletzt angelegt zuerst",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c10a", "created_at": "2026-09-02 09:00:00" },
+        { "copy_id": "c10b", "created_at": "2026-09-01 09:00:00" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c10a"], "value": 2 }]
+    },
+    {
+      "name": "Gleichstand in allen Kriterien: kleinere copy_id zuerst",
+      "keep": "1", "catalog": true,
+      "copies": [
+        { "copy_id": "c11b" },
+        { "copy_id": "c11a" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c11a"], "value": 2 }]
+    },
+    {
+      "name": "Artwork-Passcodes zählen zur Hauptkarte",
+      "keep": "3", "catalog": true,
+      "copies": [
+        { "copy_id": "d1", "created_at": "2026-09-01 10:00:01" },
+        { "copy_id": "d2", "created_at": "2026-09-01 10:00:02" },
+        { "copy_id": "d3", "created_at": "2026-09-01 10:00:03" },
+        { "copy_id": "d4", "card_id": "46986415", "set_code": "CT13-DE003", "rarity": "Ultra Rare", "price": 3, "created_at": "2026-09-01 10:00:04" },
+        { "copy_id": "d5", "card_id": "46986415", "set_code": "CT13-DE003", "rarity": "Ultra Rare", "price": 3, "created_at": "2026-09-01 10:00:05" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 5, "surplus": 2, "copy_ids": ["d3", "d2"], "value": 4 }],
+      "texts": {
+        "header": "1 Karte · 2 Exemplare über Playset · ca. 4 €", "confirm": "2 Exemplare von 1 Karte markieren?", "startDuplicates": "Duplikate: 1 Karte",
+        "rows": ["5 Exemplare · 2 über Playset"], "proposals": [["2× LOB-DE005 Common · NM · Unlimited"]]
+      }
+    },
+    {
+      "name": "Katalog fehlt: gespeicherter Passcode, Artworks getrennt",
+      "keep": "3", "catalog": false,
+      "copies": [
+        { "copy_id": "d1", "created_at": "2026-09-01 10:00:01" },
+        { "copy_id": "d2", "created_at": "2026-09-01 10:00:02" },
+        { "copy_id": "d3", "created_at": "2026-09-01 10:00:03" },
+        { "copy_id": "d4", "card_id": "46986415", "set_code": "CT13-DE003", "rarity": "Ultra Rare", "price": 3, "created_at": "2026-09-01 10:00:04" },
+        { "copy_id": "d5", "card_id": "46986415", "set_code": "CT13-DE003", "rarity": "Ultra Rare", "price": 3, "created_at": "2026-09-01 10:00:05" }
+      ],
+      "expected": []
+    },
+    {
+      "name": "keep einstellbar: 2",
+      "keep": "2", "catalog": true,
+      "copies": [
+        { "copy_id": "e1", "created_at": "2026-09-01 10:00:01" },
+        { "copy_id": "e2", "created_at": "2026-09-01 10:00:02" },
+        { "copy_id": "e3", "created_at": "2026-09-01 10:00:03" }
+      ],
+      "expected": [{ "main_id": "46986414", "count": 3, "surplus": 1, "copy_ids": ["e3"], "value": 2 }]
+    },
+    {
+      "name": "keep ungültig (0) gilt als 3",
+      "keep": "0", "catalog": true,
+      "copies": [
+        { "copy_id": "f1", "created_at": "2026-09-01 10:00:01" },
+        { "copy_id": "f2", "created_at": "2026-09-01 10:00:02" },
+        { "copy_id": "f3", "created_at": "2026-09-01 10:00:03" }
+      ],
+      "expected": []
+    },
+    {
+      "name": "Mehrere Karten: Unknown zählt mit, gelöschte nicht, Reihenfolge nach Überschuss und Wert",
+      "keep": "3", "catalog": true,
+      "copies": [
+        { "copy_id": "x1", "created_at": "2026-09-01 10:00:01" },
+        { "copy_id": "x2", "created_at": "2026-09-01 10:00:02" },
+        { "copy_id": "x3", "created_at": "2026-09-01 10:00:03" },
+        { "copy_id": "x4", "created_at": "2026-09-01 10:00:04" },
+        { "copy_id": "x5", "set_code": "Unknown", "rarity": "Unknown", "edition": "unknown", "price": 0, "created_at": "2026-09-01 10:00:05" },
+        { "copy_id": "x6", "deleted": true, "created_at": "2026-09-01 10:00:06" },
+        { "copy_id": "z1", "card_id": "55144522", "name": "Topf der Gier", "set_code": "LOB-DE046", "price": 1, "created_at": "2026-09-01 10:00:01" },
+        { "copy_id": "z2", "card_id": "55144522", "name": "Topf der Gier", "set_code": "LOB-DE046", "price": 1, "created_at": "2026-09-01 10:00:02" },
+        { "copy_id": "z3", "card_id": "55144522", "name": "Topf der Gier", "set_code": "LOB-DE046", "price": 1, "created_at": "2026-09-01 10:00:03" },
+        { "copy_id": "z4", "card_id": "55144522", "name": "Topf der Gier", "set_code": "LOB-DE046", "price": 1, "created_at": "2026-09-01 10:00:04" },
+        { "copy_id": "y1", "card_id": "89631139", "name": "Blauäugiger w. Drache", "set_code": "SDK-DE001", "rarity": "Ultra Rare", "condition": "EX", "price": 8, "created_at": "2026-09-01 10:00:01" },
+        { "copy_id": "y2", "card_id": "89631139", "name": "Blauäugiger w. Drache", "set_code": "SDK-DE001", "rarity": "Ultra Rare", "price": 8, "created_at": "2026-09-01 10:00:02" },
+        { "copy_id": "y3", "card_id": "89631139", "name": "Blauäugiger w. Drache", "set_code": "SDK-DE001", "rarity": "Ultra Rare", "price": 8, "created_at": "2026-09-01 10:00:03" },
+        { "copy_id": "y4", "card_id": "89631139", "name": "Blauäugiger w. Drache", "set_code": "SDK-DE001", "rarity": "Ultra Rare", "price": 8, "created_at": "2026-09-01 10:00:04" }
+      ],
+      "expected": [
+        { "main_id": "46986414", "count": 5, "surplus": 2, "copy_ids": ["x5", "x4"], "value": 2 },
+        { "main_id": "89631139", "count": 4, "surplus": 1, "copy_ids": ["y1"], "value": 6.8 },
+        { "main_id": "55144522", "count": 4, "surplus": 1, "copy_ids": ["z4"], "value": 1 }
+      ],
+      "texts": {
+        "header": "3 Karten · 4 Exemplare über Playset · ca. 10 €", "confirm": "4 Exemplare von 3 Karten markieren?", "startDuplicates": "Duplikate: 3 Karten",
+        "rows": ["5 Exemplare · 2 über Playset", "4 Exemplare · 1 über Playset", "4 Exemplare · 1 über Playset"],
+        "proposals": [
+          ["1× Unknown Unknown · NM · Unbek.", "1× LOB-DE005 Common · NM · Unlimited"],
+          ["1× SDK-DE001 Ultra Rare · EX · Unlimited"],
+          ["1× LOB-DE046 Common · NM · Unlimited"]
+        ]
+      },
+      "allProposalIds": { "forSale": ["x5"], "ids": ["x4", "y1", "z4"] }
+    }
+  ],
+  "keep": [
+    { "raw": "3", "expected": 3 },
+    { "raw": "1", "expected": 1 },
+    { "raw": "99", "expected": 99 },
+    { "raw": "07", "expected": 7 },
+    { "raw": " 5 ", "expected": 5 },
+    { "raw": "0", "expected": 3 },
+    { "raw": "100", "expected": 3 },
+    { "raw": "-2", "expected": 3 },
+    { "raw": "4.5", "expected": 3 },
+    { "raw": "abc", "expected": 3 },
+    { "raw": "", "expected": 3 },
+    { "raw": null, "expected": 3 }
+  ],
+  "euro": [
+    { "value": 0, "cents": "0,00 €", "whole": "0 €" },
+    { "value": 84.3, "cents": "84,30 €", "whole": "84 €" },
+    { "value": 61.5, "cents": "61,50 €", "whole": "62 €" },
+    { "value": 1234.5, "cents": "1.234,50 €", "whole": "1.235 €" },
+    { "value": 0.125, "cents": "0,13 €", "whole": "0 €" },
+    { "value": 1.005, "cents": "1,00 €", "whole": "1 €" }
+  ],
+  "forSale": {
+    "copies": [
+      { "copy_id": "s1", "for_sale": true, "condition": "EX", "price": 8 },
+      { "copy_id": "s2", "for_sale": true, "price": null, "created_at": "2026-09-02 10:00:00" },
+      { "copy_id": "s3", "price": 5 },
+      { "copy_id": "s4", "for_sale": true, "deleted": true, "price": 100 },
+      { "copy_id": "s5", "for_sale": true, "edition": "first", "price": 1, "price_first_ed": 2.5 },
+      { "copy_id": "s6", "for_sale": true, "card_id": "89631139", "name": "Blauäugiger w. Drache", "set_code": "SDK-DE001", "rarity": "Ultra Rare", "price": null }
+    ],
+    "expected": { "copies": 4, "value": 9.3 },
+    "texts": { "header": "4 Exemplare · 9,30 €", "start": "Zum Verkauf: 4 Exemplare · 9 €", "share": "davon zum Verkauf: 9 €" },
+    "copyValues": { "s1": "6,80 €", "s2": "—", "s3": "5,00 €", "s5": "2,50 €", "s6": "—" },
+    "groups": [
+      { "card_id": "89631139", "set_code": "SDK-DE001", "language": "DE", "rarity": "Ultra Rare", "name": "Blauäugiger w. Drache", "copy_ids": ["s6"] },
+      { "card_id": "46986414", "set_code": "LOB-DE005", "language": "DE", "rarity": "Common", "name": "Dunkler Magier", "copy_ids": ["s1", "s5", "s2"] }
+    ]
+  },
+  "summaryTexts": [
+    { "summary": { "copies": 1, "value": 1.5 }, "header": "1 Exemplar · 1,50 €", "start": "Zum Verkauf: 1 Exemplar · 2 €", "share": "davon zum Verkauf: 2 €" },
+    { "summary": { "copies": 0, "value": 0 }, "header": "0 Exemplare · 0,00 €", "start": "Zum Verkauf: 0 Exemplare · 0 €", "share": "davon zum Verkauf: 0 €" }
+  ],
+  "suffix": [
+    { "n": 0, "text": null },
+    { "n": 1, "text": "(1 zum Verkauf)" },
+    { "n": 2, "text": "(2 zum Verkauf)" }
+  ],
+  "toggle": {
+    "entry": { "main_id": "46986414", "count": 6, "surplus": 3, "copy_ids": ["t1", "t2", "t3"], "value": 6 },
+    "cases": [
+      { "name": "nichts markiert", "forSale": [], "isOn": false, "premarked": [], "on": ["t1", "t2", "t3"], "offWithHistory": ["t1", "t2", "t3"], "offWithoutHistory": ["t1", "t2", "t3"] },
+      { "name": "t1 vorher markiert", "forSale": ["t1", "x9"], "isOn": false, "premarked": ["t1"], "on": ["t1", "t2", "t3"], "offWithHistory": ["t2", "t3"], "offWithoutHistory": ["t1", "t2", "t3"] },
+      { "name": "alle markiert", "forSale": ["t1", "t2", "t3"], "isOn": true, "premarked": ["t1", "t2", "t3"], "on": ["t1", "t2", "t3"], "offWithHistory": [], "offWithoutHistory": ["t1", "t2", "t3"] }
+    ]
+  }
+}

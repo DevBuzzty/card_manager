@@ -17,6 +17,10 @@ import { printingKey } from '../utils/printingKey';
 import { passcodeMatches } from '../utils/passcode';
 import ExportDialog from './ExportDialog';
 import { filterCopyIds } from '../utils/exportScope';
+import DuplicatesList from './DuplicatesList';
+import ForSaleList from './ForSaleList';
+import { LOADING, duplicates, forSaleSummary, forSaleSuffix } from '../utils/duplicates';
+import { useSaleData } from '../utils/useSaleData';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -81,7 +85,9 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [copiesByPrinting, setCopiesByPrinting] = useState({}); // printingKey() -> card_copies-Zeilen dieses Printings
   const [containersTagsError, setContainersTagsError] = useState(null);
   const [copiesLoadError, setCopiesLoadError] = useState(null);
-  const [segment, setSegment] = useState('all'); // all | unknown | incomplete | foils
+  // all | unknown | duplicates | forsale | incomplete | foils; Start oeffnet Duplikate/Zum Verkauf ueber location.state.
+  const [segment, setSegment] = useState(() => location.state?.segment || 'all');
+  const sale = useSaleData(); // Spec H1: Exemplare fuer Duplikate/Verkaufsliste, data null = laedt
   const [segmentBusy, setSegmentBusy] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
@@ -299,12 +305,26 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const hasUnknownVariant = (c) => c.variants && c.variants.some(v => v.set_code === 'Unknown');
   const hasFoilVariant = (c) => Array.from(c.rarities).some(r => !!getRarityInfo(r).foil);
 
+  // Spec H1 §4: Duplikate je Haupt-Passcode (main_id kommt aus list-sale-copies), Zusatz "(n zum Verkauf)" je Passcode.
+  const saleDuplicates = useMemo(() => {
+      if (!sale.data) return null;
+      const mainIds = new Map(sale.data.copies.map(c => [String(c.card_id), c.main_id]));
+      return duplicates(sale.data.copies, sale.data.keep, (id) => mainIds.get(id));
+  }, [sale.data]);
+  const forSaleByCard = useMemo(() => {
+      const m = new Map();
+      for (const c of (sale.data ? sale.data.copies : [])) if (c.for_sale) m.set(String(c.card_id), (m.get(String(c.card_id)) || 0) + 1);
+      return m;
+  }, [sale.data]);
+
   const segmentCounts = useMemo(() => ({
       all: groupedCards.length,
       unknown: groupedCards.filter(hasUnknownVariant).length,
+      duplicates: saleDuplicates ? saleDuplicates.length : LOADING,
+      forsale: sale.data ? forSaleSummary(sale.data.copies).copies : LOADING,
       incomplete: groupedCards.filter(isIncomplete).length,
       foils: groupedCards.filter(hasFoilVariant).length,
-  }), [groupedCards]);
+  }), [groupedCards, saleDuplicates, sale.data]);
 
   const filtered = useMemo(() => {
       // card_copies-Zeilen ALLER Printings einer Gruppe (groupedCards buendelt einen Passcode --
@@ -409,6 +429,12 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   );
 
   // The panel walks the list with the arrow buttons, so it gets the current order handed over.
+  // Spec H1: aus Duplikate/Zum Verkauf ins Karten-Detail des Printings dieses Exemplars.
+  const openSaleCopy = (copy) => {
+    if (!copy || copy.card_id == null) return;
+    navigate(cardRoute({ id: copy.card_id, set_code: copy.set_code, language: copy.language, rarity: copy.rarity }), { state: { background: location, list: [] } });
+  };
+
   const openCard = (card) => {
     const first = (card.variants && card.variants[0]) || card;
     const list = filtered.map(c => cardRoute((c.variants && c.variants[0]) || c));
@@ -440,7 +466,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
       return (
           <div style={{ ...style, padding: 8 }}>
-              <CardTile card={card} onClick={() => openCard(card)} />
+              <CardTile card={card} onClick={() => openCard(card)} saleNote={forSaleSuffix(forSaleByCard.get(String(card.id)) || 0)} />
               {filterContainers.length > 0 && locationCopy && (
                   <div className="mt-1 px-0.5">
                       <span className="inline-flex items-center font-mono text-[9.5px] text-ink-faint bg-obsidian-700 border border-line rounded px-1.5 py-0.5 truncate max-w-full">
@@ -561,6 +587,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 {[
                     { id: 'all', label: 'Alle' },
                     { id: 'unknown', label: 'Unbekannt' },
+                    { id: 'duplicates', label: 'Duplikate' },
+                    { id: 'forsale', label: 'Zum Verkauf' },
                     { id: 'incomplete', label: 'Unvollständig' },
                     { id: 'foils', label: 'Foils' },
                 ].map(s => (
@@ -644,7 +672,17 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
         </div>
 
         <div className="flex-1 overflow-hidden">
-            {filtered.length === 0 ? (
+            {sale.error && (segment === 'duplicates' || segment === 'forsale') && (
+                <div className="flex items-center gap-2 px-4 py-3 mb-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{sale.error}</span>
+                </div>
+            )}
+            {segment === 'duplicates' ? (
+                <DuplicatesList list={saleDuplicates} copies={sale.data ? sale.data.copies : null} reload={sale.reload} onOpenCard={openSaleCopy} />
+            ) : segment === 'forsale' ? (
+                <ForSaleList copies={sale.data ? sale.data.copies : null} containers={containers} reload={sale.reload} onOpenCard={openSaleCopy} />
+            ) : filtered.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-gray-600">Keine Karten gefunden.</div>
             ) : (
                 <AutoSizer>

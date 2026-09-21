@@ -2,6 +2,7 @@ package com.example.yugiohscanner
 
 import android.content.Context
 import com.example.yugiohscanner.cloud.Valuation
+import com.example.yugiohscanner.ml.Duplicates
 
 object Prefs {
     private fun p(ctx: Context) = ctx.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE)
@@ -49,4 +50,10 @@ object Prefs {
         if (!wert.isFinite()) return 1f.coerceIn(min, max)
         return wert.coerceIn(min, max)
     }
+
+    /** Spec H1 §4: keep_per_card, ganze Zahl 1–99, ungültig oder fehlend -> 3 (Duplicates.keepPerCard). Kein Sync. */
+    fun keepPerCard(ctx: Context): Int = Duplicates.keepPerCard(p(ctx).getString("keep_per_card", null))
+    /** Speichert den normalisierten Wert und liefert ihn zurueck (fuer das Eingabefeld). */
+    fun setKeepPerCard(ctx: Context, raw: String): Int =
+        Duplicates.keepPerCard(raw).also { p(ctx).edit().putString("keep_per_card", it.toString()).apply() }
 }

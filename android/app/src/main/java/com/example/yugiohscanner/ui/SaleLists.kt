@@ -1,0 +1,257 @@
+package com.example.yugiohscanner.ui
+
+import android.content.Context
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.example.yugiohscanner.Prefs
+import com.example.yugiohscanner.cloud.CardRow
+import com.example.yugiohscanner.cloud.CatalogRepository
+import com.example.yugiohscanner.cloud.CollectionRepository
+import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.CopyLocation
+import com.example.yugiohscanner.cloud.CopyRow
+import com.example.yugiohscanner.cloud.StoreState
+import com.example.yugiohscanner.cloud.Valuation
+import com.example.yugiohscanner.ml.DuplicateEntry
+import com.example.yugiohscanner.ml.Duplicates
+import com.example.yugiohscanner.ml.SaleCopy
+import com.example.yugiohscanner.ui.components.SpaceCard
+import com.example.yugiohscanner.ui.theme.ErrorColor
+import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.MonoFontFamily
+import com.example.yugiohscanner.ui.theme.Muted
+import com.example.yugiohscanner.ui.theme.OnSurface
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** Spec H1 §5.2: Start oeffnet einen Chip der Sammlung -- einmalige Anfrage, CollectionScreen nimmt sie heraus. */
+object CollectionChip {
+    const val ALLE = "alle"
+    const val DUPLIKATE = "duplikate"
+    const val VERKAUF = "verkauf"
+    private val pending = MutableStateFlow<String?>(null)
+    val request: StateFlow<String?> = pending
+
+    fun open(chip: String) { pending.value = chip }
+    fun take(): String? = pending.getAndUpdate { null }
+}
+
+/**
+ * Spec H1 §4/§5: Verkaufs-Exemplare und Duplikate zu genau einem Speicherstand ([cards]/[copies] per Identitaet) und keep.
+ * Gerechnet abseits des Hauptthreads (Artwork-Zuordnung ist ein SQLite-Lesen).
+ */
+class SaleData(val cards: List<CardRow>, val copies: List<CopyRow>, val keep: String, val sale: List<SaleCopy>, val duplicates: List<DuplicateEntry>) {
+    val byId: Map<String, SaleCopy> = sale.associateBy { it.copy.copyId }
+    val forSaleIds: Set<String> = sale.filter { it.copy.forSale }.map { it.copy.copyId }.toSet()
+}
+
+private fun keepOf(ctx: Context) = Prefs.keepPerCard(ctx).toString()
+
+private suspend fun computeSaleData(cards: List<CardRow>, copies: List<CopyRow>, keep: String): SaleData = withContext(Dispatchers.Default) {
+    val sale = Duplicates.saleCopies(copies, cards)
+    val aliases = withContext(Dispatchers.IO) { runCatching { CatalogRepository.aliases(sale.map { it.copy.cardId }) }.getOrDefault(emptyMap()) }
+    SaleData(cards, copies, keep, sale, Duplicates.duplicates(sale, keep) { aliases[it] })
+}
+
+/** Frischer Stand fuer Mutationen (innerhalb des InFlight-Gatters gelesen, nie der Kompositions-Schnappschuss). */
+suspend fun freshSaleData(ctx: Context): SaleData? {
+    val r = CollectionStore.state.value as? StoreState.Ready ?: return null
+    return computeSaleData(r.cards, r.copies, keepOf(ctx))
+}
+
+/**
+ * Verkaufsdaten zum Speicher; "…" (null) nur, bis das ERSTE Ergebnis da ist. Danach bleibt der zuletzt
+ * berechnete Stand sichtbar, auch waehrend nach einer Mutation/einem Sync/keep_per_card-Wechsel neu
+ * gerechnet wird (Spec H1 I1) -- sonst verlaesst die LazyColumn die Komposition und die Scrollposition
+ * geht verloren. Mutationen lesen ohnehin frisch über freshSaleData(), nie über diesen Schnappschuss.
+ */
+@Composable
+fun rememberSaleData(): SaleData? {
+    val ctx = LocalContext.current
+    val store by CollectionStore.state.collectAsState()
+    val ready = store as? StoreState.Ready
+    val keep = keepOf(ctx)
+    val data by produceState<SaleData?>(null, ready?.cards, ready?.copies, keep) {
+        val r = ready ?: return@produceState
+        value = computeSaleData(r.cards, r.copies, keep)
+    }
+    return Duplicates.visibleSaleData(ready != null, data)
+}
+
+/** Ein-Lauf-Mutation: InFlight-Gatter, danach Abgleich mit dem Speicher, erst dann frei (Spec H1 §7). */
+@Composable
+private fun rememberMutation(onError: (String?) -> Unit): Pair<Boolean, (suspend () -> Unit) -> Unit> {
+    val scope = rememberCoroutineScope()
+    val inFlight = remember { InFlight() }
+    var busy by remember { mutableStateOf(false) }
+    val mutate: (suspend () -> Unit) -> Unit = { block ->
+        if (inFlight.tryStart()) {
+            busy = true
+            scope.launch {
+                try { block(); CollectionStore.awaitSync(); onError(null) }
+                catch (e: Exception) { onError(e.message ?: "Speichern fehlgeschlagen.") }
+                finally { inFlight.finish(); busy = false }
+            }
+        }
+    }
+    return busy to mutate
+}
+
+/**
+ * Spec H1 §5.2: Duplikate am Handy -- Kopf mit "Alle Vorschläge", je Karte Zeile mit Schalter; Tipp oeffnet das Detail.
+ * [history] (§5.4 Vorgeschichte je Haupt-Passcode) und [listState] (Scrollposition) werden vom Aufrufer
+ * (CollectionScreen, oberhalb des Karten-Detail-Returns) gehalten, damit beides ein Detail-Öffnen und
+ * -Schließen überlebt (Spec H1 M2); der Aufrufer leert [history] beim Verlassen des Duplikate-Chips.
+ */
+@Composable
+fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashMap<String, List<String>>, listState: LazyListState, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    var error by remember { mutableStateOf<String?>(null) }
+    val (busy, mutate) = rememberMutation { error = it }
+    var confirmAll by remember { mutableStateOf(false) }
+
+    if (data == null) {
+        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
+        return
+    }
+    val summary = remember(data) { Duplicates.summary(data.duplicates) }
+
+    Column(modifier) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(Duplicates.headerText(summary), color = OnSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        }
+        TextButton(onClick = { confirmAll = true }, enabled = !busy && data.duplicates.isNotEmpty(), contentPadding = PaddingValues(0.dp)) {
+            Text("Alle Vorschläge auf die Verkaufsliste")
+        }
+        error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
+        if (data.duplicates.isEmpty()) {
+            Text("Keine Duplikate.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+        } else {
+            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
+                items(data.duplicates, key = { it.mainId }) { e ->
+                    val first = data.byId[e.copyIds.first()]
+                    SpaceCard(Modifier.fillMaxWidth()) {
+                        Row(Modifier.clickable { first?.let { onOpenCard(it.copy.cardId) } }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AsyncImage(model = first?.card?.imageUrl, contentDescription = first?.card?.name,
+                                modifier = Modifier.width(40.dp).height(58.dp).clip(RoundedCornerShape(6.dp)))
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(first?.card?.name ?: e.mainId, color = OnSurface, fontWeight = FontWeight.Bold, maxLines = 2)
+                                Text(Duplicates.rowCountText(e), color = Muted, style = MaterialTheme.typography.bodySmall)
+                                Duplicates.proposalTexts(e, data.byId).forEach {
+                                    Text(it, color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                }
+                            }
+                            Switch(
+                                checked = Duplicates.toggleIsOn(e, data.forSaleIds), enabled = !busy,
+                                onCheckedChange = {
+                                    mutate {
+                                        val d = freshSaleData(ctx) ?: return@mutate
+                                        val fresh = d.duplicates.firstOrNull { it.mainId == e.mainId } ?: return@mutate
+                                        val on = !Duplicates.toggleIsOn(fresh, d.forSaleIds)
+                                        if (on) history[fresh.mainId] = Duplicates.premarkedIds(fresh, d.forSaleIds)
+                                        val t = Duplicates.toggleTargets(fresh, on, if (on) null else history[fresh.mainId])
+                                        if (!on) history.remove(fresh.mainId)
+                                        if (t.ids.isNotEmpty()) CollectionRepository.setForSale(t.ids, t.value)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (confirmAll) {
+        AlertDialog(
+            onDismissRequest = { confirmAll = false },
+            title = { Text("Auf die Verkaufsliste") },
+            text = { Text(Duplicates.confirmAllText(summary)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmAll = false
+                    mutate {
+                        val d = freshSaleData(ctx) ?: return@mutate
+                        val ids = Duplicates.allProposalIds(d.duplicates, d.forSaleIds)
+                        if (ids.isNotEmpty()) CollectionRepository.setForSale(ids, true)
+                    }
+                }) { Text("Markieren") }
+            },
+            dismissButton = { TextButton(onClick = { confirmAll = false }) { Text("Abbrechen") } },
+        )
+    }
+}
+
+/**
+ * Spec H1 §5.2: Zum Verkauf am Handy -- Printings mit markierten Exemplaren, je Exemplar "Zurück in die Sammlung". Kein Export.
+ * [listState] wird vom Aufrufer gehalten, damit die Scrollposition ein Karten-Detail-Öffnen/-Schließen überlebt (Spec H1 M2).
+ */
+@Composable
+fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyListState, modifier: Modifier = Modifier) {
+    var error by remember { mutableStateOf<String?>(null) }
+    val (busy, mutate) = rememberMutation { error = it }
+    val store by CollectionStore.state.collectAsState()
+    val containers = (store as? StoreState.Ready)?.containers ?: emptyList()
+
+    if (data == null) {
+        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
+        return
+    }
+    val summary = remember(data) { Duplicates.forSaleSummary(data.sale) }
+    val groups = remember(data) { Duplicates.forSaleGroups(data.sale) }
+
+    Column(modifier) {
+        Text(Duplicates.forSaleHeaderText(summary), color = OnSurface, style = MaterialTheme.typography.bodyMedium)
+        error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
+        if (groups.isEmpty()) {
+            Text("Keine Exemplare zum Verkauf.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+        } else {
+            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
+                items(groups, key = { "${it.cardId}|${it.setCode}|${it.language}|${it.rarity}" }) { g ->
+                    SpaceCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(10.dp)) {
+                            Column(Modifier.fillMaxWidth().clickable { onOpenCard(g.cardId) }) {
+                                Text(g.name ?: g.cardId, color = OnSurface, fontWeight = FontWeight.Bold, maxLines = 2)
+                                Text("${g.setCode} · ${g.rarity} · ${g.language}", color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                            }
+                            g.copyIds.forEach { id ->
+                                val s = data.byId[id] ?: return@forEach
+                                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("${s.copy.condition} · ${Valuation.EDITION_LABELS[s.copy.edition] ?: s.copy.edition}", color = OnSurface,
+                                            fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                                        Text(CopyLocation.format(s.copy, containers.find { it.containerId == s.copy.containerId }), color = Muted,
+                                            fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                    }
+                                    Text(Duplicates.copyValueText(s), color = Gold, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                                    Spacer(Modifier.width(6.dp))
+                                    TextButton(onClick = { mutate { CollectionRepository.setForSale(listOf(id), false) } }, enabled = !busy) {
+                                        Text("Zurück in die Sammlung", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

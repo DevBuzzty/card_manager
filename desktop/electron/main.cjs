@@ -868,6 +868,19 @@ ipcMain.handle('export-run', async (event, input) => {
     return { success: true, text: exportResultText(built) };
 });
 
+// --- Spec H1: Duplikate & Verkaufsliste ---
+// Regeln in copies.cjs (setForSale, listSaleCopies, Minus-Regel) und src/utils/duplicates.js; hier nur die Kanaele.
+// Exemplare fuer Duplikate/Verkaufsliste mit Haupt-Passcode ueber die Artwork-Zuordnung (ohne Katalog der gespeicherte).
+ipcMain.handle('list-sale-copies', () => {
+    try { return copies.listSaleCopies(db, (id) => catalogMainId(userDataPath, id)); }
+    catch (e) { console.error('[list-sale-copies]', e); throw new Error(CONTAINER_COPY_ERROR_MSG); }
+});
+// { copyIds: string[], value: boolean } -> { success, changed }; idempotent, setzt updated_at nur bei Aenderung.
+ipcMain.handle('set-for-sale', (event, d) => {
+    try { return { success: true, changed: copies.setForSale(db, d || {}) }; }
+    catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'set-for-sale') }; }
+});
+
 // --- Other Handlers ---
 
 ipcMain.handle('manual-scan', async (event, passcode) => {

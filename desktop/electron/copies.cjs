@@ -54,6 +54,7 @@ function addCopies(db, printing, { edition, condition, count = 1 } = {}) {
 
 // Standard-first: the default group goes first, then the remaining copies ordered so that the
 // most valuable (highest factor, non-default edition) are removed LAST.
+// Spec H1 §5.3: in beiden Zweigen gehen Exemplare mit for_sale = 1 vor allen anderen (sie sollen ohnehin weg).
 function removeCopies(db, printing, { edition, condition, count = 1 } = {}) {
   const p = norm(printing);
   const n = Math.max(1, Number(count) || 1);
@@ -61,11 +62,13 @@ function removeCopies(db, printing, { edition, condition, count = 1 } = {}) {
   if (edition || condition) {
     rows = db.prepare(`SELECT copy_id FROM card_copies WHERE ${KEY} AND deleted = 0
       AND (@edition IS NULL OR edition = @edition) AND (@condition IS NULL OR condition = @condition)
-      ORDER BY created_at DESC, copy_id LIMIT @n`).all({ ...p, edition: edition || null, condition: condition || null, n });
+      ORDER BY for_sale DESC, created_at DESC, copy_id LIMIT @n`).all({ ...p, edition: edition || null, condition: condition || null, n });
   } else {
     const d = defaults(db);
-    const all = db.prepare(`SELECT copy_id, edition, condition, created_at FROM card_copies WHERE ${KEY} AND deleted = 0`).all(p);
+    const all = db.prepare(`SELECT copy_id, edition, condition, created_at, for_sale FROM card_copies WHERE ${KEY} AND deleted = 0`).all(p);
     all.sort((a, b) => {
+      const va = a.for_sale ? 0 : 1, vb = b.for_sale ? 0 : 1;
+      if (va !== vb) return va - vb;                                   // for sale first (Spec H1)
       const sa = (a.edition === d.edition && a.condition === d.condition) ? 0 : 1;
       const sb = (b.edition === d.edition && b.condition === d.condition) ? 0 : 1;
       if (sa !== sb) return sa - sb;                                   // standard first
@@ -223,13 +226,55 @@ function listAllCopies(db) {
 function listDeckCopies(db) {
   return db.prepare(`
     SELECT cp.copy_id, cp.card_id, cp.set_code, cp.language, cp.rarity, cp.edition, cp.condition,
-           cp.container_id, cp.page, cp.slot,
+           cp.container_id, cp.page, cp.slot, cp.for_sale,
            c.name AS card_name, c.price AS price, c.price_first_ed AS price_first_ed
       FROM card_copies cp
       JOIN cards c ON c.id = cp.card_id AND c.set_code = cp.set_code
                   AND c.language = cp.language AND c.rarity = cp.rarity
      WHERE cp.deleted = 0 AND c.deleted = 0
      ORDER BY cp.card_id, cp.copy_id`).all();
+}
+
+// Spec H1 §6: Verkaufsliste umschalten. Nur lebende Exemplare, nur Zeilen mit anderem Wert -- ein zweiter gleicher
+// Aufruf aendert nichts und stempelt updated_at nicht neu (kein unnoetiger Push). Unbekannte oder anderswo geloeschte
+// copy_ids werden uebersprungen. -> Anzahl geaenderter Exemplare.
+function setForSale(db, { copyIds, value } = {}) {
+  if (!Array.isArray(copyIds) || copyIds.some((id) => typeof id !== 'string' || id === '')) {
+    throw new ValidationError('Ungültige Exemplar-Liste.');
+  }
+  if (typeof value !== 'boolean') throw new ValidationError('Ungültiger Wert für „Zum Verkauf“.');
+  const upd = db.prepare(`UPDATE card_copies SET for_sale = @v, updated_at = CURRENT_TIMESTAMP
+                           WHERE copy_id = @id AND deleted = 0 AND for_sale IS NOT @v`);
+  let changed = 0;
+  db.transaction(() => {
+    for (const id of new Set(copyIds)) changed += upd.run({ id, v: value ? 1 : 0 }).changes;
+  })();
+  return changed;
+}
+
+// Spec H1 §4/§5: lebende Exemplare lebender Printings fuer Duplikate und Verkaufsliste, mit den Printing-Feldern der
+// Wertanzeige (name, image_url, price, price_first_ed) und main_id = Haupt-Passcode (mainIdOf, E3-Artwork-Zuordnung;
+// ohne Katalog der gespeicherte Passcode). Ausgeschriebene Spaltenliste wie listUnsortedCopies (created_at/deleted
+// muessen die des Exemplars sein).
+function listSaleCopies(db, mainIdOf = (id) => id) {
+  const rows = db.prepare(`
+    SELECT cp.copy_id, cp.card_id, cp.set_code, cp.language, cp.rarity, cp.edition, cp.condition,
+           cp.container_id, cp.page, cp.slot, cp.tags, cp.note, cp.for_sale, cp.created_at,
+           c.name, c.image_url, c.price, c.price_first_ed
+      FROM card_copies cp
+      JOIN cards c ON c.id = cp.card_id AND c.set_code = cp.set_code
+                  AND c.language = cp.language AND c.rarity = cp.rarity
+     WHERE cp.deleted = 0 AND c.deleted = 0
+     ORDER BY cp.created_at, cp.copy_id`).all();
+  const memo = new Map();
+  return rows.map((r) => {
+    const id = String(r.card_id);
+    if (!memo.has(id)) {
+      const m = mainIdOf(id);
+      memo.set(id, m == null || m === '' ? id : String(m));
+    }
+    return { ...r, main_id: memo.get(id) };
+  });
 }
 
 // Vorschlagsliste ueber alle lebenden Exemplare: entdoppelt (ohne Ruecksicht auf
@@ -351,5 +396,5 @@ module.exports = {
   ValidationError,
   defaults, listCopies, listAllCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting,
   setCopyLocation, deleteCopy, setCopyTagsNote, listUnsortedCopies, listDeckCopies, listTags, listContainers, saveContainer,
-  normalizeTagList, CONTAINER_KINDS, BINDER_POCKETS,
+  normalizeTagList, CONTAINER_KINDS, BINDER_POCKETS, setForSale, listSaleCopies,
 };

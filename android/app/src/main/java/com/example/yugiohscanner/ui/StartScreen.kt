@@ -46,6 +46,7 @@ import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.Duplicates
 import com.example.yugiohscanner.ml.SealedSnapshot
 import com.example.yugiohscanner.ml.SealedValue
 import com.example.yugiohscanner.ml.SnapshotSeries
@@ -86,8 +87,14 @@ fun StartScreen(
     onOpenBinder: () -> Unit,
     onOpenInsights: () -> Unit,
     onOpenAlerts: () -> Unit,
+    onOpenForSale: () -> Unit,
+    onOpenDuplicates: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    // Spec H1 §5.3: Zaehler und "davon zum Verkauf"; null = wird gerechnet ("…").
+    val sale = rememberSaleData()
+    val saleSummary = remember(sale) { sale?.let { Duplicates.forSaleSummary(it.sale) } }
+    val duplicateSummary = remember(sale) { sale?.let { Duplicates.summary(it.duplicates) } }
     // Spec §5: Karten und Exemplare aus dem Speicher; der Ladebildschirm garantiert Ready.
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
@@ -268,6 +275,10 @@ fun StartScreen(
                             Text("Karten %.2f € · Sealed %.2f €".format(dash.totalValue, sealedTotal),
                                 style = MaterialTheme.typography.bodySmall, color = Muted)
                         }
+                        // Spec H1 §5.3: markierte Exemplare zaehlen weiter zum Wert.
+                        if (saleSummary != null && saleSummary.copies > 0) {
+                            Text(Duplicates.saleShareText(saleSummary), style = MaterialTheme.typography.bodySmall, color = Muted)
+                        }
                         // Fix M2 (final-review-report.md): ohne bekannten Sealed-Wert waere die Basis-Momentaufnahme
                         // (die Sealed einschliesst) nicht mit `total` (nur Karten) vergleichbar -- die Delta-Zeile
                         // bliebe irrefuehrend, bis der Sealed-Wert bekannt ist.
@@ -341,6 +352,24 @@ fun StartScreen(
                             "Nicht einsortiert",
                             style = MaterialTheme.typography.labelSmall, color = Muted,
                         )
+                    }
+                }
+            }
+
+            // Spec H1 §5.3: "Zum Verkauf" und "Duplikate", Tipp oeffnet den Chip der Sammlung.
+            SpaceCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth().clickable { onOpenForSale() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Sell, null, tint = Gold)
+                        Spacer(Modifier.width(12.dp))
+                        Text(saleSummary?.let { Duplicates.startSaleText(it) } ?: "Zum Verkauf: ${Duplicates.LOADING}",
+                            style = MaterialTheme.typography.bodyMedium, color = OnSurface)
+                    }
+                    Row(Modifier.fillMaxWidth().clickable { onOpenDuplicates() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Style, null, tint = Primary)
+                        Spacer(Modifier.width(12.dp))
+                        Text(duplicateSummary?.let { Duplicates.startDuplicatesText(it) } ?: "Duplikate: ${Duplicates.LOADING}",
+                            style = MaterialTheme.typography.bodyMedium, color = OnSurface)
                     }
                 }
             }

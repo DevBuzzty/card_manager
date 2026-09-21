@@ -6,10 +6,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -22,6 +24,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +39,7 @@ import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.Duplicates
 import com.example.yugiohscanner.ml.Tags
 import com.example.yugiohscanner.ml.TagVocabulary
 import com.example.yugiohscanner.ui.components.RarityChip
@@ -61,6 +65,8 @@ private data class CardGroup(
     // unten), nicht der Gruppe. Bereits hier statt erst beim Rendern aufgeloest, weil zu diesem
     // Zeitpunkt die Behaelterliste bereits vorliegt.
     val locationLabel: String? = null,
+    // Spec H1 §5.3: Zusatz "(2 zum Verkauf)", sonst null.
+    val saleNote: String? = null,
 )
 
 private fun groupCards(cards: List<CardRow>, byKey: Map<String, List<CopyRow>>): List<CardGroup> =
@@ -83,6 +89,18 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf("total") } // total | single | name
     var detailId by remember { mutableStateOf<String?>(null) }
+    // Spec H1 §5.2: Chip-Zeile Alle · Duplikate · Zum Verkauf; Start oeffnet einen Chip ueber CollectionChip.
+    var chip by rememberSaveable { mutableStateOf(CollectionChip.ALLE) }
+    val requestedChip by CollectionChip.request.collectAsState()
+    LaunchedEffect(requestedChip) { CollectionChip.take()?.let { chip = it } }
+    val sale = rememberSaleData()
+    // Spec H1 M2: history (§5.4 Vorgeschichte) und Scrollposition oberhalb des Karten-Detail-Returns
+    // halten, damit ein Detail-Öffnen und -Schließen als "Liste bleibt offen" zählt. Verlassen des
+    // Duplikate-Chips (nicht bloß das Detail) zählt als Schließen -- dann wird history geleert.
+    val duplicatesHistory = remember { HashMap<String, List<String>>() }
+    val duplicatesListState = rememberLazyListState()
+    val forSaleListState = rememberLazyListState()
+    LaunchedEffect(chip) { if (chip != CollectionChip.DUPLIKATE) duplicatesHistory.clear() }
 
     var searchOpen by remember { mutableStateOf(false) }
     var filterOpen by remember { mutableStateOf(false) }
@@ -115,6 +133,7 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     }
 
     val byKey = remember(copies) { copies.groupBy { it.printingKey() } }
+    val forSaleByCard = remember(copies) { copies.filter { !it.deleted && it.forSale }.groupingBy { it.cardId }.eachCount() }
 
     val setOptions = remember(cards) { cards.map { it.setCode.substringBefore('-') }.distinct().sorted() }
     val rarityOptions = remember(cards) { cards.mapNotNull { it.rarity }.distinct().sorted() }
@@ -124,7 +143,7 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     val activeFilterCount = listOf(fSet, fRarity, fType, fLang, fCondition, fEdition).count { it != null } +
         fContainers.size + fTags.size
 
-    val groups = remember(cards, copies, query, sort, fSet, fRarity, fType, fLang, fCondition, fEdition, fContainers.toList(), fTags.toList(), containers) {
+    val groups = remember(cards, copies, query, sort, fSet, fRarity, fType, fLang, fCondition, fEdition, fContainers.toList(), fTags.toList(), containers, forSaleByCard) {
         fun copiesOfGroup(g: CardGroup): List<CopyRow> = g.variants.flatMap { byKey[it.printingKey()] ?: emptyList() }
         fun copyMatchesContainer(cp: CopyRow) = fContainers.isEmpty() || (cp.containerId != null && fContainers.contains(cp.containerId))
         fun copyMatchesTags(cp: CopyRow): Boolean {
@@ -167,7 +186,7 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                     locationLabel = CopyLocation.format(match, containers.find { it.containerId == match.containerId })
                 }
             }
-            out.add(if (locationLabel != null) g0.copy(locationLabel = locationLabel) else g0)
+            out.add(g0.copy(locationLabel = locationLabel, saleNote = Duplicates.forSaleSuffix(forSaleByCard[g0.id] ?: 0)))
         }
         out.sortedWith(
             when (sort) {
@@ -180,29 +199,42 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (searchOpen) {
-                    OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.weight(1f),
-                        placeholder = { Text("Suchen") },
-                        trailingIcon = { IconButton(onClick = { query = ""; searchOpen = false }) { Icon(Icons.Default.Close, "Suche schließen") } })
-                } else {
-                    Text("${groups.size} Karten", color = Muted, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { searchOpen = true }) { Icon(Icons.Default.Search, "Suchen", tint = OnSurface) }
+            // T9: Suchen/Ansicht-wechseln/Filter wirken nur auf "Alle" (groups) -- in Duplikate/Zum
+            // Verkauf waeren sie wirkungslose Knoepfe, deshalb dort ganz ausgeblendet.
+            if (chip == CollectionChip.ALLE) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (searchOpen) {
+                        OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.weight(1f),
+                            placeholder = { Text("Suchen") },
+                            trailingIcon = { IconButton(onClick = { query = ""; searchOpen = false }) { Icon(Icons.Default.Close, "Suche schließen") } })
+                    } else {
+                        Text("${groups.size} Karten", color = Muted, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { searchOpen = true }) { Icon(Icons.Default.Search, "Suchen", tint = OnSurface) }
+                    }
+                    IconButton(onClick = { grid = !grid }) {
+                        Icon(if (grid) Icons.AutoMirrored.Filled.List else Icons.Default.GridView, "Ansicht wechseln", tint = OnSurface)
+                    }
+                    BadgedBox(badge = { if (activeFilterCount > 0) Badge { Text("$activeFilterCount") } }) {
+                        IconButton(onClick = { filterOpen = true }) { Icon(Icons.Default.FilterList, "Filter", tint = OnSurface) }
+                    }
                 }
-                IconButton(onClick = { grid = !grid }) {
-                    Icon(if (grid) Icons.AutoMirrored.Filled.List else Icons.Default.GridView, "Ansicht wechseln", tint = OnSurface)
-                }
-                BadgedBox(badge = { if (activeFilterCount > 0) Badge { Text("$activeFilterCount") } }) {
-                    IconButton(onClick = { filterOpen = true }) { Icon(Icons.Default.FilterList, "Filter", tint = OnSurface) }
-                }
+                Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(8.dp))
+            // Spec H1 §5.2: Chip-Zeile ueber der Liste; Sortierung und aktive Filter gelten nur fuer "Alle".
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(sort == "total", { sort = "total" }, label = { Text("Wert") })
-                FilterChip(sort == "single", { sort = "single" }, label = { Text("Preis") })
-                FilterChip(sort == "name", { sort = "name" }, label = { Text("Name") })
+                FilterChip(chip == CollectionChip.ALLE, { chip = CollectionChip.ALLE }, label = { Text("Alle") })
+                FilterChip(chip == CollectionChip.DUPLIKATE, { chip = CollectionChip.DUPLIKATE }, label = { Text("Duplikate") })
+                FilterChip(chip == CollectionChip.VERKAUF, { chip = CollectionChip.VERKAUF }, label = { Text("Zum Verkauf") })
             }
-            if (activeFilterCount > 0) {
+            if (chip == CollectionChip.ALLE) {
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(sort == "total", { sort = "total" }, label = { Text("Wert") })
+                    FilterChip(sort == "single", { sort = "single" }, label = { Text("Preis") })
+                    FilterChip(sort == "name", { sort = "name" }, label = { Text("Name") })
+                }
+            }
+            if (activeFilterCount > 0 && chip == CollectionChip.ALLE) {
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     fSet?.let { ActiveFilterChip(it) { fSet = null } }
@@ -218,7 +250,11 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            if (grid) {
+            if (chip == CollectionChip.DUPLIKATE) {
+                DuplicatesList(sale, onOpenCard = { detailId = it }, history = duplicatesHistory, listState = duplicatesListState, modifier = Modifier.weight(1f))
+            } else if (chip == CollectionChip.VERKAUF) {
+                ForSaleList(sale, onOpenCard = { detailId = it }, listState = forSaleListState, modifier = Modifier.weight(1f))
+            } else if (grid) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     modifier = Modifier.weight(1f),
@@ -333,6 +369,7 @@ private fun CardGroupItem(group: CardGroup, onOpen: () -> Unit) {
                 Column(Modifier.weight(1f)) {
                     Text(group.name ?: group.id, style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface, maxLines = 2)
+                    group.saleNote?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Muted) }
                     Spacer(Modifier.height(4.dp))
                     // All owned rarities.
                     Row(Modifier.horizontalScroll(rememberScrollState()),

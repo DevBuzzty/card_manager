@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning, Award, PackageOpen } from 'lucide-react';
+import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning, Award, PackageOpen, Tag, Copy } from 'lucide-react';
 import CardTile from './CardTile';
 import SetCompletion from './SetCompletion';
 import MoversCard from './MoversCard';
@@ -8,6 +8,8 @@ import PriceAlertsCard from './PriceAlertsCard';
 import { fmtEUR, fmtSignedEUR } from '../utils/format';
 import { ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
+import { LOADING, duplicates, duplicatesSummary, forSaleSummary, startSaleText, startDuplicatesText, saleShareText } from '../utils/duplicates';
+import { useSaleData } from '../utils/useSaleData';
 
 export default function Start({ onOpenPalette }) {
   const navigate = useNavigate();
@@ -23,6 +25,14 @@ export default function Start({ onOpenPalette }) {
   // ohne diesen eigenen Fehlerzustand saehe ein Ladefehler wie "0 nicht einsortiert" aus, genau
   // der Fehler, der bei Binders.jsx (Task 5) erst nachtraeglich behoben werden musste.
   const [unsortedError, setUnsortedError] = useState(false);
+  // Spec H1 §5.3: Zaehler "Zum Verkauf"/"Duplikate" und "davon zum Verkauf"; data null = laedt ("…").
+  const sale = useSaleData();
+  const saleSummary = useMemo(() => (sale.data ? forSaleSummary(sale.data.copies) : null), [sale.data]);
+  const duplicateSummary = useMemo(() => {
+    if (!sale.data) return null;
+    const mainIds = new Map(sale.data.copies.map(c => [String(c.card_id), c.main_id]));
+    return duplicatesSummary(duplicates(sale.data.copies, sale.data.keep, (id) => mainIds.get(id)));
+  }, [sale.data]);
 
   useEffect(() => {
     if (!window.api) return;
@@ -147,6 +157,10 @@ export default function Start({ onOpenPalette }) {
           {stats.hasSealed && (
             <div className="text-xs text-ink-muted mt-1">Karten {money(stats.cardValue)} · Sealed {money(stats.sealedValue)}</div>
           )}
+          {/* Spec H1 §5.3: markierte Exemplare zaehlen weiter zum Wert */}
+          {saleSummary && saleSummary.copies > 0 && (
+            <div className="text-xs text-ink-muted mt-1">{saleShareText(saleSummary)}</div>
+          )}
           <div className="flex gap-4 mt-1.5">
             {renderDelta(delta.d7, '7T')}
             {renderDelta(delta.d30, '30T')}
@@ -190,6 +204,14 @@ export default function Start({ onOpenPalette }) {
             <button onClick={() => navigate(ROUTES.binder)} className="flex-1 text-left rounded-xl p-3 border border-frame-spell/30 bg-frame-spell/5 hover:bg-frame-spell/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-frame-spell"><PackageOpen className="w-4 h-4" />{unsortedError ? '—' : unsortedCount}</div>
               <div className="text-[11px] text-ink-muted mt-0.5">Nicht einsortiert{unsortedError ? ' (Ladefehler)' : ''}</div>
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'forsale' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors text-xs text-ink">
+              <Tag className="w-4 h-4 text-gold shrink-0" />{saleSummary ? startSaleText(saleSummary) : sale.error ? 'Zum Verkauf: —' : `Zum Verkauf: ${LOADING}`}
+            </button>
+            <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'duplicates' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-space-violet/30 bg-space-violet/5 hover:bg-space-violet/10 transition-colors text-xs text-ink">
+              <Copy className="w-4 h-4 text-violet-soft shrink-0" />{duplicateSummary ? startDuplicatesText(duplicateSummary) : sale.error ? 'Duplikate: —' : `Duplikate: ${LOADING}`}
             </button>
           </div>
           <button onClick={() => navigate(ROUTES.scannen)} className="mt-auto flex items-center justify-center gap-2 bg-gradient-to-br from-space-violet to-space-violet-dark text-white font-display font-semibold text-sm py-3 rounded-xl shadow-[0_10px_24px_-10px_#9D00FF]">
