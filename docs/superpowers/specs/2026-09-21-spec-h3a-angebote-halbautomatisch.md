@@ -88,7 +88,7 @@ Knöpfe: „Titel kopieren", „Beschreibung kopieren", „Zum Einstellen öffne
 Anlegen setzt bei allen Exemplaren `for_sale = 1` (H1).
 
 ### 5.3 Texte (reine Regel, Zwilling JS/Kotlin, §10)
-- **Titel, eine Karte:** `Yu-Gi-Oh! <Name> <Set-Code> <Rarität> <Auflage> <Zustand> <Sprache>`, z. B. „Yu-Gi-Oh! Dunkler Magier LOB-DE005 Ultra Rare 1. Auflage NM Deutsch". Auflage: „1. Auflage" / „Limitiert"; `unlimited` und `unknown` entfallen. Sprache ausgeschrieben (DE Deutsch, EN Englisch, FR Französisch, IT Italienisch, SP Spanisch, PT Portugiesisch, JP Japanisch). Unbekannte Angaben (Set-Code `Unknown`, leere Rarität) entfallen.
+- **Titel, eine Karte:** `Yu-Gi-Oh! <Name> <Set-Code> <Rarität> <Auflage> <Zustand> <Sprache>`, z. B. „Yu-Gi-Oh! Dunkler Magier LOB-DE005 Ultra Rare 1. Auflage NM" — mit „Deutsch" wären es 67 Zeichen, das Kürzen (unten) lässt es deshalb weg. Auflage: „1. Auflage" / „Limitiert"; `unlimited` und `unknown` entfallen. Sprache ausgeschrieben (DE Deutsch, EN Englisch, FR Französisch, IT Italienisch, SP Spanisch, PT Portugiesisch, JP Japanisch). Unbekannte Angaben (Set-Code `Unknown`, leere Rarität) entfallen.
 - **Titel, Konvolut** (mehrere verschiedene Drucke): `Yu-Gi-Oh! Konvolut <n> Karten – <Name1>, <Name2>, …` in der Reihenfolge der Beschreibung.
 - **Mehrere gleiche Exemplare** (ein Druck, gleicher Zustand/Auflage): Titel wie „eine Karte" mit vorangestelltem `<n>× `.
 - **Kürzen:** höchstens 65 Zeichen; gekürzt wird an der letzten Wortgrenze davor, bei Konvoluten mit „…". Der Dialog zeigt einen Zähler „n/65".
