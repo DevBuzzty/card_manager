@@ -28,6 +28,12 @@ export function fakeStore(init: {
     saveAccount: (p) => { state.account = { ...state.account, ...p }; return Promise.resolve(); },
     tryLock: (h) => { if (state.lockHolder) return Promise.resolve(false); state.lockHolder = h; return Promise.resolve(true); },
     unlock: (h) => { if (state.lockHolder === h) state.lockHolder = null; state.unlocked++; return Promise.resolve(); },
+    consumeState: (s) => {
+      const a = state.account;
+      const ok = a.oauth_state === s && !!a.oauth_state_expires_at && Date.parse(a.oauth_state_expires_at) > Date.now();
+      if (ok) state.account = { ...a, oauth_state: null, oauth_state_expires_at: null };
+      return Promise.resolve(ok);
+    },
     openRows: (extra) => Promise.resolve([...state.rows.values()].filter((r) => r.state !== "beendet" || r.listing_id === extra)),
     soll: (ids) => Promise.resolve({
       listings: state.listings.filter((l) => (l.channel_id === "ebay" && l.status === "aktiv" && !l.deleted) || ids.includes(l.listing_id)),

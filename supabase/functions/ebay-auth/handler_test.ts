@@ -1,6 +1,6 @@
 // Spec H3b §4.3/§9 -- ebay-auth mit nachgebautem eBay und Speicher-Store (kein Netz, keine Datenbank).
 import { assertEquals } from "jsr:@std/assert@1";
-import { failPage, handleAuth, OK_PAGE } from "./handler.ts";
+import { failPage, handleAuth, LOCK_BUSY, OK_PAGE } from "./handler.ts";
 import { pick, resolveSetup } from "./setup.ts";
 import { fakeEbay, type FakeEbayOpts } from "../_shared/fake-ebay.ts";
 import { account } from "../_shared/fake-store.ts";
@@ -10,14 +10,30 @@ const NOW = new Date("2026-09-22T12:00:00Z");
 const ENV: Record<string, string> = { EBAY_SANDBOX_CLIENT_ID: "id", EBAY_SANDBOX_CLIENT_SECRET: "sec", EBAY_SANDBOX_RUNAME: "ru" };
 const FN = "https://proj.supabase.co/functions/v1/ebay-auth";
 
-function setup(acc: Partial<Account> = {}, ebay: FakeEbayOpts = {}, user = true, liveOffers = 0) {
-  const st = { account: account(acc) };
+function setup(acc: Partial<Account> = {}, ebay: FakeEbayOpts = {}, user = true, liveOffers = 0, lockFree = true) {
+  const st = { account: account(acc), saveAccountCalls: 0, lock: null as string | null, locked: [] as string[], unlocked: [] as string[] };
   const eb = fakeEbay(ebay);
   const d = {
     store: {
       account: () => Promise.resolve({ ...st.account }),
-      saveAccount: (p: Partial<Account>) => { st.account = { ...st.account, ...p }; return Promise.resolve(); },
+      saveAccount: (p: Partial<Account>) => { st.saveAccountCalls++; st.account = { ...st.account, ...p }; return Promise.resolve(); },
       liveOfferCount: (env: string) => Promise.resolve(env === st.account.environment ? liveOffers : 0),
+      consumeState: (s: string) => {
+        const a = st.account;
+        const ok = a.oauth_state === s && !!a.oauth_state_expires_at && Date.parse(a.oauth_state_expires_at) > NOW.getTime();
+        if (ok) st.account = { ...a, oauth_state: null, oauth_state_expires_at: null };
+        return Promise.resolve(ok);
+      },
+      tryLock: (h: string) => {
+        if (!lockFree || st.lock) return Promise.resolve(false);
+        st.lock = h; st.locked.push(h);
+        return Promise.resolve(true);
+      },
+      unlock: (h: string) => {
+        if (st.lock === h) st.lock = null;
+        st.unlocked.push(h);
+        return Promise.resolve();
+      },
     },
     fetch: eb.fetchFn, env: (k: string) => ENV[k], now: () => NOW,
     verifyUser: (h: string | null) => Promise.resolve(user && h === "Bearer JWT"), randomState: () => "state-123",
@@ -108,6 +124,36 @@ Deno.test("set_environment trennt und leert die Einrichtung; disconnect löscht 
   await d.post({ action: "disconnect" });
   assertEquals([d.st.account.refresh_token, d.st.account.payment_policy_id], [null, "PAY1"]);
   assertEquals(await (await d.post({ action: "check" })).json(), { ok: false, error: "Nicht mit eBay verbunden." });
+});
+
+Deno.test("set_environment/disconnect: Sperre belegt -> nichts geändert; frei -> genommen und wieder freigegeben", async () => {
+  const busy = setup({}, {}, true, 0, false);
+  assertEquals(await (await busy.post({ action: "set_environment", environment: "production" })).json(), { ok: false, error: LOCK_BUSY });
+  assertEquals(busy.st.account.environment, "sandbox");
+  assertEquals(await (await busy.post({ action: "disconnect" })).json(), { ok: false, error: LOCK_BUSY });
+  assertEquals(busy.st.account.refresh_token, "RT");
+  assertEquals(busy.st.locked.length, 0);
+
+  const free = setup();
+  await free.post({ action: "disconnect" });
+  assertEquals(free.st.locked.length, 1);
+  assertEquals(free.st.unlocked, free.st.locked);
+});
+
+Deno.test("select: leere Zeichenkette wie keine Auswahl behandeln", async () => {
+  const w = setup({ payment_policy_id: "P2", payment_policy_name: "Überweisung" },
+    { payment: [{ id: "P1", name: "PayPal" }, { id: "P2", name: "Überweisung" }] });
+  const r = await (await w.post({ action: "select", payment_policy_id: "" })).json();
+  assertEquals([r.ok, r.payment.selected], [true, "P2"]);
+});
+
+Deno.test("check: zweiter Aufruf ohne Änderung schreibt nicht erneut", async () => {
+  const w = setup();
+  await w.post({ action: "check" });
+  const after1 = w.st.saveAccountCalls;
+  assertEquals(after1 > 0, true);
+  await w.post({ action: "check" });
+  assertEquals(w.st.saveAccountCalls, after1);
 });
 
 Deno.test("Einrichtung rein: bisherige Wahl bleibt, genau eine -> automatisch", () => {

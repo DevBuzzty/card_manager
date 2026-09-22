@@ -24,6 +24,9 @@ export interface Store {
   saveAccount(patch: Partial<Account>): Promise<void>;
   tryLock(holder: string, seconds: number): Promise<boolean>;
   unlock(holder: string): Promise<void>;
+  // Fixrunde 1 Befund 2 (Task 4): Rücksprung-state atomar verbrauchen -- löscht ihn nur, wenn er noch zum
+  // übergebenen Wert passt und nicht abgelaufen ist. Verhindert, dass zwei gleichzeitige Rücksprünge beide durchkommen.
+  consumeState(state: string): Promise<boolean>;
   // ebay_listings mit state <> 'beendet', dazu die Zeile extraId (Erneut versuchen), falls vorhanden.
   openRows(extraId: string | null): Promise<EbayRow[]>;
   // Aktive eBay-Angebote und zusätzlich die Angebote ids (auch beendete/gelöschte), mit Positionen, lebenden Exemplaren, Fotos.
@@ -77,6 +80,12 @@ export function supabaseStore(sb: SupabaseClient, supabaseUrl: string): Store {
     async unlock(holder) {
       const { error } = await sb.rpc("ebay_unlock", { p_holder: holder });
       if (error) console.error("[ebay] unlock:", error.message);
+    },
+    async consumeState(state) {
+      const { data, error } = await sb.from("ebay_account").update({ oauth_state: null, oauth_state_expires_at: null })
+        .eq("id", 1).eq("oauth_state", state).gt("oauth_state_expires_at", new Date().toISOString()).select("id");
+      if (error) fail("ebay_account state verbrauchen", error);
+      return (data?.length ?? 0) > 0;
     },
     async openRows(extraId) {
       const rows = await all<EbayRow>("ebay_listings", (f, t) =>
