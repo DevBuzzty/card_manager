@@ -1,16 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import clsx from 'clsx';
-import { ROUTES } from '../utils/routes';
-import { T } from '../utils/i18n-de';
-
-const SEGMENTS = [
-  { to: ROUTES.karten, label: T.karten },
-  { to: ROUTES.binder, label: T.binder },
-  { to: ROUTES.wunschliste, label: T.wunschliste },
-  { to: ROUTES.sets, label: T.sets },
-  { to: ROUTES.decks, label: T.decks },
-  { to: ROUTES.sealed, label: T.sealed },
-];
+import { SAMMLUNG_SEGMENTS, T } from '../utils/i18n-de';
 
 // Everything that is "my collection" lives on one page; the segments swap the content below.
 export default function SammlungLayout() {
@@ -21,13 +11,13 @@ export default function SammlungLayout() {
       <div className="flex flex-wrap items-center gap-4 mb-5 shrink-0">
         <h1 className="font-display font-semibold text-2xl text-ink">{T.sammlung}</h1>
         <div className="flex flex-wrap bg-obsidian-700 border border-line rounded-xl p-1 gap-1">
-          {SEGMENTS.map(s => (
+          {SAMMLUNG_SEGMENTS.map(s => (
             <NavLink
-              key={s.to}
+              key={s.id}
               to={s.to}
               className={({ isActive }) => clsx(
                 'px-4 py-1.5 rounded-lg font-display text-sm font-medium transition-colors',
-                isActive ? 'bg-space-violet text-white shadow-[0_6px_16px_-8px_#9D00FF]' : 'text-ink-muted hover:text-ink'
+                isActive ? 'bg-accent text-accent-fg' : 'text-ink-muted hover:text-ink'
               )}
             >
               {s.label}

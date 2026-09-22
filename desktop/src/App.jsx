@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
 import SammlungLayout from './components/SammlungLayout';
+import VerkaufenLayout, { KandidatenPanel, ZumVerkaufPanel, AngebotePanel, VerkaeufePanel } from './components/VerkaufenLayout';
 import CollectionList from './components/CollectionList';
 import Binders from './components/Binders';
 import BinderView from './components/BinderView';
@@ -122,8 +123,16 @@ function App() {
                       <Route path="binder/:containerId" element={<BinderView panelOpen={panelOpen} />} />
                       <Route path="wunschliste" element={<Wishlist />} />
                       <Route path="sets" element={<SetCompletion />} />
-                      <Route path="decks" element={<DeckBuilder />} />
                       <Route path="sealed" element={<SealedList />} />
+                    </Route>
+                    <Route path="/decks" element={<DeckBuilder />} />
+                    <Route path="/sammlung/decks" element={<Navigate to="/decks" replace />} />
+                    <Route path="/verkaufen" element={<VerkaufenLayout />}>
+                      <Route index element={<Navigate to="/verkaufen/kandidaten" replace />} />
+                      <Route path="kandidaten" element={<KandidatenPanel />} />
+                      <Route path="zum-verkauf" element={<ZumVerkaufPanel />} />
+                      <Route path="angebote" element={<AngebotePanel />} />
+                      <Route path="verkaeufe" element={<VerkaeufePanel />} />
                     </Route>
                     <Route path="/deals" element={<Deals />} />
                     <Route path="/insights" element={<Insights />} />

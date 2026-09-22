@@ -1,10 +1,10 @@
-import { Home, ScanLine, Library, Tag, BarChart3, Settings as SettingsIcon, Wifi } from 'lucide-react';
+import { Home, ScanLine, Library, Layers, Tag, BarChart3, Settings as SettingsIcon, Banknote, Wifi } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
-import { NAV, T } from '../utils/i18n-de';
+import { NAV_GROUPS } from '../utils/i18n-de';
 
-const ICONS = { start: Home, scannen: ScanLine, sammlung: Library, deals: Tag, insights: BarChart3 };
+const ICONS = { start: Home, scannen: ScanLine, sammlung: Library, decks: Layers, verkaufen: Banknote, deals: Tag, insights: BarChart3, einstellungen: SettingsIcon };
 
 const NavItem = ({ to, icon, label, match }) => {
   // eslint in this project doesn't see a destructured `icon: Icon` as used — bind it in the body.
@@ -48,11 +48,19 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto custom-scrollbar space-y-0.5">
-        {NAV.map(n => <NavItem key={n.key} to={n.to} icon={ICONS[n.key]} label={n.label} match={n.key === 'sammlung' ? '/sammlung' : undefined} />)}
+      <nav className="flex-1 overflow-y-auto custom-scrollbar">
+        {NAV_GROUPS.map(g => (
+          <div key={g.group} className="mb-4">
+            <div className="px-3 mb-1 text-[11px] uppercase tracking-wider text-muted">{g.group}</div>
+            <div className="space-y-0.5">
+              {g.items.map(n => (
+                <NavItem key={n.key} to={n.to} icon={ICONS[n.key]} label={n.label}
+                  match={n.key === 'sammlung' ? '/sammlung' : n.key === 'verkaufen' ? '/verkaufen' : n.key === 'einstellungen' ? '/einstellungen' : undefined} />
+              ))}
+            </div>
+          </div>
+        ))}
       </nav>
-
-      <NavItem to="/einstellungen" icon={SettingsIcon} label={T.einstellungen} />
 
       <NavLink to="/einstellungen/verbindung"
         className="mt-3 flex items-center gap-2.5 bg-obsidian-700 border border-line rounded-xl px-3 py-2.5 hover:border-space-violet/40 transition-colors">

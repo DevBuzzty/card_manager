@@ -1,0 +1,19 @@
+{
+  "_": "ZWILLING: desktop/src/utils/nav.test.js und android NavTabellenTest.kt pruefen ihre Navigation gegen diese Tabelle. Spec I §3.",
+  "groups": [
+    { "group": "Alltag",     "items": ["start", "scannen"] },
+    { "group": "Bestand",    "items": ["sammlung", "decks"] },
+    { "group": "Handel",     "items": ["verkaufen", "deals"] },
+    { "group": "Auswertung", "items": ["insights", "einstellungen"] }
+  ],
+  "labels": {
+    "start": "Start", "scannen": "Scannen", "sammlung": "Sammlung", "decks": "Decks",
+    "verkaufen": "Verkaufen", "deals": "Deals", "insights": "Insights", "einstellungen": "Einstellungen"
+  },
+  "segments": {
+    "sammlung": [["karten", "Karten"], ["binder", "Binder"], ["sets", "Sets"], ["wunschliste", "Wunschliste"], ["sealed", "Sealed"]],
+    "verkaufen": [["kandidaten", "Kandidaten"], ["zum-verkauf", "Zum Verkauf"], ["angebote", "Angebote"], ["verkaeufe", "Verkäufe"]]
+  },
+  "handyLeiste": ["start", "sammlung", "verkaufen", "deals"],
+  "handyUeberStart": ["decks", "insights", "einstellungen"]
+}
