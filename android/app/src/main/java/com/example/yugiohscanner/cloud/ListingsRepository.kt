@@ -247,6 +247,8 @@ object ListingsRepository {
                 if (op.expectRow && (text.isNullOrBlank() || JSONArray(text).length() == 0)) throw IllegalStateException(CHANGED)
             }
         }
+        // Spec H3b1 §5.4: einzige Schreibstelle der Angebote am Handy -- jede eBay-relevante Änderung stößt an.
+        EbayRepository.kick()
     }
 
     private fun url(table: String, params: List<Pair<String, String>>): HttpUrl =
