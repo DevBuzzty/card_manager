@@ -28,18 +28,23 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.Prefs
+import com.example.yugiohscanner.cloud.CacheState
 import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.EbayRepository
 import com.example.yugiohscanner.cloud.ListingRow
 import com.example.yugiohscanner.cloud.ListingsData
 import com.example.yugiohscanner.cloud.ListingsRepository
 import com.example.yugiohscanner.cloud.SalesData
 import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
+import com.example.yugiohscanner.cloud.SupabaseCloud
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.Duplicates
+import com.example.yugiohscanner.ml.EbayMarks
 import com.example.yugiohscanner.ml.ListingOverview
 import com.example.yugiohscanner.ml.ListingText
+import com.example.yugiohscanner.ml.PhotoScale
 import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ml.SalesOverview
@@ -97,6 +102,30 @@ private fun MarkChip(text: String, color: Color) {
         modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(color.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp))
 }
 
+/** Spec H3b1 §4.3 -- Stand von SideStores.ebayStatus als EbayMarks.StatusState (Loading/None/Known). */
+private fun ebayState(s: CacheState<List<Pair<EbayMarks.Status, EbayRepository.RunInfo>>>): EbayMarks.StatusState = when {
+    s.value == null && s.error == null -> EbayMarks.StatusState.Loading
+    s.value?.firstOrNull() == null -> EbayMarks.StatusState.None
+    else -> EbayMarks.StatusState.Known(s.value!!.first().first)
+}
+
+/** Spec H3b1 §4.3/§5.4 -- eBay-Marke unter MarksRow: Farbe je Art, „Erneut versuchen“ bei mark.retry. */
+@Composable
+private fun EbayMarkRow(mark: EbayMarks.Mark?, onRetry: (() -> Unit)?) {
+    if (mark == null) return
+    val color = when (mark.kind) {
+        "online" -> Good
+        "fehler" -> ErrorColor
+        else -> Gold
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        MarkChip(mark.text, color)
+        if (mark.retry && onRetry != null) {
+            TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 6.dp)) { Text("Erneut versuchen") }
+        }
+    }
+}
+
 /**
  * Spec H3a §6 -- Sammlung › Angebote am Handy (Gegenstück zu desktop/src/components/ListingsList.jsx). Enthält die
  * EINZIGEN Aufrufstellen von SaleSheet/ListingSheet/Detail dieses Bereichs, vor jedem frühen return (Muster
@@ -127,6 +156,9 @@ fun ListingsSection(onOpenCard: (String) -> Unit, modifier: Modifier = Modifier)
     LaunchedEffect(Unit) { SideStores.listings.refresh() }
     val salesState by SideStores.sales.state.collectAsState()
     LaunchedEffect(Unit) { SideStores.sales.ensureLoaded() }
+    val ebayStatusState by SideStores.ebayStatus.state.collectAsState()
+    val ebayRowsState by SideStores.ebayRows.state.collectAsState()
+    LaunchedEffect(Unit) { SideStores.ebayStatus.refresh(); SideStores.ebayRows.refresh() }
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
     var status by rememberSaveable { mutableStateOf("aktiv") }
@@ -179,15 +211,22 @@ fun ListingsSection(onOpenCard: (String) -> Unit, modifier: Modifier = Modifier)
         if (rows.isEmpty()) {
             Text("Keine Angebote.", color = Muted, modifier = Modifier.padding(top = 16.dp))
         } else {
+            val ebayStat = ebayState(ebayStatusState)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
-                items(rows, key = { it.head.listingId }) { r -> ListingRowView(r) { openId = r.head.listingId } }
+                items(rows, key = { it.head.listingId }) { r ->
+                    val mark = EbayMarks.mark(
+                        EbayMarks.ListingHead(r.head.channelId, r.head.status, r.head.deleted),
+                        ebayRowsState.value?.get(r.head.listingId)?.row(), ebayStat,
+                    )
+                    ListingRowView(r, mark) { openId = r.head.listingId }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ListingRowView(r: ListingOverview.Row, onOpen: () -> Unit) {
+private fun ListingRowView(r: ListingOverview.Row, ebayMark: EbayMarks.Mark?, onOpen: () -> Unit) {
     val active = r.head.status == "aktiv"
     val color = if (active) OnSurface else Muted
     val price = r.head.priceCents
@@ -207,6 +246,7 @@ private fun ListingRowView(r: ListingOverview.Row, onOpen: () -> Unit) {
                     fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
             }
             MarksRow(r.marks)
+            EbayMarkRow(ebayMark, onRetry = null)
         }
     }
 }
@@ -234,6 +274,9 @@ private fun ListingDetailSheet(
     val state by SideStores.listings.state.collectAsState()
     LaunchedEffect(listingId) { SideStores.listings.refresh() }
     val salesState by SideStores.sales.state.collectAsState()
+    val ebayStatusState by SideStores.ebayStatus.state.collectAsState()
+    val ebayRowsState by SideStores.ebayRows.state.collectAsState()
+    LaunchedEffect(Unit) { SideStores.ebayStatus.refresh(); SideStores.ebayRows.refresh() }
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
     val offline = state.value == null || state.error != null
@@ -249,6 +292,14 @@ private fun ListingDetailSheet(
     val copies = remember(ready) { ready?.copies?.filter { !it.deleted }?.associateBy { it.copyId } ?: emptyMap() }
     val cards = remember(ready) { ready?.cards?.associateBy { it.printingKey() } ?: emptyMap() }
     val sellable = items.filter { it.copyId in copies }
+    val ebayMark = remember(listing, ebayRowsState, ebayStatusState) {
+        listing?.let { l ->
+            EbayMarks.mark(
+                EbayMarks.ListingHead(l.channelId, l.status, l.deleted),
+                ebayRowsState.value?.get(l.listingId)?.row(), ebayState(ebayStatusState),
+            )
+        }
+    }
 
     var editing by remember { mutableStateOf(false) }
     var fPrice by remember { mutableStateOf("") }
@@ -333,6 +384,18 @@ private fun ListingDetailSheet(
                 Text(overviewRow?.title ?: ListingText.rowTitle(listing.head(), items.map { it.item() }), color = OnSurface, fontWeight = FontWeight.Bold)
                 Text(SalesMath.euroCentsText(listing.priceCents), color = Gold, fontFamily = MonoFontFamily)
                 MarksRow(overviewRow?.marks)
+                EbayMarkRow(ebayMark, onRetry = {
+                    write(requireActive = true) { _, l ->
+                        val r = EbayRepository.syncNow(l.listingId)
+                        if (!r.optBoolean("ok")) error = r.optString("error")
+                        else notice = if (r.optBoolean("busy")) "Abgleich läuft schon – gleich noch einmal versuchen." else "eBay-Abgleich angestoßen."
+                    }
+                })
+                if (ebayMark?.url != null) {
+                    OutlinedButton(onClick = { if (!openWebLink(ctx, ebayMark.url)) error = "Link konnte nicht geöffnet werden." }) {
+                        Text("Auf eBay ansehen")
+                    }
+                }
                 listing.note?.let { Text(it, color = Muted, style = MaterialTheme.typography.bodySmall) }
             } else {
                 OutlinedTextField(value = fPrice, onValueChange = { fPrice = it }, label = { Text("Preis (€)") }, singleLine = true,
@@ -390,6 +453,8 @@ private fun ListingDetailSheet(
                 }
             }
 
+            ListingPhotos(listingId, enabled = active && !offline)
+
             if (!editing) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!cm) {
@@ -402,9 +467,11 @@ private fun ListingDetailSheet(
                         onClick = {
                             sharing = true; notice = null
                             val title = overviewRow?.title ?: "Angebot"
+                            val ownUrls = EbayRepository.photosOf(SideStores.listingPhotos.state.value.value.orEmpty(), listingId)
+                                .map { PhotoScale.publicUrl(SupabaseCloud.base(), it.path) }
                             scope.launch {
                                 try {
-                                    val (s, t) = ListingShare.shareImages(ctx, title, ListingText.imageUrls(items.map { it.item() }))
+                                    val (s, t) = ListingShare.shareImages(ctx, title, ownUrls + ListingText.imageUrls(items.map { it.item() }))
                                     notice = ListingText.imagesText(s, t)
                                 } catch (e: CancellationException) { throw e }
                                 catch (e: Exception) { notice = "Teilen fehlgeschlagen: ${e.message ?: "Unbekannter Fehler"}" }
