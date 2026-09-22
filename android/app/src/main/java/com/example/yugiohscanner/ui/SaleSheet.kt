@@ -368,7 +368,8 @@ fun SaleSheet(
 @Composable
 private fun DoneContent(d: DoneStep, onAdjust: (() -> Unit)?, onFinish: () -> Unit) {
     val ctx = LocalContext.current
-    Text("Gebucht.", style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
+    var linkError by remember { mutableStateOf<String?>(null) }
+    Text("Gebucht.",style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
     d.cleanupError?.let {
         Text("Angebote nicht aufgeräumt: $it – sie zeigen „Karte fehlt“.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
     }
@@ -382,7 +383,10 @@ private fun DoneContent(d: DoneStep, onAdjust: (() -> Unit)?, onFinish: () -> Un
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${r.channelName} – ${r.title}", color = OnSurface, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                 r.externalUrl?.let { url ->
-                    TextButton(onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }) { Text("Anzeige öffnen") }
+                    TextButton(onClick = {
+                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                            .onFailure { linkError = "Link konnte nicht geöffnet werden." }
+                    }) { Text("Anzeige öffnen") }
                 }
             }
         }
@@ -393,6 +397,7 @@ private fun DoneContent(d: DoneStep, onAdjust: (() -> Unit)?, onFinish: () -> Un
             onAdjust?.let { TextButton(onClick = it) { Text("Bearbeiten") } }
         }
     }
+    linkError?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Button(onClick = onFinish) { Text("Fertig") }
     }

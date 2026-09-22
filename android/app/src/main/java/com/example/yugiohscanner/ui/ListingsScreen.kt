@@ -369,9 +369,13 @@ private fun ListingDetailSheet(
                                 style = MaterialTheme.typography.labelSmall)
                             Text("${it0.condition} · ${Valuation.EDITION_LABELS[it0.edition] ?: it0.edition}", color = Muted,
                                 fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
-                            Text("Marktwert ${market?.let { SalesMath.euroCentsText(it) } ?: "–"}", color = Muted,
-                                fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
-                            if (copy == null) MarkChip("Karte fehlt", ErrorColor)
+                            // Wie ListingDetail.jsx: verkaufte Exemplare verlassen den Speicher -- bei verkauften/beendeten
+                            // Angeboten weder „Marktwert –“ noch „Karte fehlt“.
+                            if (active || market != null) {
+                                Text("Marktwert ${market?.let { SalesMath.euroCentsText(it) } ?: "–"}", color = Muted,
+                                    fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                            }
+                            if (copy == null && active) MarkChip("Karte fehlt", ErrorColor)
                         }
                     }
                     if (editing) {
@@ -411,7 +415,10 @@ private fun ListingDetailSheet(
                         enabled = !sharing && items.isNotEmpty(),
                     ) { Text(if (sharing) "Bilder werden geladen…" else "Bilder") }
                     listing.externalUrl?.let { url ->
-                        OutlinedButton(onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }) {
+                        OutlinedButton(onClick = {
+                            runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                                .onFailure { error = "Link konnte nicht geöffnet werden." }
+                        }) {
                             Text("Anzeige öffnen")
                         }
                     }
