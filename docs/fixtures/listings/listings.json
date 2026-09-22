@@ -1,0 +1,190 @@
+{
+  "_comment": "Spec H3a §5.3-§7.2 -- gemeinsame Fixture fuer desktop/electron/listing-text.cjs, desktop/src/utils/listingText.js und android ml/ListingText.kt. Geld in Cent (price in Euro wie in der Datenbank). Laengen in UTF-16-Codeeinheiten. Alle Zeichen in der BMP.",
+  "items": {
+    "dm1": { "copy_id": "dm1", "card_id": "46986414", "name": "Dunkler Magier", "name_en": "Dark Magician", "set_code": "LOB-DE005", "language": "DE", "rarity": "Ultra Rare", "edition": "first", "condition": "NM", "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg" },
+    "dm2": { "copy_id": "dm2", "card_id": "46986414", "name": "Dunkler Magier", "name_en": "Dark Magician", "set_code": "LOB-DE005", "language": "DE", "rarity": "Ultra Rare", "edition": "first", "condition": "NM", "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg" },
+    "dm3": { "copy_id": "dm3", "card_id": "46986414", "name": "Dunkler Magier", "name_en": "Dark Magician", "set_code": "LOB-DE005", "language": "DE", "rarity": "Ultra Rare", "edition": "first", "condition": "NM", "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg" },
+    "dm4": { "copy_id": "dm4", "card_id": "46986414", "name": "Dunkler Magier", "name_en": "Dark Magician", "set_code": "SDY-DE006", "language": "DE", "rarity": "Common", "edition": "unlimited", "condition": "NM", "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg" },
+    "dm5": { "copy_id": "dm5", "card_id": "46986414", "name": "Dunkler Magier", "name_en": "Dark Magician", "set_code": "LOB-DE005", "language": "DE", "rarity": "Ultra Rare", "edition": "first", "condition": "EX", "image_url": "https://images.ygoprodeck.com/images/cards/46986414.jpg" },
+    "be1": { "copy_id": "be1", "card_id": "89631139", "name": "Blauäugiger w. Drache", "name_en": "Blue-Eyes White Dragon", "set_code": "SDK-DE001", "language": "DE", "rarity": "Common", "edition": "unlimited", "condition": "EX", "image_url": "https://images.ygoprodeck.com/images/cards/89631139.jpg" },
+    "be2": { "copy_id": "be2", "card_id": "89631139", "name": "Blauäugiger w. Drache", "name_en": "Blue-Eyes White Dragon", "set_code": "SDK-DE001", "language": "DE", "rarity": "Common", "edition": "unlimited", "condition": "EX", "image_url": "https://images.ygoprodeck.com/images/cards/89631139.jpg" },
+    "ab1": { "copy_id": "ab1", "card_id": "14558127", "name": "Aschblüte & Freudiger Frühling", "name_en": "Ash Blossom & Joyous Spring", "set_code": "MACR-DE036", "language": "DE", "rarity": "Secret Rare", "edition": "limited", "condition": "MT", "image_url": "https://images.ygoprodeck.com/images/cards/14558127.jpg" },
+    "tg1": { "copy_id": "tg1", "card_id": "55144522", "name": "Topf der Gier", "name_en": "Pot of Greed", "set_code": "Unknown", "language": "EN", "rarity": "", "edition": "unknown", "condition": "GD", "image_url": null },
+    "nn1": { "copy_id": "nn1", "card_id": "12345678", "name": null, "name_en": null, "set_code": "ABC-DE001", "language": "IT", "rarity": "Rare", "edition": "first", "condition": "LP", "image_url": null }
+  },
+  "titles": [
+    { "name": "eine Karte: Spec-Beispiel (67 Zeichen) wird an der Wortgrenze gekuerzt", "items": ["dm1"], "title": "Yu-Gi-Oh! Dunkler Magier LOB-DE005 Ultra Rare 1. Auflage NM", "length": 59 },
+    { "name": "eine Karte: unlimitiert entfaellt", "items": ["be1"], "title": "Yu-Gi-Oh! Blauäugiger w. Drache SDK-DE001 Common EX Deutsch", "length": 59 },
+    { "name": "unbekannte Angaben entfallen", "items": ["tg1"], "title": "Yu-Gi-Oh! Topf der Gier GD Englisch", "length": 35 },
+    { "name": "ohne Namen steht der Passcode", "items": ["nn1"], "title": "Yu-Gi-Oh! 12345678 ABC-DE001 Rare 1. Auflage LP Italienisch", "length": 59 },
+    { "name": "n gleiche", "items": ["be2", "be1"], "title": "2× Yu-Gi-Oh! Blauäugiger w. Drache SDK-DE001 Common EX Deutsch", "length": 62 },
+    { "name": "n gleiche, gekuerzt ohne Auslassungszeichen", "items": ["dm3", "dm1", "dm2"], "title": "3× Yu-Gi-Oh! Dunkler Magier LOB-DE005 Ultra Rare 1. Auflage NM", "length": 62 },
+    { "name": "Konvolut, gekuerzt mit Auslassungszeichen, Komma entfernt", "items": ["dm1", "be1", "ab1"], "title": "Yu-Gi-Oh! Konvolut 3 Karten – Aschblüte & Freudiger Frühling…", "length": 61 },
+    { "name": "Konvolut ohne Kuerzung", "items": ["tg1", "dm1"], "title": "Yu-Gi-Oh! Konvolut 2 Karten – Dunkler Magier, Topf der Gier", "length": 59 },
+    { "name": "Konvolut: gleicher Name nur einmal", "items": ["dm4", "dm1"], "title": "Yu-Gi-Oh! Konvolut 2 Karten – Dunkler Magier", "length": 44 },
+    { "name": "Konvolut: Zustaende getrennt, Anzahl zaehlt alle Karten", "items": ["dm5", "dm1", "dm2"], "title": "Yu-Gi-Oh! Konvolut 3 Karten – Dunkler Magier", "length": 44 },
+    { "name": "leer", "items": [], "title": "", "length": 0 }
+  ],
+  "descriptions": [
+    { "name": "zwei Gruppen, Reihenfolge wie Konvolut-Titel", "items": ["dm2", "be1", "dm1"], "priceCents": 1250, "text": "1× Blauäugiger w. Drache – SDK-DE001 – Common – Unlimitiert – EX\n2× Dunkler Magier – LOB-DE005 – Ultra Rare – 1. Auflage – NM\n\nPreis: 12,50 €\n\nPrivatverkauf, keine Garantie oder Rücknahme." },
+    { "name": "unbekannte Angaben entfallen, ohne Preis", "items": ["tg1"], "priceCents": null, "text": "1× Topf der Gier – GD\n\nPreis: –\n\nPrivatverkauf, keine Garantie oder Rücknahme." },
+    { "name": "limitiert", "items": ["ab1"], "priceCents": 1999, "text": "1× Aschblüte & Freudiger Frühling – MACR-DE036 – Secret Rare – Limitiert – MT\n\nPreis: 19,99 €\n\nPrivatverkauf, keine Garantie oder Rücknahme." }
+  ],
+  "cardmarketGroups": [
+    { "name": "gemischte Auswahl wird zu 4 Gruppen", "items": ["dm1", "be1", "dm2", "ab1", "dm5"], "groups": [
+      { "product": "Aschblüte & Freudiger Frühling MACR-DE036", "condition": "MT", "count": 1, "copy_ids": ["ab1"] },
+      { "product": "Blauäugiger w. Drache SDK-DE001", "condition": "EX", "count": 1, "copy_ids": ["be1"] },
+      { "product": "Dunkler Magier LOB-DE005", "condition": "NM", "count": 2, "copy_ids": ["dm1", "dm2"] },
+      { "product": "Dunkler Magier LOB-DE005", "condition": "EX", "count": 1, "copy_ids": ["dm5"] }
+    ] }
+  ],
+  "cardmarketEntries": [
+    { "items": ["dm2", "dm1"], "priceCents": 1001, "entry": { "product": "Dunkler Magier LOB-DE005", "quantity": 2, "language": "Deutsch", "condition": "NM", "firstEdition": true, "pieceCents": 501 } },
+    { "items": ["tg1"], "priceCents": 150, "entry": { "product": "Topf der Gier", "quantity": 1, "language": "Englisch", "condition": "GD", "firstEdition": false, "pieceCents": 150 } },
+    { "items": ["be1", "be2"], "priceCents": null, "entry": { "product": "Blauäugiger w. Drache SDK-DE001", "quantity": 2, "language": "Deutsch", "condition": "EX", "firstEdition": false, "pieceCents": null } }
+  ],
+  "pieceCents": [
+    { "total": 1000, "quantity": 3, "cents": 333 },
+    { "total": 1001, "quantity": 2, "cents": 501 },
+    { "total": 999, "quantity": 4, "cents": 250 },
+    { "total": 100, "quantity": 1, "cents": 100 }
+  ],
+  "afterSale": [
+    { "name": "Cardmarket Teilverkauf: 500 je Stueck x 1 Rest", "listing": { "channel_id": "cardmarket", "price": 10.0, "status": "aktiv" }, "live": ["c1", "c2"], "sold": ["c1"], "result": { "status": "aktiv", "removeCopyIds": ["c1"], "priceCents": 500, "askAdjust": false } },
+    { "name": "Cardmarket Teilverkauf: 333 je Stueck x 2 Rest", "listing": { "channel_id": "cardmarket", "price": 10.0, "status": "aktiv" }, "live": ["c1", "c2", "c10"], "sold": ["c10"], "result": { "status": "aktiv", "removeCopyIds": ["c10"], "priceCents": 666, "askAdjust": false } },
+    { "name": "alles verkauft", "listing": { "channel_id": "ebay", "price": 12.0, "status": "aktiv" }, "live": ["c1", "c3"], "sold": ["c3", "c1"], "result": { "status": "verkauft", "removeCopyIds": [], "priceCents": 1200, "askAdjust": false } },
+    { "name": "anderer Kanal Teilverkauf: Preis bleibt, Hinweis", "listing": { "channel_id": "ebay", "price": 12.0, "status": "aktiv" }, "live": ["c1", "c3"], "sold": ["c3"], "result": { "status": "aktiv", "removeCopyIds": ["c3"], "priceCents": 1200, "askAdjust": true } },
+    { "name": "Cardmarket Teilverkauf: nie 0 Cent", "listing": { "channel_id": "cardmarket", "price": 0.01, "status": "aktiv" }, "live": ["c1", "c2", "c3"], "sold": ["c2"], "result": { "status": "aktiv", "removeCopyIds": ["c2"], "priceCents": 1, "askAdjust": false } },
+    { "name": "nichts davon verkauft", "listing": { "channel_id": "ebay", "price": 12.0, "status": "aktiv" }, "live": ["c1"], "sold": ["c9"], "result": { "status": "aktiv", "removeCopyIds": [], "priceCents": 1200, "askAdjust": false } }
+  ],
+  "links": [
+    { "channel_id": "cardmarket", "cmUrl": "https://www.cardmarket.com/de/YuGiOh/Products/Singles/Legend-of-Blue-Eyes-White-Dragon/Dark-Magician", "nameEn": "Dark Magician", "setCode": "LOB-DE005", "url": "https://www.cardmarket.com/de/YuGiOh/Products/Singles/Legend-of-Blue-Eyes-White-Dragon/Dark-Magician" },
+    { "channel_id": "cardmarket", "cmUrl": null, "nameEn": "Ash Blossom & Joyous Spring", "setCode": "MACR-DE036", "url": "https://www.cardmarket.com/de/YuGiOh/Products/Search?searchString=Ash%20Blossom%20%26%20Joyous%20Spring%20MACR-DE036" },
+    { "channel_id": "cardmarket", "cmUrl": "", "nameEn": null, "setCode": "LOB-DE005", "url": "https://www.cardmarket.com/de/YuGiOh/Products/Search?searchString=LOB-DE005" },
+    { "channel_id": "cardmarket", "cmUrl": null, "nameEn": "Harpie's Feather Duster", "setCode": "Unknown", "url": "https://www.cardmarket.com/de/YuGiOh/Products/Search?searchString=Harpie's%20Feather%20Duster" },
+    { "channel_id": "kleinanzeigen", "cmUrl": null, "nameEn": "Dark Magician", "setCode": "LOB-DE005", "url": "https://www.kleinanzeigen.de/p-anzeige-aufgeben.html" },
+    { "channel_id": "ebay", "cmUrl": null, "nameEn": null, "setCode": null, "url": "https://www.ebay.de/sl/sell" },
+    { "channel_id": "tausch", "cmUrl": null, "nameEn": null, "setCode": null, "url": null },
+    { "channel_id": "privat", "cmUrl": null, "nameEn": null, "setCode": null, "url": null },
+    { "channel_id": "5d0c1c52-0000-4000-8000-000000000001", "cmUrl": null, "nameEn": "Dark Magician", "setCode": "LOB-DE005", "url": null }
+  ],
+  "shorts": [
+    { "channel_id": "cardmarket", "name": "Cardmarket", "short": "CM" },
+    { "channel_id": "ebay", "name": "eBay", "short": "EB" },
+    { "channel_id": "kleinanzeigen", "name": "Kleinanzeigen", "short": "KA" },
+    { "channel_id": "tausch", "name": "Tausch", "short": "TA" },
+    { "channel_id": "privat", "name": "Privat", "short": "PR" },
+    { "channel_id": "x1", "name": "Flohmarkt", "short": "FL" },
+    { "channel_id": "x2", "name": " börse", "short": "BÖ" },
+    { "channel_id": "x3", "name": "", "short": "??" }
+  ],
+  "badges": [
+    { "offers": [ { "listing_id": "l2", "channel_id": "ebay", "channel_name": "eBay", "priceCents": 1200 }, { "listing_id": "l9", "channel_id": "x1", "channel_name": "Flohmarkt", "priceCents": 300 }, { "listing_id": "l1", "channel_id": "cardmarket", "channel_name": "Cardmarket", "priceCents": 1000 }, { "listing_id": "l8", "channel_id": "ebay", "channel_name": "eBay", "priceCents": 900 } ], "badges": ["CM", "EB", "FL"] },
+    { "offers": [], "badges": [] }
+  ],
+  "imageUrls": [
+    { "items": ["dm1", "dm2", "be1", "tg1"], "urls": ["https://images.ygoprodeck.com/images/cards/89631139.jpg", "https://images.ygoprodeck.com/images/cards/46986414.jpg"] },
+    { "items": ["dm4", "dm1"], "urls": ["https://images.ygoprodeck.com/images/cards/46986414.jpg"] },
+    { "items": ["nn1"], "urls": [] }
+  ],
+  "imagesText": [
+    { "saved": 3, "total": 4, "text": "3 von 4 Bildern gespeichert" },
+    { "saved": 4, "total": 4, "text": "4 Bilder gespeichert" },
+    { "saved": 1, "total": 1, "text": "1 Bild gespeichert" },
+    { "saved": 0, "total": 2, "text": "0 von 2 Bildern gespeichert" },
+    { "saved": 0, "total": 0, "text": "Keine Bilder vorhanden." }
+  ],
+  "since": [
+    { "listed_on": "2026-09-15", "today": "2026-09-21", "days": 6, "text": "seit 6 Tagen" },
+    { "listed_on": "2026-09-20", "today": "2026-09-21", "days": 1, "text": "seit 1 Tag" },
+    { "listed_on": "2026-09-21", "today": "2026-09-21", "days": 0, "text": "seit heute" },
+    { "listed_on": "2026-08-31", "today": "2026-09-01", "days": 1, "text": "seit 1 Tag" },
+    { "listed_on": "2025-12-31", "today": "2026-03-01", "days": 60, "text": "seit 60 Tagen" },
+    { "listed_on": "2026-09-22", "today": "2026-09-21", "days": 0, "text": "seit heute" }
+  ],
+  "suggestionSum": [
+    { "values": [190, null, 250], "sum": 440 },
+    { "values": [null, null], "sum": null },
+    { "values": [], "sum": null },
+    { "values": [0], "sum": 0 }
+  ],
+  "summaryTexts": [
+    { "listings": 1, "cards": 1, "priceCents": 250, "text": "1 Angebot · 1 Karte · 2,50 €" },
+    { "listings": 0, "cards": 0, "priceCents": 0, "text": "0 Angebote · 0 Karten · 0,00 €" },
+    { "listings": 8, "cards": 34, "priceCents": 11250, "text": "8 Angebote · 34 Karten · 112,50 €" }
+  ],
+  "startTexts": [ { "n": 8, "text": "Angebote: 8 aktiv" }, { "n": 0, "text": "Angebote: 0 aktiv" } ],
+  "rowTitleCases": [
+    { "listing": { "channel_id": "cardmarket", "title": null }, "items": [], "title": "(ohne Karten)" },
+    { "listing": { "channel_id": "cardmarket", "title": null }, "items": ["dm2", "dm1"], "title": "2× Dunkler Magier LOB-DE005" },
+    { "listing": { "channel_id": "ebay", "title": "  " }, "items": ["dm1"], "title": "(ohne Titel)" },
+    { "listing": { "channel_id": "ebay", "title": "Dunkler Magier NM" }, "items": ["dm1"], "title": "Dunkler Magier NM" }
+  ],
+  "board": {
+    "today": "2026-09-21",
+    "base": { "card_id": "46986414", "name": "Dunkler Magier", "name_en": "Dark Magician", "set_code": "LOB-DE005", "language": "DE", "rarity": "Ultra Rare", "edition": "first", "condition": "NM", "image_url": null },
+    "listings": [
+      { "listing_id": "l1", "channel_id": "cardmarket", "channel_name": "Cardmarket", "title": null, "price": 10.0, "status": "aktiv", "listed_on": "2026-09-10", "created_at": "2026-09-10 10:00:00", "sale_id": null, "external_url": null, "deleted": false },
+      { "listing_id": "l2", "channel_id": "ebay", "channel_name": "eBay", "title": "Yu-Gi-Oh! Konvolut 2 Karten – Dunkler Magier", "price": 12.0, "status": "aktiv", "listed_on": "2026-09-15", "created_at": "2026-09-15 11:00:00", "sale_id": null, "external_url": "https://www.ebay.de/itm/123", "deleted": false },
+      { "listing_id": "l3", "channel_id": "kleinanzeigen", "channel_name": "Kleinanzeigen", "title": "Dunkler Magier NM", "price": 5.0, "status": "aktiv", "listed_on": "2026-09-15", "created_at": "2026-09-15 09:00:00", "sale_id": null, "external_url": null, "deleted": false },
+      { "listing_id": "l4", "channel_id": "ebay", "channel_name": "eBay", "title": "Dunkler Magier (eBay)", "price": 8.0, "status": "verkauft", "listed_on": "2026-09-01", "created_at": "2026-09-01 08:00:00", "sale_id": "s1", "external_url": null, "deleted": false },
+      { "listing_id": "l5", "channel_id": "privat", "channel_name": "Privat", "title": "Privat-Angebot", "price": 3.0, "status": "beendet", "listed_on": "2026-09-15", "created_at": "2026-09-15 09:00:00", "sale_id": null, "external_url": null, "deleted": false },
+      { "listing_id": "l6", "channel_id": "kleinanzeigen", "channel_name": "Kleinanzeigen", "title": "Kleinanzeige alt", "price": 4.0, "status": "verkauft", "listed_on": "2026-08-30", "created_at": "2026-08-30 08:00:00", "sale_id": "s2", "external_url": null, "deleted": false },
+      { "listing_id": "l7", "channel_id": "tausch", "channel_name": "Tausch", "title": "", "price": 10.01, "status": "aktiv", "listed_on": "2026-09-15", "created_at": "2026-09-15 12:00:00", "sale_id": null, "external_url": null, "deleted": false }
+    ],
+    "items": [
+      { "listing_id": "l1", "copy_id": "c1", "deleted": false },
+      { "listing_id": "l1", "copy_id": "c2", "deleted": false },
+      { "listing_id": "l2", "copy_id": "c1", "deleted": false },
+      { "listing_id": "l2", "copy_id": "c3", "deleted": false },
+      { "listing_id": "l3", "copy_id": "c4", "deleted": false },
+      { "listing_id": "l3", "copy_id": "c5", "deleted": true },
+      { "listing_id": "l4", "copy_id": "c6", "deleted": false },
+      { "listing_id": "l5", "copy_id": "c1", "deleted": false },
+      { "listing_id": "l6", "copy_id": "c7", "deleted": false },
+      { "listing_id": "l7", "copy_id": "c8", "deleted": false }
+    ],
+    "copyLive": ["c1", "c2", "c3", "c5", "c8"],
+    "saleStatus": { "s1": "storniert", "s2": "aktiv" },
+    "suggestions": { "c1": 600, "c2": 600, "c3": null, "c8": 1201 },
+    "marks": {
+      "l1": { "alsoOn": ["eBay"], "missing": false, "underSuggestion": true, "saleCancelled": false },
+      "l2": { "alsoOn": ["Cardmarket"], "missing": false, "underSuggestion": false, "saleCancelled": false },
+      "l3": { "alsoOn": [], "missing": true, "underSuggestion": false, "saleCancelled": false },
+      "l4": { "alsoOn": [], "missing": false, "underSuggestion": false, "saleCancelled": true },
+      "l5": { "alsoOn": [], "missing": false, "underSuggestion": false, "saleCancelled": false },
+      "l6": { "alsoOn": [], "missing": false, "underSuggestion": false, "saleCancelled": false },
+      "l7": { "alsoOn": [], "missing": false, "underSuggestion": false, "saleCancelled": false }
+    },
+    "order": ["l7", "l2", "l3", "l5", "l1", "l4", "l6"],
+    "summary": { "listings": 4, "cards": 6, "priceCents": 3701 },
+    "summaryText": "4 Angebote · 6 Karten · 37,01 €",
+    "rowTitles": { "l1": "2× Dunkler Magier LOB-DE005", "l2": "Yu-Gi-Oh! Konvolut 2 Karten – Dunkler Magier", "l3": "Dunkler Magier NM", "l7": "(ohne Titel)" },
+    "byCopy": {
+      "c1": [ { "listing_id": "l1", "channel_id": "cardmarket", "channel_name": "Cardmarket", "priceCents": 1000 }, { "listing_id": "l2", "channel_id": "ebay", "channel_name": "eBay", "priceCents": 1200 } ],
+      "c2": [ { "listing_id": "l1", "channel_id": "cardmarket", "channel_name": "Cardmarket", "priceCents": 1000 } ],
+      "c3": [ { "listing_id": "l2", "channel_id": "ebay", "channel_name": "eBay", "priceCents": 1200 } ],
+      "c4": [ { "listing_id": "l3", "channel_id": "kleinanzeigen", "channel_name": "Kleinanzeigen", "priceCents": 500 } ],
+      "c8": [ { "listing_id": "l7", "channel_id": "tausch", "channel_name": "Tausch", "priceCents": 1001 } ]
+    },
+    "offeredText": { "c1": "angeboten auf Cardmarket für 10,00 €, eBay für 12,00 €", "c8": "angeboten auf Tausch für 10,01 €", "c9": null },
+    "cleanup": [
+      { "name": "Verkauf aus der Verkaufsliste (ohne Angebot)", "sold": ["c3", "c1"], "except": null, "result": {
+        "removeItems": [ { "listing_id": "l1", "copy_id": "c1" }, { "listing_id": "l2", "copy_id": "c1" }, { "listing_id": "l2", "copy_id": "c3" } ],
+        "endListings": ["l2"],
+        "remind": [
+          { "listing_id": "l1", "channel_name": "Cardmarket", "title": "2× Dunkler Magier LOB-DE005", "external_url": null },
+          { "listing_id": "l2", "channel_name": "eBay", "title": "Yu-Gi-Oh! Konvolut 2 Karten – Dunkler Magier", "external_url": "https://www.ebay.de/itm/123" }
+        ] } },
+      { "name": "Verkauf ueber Angebot l1: l1 selbst bleibt unberuehrt", "sold": ["c1", "c2"], "except": "l1", "result": {
+        "removeItems": [ { "listing_id": "l2", "copy_id": "c1" } ],
+        "endListings": [],
+        "remind": [ { "listing_id": "l2", "channel_name": "eBay", "title": "Yu-Gi-Oh! Konvolut 2 Karten – Dunkler Magier", "external_url": "https://www.ebay.de/itm/123" } ] } },
+      { "name": "letzte Position: Angebot endet", "sold": ["c4"], "except": null, "result": {
+        "removeItems": [ { "listing_id": "l3", "copy_id": "c4" } ],
+        "endListings": ["l3"],
+        "remind": [ { "listing_id": "l3", "channel_name": "Kleinanzeigen", "title": "Dunkler Magier NM", "external_url": null } ] } },
+      { "name": "Exemplar in keinem Angebot", "sold": ["c9"], "except": null, "result": { "removeItems": [], "endListings": [], "remind": [] } }
+    ]
+  }
+}
