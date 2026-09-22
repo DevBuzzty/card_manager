@@ -2,6 +2,7 @@ package com.example.yugiohscanner
 
 import com.example.yugiohscanner.ui.ListingShare
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -28,5 +29,10 @@ class ListingShareConfigTest {
         assertEquals("01.jpg", ListingShare.fileName(0, "https://a/b/46986414.jpg"))
         assertEquals("10.png", ListingShare.fileName(9, "https://a/b/x.PNG?v=2"))
         assertEquals("03.jpg", ListingShare.fileName(2, "https://a/b/x"))
+    }
+    @Test fun `Bilder werden hoechstens 10 MB gelesen`() {
+        val ok = ByteArray(ListingShare.MAX_BYTES.toInt())
+        assertEquals(ok.size, ListingShare.readCapped(ok.inputStream())!!.size)
+        assertNull(ListingShare.readCapped(ByteArray(ListingShare.MAX_BYTES.toInt() + 1).inputStream()))
     }
 }

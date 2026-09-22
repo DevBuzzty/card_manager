@@ -317,7 +317,7 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
         SaleSheet(listOf(copy.copyId), onDismiss = { selling = false }, onBooked = { _, _ -> selling = false; onSaved(); onDismiss() })
     }
     if (listing) {
-        ListingSheet(listOf(copy.copyId), onDismiss = { listing = false }, onSaved = { listing = false; onSaved() })
+        ListingSheet(listOf(copy.copyId), onDismiss = { listing = false }, onSaved = { listing = false; forSale = true; onSaved() })
     }
 
     if (pendingRemove) {

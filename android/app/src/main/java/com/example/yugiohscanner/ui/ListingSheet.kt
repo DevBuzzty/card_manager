@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.ListingSavedPartially
 import com.example.yugiohscanner.cloud.ListingsRepository
 import com.example.yugiohscanner.cloud.NewListing
 import com.example.yugiohscanner.cloud.SideStores
@@ -214,16 +215,12 @@ fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismi
                 list.firstNotNullOfOrNull { ListingsRepository.checkNew(it, liveIds, chIds) }?.let { throw IllegalStateException(it) }
                 val ids = try {
                     ListingsRepository.create(list)
-                } catch (e: CancellationException) { throw e }
-                catch (e: IllegalStateException) {
-                    // ListingsRepository.create: Angebot steht, nur for_sale scheiterte -- kein „Nicht gespeichert“, kein zweites Anlegen.
-                    if (e.message?.startsWith("Angebot gespeichert") == true) {
-                        created = true
-                        error = e.message
-                        try { SideStores.listings.refreshAndWait() } catch (c: CancellationException) { throw c } catch (_: Exception) { }
-                        return@launch
-                    }
-                    throw e
+                } catch (e: ListingSavedPartially) {
+                    // Angebot steht, nur for_sale scheiterte -- kein „Nicht gespeichert“, kein zweites Anlegen.
+                    created = true
+                    error = e.message
+                    try { SideStores.listings.refreshAndWait() } catch (c: CancellationException) { throw c } catch (_: Exception) { }
+                    return@launch
                 }
                 created = true
                 // Gespeichert ist gespeichert -- ein Fehler beim Nachladen darf nicht als „Nicht gespeichert“ erscheinen.
@@ -249,9 +246,10 @@ fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismi
 
             if (offline) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val loadingOnly = loadingSide && listingsState.error == null && salesState.error == null
                     Text(
-                        if (loadingSide && listingsState.error == null && salesState.error == null) "Angebote werden geladen…" else "Keine Verbindung – Angebote nicht geladen",
-                        color = ErrorColor, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
+                        if (loadingOnly) "Angebote werden geladen…" else "Keine Verbindung – Angebote nicht geladen",
+                        color = if (loadingOnly) Muted else ErrorColor, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = { SideStores.listings.refresh(); SideStores.sales.refresh() },
                         enabled = !listingsState.loading && !salesState.loading) { Text("Erneut versuchen") }

@@ -10,7 +10,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 import java.util.Locale
 
 /**
@@ -21,10 +23,26 @@ import java.util.Locale
 object ListingShare {
     const val CACHE_DIR = "listing_images"
     const val AUTHORITY_SUFFIX = ".fileprovider"
+    const val MAX_BYTES = 10L * 1024 * 1024
     private val EXT = Regex("\\.(jpe?g|png|webp)(?:$|\\?)", RegexOption.IGNORE_CASE)
 
     fun fileName(index: Int, url: String): String =
         String.format(Locale.ROOT, "%02d", index + 1) + (EXT.find(url)?.groupValues?.get(1)?.lowercase(Locale.ROOT)?.let { ".$it" } ?: ".jpg")
+
+    /** Liest höchstens [MAX_BYTES]; null, wenn der Strom länger ist. */
+    internal fun readCapped(input: InputStream): ByteArray? = input.use { s ->
+        val out = ByteArrayOutputStream()
+        val buf = ByteArray(8192)
+        var total = 0L
+        while (true) {
+            val n = s.read(buf)
+            if (n < 0) break
+            total += n
+            if (total > MAX_BYTES) return null
+            out.write(buf, 0, n)
+        }
+        out.toByteArray()
+    }
 
     /** -> (geteilt, gesamt). Öffnet das Teilen-Menü nur, wenn mindestens ein Bild geladen wurde. */
     suspend fun shareImages(ctx: Context, title: String, urls: List<String>): Pair<Int, Int> {
@@ -36,7 +54,10 @@ object ListingShare {
                 if (!u.startsWith("https://", ignoreCase = true)) return@forEachIndexed
                 try {
                     SupabaseCloud.http().newCall(Request.Builder().url(u).build()).execute().use { r ->
-                        val bytes = if (r.isSuccessful) r.body?.bytes() else null
+                        val body = r.body
+                        // Nur Bilder, höchstens 10 MB -- auch bei unbekannter Länge wird nie mehr gelesen.
+                        val isImage = body?.contentType()?.type.equals("image", ignoreCase = true)
+                        val bytes = if (r.isSuccessful && body != null && isImage && body.contentLength() <= MAX_BYTES) readCapped(body.byteStream()) else null
                         if (bytes != null && bytes.isNotEmpty()) {
                             val f = File(dir, fileName(i, u))
                             f.writeBytes(bytes)

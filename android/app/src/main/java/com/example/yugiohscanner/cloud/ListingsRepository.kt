@@ -134,10 +134,18 @@ object ListingsRepository {
     suspend fun create(list: List<NewListing>): List<String> {
         val ids = list.map { UUID.randomUUID().toString() }
         run(createOps(ids, list))
+        return forSaleAfterCreate(ids, list.flatMap { l -> l.items.map { it.copyId } }.distinct()) { CollectionRepository.setForSale(it, true) }
+    }
+
+    /**
+     * Zweiter Schritt von [create] (Abweichung 1): die Angebote stehen schon. Scheitert for_sale, wirft er
+     * [ListingSavedPartially] -- der Aufrufer darf dann nicht „Nicht gespeichert“ melden und nicht erneut anlegen.
+     */
+    internal suspend fun forSaleAfterCreate(ids: List<String>, copyIds: List<String>, setForSale: suspend (List<String>) -> Unit): List<String> {
         try {
-            CollectionRepository.setForSale(list.flatMap { l -> l.items.map { it.copyId } }.distinct(), true)
+            setForSale(copyIds)
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-        catch (e: Exception) { throw IllegalStateException("Angebot gespeichert, „Zum Verkauf“ nicht gesetzt: ${e.message}") }
+        catch (e: Exception) { throw ListingSavedPartially("Angebot gespeichert, „Zum Verkauf“ nicht gesetzt: ${e.message}") }
         return ids
     }
 
@@ -264,3 +272,6 @@ object ListingsRepository {
         SupabaseCloud.http().newCall(build()).execute()
     }
 }
+
+/** Spec H3a Abweichung 1: Angebot angelegt, nur „Zum Verkauf“ (for_sale) nicht gesetzt. */
+class ListingSavedPartially(msg: String) : IllegalStateException(msg)
