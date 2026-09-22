@@ -21,6 +21,9 @@ import DuplicatesList from './DuplicatesList';
 import ForSaleList from './ForSaleList';
 import { LOADING, duplicates, forSaleSummary, forSaleSuffix } from '../utils/duplicates';
 import { useSaleData } from '../utils/useSaleData';
+import { useListingsData } from '../utils/useListingsData';
+import ListingsList from './ListingsList';
+import { listingsSummary } from '../utils/listingText';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -85,9 +88,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [copiesByPrinting, setCopiesByPrinting] = useState({}); // printingKey() -> card_copies-Zeilen dieses Printings
   const [containersTagsError, setContainersTagsError] = useState(null);
   const [copiesLoadError, setCopiesLoadError] = useState(null);
-  // all | unknown | duplicates | forsale | incomplete | foils; Start oeffnet Duplikate/Zum Verkauf ueber location.state.
+  // all | unknown | duplicates | forsale | listings | incomplete | foils; Start oeffnet Duplikate/Zum Verkauf ueber location.state.
   const [segment, setSegment] = useState(() => location.state?.segment || 'all');
   const sale = useSaleData(); // Spec H1: Exemplare fuer Duplikate/Verkaufsliste, data null = laedt
+  const listingsData = useListingsData(); // Spec H3a §6: Angebote, data null = laedt
   const [segmentBusy, setSegmentBusy] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
@@ -322,9 +326,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       unknown: groupedCards.filter(hasUnknownVariant).length,
       duplicates: saleDuplicates ? saleDuplicates.length : LOADING,
       forsale: sale.data ? forSaleSummary(sale.data.copies).copies : LOADING,
+      listings: listingsData.data ? listingsSummary(listingsData.data.listings, listingsData.data.items).listings : LOADING,
       incomplete: groupedCards.filter(isIncomplete).length,
       foils: groupedCards.filter(hasFoilVariant).length,
-  }), [groupedCards, saleDuplicates, sale.data]);
+  }), [groupedCards, saleDuplicates, sale.data, listingsData.data]);
 
   const filtered = useMemo(() => {
       // card_copies-Zeilen ALLER Printings einer Gruppe (groupedCards buendelt einen Passcode --
@@ -589,6 +594,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                     { id: 'unknown', label: 'Unbekannt' },
                     { id: 'duplicates', label: 'Duplikate' },
                     { id: 'forsale', label: 'Zum Verkauf' },
+                    { id: 'listings', label: 'Angebote' },
                     { id: 'incomplete', label: 'Unvollständig' },
                     { id: 'foils', label: 'Foils' },
                 ].map(s => (
@@ -682,6 +688,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 <DuplicatesList list={saleDuplicates} copies={sale.data ? sale.data.copies : null} reload={sale.reload} onOpenCard={openSaleCopy} />
             ) : segment === 'forsale' ? (
                 <ForSaleList copies={sale.data ? sale.data.copies : null} containers={containers} reload={sale.reload} onOpenCard={openSaleCopy} />
+            ) : segment === 'listings' ? (
+                <ListingsList data={listingsData.data} error={listingsData.error} reload={listingsData.reload} onOpenCard={openSaleCopy} />
             ) : filtered.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-gray-600">Keine Karten gefunden.</div>
             ) : (

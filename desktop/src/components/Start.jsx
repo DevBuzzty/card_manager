@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning, Award, PackageOpen, Tag, Copy } from 'lucide-react';
+import { Search, Plus, ScanLine, ArrowRight, Clock, TriangleAlert, FileWarning, Award, PackageOpen, Tag, Copy, Store } from 'lucide-react';
 import CardTile from './CardTile';
 import SetCompletion from './SetCompletion';
 import MoversCard from './MoversCard';
@@ -10,6 +10,8 @@ import { ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
 import { LOADING, duplicates, duplicatesSummary, forSaleSummary, startSaleText, startDuplicatesText, saleShareText } from '../utils/duplicates';
 import { useSaleData } from '../utils/useSaleData';
+import { useListingsData } from '../utils/useListingsData';
+import { listingsSummary, startText } from '../utils/listingText';
 
 export default function Start({ onOpenPalette }) {
   const navigate = useNavigate();
@@ -27,6 +29,7 @@ export default function Start({ onOpenPalette }) {
   const [unsortedError, setUnsortedError] = useState(false);
   // Spec H1 §5.3: Zaehler "Zum Verkauf"/"Duplikate" und "davon zum Verkauf"; data null = laedt ("…").
   const sale = useSaleData();
+  const listingsData = useListingsData(); // Spec H3a §6: "Angebote: N aktiv", data null = laedt
   const saleSummary = useMemo(() => (sale.data ? forSaleSummary(sale.data.copies) : null), [sale.data]);
   const duplicateSummary = useMemo(() => {
     if (!sale.data) return null;
@@ -212,6 +215,9 @@ export default function Start({ onOpenPalette }) {
             </button>
             <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'duplicates' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-space-violet/30 bg-space-violet/5 hover:bg-space-violet/10 transition-colors text-xs text-ink">
               <Copy className="w-4 h-4 text-violet-soft shrink-0" />{duplicateSummary ? startDuplicatesText(duplicateSummary) : sale.error ? 'Duplikate: —' : `Duplikate: ${LOADING}`}
+            </button>
+            <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'listings' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors text-xs text-ink">
+              <Store className="w-4 h-4 text-gold shrink-0" />{listingsData.data ? startText(listingsSummary(listingsData.data.listings, listingsData.data.items).listings) : listingsData.error ? 'Angebote: —' : `Angebote: ${LOADING}`}
             </button>
           </div>
           <button onClick={() => navigate(ROUTES.scannen)} className="mt-auto flex items-center justify-center gap-2 bg-gradient-to-br from-space-violet to-space-violet-dark text-white font-display font-semibold text-sm py-3 rounded-xl shadow-[0_10px_24px_-10px_#9D00FF]">

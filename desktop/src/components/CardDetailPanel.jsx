@@ -15,6 +15,7 @@ import { formatCopyLocation } from '../utils/copyLocation';
 import { formatPasscode } from '../utils/passcode';
 import { euroCentsText, toCents } from '../utils/saleMath';
 import { createLatestOnly } from '../utils/busyGate';
+import { offeredText } from '../utils/listingText';
 
 export default function CardDetailPanel({ paletteOpen = false }) {
   const params = useParams();
@@ -32,6 +33,8 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   const [sheetCopy, setSheetCopy] = useState(null); // das im Exemplar-Sheet geoeffnete Exemplar, oder null
   const [sold, setSold] = useState([]); // Spec H2 §7: verkaufte Exemplare dieser Karte
   const soldSeq = useRef(createLatestOnly()); // eine spaete Antwort fuer Karte A landet nie bei Karte B
+  const [offers, setOffers] = useState({}); // Spec H3a §6: copy_id -> aktive Angebote ("angeboten auf …")
+  const offersSeq = useRef(createLatestOnly());
   const vKey = (v) => `${v.set_code}|${v.rarity}|${v.language || 'DE'}`;
   const printingOf = (v) => ({ id: String(card.id), set_code: v.set_code, language: v.language || 'DE', rarity: v.rarity });
 
@@ -42,11 +45,19 @@ export default function CardDetailPanel({ paletteOpen = false }) {
     const apply = (r) => { if (soldSeq.current.isCurrent(token)) setSold(Array.isArray(r) ? r : []); };
     window.api.cardSales(cardId).then(apply).catch(() => apply([]));
   };
+  // Spec H3a §6 -- "angeboten auf <Kanal> für <Preis>" je Exemplar; nur die zuletzt gestartete Abfrage darf setzen.
+  const loadOffers = () => {
+    if (!window.api?.listingOffers) return;
+    const token = offersSeq.current.start();
+    const apply = (o) => { if (offersSeq.current.isCurrent(token)) setOffers(o || {}); };
+    window.api.listingOffers().then(apply).catch(() => apply({}));
+  };
 
   // Rebuild the grouped card for this passcode from the collection.
   const loadCard = async () => {
     if (!window.api) return;
     loadSold(printing.id);
+    loadOffers();
     const rows = (await window.api.getCollection()).filter(r => String(r.id) === String(printing.id));
     if (rows.length === 0) { setCard(null); return; }
     const primary = rows.find(r => r.set_code === printing.set_code && r.rarity === printing.rarity
@@ -55,11 +66,18 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   };
   useEffect(() => { loadCard(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [params.id]);
   // Verkauf/Storno/Abgleich an anderer Stelle: „Verkauft" frisch halten.
+  // Spec H3a §6: dazu Angebote (Abgleich, 'listings-dirty') fuer "angeboten auf …".
   useEffect(() => {
-    const onChange = () => loadSold(printing.id);
+    const onChange = () => { loadSold(printing.id); loadOffers(); };
     const off = window.api?.onSalesChanged?.(onChange);
+    const offListings = window.api?.onListingsChanged?.(onChange);
     window.addEventListener('collection-dirty', onChange);
-    return () => { off?.(); window.removeEventListener('collection-dirty', onChange); };
+    window.addEventListener('listings-dirty', onChange);
+    return () => {
+      off?.(); offListings?.();
+      window.removeEventListener('collection-dirty', onChange);
+      window.removeEventListener('listings-dirty', onChange);
+    };
   }, [printing.id]);
 
   // Going back is right when we opened over a page; when /karte/… is the first history entry
@@ -332,6 +350,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                               {/* Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile. */}
                                               {c.container_id ? formatCopyLocation(c, containers.find(ct => ct.container_id === c.container_id)) : 'ohne Standort'}
                                           </span>
+                                          {offeredText(offers[c.copy_id] || []) && <span className="text-[10px] text-gold font-mono truncate">{offeredText(offers[c.copy_id] || [])}</span>}
                                           <div className="ml-auto flex gap-1 flex-wrap justify-end">
                                               {parseTags(c.tags).map(t => (
                                                   <span key={t} className="px-1.5 py-0.5 rounded-full bg-space-violet/15 text-space-violet text-[10px] border border-space-violet/30">{t}</span>
@@ -453,7 +472,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
         <CopySheet
             copy={sheetCopy}
             onClose={() => setSheetCopy(null)}
-            onSaved={() => { refreshVariant({ set_code: sheetCopy.set_code, rarity: sheetCopy.rarity, language: sheetCopy.language }); loadSold(printing.id); }}
+            onSaved={() => { refreshVariant({ set_code: sheetCopy.set_code, rarity: sheetCopy.rarity, language: sheetCopy.language }); loadSold(printing.id); loadOffers(); }}
         />
     )}
     </>
