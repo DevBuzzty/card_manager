@@ -8,6 +8,7 @@ const { mergeRemotePriceHistory } = require('./price-history.cjs');
 const { nextNotification, openSignature } = require('./alert-notify.cjs');
 const { CHANNEL_COLS, SALE_COLS, ITEM_COLS } = require('./sales-schema.cjs');
 const { LISTING_COLS, LISTING_ITEM_COLS } = require('./listings-schema.cjs');
+const { EBAY_LISTING_COLS, LISTING_PHOTO_COLS } = require('./ebay-schema.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
@@ -261,8 +262,10 @@ const SALES_STREAMS = {
   // ueberschrieben; der naechste Push traegt sie in die Cloud. Die H2-Stroeme bleiben absichtlich ohne Flag.
   listings: { cols: noStamps(LISTING_COLS), bools: new Set(['deleted']), key: ['listing_id'], cursor: 'sync_listings', localWinsUnpushed: true },
   listing_items: { cols: noStamps(LISTING_ITEM_COLS), bools: new Set(['deleted']), key: ['listing_id', 'copy_id'], cursor: 'sync_listing_items', localWinsUnpushed: true },
+  // Spec H3b1 §6 -- eigene Fotos, dieselbe Bauart wie listings (beide Richtungen, lokal ungeschoben gewinnt).
+  listing_photos: { cols: noStamps(LISTING_PHOTO_COLS), bools: new Set(['deleted']), key: ['photo_id'], cursor: 'sync_listing_photos', localWinsUnpushed: true },
 };
-const recentlyPushedSalesByTable = { sale_channels: new Map(), sales: new Map(), sale_items: new Map(), listings: new Map(), listing_items: new Map() };
+const recentlyPushedSalesByTable = { sale_channels: new Map(), sales: new Map(), sale_items: new Map(), listings: new Map(), listing_items: new Map(), listing_photos: new Map() };
 const echoKey = (table, r) => SALES_STREAMS[table].key.map((k) => String(r[k])).join('|');
 
 function salesRowToRemote(table, row) {
@@ -307,6 +310,41 @@ function applyPulledSalesRows(db, table, rows) {
 }
 function salesPushRows(db, table, cursor) {
   return db.prepare(`SELECT * FROM ${table} WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')`).all(cursor);
+}
+
+// Spec H3b1 §5.1 -- NUR-LESE-Ströme: die Cloud (Funktion ebay-sync) schreibt, der PC zieht und schiebt NIE.
+// Deshalb stehen sie bewusst NICHT in SALES_STREAMS (dort würde pushSalesTable sie hochladen). Die Zeilen werden
+// wörtlich übernommen (auch die Zeitstempel als Cloud-Text) -- kein Push-Zeiger vergleicht sie.
+const READ_ONLY_STREAMS = {
+  ebay_listings: { cols: EBAY_LISTING_COLS, key: 'listing_id', cursor: 'sync_ebay_listings_last_pull' },
+};
+async function pullReadOnlyTable(c, db, table) {
+  const s = READ_ONLY_STREAMS[table];
+  const cursor = getSetting(db, s.cursor) || '1970-01-01T00:00:00Z';
+  const put = db.prepare(`INSERT OR REPLACE INTO ${table} (${s.cols.join(',')}) VALUES (${s.cols.map((k) => '@' + k).join(',')})`);
+  const PAGE = 1000; let applied = 0; let lastTs = null;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await c.from(table).select('*').gt('updated_at', cursor)
+      .order('updated_at', { ascending: true }).order(s.key, { ascending: true }).range(from, from + PAGE - 1);
+    if (error) throw new Error(`Pull ${table} failed: ` + error.message);
+    if (!data || data.length === 0) break;
+    db.transaction(() => {
+      for (const r of data) { put.run(Object.fromEntries(s.cols.map((k) => [k, r[k] ?? null]))); applied++; }
+    })();
+    lastTs = data[data.length - 1].updated_at;
+    if (data.length < PAGE) break;
+  }
+  if (lastTs) setSetting(db, s.cursor, lastTs);
+  return applied;
+}
+// Spec H3b1 §4.2 -- ebay_status (eine Zeile, ohne Tokens) als JSON in settings.ebay_status_cache. -> true, wenn geändert.
+async function pullEbayStatus(c, db) {
+  const { data, error } = await c.from('ebay_status').select('*').maybeSingle();
+  if (error) throw new Error('Pull ebay_status failed: ' + error.message);
+  const next = JSON.stringify(data ?? null);
+  if (getSetting(db, 'ebay_status_cache') === next) return false;
+  setSetting(db, 'ebay_status_cache', next);
+  return true;
 }
 
 function getSetting(db, key) {
@@ -636,7 +674,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
 
   // Spec H3a §4.3: Angebote als zwei weitere Stroeme nach den Verkaeufen; fehlt eine Cloud-Tabelle
   // (listings_schema.sql nicht eingespielt), laufen alle anderen Stroeme weiter.
-  const LISTING_TABLES = ['listings', 'listing_items'];
+  const LISTING_TABLES = ['listings', 'listing_items', 'listing_photos'];
   async function pullListingsSafe(c) {
     let n = 0;
     for (const t of LISTING_TABLES) {
@@ -648,6 +686,15 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     for (const t of LISTING_TABLES) {
       try { await pushSalesTable(c, t); } catch (e) { console.error(`[sync] ${t} push:`, e.message); }
     }
+  }
+
+  // Spec H3b1: eBay-Stand nur ziehen; fehlen die Cloud-Tabellen (ebay_schema.sql nicht eingespielt), laufen alle
+  // anderen Ströme weiter. -> true, wenn sich etwas geändert hat (Renderer-Ereignis ebay-changed).
+  async function pullEbaySafe(c) {
+    let changed = false;
+    try { changed = (await pullReadOnlyTable(c, db, 'ebay_listings')) > 0; } catch (e) { console.error('[sync] ebay_listings pull:', e.message); }
+    try { changed = (await pullEbayStatus(c, db)) || changed; } catch (e) { console.error('[sync] ebay_status pull:', e.message); }
+    return changed;
   }
 
   // Spec G1 §4.12 — the daily cloud Edge Function writes source='cloud' rows the desktop would
@@ -761,6 +808,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       await pushSealedSafe(c);
       await pushSalesSafe(c);
       await pushListingsSafe(c);
+      const ebayChanged = await pullEbaySafe(c);
       await pullPriceHistory(c);
       await pushPriceHistory(c);
       await syncSnapshot(c);
@@ -775,6 +823,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       }
       if (pulledSales > 0) { const w = getWindow(); if (w) w.webContents.send('sales-changed'); }
       if (pulledListings > 0) { const w = getWindow(); if (w) w.webContents.send('listings-changed'); }
+      if (ebayChanged) { const w = getWindow(); if (w) w.webContents.send('ebay-changed'); }
       const totalPulled = pulledCollection + pulledSealed + pulledSales + pulledListings;
       emit('idle', totalPulled > 0 ? `pulled ${totalPulled}` : 'up to date');
     } catch (e) {
@@ -792,9 +841,16 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
   setInterval(cycle, 20000);
   setTimeout(cycle, 3000); // initial kick shortly after launch
 
+  // Spec H3b1 §5.4: „jetzt“ abgleichen (vor/nach dem Anstoß von ebay-sync) -- wartet einen laufenden Zyklus ab
+  // und startet dann einen eigenen, damit lokale Änderungen sicher geschoben und der eBay-Stand gezogen ist.
+  async function syncNow() {
+    while (running) await new Promise((r) => setTimeout(r, 200));
+    await cycle();
+  }
+
   // Expose the authed client so other main-process features (deals) can use the same
   // signed-in Supabase session instead of a separate local store.
-  return { ensureClient };
+  return { ensureClient, syncNow };
 }
 
 module.exports = {
@@ -818,6 +874,12 @@ module.exports = {
   _applyPulledListingItems: (db, rows) => applyPulledSalesRows(db, 'listing_items', rows),
   _recentlyPushedListings: recentlyPushedSalesByTable.listings,
   _recentlyPushedListingItems: recentlyPushedSalesByTable.listing_items,
+  listingPhotoToRemote: (r) => salesRowToRemote('listing_photos', r), remoteToLocalListingPhoto: (r) => remoteToLocalSalesRow('listing_photos', r),
+  _applyPulledListingPhotos: (db, rows) => applyPulledSalesRows(db, 'listing_photos', rows),
+  _recentlyPushedListingPhotos: recentlyPushedSalesByTable.listing_photos,
+  // Spec H3b1: Test-Haken der Nur-Lese-Ströme (ebay-sync.test.cjs) und die Liste der geschobenen Tabellen (Wächter).
+  _pullReadOnlyTable: pullReadOnlyTable, _pullEbayStatus: pullEbayStatus,
+  _READ_ONLY_TABLES: Object.keys(READ_ONLY_STREAMS), _PUSHED_TABLES: Object.keys(SALES_STREAMS),
   // Test-only hooks into the containers echo-lock (see test-sync.cjs): the module-level map and
   // apply function that pullContainers itself uses internally. Not called by production code
   // outside sync.cjs; calling startSync() just to reach them would also start its real timers.

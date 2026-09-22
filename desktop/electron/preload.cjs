@@ -125,6 +125,16 @@ contextBridge.exposeInMainWorld('api', {
   openListingUrl: (url) => ipcRenderer.invoke('listing-open-url', url),
   saveListingImages: (data) => ipcRenderer.invoke('listing-save-images', data),
   onListingsChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('listings-changed', s); return () => ipcRenderer.removeListener('listings-changed', s); },
+  // Spec H3b1: eBay und eigene Fotos
+  ebayStatus: () => ipcRenderer.invoke('ebay-status'),
+  ebayListings: () => ipcRenderer.invoke('ebay-listings'),
+  ebayAuth: (data) => ipcRenderer.invoke('ebay-auth', data),
+  ebaySyncNow: (data) => ipcRenderer.invoke('ebay-sync-now', data),
+  listingPhotos: (listingId) => ipcRenderer.invoke('listing-photos', listingId),
+  addListingPhotos: (listingId) => ipcRenderer.invoke('listing-photo-add', listingId),
+  deleteListingPhoto: (photoId) => ipcRenderer.invoke('listing-photo-delete', photoId),
+  reorderListingPhotos: (data) => ipcRenderer.invoke('listing-photo-reorder', data),
+  onEbayChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('ebay-changed', s); return () => ipcRenderer.removeListener('ebay-changed', s); },
 
   // Wishlist
   getWishlist: () => ipcRenderer.invoke('get-wishlist'),

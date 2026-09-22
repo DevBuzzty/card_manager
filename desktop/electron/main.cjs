@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Notification, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Notification, shell, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { Server } = require('socket.io');
@@ -23,6 +23,7 @@ const sealed = require('./sealed-items.cjs');
 const sales = require('./sales.cjs');
 const listings = require('./listings.cjs');
 const { saveListingImages } = require('./listing-images.cjs');
+const photos = require('./listing-photos.cjs');
 const { readSealedProducts, searchSealedProducts, sealedProductsAvailable } = require('./sealed-products.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck, saveDeck } = require('./decks.cjs');
@@ -906,6 +907,7 @@ ipcMain.handle('sale-preview', saleRead('sale-preview', (ids) => sales.previewSa
 ipcMain.handle('sale-book', saleWrite('sale-book', (d) => {
     // Spec H3a §7: dieselbe Buchung, dazu Erinnerung/Teilverkauf aus dem Aufraeumen in derselben Transaktion.
     const r = sales.bookSaleDetailed(db, d || {});
+    kickEbay(); // Spec H3b1: Aufräumen kann eBay-Angebote verkleinern/beenden
     return { sale_id: r.saleId, reminders: r.reminders, askAdjust: r.askAdjust, listingSkipped: r.listingSkipped };
 }));
 ipcMain.handle('sale-update', saleWrite('sale-update', (d) => { sales.updateSale(db, d || {}); return {}; }));
@@ -928,7 +930,7 @@ function listingErrorMessage(e, channel) {
     return CONTAINER_COPY_ERROR_MSG;
 }
 const listingWrite = (channel, fn) => (event, d) => {
-    try { return { success: true, ...fn(d) }; }
+    try { const r = { success: true, ...fn(d) }; kickEbay(); return r; }
     catch (e) { return { success: false, error: listingErrorMessage(e, channel) }; }
 };
 const listingRead = (channel, fn) => (event, d) => {
@@ -967,6 +969,115 @@ ipcMain.handle('listing-save-images', async (event, d) => {
         return { success: false, error: 'Bilder konnten nicht gespeichert werden.' };
     }
 });
+
+// --- Spec H3b1: eBay (Verbinden, Einstellen, eigene Fotos) ---
+// Alles eBay-Wissen liegt in den Edge Functions; hier nur Aufrufe, der Nur-Lese-Stand (sync.cjs) und Fotos (listing-photos.cjs).
+const EBAY_AUTH_ACTIONS = ['start', 'check', 'select', 'create_location', 'set_environment', 'disconnect'];
+const EBAY_OFFLINE = 'Cloud nicht verbunden — Supabase-Login in den Einstellungen prüfen.';
+function ebayStatusCached() {
+    try { return JSON.parse(getSetting('ebay_status_cache') || 'null'); } catch { return null; }
+}
+// Funktion aufrufen: erwartete Fehler kommen als { ok: false, error } mit Status 200, 401 als FunctionsHttpError.
+async function invokeEbay(name, body) {
+    const c = sync && await sync.ensureClient();
+    if (!c) return { ok: false, error: EBAY_OFFLINE };
+    const { data, error } = await c.functions.invoke(name, { body });
+    if (!error) return data && typeof data === 'object' ? data : { ok: false, error: 'Unerwartete Antwort der eBay-Funktion.' };
+    let msg = error.message;
+    try { const j = await error.context?.json?.(); if (j?.error) msg = j.error; } catch { /* Text behalten */ }
+    return { ok: false, error: msg };
+}
+// Spec §5.4 (Abweichung 9): nach Angebots-/Foto-Änderungen anstoßen -- entprellt, nur wenn verbunden; erst schieben,
+// dann ebay-sync, dann den neuen eBay-Stand ziehen. Fehler nur ins Protokoll (der Zeitplan holt es nach).
+let ebayKickTimer = null;
+function kickEbay() {
+    if (!sync || !ebayStatusCached()?.connected) return;
+    clearTimeout(ebayKickTimer);
+    ebayKickTimer = setTimeout(async () => {
+        try {
+            await sync.syncNow();
+            const r = await invokeEbay('ebay-sync', {});
+            if (r?.ok === false) console.error('[ebay-kick]', r.error);
+            await sync.syncNow();
+        } catch (e) { console.error('[ebay-kick]', e.message); }
+    }, 1500);
+}
+ipcMain.handle('ebay-status', () => ({ status: ebayStatusCached() }));
+ipcMain.handle('ebay-listings', () => Object.fromEntries(db.prepare('SELECT * FROM ebay_listings').all().map((r) => [r.listing_id, r])));
+ipcMain.handle('ebay-auth', async (event, d) => {
+    const action = d?.action;
+    if (!EBAY_AUTH_ACTIONS.includes(action)) return { ok: false, error: 'Unbekannte Aktion.' };
+    try {
+        const r = await invokeEbay('ebay-auth', { ...d, action });
+        if (action === 'start') {
+            if (!r?.ok) return r;
+            // Nur eine https-Adresse an den Browser (Global Constraints: Links nur http(s), hier strenger https).
+            if (!/^https:\/\//i.test(String(r.url || ''))) return { ok: false, error: 'Ungültige Adresse von eBay.' };
+            await shell.openExternal(r.url);
+            return { ok: true };
+        }
+        if (r?.ok && sync) await sync.syncNow(); // ebay_status frisch ziehen -> Einstellungen zeigen den neuen Stand
+        return r;
+    } catch (e) { console.error('[ebay-auth]', action, e.message); return { ok: false, error: 'eBay-Aufruf fehlgeschlagen.' }; }
+});
+ipcMain.handle('ebay-sync-now', async (event, d) => {
+    try {
+        if (sync) await sync.syncNow();
+        const r = await invokeEbay('ebay-sync', d?.retry ? { retry: String(d.retry) } : {});
+        if (sync) await sync.syncNow();
+        return r;
+    } catch (e) { console.error('[ebay-sync-now]', e.message); return { ok: false, error: 'eBay-Abgleich fehlgeschlagen.' }; }
+});
+// Spec §6: Fotos verkleinern mit nativeImage (Hauptprozess), hochladen in den Speicher der angemeldeten Sitzung.
+function photoDeps(c) {
+    return {
+        fileSize: (f) => fs.statSync(f).size,
+        readFile: (f) => fs.readFileSync(f),
+        decode: (buf) => {
+            const img = nativeImage.createFromBuffer(buf);
+            if (img.isEmpty()) return null;
+            const { width, height } = img.getSize();
+            return { width, height, resize: (s) => { const r = img.resize({ ...s, quality: 'best' }); return { toJPEG: (q) => r.toJPEG(q) }; } };
+        },
+        upload: async (p, buf) => {
+            const { error } = await c.storage.from('listing-photos').upload(p, buf, { contentType: 'image/jpeg', upsert: false });
+            if (error) throw new photos.PhotoError(`Hochladen fehlgeschlagen: ${error.message}`);
+        },
+        uuid: () => require('crypto').randomUUID(),
+    };
+}
+ipcMain.handle('listing-photos', (event, listingId) => {
+    try { return photos.listPhotos(db, listingId, getSetting('supabase_url')); }
+    catch (e) { console.error('[listing-photos]', e); throw new Error('Fotos konnten nicht geladen werden.'); }
+});
+ipcMain.handle('listing-photo-add', async (event, listingId) => {
+    const c = sync && await sync.ensureClient();
+    if (!c) return { success: false, added: 0, error: 'Fotos brauchen die Cloud – Supabase-Login in den Einstellungen prüfen.' };
+    const pick = await dialog.showOpenDialog(mainWindow, { title: 'Fotos wählen', properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Bilder', extensions: ['jpg', 'jpeg', 'png'] }] });
+    if (pick.canceled || pick.filePaths.length === 0) return { success: true, added: 0 };
+    let added = 0;
+    for (const f of pick.filePaths) {
+        try { await photos.addPhoto(db, { listingId, filePath: f }, photoDeps(c)); added++; }
+        catch (e) {
+            if (added > 0) kickEbay();
+            if (!(e instanceof photos.PhotoError)) console.error('[listing-photo-add]', e);
+            return { success: false, added, error: e instanceof photos.PhotoError ? e.message : 'Foto konnte nicht hinzugefügt werden.' };
+        }
+    }
+    kickEbay();
+    return { success: true, added };
+});
+const photoWrite = (channel, fn) => (event, d) => {
+    try { fn(d); kickEbay(); return { success: true }; }
+    catch (e) {
+        if (e instanceof photos.PhotoError) return { success: false, error: e.message };
+        console.error(`[${channel}]`, e);
+        return { success: false, error: 'Speichern fehlgeschlagen.' };
+    }
+};
+ipcMain.handle('listing-photo-delete', photoWrite('listing-photo-delete', (id) => photos.deletePhoto(db, id)));
+ipcMain.handle('listing-photo-reorder', photoWrite('listing-photo-reorder', (d) => photos.reorderPhotos(db, d?.listing_id, d?.photoIds)));
 
 // --- Other Handlers ---
 
