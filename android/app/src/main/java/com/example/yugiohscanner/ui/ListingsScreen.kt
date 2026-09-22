@@ -1,8 +1,6 @@
 package com.example.yugiohscanner.ui
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -45,6 +43,7 @@ import com.example.yugiohscanner.ml.ListingText
 import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ml.SalesOverview
+import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Gold
@@ -416,8 +415,7 @@ private fun ListingDetailSheet(
                     ) { Text(if (sharing) "Bilder werden geladen…" else "Bilder") }
                     listing.externalUrl?.let { url ->
                         OutlinedButton(onClick = {
-                            runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                                .onFailure { error = "Link konnte nicht geöffnet werden." }
+                            if (!openWebLink(ctx, url)) error = "Link konnte nicht geöffnet werden."
                         }) {
                             Text("Anzeige öffnen")
                         }

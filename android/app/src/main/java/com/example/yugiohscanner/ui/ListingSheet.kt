@@ -1,7 +1,5 @@
 package com.example.yugiohscanner.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,6 +26,7 @@ import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.ListingText
 import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ml.SalesMath
+import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
@@ -334,7 +333,7 @@ fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismi
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Am Handy nie cm_url (Befund 2): Cardmarket öffnet die Suche.
                 openUrl?.let { url ->
-                    OutlinedButton(onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }) {
+                    OutlinedButton(onClick = { if (!openWebLink(ctx, url)) error = "Link konnte nicht geöffnet werden." }) {
                         Text("Zum Einstellen öffnen")
                     }
                 }

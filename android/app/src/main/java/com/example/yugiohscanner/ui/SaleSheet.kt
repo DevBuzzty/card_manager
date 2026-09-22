@@ -1,7 +1,5 @@
 package com.example.yugiohscanner.ui
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,6 +23,7 @@ import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ml.SalesMath
+import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
@@ -386,8 +385,7 @@ private fun DoneContent(d: DoneStep, onAdjust: (() -> Unit)?, onFinish: () -> Un
                 Text("${r.channelName} – ${r.title}", color = OnSurface, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                 r.externalUrl?.let { url ->
                     TextButton(onClick = {
-                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                            .onFailure { linkError = "Link konnte nicht geöffnet werden." }
+                        if (!openWebLink(ctx, url)) linkError = "Link konnte nicht geöffnet werden."
                     }) { Text("Anzeige öffnen") }
                 }
             }
