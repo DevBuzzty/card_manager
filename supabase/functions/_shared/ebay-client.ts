@@ -59,18 +59,36 @@ function errorText(body: any, status: number): string {
   const text = e?.longMessage || e?.message || body?.error_description || body?.error || body?.raw;
   return text ? String(text) : `eBay-Aufruf fehlgeschlagen (${status})`;
 }
+// Fixrunde 1 Befund 1: invalid_client (falsches App-Secret) darf NICHT als auth gelten -- sonst löscht der Aufrufer
+// den noch gültigen Nutzer-Refresh-Token und "neu verbinden" hilft nie. Am Token-Endpunkt gilt nur invalid_grant
+// (abgelaufener/widerrufener Nutzer-Token) als auth; invalid_client und jeder andere 4xx dort sind Einrichtungsfehler.
 function toError(body: any, status: number, oauth: boolean): EbayError {
   const transient = status === 429 || status >= 500;
-  const auth = status === 401 || (oauth && (status === 400 || status === 401) && /invalid_grant|invalid_client/i.test(String(body?.error ?? "")));
+  const code = String(body?.error ?? "").toLowerCase();
+  if (oauth && code === "invalid_client") {
+    return new EbayError("eBay-Zugangsdaten der App ungültig – Secrets prüfen.", status, false, false);
+  }
+  const auth = oauth ? (status === 400 || status === 401) && code === "invalid_grant" : status === 401;
   return new EbayError(errorText(body, status), status, transient, auth);
 }
+// Fixrunde 1 Befund 5: Zeitlimit für jeden Aufruf, damit ein hängender eBay-Aufruf den Abgleich nicht blockiert.
+// Ein Abbruch/Netzwerkfehler ist kein eBay-Fehler mit Status, sondern vorübergehend (Durchgang abbrechen, später erneut).
 async function send(fetchFn: Fetch, url: string, init: RequestInit, oauth = false): Promise<any> {
   let r: Response;
-  try { r = await fetchFn(url, init); }
+  try { r = await fetchFn(url, { ...init, signal: init.signal ?? AbortSignal.timeout(30_000) }); }
   catch (e) { throw new EbayError(`eBay nicht erreichbar: ${(e as Error).message}`, 0, true, false); }
   const body = await readJson(r);
   if (!r.ok) throw toError(body, r.status, oauth);
   return body;
+}
+// Fixrunde 1 Befund 2/3: eine 200-Antwort ohne Pflichtfeld (oder ganz ohne Body) ist kein gültiges Ergebnis --
+// EbayError statt eines rohen TypeError/RangeError oder der Zeichenkette "undefined" weiterreichen.
+function requireField(b: any, key: string): unknown {
+  const v = b?.[key];
+  if (v === null || v === undefined || v === "") {
+    throw new EbayError(`eBay-Antwort unvollständig (Feld „${key}“ fehlt).`, 0, false, false);
+  }
+  return v;
 }
 
 export type TokenSet = { access_token: string; access_expires_at: string; refresh_token: string; refresh_expires_at: string };
@@ -85,17 +103,17 @@ async function tokenCall(fetchFn: Fetch, env: Env, c: Creds, form: Record<string
 export async function exchangeCode(fetchFn: Fetch, env: Env, c: Creds, code: string, now: Date): Promise<TokenSet> {
   const b = await tokenCall(fetchFn, env, c, { grant_type: "authorization_code", code, redirect_uri: c.ruName });
   return {
-    access_token: b.access_token, access_expires_at: isoIn(now, Number(b.expires_in)),
-    refresh_token: b.refresh_token, refresh_expires_at: isoIn(now, Number(b.refresh_token_expires_in)),
+    access_token: String(requireField(b, "access_token")), access_expires_at: isoIn(now, Number(requireField(b, "expires_in"))),
+    refresh_token: String(requireField(b, "refresh_token")), refresh_expires_at: isoIn(now, Number(requireField(b, "refresh_token_expires_in"))),
   };
 }
 export async function refreshAccess(fetchFn: Fetch, env: Env, c: Creds, refreshToken: string, now: Date) {
   const b = await tokenCall(fetchFn, env, c, { grant_type: "refresh_token", refresh_token: refreshToken, scope: USER_SCOPES.join(" ") });
-  return { access_token: String(b.access_token), access_expires_at: isoIn(now, Number(b.expires_in)) };
+  return { access_token: String(requireField(b, "access_token")), access_expires_at: isoIn(now, Number(requireField(b, "expires_in"))) };
 }
 export async function appToken(fetchFn: Fetch, env: Env, c: Creds): Promise<string> {
   const b = await tokenCall(fetchFn, env, c, { grant_type: "client_credentials", scope: APP_SCOPE });
-  return String(b.access_token);
+  return String(requireField(b, "access_token"));
 }
 
 // Gültiges Nutzer-Token: das gespeicherte, solange es noch mindestens 5 Minuten gilt, sonst erneuert.
@@ -153,9 +171,9 @@ export function ebayApi(fetchFn: Fetch, env: Env, token: string) {
       try { return await call("GET", `/sell/inventory/v1/offer/${enc(offerId)}`); }
       catch (e) { if (e instanceof EbayError && e.status === 404) return null; throw e; }
     },
-    createOffer: async (body: unknown) => String((await call("POST", "/sell/inventory/v1/offer", body)).offerId),
+    createOffer: async (body: unknown) => String(requireField(await call("POST", "/sell/inventory/v1/offer", body), "offerId")),
     updateOffer: (offerId: string, body: unknown) => call("PUT", `/sell/inventory/v1/offer/${enc(offerId)}`, body),
-    publishOffer: async (offerId: string) => String((await call("POST", `/sell/inventory/v1/offer/${enc(offerId)}/publish`)).listingId),
+    publishOffer: async (offerId: string) => String(requireField(await call("POST", `/sell/inventory/v1/offer/${enc(offerId)}/publish`), "listingId")),
     withdrawOffer: (offerId: string) => call("POST", `/sell/inventory/v1/offer/${enc(offerId)}/withdraw`),
   };
 }

@@ -1,7 +1,8 @@
 // Spec H3b §4.3/§9 -- eBay-Client gegen nachgebaute Antworten (kein Netz).
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
-  categoryAspects, consentUrl, credsFor, EbayError, ebayApi, ensureAccess, exchangeCode, refreshAccess,
+  APP_SCOPE, appToken, categoryAspects, consentUrl, credsFor, EbayError, ebayApi, ensureAccess, exchangeCode,
+  type Fetch, refreshAccess,
 } from "./ebay-client.ts";
 import { fakeFetch } from "./fake-fetch.ts";
 
@@ -49,11 +50,86 @@ Deno.test("Fehler: invalid_grant = auth, 500/429 = vorübergehend, longMessage b
   const busy = fakeFetch({ [`GET ${API}/sell/inventory/v1/offer/O1`]: { status: 503, body: {} } });
   const e2 = await assertRejects(() => ebayApi(busy.fetchFn, "sandbox", "AT").getOffer("O1"), EbayError);
   assertEquals([e2.transient, e2.auth], [true, false]);
+  const busy500 = fakeFetch({ [`GET ${API}/sell/inventory/v1/offer/O1`]: { status: 500, body: {} } });
+  const e2b = await assertRejects(() => ebayApi(busy500.fetchFn, "sandbox", "AT").getOffer("O1"), EbayError);
+  assertEquals([e2b.transient, e2b.auth], [true, false]);
+  const busy429 = fakeFetch({ [`GET ${API}/sell/inventory/v1/offer/O1`]: { status: 429, body: {} } });
+  const e2c = await assertRejects(() => ebayApi(busy429.fetchFn, "sandbox", "AT").getOffer("O1"), EbayError);
+  assertEquals([e2c.transient, e2c.auth], [true, false]);
   const rej = fakeFetch({ [`POST ${API}/sell/inventory/v1/offer/O1/publish`]: { status: 400, body: { errors: [{ errorId: 25002, message: "kurz", longMessage: "Das Merkmal Spiel fehlt." }] } } });
   const e3 = await assertRejects(() => ebayApi(rej.fetchFn, "sandbox", "AT").publishOffer("O1"), EbayError);
   assertEquals([e3.message, e3.transient, e3.auth], ["Das Merkmal Spiel fehlt.", false, false]);
   const net = await assertRejects(() => ebayApi(() => Promise.reject(new Error("dns")), "sandbox", "AT").getOffer("O1"), EbayError);
   assertEquals(net.transient, true);
+});
+
+Deno.test("REST-Aufruf mit 401 -> auth, unabhängig vom OAuth-Fehlercode im Rumpf", async () => {
+  const f = fakeFetch({ [`GET ${API}/sell/inventory/v1/offer/O1`]: { status: 401, body: { errors: [{ message: "invalid_grant" }] } } });
+  const e = await assertRejects(() => ebayApi(f.fetchFn, "sandbox", "AT").getOffer("O1"), EbayError);
+  assertEquals([e.auth, e.transient], [true, false]);
+});
+
+Deno.test("Falsches App-Secret am Token-Endpunkt (invalid_client) -> Einrichtungsfehler, kein neu Verbinden", async () => {
+  const f = fakeFetch({ [`POST ${TOKEN}`]: { status: 401, body: { error: "invalid_client", error_description: "client authentication failed" } } });
+  const e = await assertRejects(() => refreshAccess(f.fetchFn, "sandbox", C, "RT", NOW), EbayError);
+  assertEquals([e.auth, e.transient, e.message], [false, false, "eBay-Zugangsdaten der App ungültig – Secrets prüfen."]);
+});
+
+Deno.test("Token-Antwort ohne Pflichtfelder oder ganz ohne Rumpf -> EbayError statt Absturz", async () => {
+  const empty = fakeFetch({ [`POST ${TOKEN}`]: { status: 200 } });
+  await assertRejects(() => refreshAccess(empty.fetchFn, "sandbox", C, "RT", NOW), EbayError);
+  const noExpiry = fakeFetch({ [`POST ${TOKEN}`]: { body: { access_token: "AT" } } });
+  await assertRejects(() => refreshAccess(noExpiry.fetchFn, "sandbox", C, "RT", NOW), EbayError);
+  const noRefresh = fakeFetch({ [`POST ${TOKEN}`]: { body: { access_token: "AT", expires_in: 7200 } } });
+  await assertRejects(() => exchangeCode(noRefresh.fetchFn, "sandbox", C, "code", NOW), EbayError);
+  const noRefreshExpiry = fakeFetch({ [`POST ${TOKEN}`]: { body: { access_token: "AT", expires_in: 7200, refresh_token: "RT" } } });
+  await assertRejects(() => exchangeCode(noRefreshExpiry.fetchFn, "sandbox", C, "code", NOW), EbayError);
+});
+
+Deno.test("Fehlende offerId/listingId in einer 2xx-Antwort -> EbayError statt der Zeichenkette 'undefined'", async () => {
+  const f1 = fakeFetch({ [`POST ${API}/sell/inventory/v1/offer`]: { status: 201, body: {} } });
+  await assertRejects(() => ebayApi(f1.fetchFn, "sandbox", "AT").createOffer({}), EbayError);
+  const f2 = fakeFetch({ [`POST ${API}/sell/inventory/v1/offer/O1/publish`]: { status: 200, body: {} } });
+  await assertRejects(() => ebayApi(f2.fetchFn, "sandbox", "AT").publishOffer("O1"), EbayError);
+});
+
+Deno.test("appToken: client_credentials mit Basisscope und Basic-Kopf", async () => {
+  const f = fakeFetch({ [`POST ${TOKEN}`]: { body: { access_token: "APP1", expires_in: 7200 } } });
+  assertEquals(await appToken(f.fetchFn, "sandbox", C), "APP1");
+  assertEquals(f.calls[0].headers["authorization"], `Basic ${btoa("app-id:geheim")}`);
+  assertEquals(f.calls[0].body, `grant_type=client_credentials&scope=${encodeURIComponent(APP_SCOPE)}`);
+});
+
+Deno.test("Weitere API-Aufrufe: Programme, Versand-/Rückgabe-Richtlinien, Offer aktualisieren/veröffentlichen/zurückziehen", async () => {
+  const f = fakeFetch({
+    [`GET ${API}/sell/account/v1/program/get_opted_in_programs`]: { body: { programs: [{ programType: "OUT_OF_STOCK_CONTROL" }] } },
+    [`GET ${API}/sell/account/v1/fulfillment_policy?marketplace_id=EBAY_DE`]: { body: { fulfillmentPolicies: [{ fulfillmentPolicyId: "F1", name: "Versand" }] } },
+    [`GET ${API}/sell/account/v1/return_policy?marketplace_id=EBAY_DE`]: { body: { returnPolicies: [{ returnPolicyId: "R1", name: "Rückgabe" }] } },
+    [`PUT ${API}/sell/inventory/v1/offer/O1`]: { status: 204 },
+    [`POST ${API}/sell/inventory/v1/offer/O1/publish`]: { status: 200, body: { listingId: "L1" } },
+    [`POST ${API}/sell/inventory/v1/offer/O1/withdraw`]: { status: 200, body: {} },
+  });
+  const api = ebayApi(f.fetchFn, "sandbox", "AT");
+  assertEquals(await api.optedInPrograms(), ["OUT_OF_STOCK_CONTROL"]);
+  assertEquals(await api.fulfillmentPolicies(), [{ id: "F1", name: "Versand" }]);
+  assertEquals(await api.returnPolicies(), [{ id: "R1", name: "Rückgabe" }]);
+  await api.updateOffer("O1", { a: 1 });
+  assertEquals(await api.publishOffer("O1"), "L1");
+  await api.withdrawOffer("O1");
+  const updateCall = f.calls.find((c) => c.method === "PUT" && c.url === `${API}/sell/inventory/v1/offer/O1`);
+  assertEquals(updateCall?.body, '{"a":1}');
+  assertEquals(f.calls.some((c) => c.method === "POST" && c.url === `${API}/sell/inventory/v1/offer/O1/publish`), true);
+  assertEquals(f.calls.some((c) => c.method === "POST" && c.url === `${API}/sell/inventory/v1/offer/O1/withdraw`), true);
+});
+
+Deno.test("Jeder Aufruf trägt ein Zeitlimit (AbortSignal) mit, sofern keines übergeben wurde", async () => {
+  let seenSignal: AbortSignal | undefined;
+  const fetchFn: Fetch = (_url, init) => {
+    seenSignal = init?.signal ?? undefined;
+    return Promise.resolve(new Response(JSON.stringify({ access_token: "APP1", expires_in: 7200 }), { status: 200 }));
+  };
+  await appToken(fetchFn, "sandbox", C);
+  assertEquals(seenSignal instanceof AbortSignal, true);
 });
 
 Deno.test("API-Aufrufe: Pfade, Kopfzeilen, 404 bei getOffers/getOffer", async () => {
