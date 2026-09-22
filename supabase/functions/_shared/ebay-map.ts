@@ -56,6 +56,16 @@ const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 export const toCents = (v: number | string) => Math.round(Number(v) * 100);
 export const skuOf = (listingId: string) => `L-${listingId}`;
 
+// Minor 3: eigener Titel wird hart auf EBAY_TITLE_MAX gekuerzt, aber an der Wortgrenze wie truncateTitle (H3a) --
+// nie mitten im Wort, nie ein Surrogatpaar (Emoji ausserhalb der BMP) zerteilen.
+function hardTruncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const cut = text.lastIndexOf(" ", max);
+  let head = cut > 0 ? text.slice(0, cut) : text.slice(0, max);
+  if (/[\uD800-\uDBFF]$/.test(head)) head = head.slice(0, -1);
+  return head.trimEnd();
+}
+
 // Spec §5.3 Soll: Angebot auf Kanal ebay, Status aktiv, nicht gelöscht, mit mindestens einer lebenden Position,
 // deren Exemplar lebt (liveCopyIds = card_copies deleted = false und sold_in is null). Positionen nach copy_id.
 export function desired(listing: SollListing | null, items: SollItem[], liveCopyIds: Set<string>) {
@@ -180,7 +190,8 @@ export function buildListing(
   const same = groupItems(liveItems).length === 1;
   const quantity = same ? liveItems.length : 1;
   const condition = worstCondition(liveItems);
-  const title = (blank(listing.title) ? listingTitle(liveItems) : listing.title!.trim()).slice(0, EBAY_TITLE_MAX).trimEnd();
+  const categoryId = categoryFor(liveItems);
+  const title = hardTruncate(blank(listing.title) ? listingTitle(liveItems) : listing.title!.trim(), EBAY_TITLE_MAX);
   const text = blank(listing.description) ? listingDescription(liveItems, totalCents) : listing.description!;
   const { aspects, missing } = fillAspects(defs, liveItems);
   const imageUrls = imageList(photoUrls, liveItems);
@@ -190,7 +201,7 @@ export function buildListing(
     sku: skuOf(listing.listing_id), kind: same ? "gleich" : "konvolut", quantity, totalCents,
     pieceCents: same ? pieceCents(totalCents, quantity) : totalCents, title, descriptionHtml: descriptionHtml(text),
     condition, conditionValue: CARD_CONDITION_VALUE[condition], imageUrls, aspects, missing, problem,
-    categoryId: same ? CATEGORY_ID : CATEGORY_LOTS,
+    categoryId,
   };
 }
 
@@ -216,10 +227,15 @@ export function offerBody(b: Built, p: Policies) {
   };
 }
 
-// Spec §5.3 Prüfsumme über Titel, Text, Preis, Menge, Zustand, Bilder (SHA-256, hex).
+// Spec §5.3 Pruefsumme über Titel, Text, Preis, Menge, Kategorie, Zustand, Bilder (SHA-256, hex).
+// Minor 1: Kategorie muss mit einfliessen (ein Kategoriewechsel bei gleicher Menge/gleichem Preis, z.B. Konvolut ->
+// Einzelkarte nach Teilverkauf, aendert sonst nichts an der Pruefsumme, obwohl der eBay-Aufruf ein anderer waere).
+// Der Zustandswert wird nur eingerechnet, wenn er tatsaechlich gesendet wird (conditionDescriptors nur bei
+// CATEGORY_ID) -- sonst loest ein Konvolut Scheinaenderungen aus, wenn sich nur der (ungesendete) Zustand aendert.
 export async function hashOf(b: Built): Promise<string> {
+  const sentConditionValue = b.categoryId === CATEGORY_ID ? b.conditionValue : null;
   const data = new TextEncoder().encode(
-    JSON.stringify([b.title, b.descriptionHtml, b.pieceCents, b.quantity, b.conditionValue, b.imageUrls]),
+    JSON.stringify([b.title, b.descriptionHtml, b.pieceCents, b.quantity, b.categoryId, sentConditionValue, b.imageUrls]),
   );
   const d = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
   return [...d].map((x) => x.toString(16).padStart(2, "0")).join("");

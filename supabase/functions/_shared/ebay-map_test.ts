@@ -61,3 +61,38 @@ Deno.test("Bilder: höchstens 24, nur https, ohne Doppelte; eigene Fotos höchst
   const own = M.ownPhotos(photos, "l");
   assertEquals([own.length, own[0].photo_id], [12, "p13"]);
 });
+
+// Minor 2 (Fixrunde 1): categoryFor ist die einzige Quelle der Kategorie-Regel (buildListing ruft sie auf).
+Deno.test("categoryFor: gleiche Karten -> 183454, gemischt -> 183455", () => {
+  const gleich = F.items.filter((i: { listing_id: string; copy_id: string }) => i.listing_id === "l1" && ["dm1", "dm2"].includes(i.copy_id));
+  const gemischt = F.items.filter((i: { listing_id: string }) => i.listing_id === "l2");
+  assertEquals(M.categoryFor(gleich), M.CATEGORY_ID);
+  assertEquals(M.categoryFor(gemischt), M.CATEGORY_LOTS);
+});
+
+// Minor 3 (Fixrunde 1): eigener Titel > 80 Zeichen wird an der Wortgrenze gekürzt, nie mitten in einem Surrogatpaar
+// (Emoji ausserhalb der BMP genau an der Schnittstelle).
+Deno.test("Eigener Titel > 80 Zeichen: Wortgrenze, kein zerteiltes Surrogatpaar", () => {
+  const longTitle = "A".repeat(79) + "😀" + "B".repeat(20); // Emoji liegt genau auf der Schnittstelle bei 80
+  const listing = { ...F.listings.l1, title: longTitle };
+  const d = M.desired(listing, F.items, live);
+  const b = M.buildListing(listing, d.liveItems, [], F.defs);
+  assertEquals(b.title.length <= 80, true);
+  assertEquals(b.title, "A".repeat(79));
+  assertEquals(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(b.title), false, "kein einzelner High-Surrogate am Ende");
+});
+
+// Minor 1 (Fixrunde 1): Kategoriewechsel bei sonst gleichem Preis/Menge muss die Prüfsumme ändern (Konvolut ->
+// Einzelkarte nach Teilverkauf), sonst bleibt eine Anzeige faelschlich in der alten Kategorie (decide=none).
+Deno.test("Prüfsumme: Kategoriewechsel (Konvolut -> Einzelkarte) ändert die Prüfsumme", async () => {
+  const listing = { listing_id: "lx", channel_id: "ebay", title: "Eigener Titel", description: "Eigener Text", price: "10.00", status: "aktiv", deleted: false };
+  const exItem = { listing_id: "lx", copy_id: "x1", card_id: "1", name: "Karte", set_code: "ABC-DE001", language: "DE", rarity: "Rare", edition: "unlimited", condition: "EX", image_url: "https://x/1.jpg", deleted: false };
+  const plItem = { ...exItem, copy_id: "x2", condition: "PL" };
+  const konvolut = M.buildListing(listing, [exItem, plItem], [], F.defs);
+  const einzelkarte = M.buildListing(listing, [plItem], [], F.defs);
+  assertEquals(konvolut.categoryId, M.CATEGORY_LOTS);
+  assertEquals(einzelkarte.categoryId, M.CATEGORY_ID);
+  const h1 = await M.hashOf(konvolut);
+  const h2 = await M.hashOf(einzelkarte);
+  assertEquals(h1 === h2, false, "Kategoriewechsel muss die Prüfsumme ändern");
+});

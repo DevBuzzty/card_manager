@@ -33,7 +33,9 @@
     { "name": "Fehler mit Offer, unveraendert -> nicht wiederholen", "active": true, "hash": "h1", "row": "fehlerOnl", "connected": true, "setupOk": true, "retry": false, "action": "none" },
     { "name": "Fehler mit Offer, Erneut versuchen -> aendern", "active": true, "hash": "h1", "row": "fehlerOnl", "connected": true, "setupOk": true, "retry": true, "action": "revise" },
     { "name": "Fehler mit Offer, Soll beendet -> zurueckziehen", "active": false, "hash": null, "row": "fehlerOnl", "connected": true, "setupOk": true, "retry": false, "action": "withdraw" },
-    { "name": "beendet, Soll wieder aktiv -> aendern und neu veroeffentlichen", "active": true, "hash": "h1", "row": "beendet", "connected": true, "setupOk": true, "retry": false, "action": "revise" }
+    { "name": "beendet, Soll wieder aktiv -> aendern und neu veroeffentlichen", "active": true, "hash": "h1", "row": "beendet", "connected": true, "setupOk": true, "retry": false, "action": "revise" },
+    { "name": "Fehler-Zeile, Verbindung weg -> Zustand bleibt (kein Ueberschreiben mit wartet)", "active": true, "hash": "h1", "row": "fehlerNew", "connected": false, "setupOk": false, "retry": false, "action": "none" },
+    { "name": "Beendet-Zeile, Soll wieder aktiv, Verbindung weg -> Zustand bleibt (kein Ueberschreiben mit wartet)", "active": true, "hash": "h1", "row": "beendet", "connected": false, "setupOk": false, "retry": false, "action": "none" }
   ],
   "ended": [
     { "offer": null, "ended": true },

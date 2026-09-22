@@ -26,10 +26,10 @@ export function decide(x: DecideInput): Action {
     // Zurückziehen braucht die Verbindung; bis dahin bleibt die Zeile, wie sie ist (nächster Lauf nach dem Verbinden).
     return r.offer_id ? (x.connected ? "withdraw" : "none") : "end_local";
   }
-  // Spec §4.4/§9: ohne Verbindung oder Einrichtung bleiben Angebote „wartet“; eine Online-Anzeige bleibt unberührt.
+  // Spec §4.4/§9: ohne Verbindung oder Einrichtung bleiben Angebote „wartet“; eine vorhandene Zeile (gleich welchen
+  // Zustands, auch fehler/beendet) bleibt unberührt, bis wieder verbunden ist -- dann greift die normale Logik.
   if (!x.connected || !x.setupOk) {
-    if (r && (r.state === "online" || r.state === "wartet")) return "none";
-    return "wait";
+    return r ? "none" : "wait";
   }
   if (!r || !r.offer_id) {
     if (r && r.state === "fehler" && r.failed_hash === x.hash && !x.retry) return "none";
