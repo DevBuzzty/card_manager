@@ -1,11 +1,11 @@
 import { useState, lazy, Suspense } from 'react';
-import { useLocation } from 'react-router-dom';
-import { TrendingUp, BarChart3, ArrowUpDown, BellRing, Loader2, Receipt } from 'lucide-react';
+import { useLocation, Navigate } from 'react-router-dom';
+import { TrendingUp, BarChart3, ArrowUpDown, BellRing, Loader2 } from 'lucide-react';
 import Statistics from './Statistics';
 import MoversPanel from './MoversPanel';
 import ValueBreakdown from './ValueBreakdown';
 import PriceAlertsPanel from './PriceAlertsPanel';
-import SalesPanel from './SalesPanel';
+import { ROUTES } from '../utils/routes';
 
 const Portfolio = lazy(() => import('./Portfolio'));
 
@@ -35,6 +35,10 @@ export default function Insights() {
   const setView = (v) => setPick({ key: location.key, view: v });
   const [metric, setMetric] = useState('count');
 
+  // Der Reiter „Verkäufe" ist nach Verkaufen umgezogen (Task 4) -- ein Rueckkanal-Aufruf mit
+  // state.tab = 'verkaeufe' (z.B. vom Handy) landet dort statt auf einem entfernten Reiter.
+  if (requested === 'verkaeufe') return <Navigate to={ROUTES.verkaeufe} replace />;
+
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
       <div className="inline-flex self-start bg-obsidian-700 border border-line rounded-xl p-1 gap-1 mb-5">
@@ -42,7 +46,6 @@ export default function Insights() {
         <Tab id="bewegungen" icon={ArrowUpDown} label="Bewegungen" view={view} setView={setView} />
         <Tab id="breakdown" icon={BarChart3} label="Aufteilung" view={view} setView={setView} />
         <Tab id="alarme" icon={BellRing} label="Alarme" view={view} setView={setView} />
-        <Tab id="verkaeufe" icon={Receipt} label="Verkäufe" view={view} setView={setView} />
       </div>
       <div className="flex-1 overflow-auto">
         {view === 'value' && (
@@ -63,7 +66,6 @@ export default function Insights() {
           </div>
         )}
         {view === 'alarme' && <PriceAlertsPanel />}
-        {view === 'verkaeufe' && <SalesPanel />}
       </div>
     </div>
   );

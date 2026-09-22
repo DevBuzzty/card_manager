@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { keepPerCard } from './duplicates.js';
-import { createLatestOnly } from './busyGate.js';
+import { keepPerCard } from '../utils/duplicates.js';
+import { createLatestOnly } from '../utils/busyGate.js';
 
 const LOAD_ERROR = 'Verkaufsdaten konnten nicht geladen werden.';
 

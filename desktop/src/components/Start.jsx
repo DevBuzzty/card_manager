@@ -9,8 +9,8 @@ import { fmtEUR, fmtSignedEUR } from '../utils/format';
 import { ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
 import { LOADING, duplicates, duplicatesSummary, forSaleSummary, startSaleText, startDuplicatesText, saleShareText } from '../utils/duplicates';
-import { useSaleData } from '../utils/useSaleData';
-import { useListingsData } from '../utils/useListingsData';
+import { useSaleData } from '../hooks/useSaleData';
+import { useListingsData } from '../hooks/useListings';
 import { listingsSummary, startText } from '../utils/listingText';
 
 export default function Start({ onOpenPalette }) {
@@ -210,13 +210,13 @@ export default function Start({ onOpenPalette }) {
             </button>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'forsale' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors text-xs text-ink">
+            <button onClick={() => navigate(ROUTES.zumVerkauf)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors text-xs text-ink">
               <Tag className="w-4 h-4 text-gold shrink-0" />{saleSummary ? startSaleText(saleSummary) : sale.error ? 'Zum Verkauf: —' : `Zum Verkauf: ${LOADING}`}
             </button>
-            <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'duplicates' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-space-violet/30 bg-space-violet/5 hover:bg-space-violet/10 transition-colors text-xs text-ink">
+            <button onClick={() => navigate(ROUTES.kandidaten)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-space-violet/30 bg-space-violet/5 hover:bg-space-violet/10 transition-colors text-xs text-ink">
               <Copy className="w-4 h-4 text-violet-soft shrink-0" />{duplicateSummary ? startDuplicatesText(duplicateSummary) : sale.error ? 'Duplikate: —' : `Duplikate: ${LOADING}`}
             </button>
-            <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'listings' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors text-xs text-ink">
+            <button onClick={() => navigate(ROUTES.angebote)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors text-xs text-ink">
               <Store className="w-4 h-4 text-gold shrink-0" />{listingsData.data ? startText(listingsSummary(listingsData.data.listings, listingsData.data.items).listings) : listingsData.error ? 'Angebote: —' : `Angebote: ${LOADING}`}
             </button>
           </div>
