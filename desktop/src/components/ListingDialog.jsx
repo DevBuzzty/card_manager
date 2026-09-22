@@ -114,7 +114,8 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
   const marketCents = items.reduce((a, it) => a + (it.valueCents || 0), 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={onClose}>
+    // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur diesen Dialog, nie den darunterliegenden (wie SaleDialog).
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={(e) => { e.stopPropagation(); onClose(); }}>
       <div className="w-full max-w-lg bg-obsidian-700 border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-ink">{prefill ? 'Erneut anbieten' : 'Angebot erstellen'}</h2>
