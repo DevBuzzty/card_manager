@@ -2,14 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Spec I §6.1 -- Farbrollen. Werte gespiegelt aus docs/fixtures/design/tokens.json
+   (desktop/src/utils/theme.test.js prueft die Gleichheit). Hell ist die Vorgabe. */
+:root {
+  --bg: #f6f4ef;
+  --surface: #fffdf8;
+  --surface-2: #f1eee7;
+  --line: #e0dbd1;
+  --text: #1b1a17;
+  --text-muted: #6c675e;
+  --accent: #4b3f8f;
+  --accent-fg: #ffffff;
+  --good: #3f7d54;
+  --warn: #9a6b1f;
+  --bad: #a23b3b;
+}
+[data-theme="dark"] {
+  --bg: #17181a;
+  --surface: #1d1f21;
+  --surface-2: #232528;
+  --line: #2e3134;
+  --text: #e9eaec;
+  --text-muted: #9ba0a6;
+  --accent: #8b6ad6;
+  --accent-fg: #0f1013;
+  --good: #7fa88a;
+  --warn: #c9a36b;
+  --bad: #c07a7a;
+}
+body { background: var(--bg); color: var(--text); }
+
 body {
   @apply bg-obsidian text-ink;
   margin: 0;
   font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background-image:
-    radial-gradient(900px 500px at 82% -8%, rgba(157, 0, 255, 0.13), transparent 60%),
-    radial-gradient(700px 500px at 6% 108%, rgba(245, 197, 66, 0.05), transparent 55%);
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

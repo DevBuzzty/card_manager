@@ -7,6 +7,7 @@ import { KEEP_DEFAULT, keepPerCard } from '../utils/duplicates';
 import { normalizeDiscount, normalizeMinPrice } from '../utils/saleMath';
 import { T } from '../utils/i18n-de';
 import { createBusyGate } from '../utils/busyGate';
+import { startTheme } from '../utils/theme';
 import PriceAlertSettings from './PriceAlertSettings';
 import ImportDialog from './ImportDialog';
 import ExportDialog from './ExportDialog';
@@ -14,6 +15,7 @@ import EbaySettings from './EbaySettings';
 
 const SECTIONS = [
     { id: 'konto', label: 'Konto & Sync' },
+    { id: 'darstellung', label: 'Darstellung' },
     { id: 'preise', label: 'Preise' },
     { id: 'ebay', label: 'eBay' },
     { id: 'verbindung', label: 'Verbindung' },
@@ -28,6 +30,7 @@ export default function Settings() {
     const isKnownSection = SECTIONS.some(s => s.id === bereich);
 
     const [priceSource, setPriceSource] = useState('cardmarket');
+    const [theme, setTheme] = useState('light');
     const [loading, setLoading] = useState(false);
     // Which long-running action owns `loading`/`progress` — the two sections that show a bar
     // ("preise" and "gefahrenzone") must only show their own. 'prices' | 'downgrade' | null.
@@ -55,6 +58,7 @@ export default function Settings() {
                 if (settings && settings.price_source) {
                     setPriceSource(settings.price_source);
                 }
+                if (settings?.theme) setTheme(settings.theme);
                 setSync(() => ({
                     supabase_url: settings?.supabase_url ?? '', supabase_key: settings?.supabase_key ?? '',
                     supabase_email: settings?.supabase_email ?? '', supabase_password: settings?.supabase_password ?? '',
@@ -299,6 +303,23 @@ export default function Settings() {
                                     {syncStatus.state === 'error' ? 'Fehler' : 'Status'}: {syncStatus.message} {syncStatus.at && `(${new Date(syncStatus.at).toLocaleTimeString()})`}
                                 </p>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {active === 'darstellung' && (
+                    <div className="bg-surface border border-line rounded-2xl p-6">
+                        <h3 className="font-display text-lg text-text mb-1">Darstellung</h3>
+                        <p className="text-sm text-muted mb-4">Gilt nur auf diesem Gerät.</p>
+                        <div className="flex gap-2">
+                            {[['light', 'Hell'], ['dark', 'Dunkel'], ['system', 'Wie das System']].map(([id, label]) => (
+                                <button key={id} type="button"
+                                    onClick={async () => { setTheme(id); startTheme(document, id); await window.api?.saveSetting?.({ key: 'theme', value: id }); }}
+                                    className={clsx('px-4 py-2 rounded-lg text-sm border',
+                                        theme === id ? 'bg-accent text-accent-fg border-transparent' : 'bg-surface-2 text-muted border-line')}>
+                                    {label}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 )}

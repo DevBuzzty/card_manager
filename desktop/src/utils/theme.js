@@ -26,3 +26,21 @@ export function contrastRatio(a, b) {
   const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
   return (x + 0.05) / (y + 0.05);
 }
+
+// Setzt data-theme am <html>. Der Renderer liest die Einstellung aus der settings-Tabelle.
+export function applyTheme(doc, setting, prefersDark) {
+  const mode = resolveMode(setting, prefersDark);
+  doc.documentElement.dataset.theme = mode;
+  return mode;
+}
+
+// Wendet die Einstellung an und folgt dem System, solange 'system' gewaehlt ist.
+export function startTheme(doc, setting) {
+  const mq = typeof doc.defaultView?.matchMedia === 'function'
+    ? doc.defaultView.matchMedia('(prefers-color-scheme: dark)') : null;
+  applyTheme(doc, setting, !!mq?.matches);
+  if (!mq || setting !== 'system') return () => {};
+  const on = () => applyTheme(doc, setting, mq.matches);
+  mq.addEventListener('change', on);
+  return () => mq.removeEventListener('change', on);
+}
