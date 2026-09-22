@@ -14,6 +14,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.ListingsRepository
 import com.example.yugiohscanner.cloud.SaleChannel
 import com.example.yugiohscanner.cloud.SaleHeadInput
 import com.example.yugiohscanner.cloud.SalesRepository
@@ -22,6 +23,7 @@ import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ml.SalesMath
+import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
@@ -30,6 +32,12 @@ import com.example.yugiohscanner.ui.theme.OnSurface
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+
+/** Spec H3a §7.1 -- „Verkauft“ aus einem Angebot: Kanal und Preis vorbelegen, Teilverkauf per Häkchen. */
+data class ListingSale(val listingId: String, val channelId: String, val priceCents: Long)
+
+/** Abschluss-Schritt nach dem Buchen (Abweichung 7): Erinnerungen, Preis-Hinweis, Aufräum-Fehler. */
+private data class DoneStep(val saleId: String, val count: Int, val after: ListingsRepository.AfterBooking?, val cleanupError: String?)
 
 /**
  * Marktwert je Exemplar (copyId, Cent) aus einem Speicherstand; null, sobald ein Exemplar oder sein
@@ -56,10 +64,16 @@ private fun feeLabel(c: SaleChannel): String {
  * Gesperrt, solange die Verkaeufe nicht geladen sind oder das letzte Laden scheiterte (Plan-Abweichung 4).
  * Gebucht wird in einer Transaktion ueber book_sale (SalesRepository.book); die Werte werden innerhalb
  * des InFlight-Gatters aus dem frischen Speicherstand neu berechnet.
+ * Spec H3a §7: mit [listing] Kanal/Preis vorbelegt und je Exemplar abwählbar (Teilverkauf); nach JEDEM Buchen werden
+ * die Angebote aufgeräumt. Sind Angebote betroffen, zeigt das Sheet einen Abschluss-Schritt, bevor es onBooked meldet;
+ * sonst schließt es wie bisher sofort. [onAdjustListing]: Sprung ins Bearbeiten („Preis für die übrigen Karten anpassen?“).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss: () -> Unit, onBooked: (saleId: String, count: Int) -> Unit) {
+fun SaleSheet(
+    copyIds: List<String>, initialGrossCents: Long? = null, listing: ListingSale? = null, onAdjustListing: (() -> Unit)? = null,
+    onDismiss: () -> Unit, onBooked: (saleId: String, count: Int) -> Unit,
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val inFlight = remember { InFlight() }
@@ -72,7 +86,11 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
 
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
-    val values = remember(ready, copyIds) { ready?.let { saleValues(it, copyIds) } }
+    // Spec H3a §7.1: aus einem Angebot sind alle Positionen angehakt und einzeln abwählbar; ohne Angebot alle (wie H2).
+    var picked by remember { mutableStateOf(copyIds.toSet()) }
+    val chosenIds = if (listing == null) copyIds else copyIds.filter { it in picked }
+    var done by remember { mutableStateOf<DoneStep?>(null) }
+    val values = remember(ready, chosenIds) { ready?.let { saleValues(it, chosenIds) } }
     val missing = ready != null && values == null
     val marketCents = values?.sumOf { it.second }
     // Spec H2 §9: Vorbelegung mit der Summe der Preisvorschlaege, sofern mindestens ein Exemplar
@@ -82,7 +100,7 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
     }
 
     val channels = sales.value?.channels ?: emptyList()
-    var channelId by remember { mutableStateOf<String?>(null) }
+    var channelId by remember { mutableStateOf<String?>(listing?.channelId) }
     val channel = channels.find { it.channelId == channelId } ?: channels.find { it.channelId == "cardmarket" } ?: channels.firstOrNull()
     var channelOpen by remember { mutableStateOf(false) }
     // Spec H2 §5.2 "Neuer Kanal…": Mini-Formular unter der Kanal-Auswahl.
@@ -124,7 +142,7 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
     val shippingOk = SaleInput.moneyOk(shipping, required = false)
     // Platzhalter statt "0,00 €", solange Marktwert oder Betraege nicht feststehen.
     val netKnown = marketCents != null && grossOk && feesOk && shippingOk
-    val canBook = !busy && !offline && ready != null && !missing && channel != null && copyIds.isNotEmpty() &&
+    val canBook = !busy && !offline && ready != null && !missing && channel != null && chosenIds.isNotEmpty() &&
         dateOk && grossOk && feesOk && shippingOk
 
     fun createChannel() {
@@ -156,6 +174,7 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
 
     fun book() {
         val chosen = channel?.channelId ?: return
+        val ids = chosenIds
         if (!inFlight.tryStart()) return
         busy = true
         error = null
@@ -163,10 +182,11 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
             try {
                 val saleId: String
                 val count: Int
+                val bookedIds: List<String>
                 try {
                     // Frischer Stand, nicht der Kompositions-Schnappschuss.
                     val fresh = CollectionStore.state.value as? StoreState.Ready ?: throw IllegalStateException("Sammlung ist nicht geladen.")
-                    val items = saleValues(fresh, copyIds) ?: throw IllegalStateException("Karte nicht mehr in der Sammlung.")
+                    val items = saleValues(fresh, ids) ?: throw IllegalStateException("Karte nicht mehr in der Sammlung.")
                     val s = SideStores.sales.state.value
                     val data = s.value
                     if (data == null || s.error != null) throw IllegalStateException("Keine Verbindung – Verkäufe nicht geladen.")
@@ -179,6 +199,7 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
                     )
                     saleId = SalesRepository.book(head, items)
                     count = items.size
+                    bookedIds = items.map { it.first }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -189,7 +210,24 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
                 try { CollectionStore.awaitSync(); SideStores.sales.refreshAndWait() }
                 catch (e: CancellationException) { throw e }
                 catch (_: Exception) { }
-                onBooked(saleId, count)
+                // Spec H3a §7.2: nach JEDEM book_sale aufräumen. Scheitert das, bleibt der Verkauf gültig; die
+                // Angebote zeigen dann "Karte fehlt".
+                var after: ListingsRepository.AfterBooking? = null
+                var cleanupError: String? = null
+                try {
+                    SideStores.listings.refreshAndWait()
+                    val ls = SideStores.listings.state.value
+                    val data = ls.value
+                    if (data == null || ls.error != null) throw IllegalStateException("Angebote nicht geladen.")
+                    val coll = CollectionStore.state.value as? StoreState.Ready ?: throw IllegalStateException("Sammlung ist nicht geladen.")
+                    val liveIds = coll.copies.filter { !it.deleted }.map { it.copyId }.toSet()
+                    after = ListingsRepository.afterBooking(data, saleId, bookedIds, listing?.listingId, liveIds)
+                    SideStores.listings.refreshAndWait()
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { cleanupError = e.message ?: "Unbekannter Fehler" }
+                if (cleanupError != null || after?.reminders?.isNotEmpty() == true || after?.askAdjust == true || after?.listingSkipped == true) {
+                    done = DoneStep(saleId, count, after, cleanupError)
+                } else onBooked(saleId, count)
             } finally {
                 inFlight.finish()
                 busy = false
@@ -197,17 +235,40 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
         }
     }
 
-    ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }, sheetState = sheetState) {
+    // Im Abschluss-Schritt ist schon gebucht: Schließen meldet onBooked (Rückgängig-Zeile, Auswahl), nie onDismiss.
+    ModalBottomSheet(onDismissRequest = { val d = done; if (d != null) onBooked(d.saleId, d.count) else if (!busy) onDismiss() }, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            done?.let { d ->
+                DoneContent(d, onAdjust = onAdjustListing?.let { adjust -> { onBooked(d.saleId, d.count); adjust() } },
+                    onFinish = { onBooked(d.saleId, d.count) })
+                return@Column
+            }
             Text("Verkauft buchen", style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
-            val n = copyIds.size
+            val n = chosenIds.size
             Text(
                 "$n ${if (n == 1) "Karte" else "Karten"} · Marktwert ${marketCents?.let { SalesMath.euroCentsText(it) } ?: "…"}",
                 color = Muted, style = MaterialTheme.typography.bodyMedium,
             )
+            // Spec H3a §7.1 Teilverkauf: je Exemplar ein Häkchen (Name aus dem Speicher, Druck, Zustand).
+            if (listing != null) {
+                val copiesById = remember(ready) { ready?.copies?.associateBy { it.copyId } ?: emptyMap() }
+                val cardsByKey = remember(ready) { ready?.cards?.associateBy { it.printingKey() } ?: emptyMap() }
+                copyIds.forEach { id ->
+                    val copy = copiesById[id]
+                    val card = copy?.let { cardsByKey[it.printingKey()] }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = id in picked, onCheckedChange = { picked = if (it) picked + id else picked - id }, enabled = !busy)
+                        Column(Modifier.weight(1f)) {
+                            Text(card?.name ?: copy?.cardId ?: id, color = OnSurface, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            Text(copy?.let { "${it.setCode} · ${it.rarity} · ${it.language} · ${it.condition}" } ?: "Karte nicht mehr in der Sammlung",
+                                color = if (copy == null) ErrorColor else Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            }
 
             if (offline) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -301,5 +362,43 @@ fun SaleSheet(copyIds: List<String>, initialGrossCents: Long? = null, onDismiss:
                 Button(onClick = { book() }, enabled = canBook) { Text(if (busy) "Wird gebucht…" else "Buchen") }
             }
         }
+    }
+}
+
+/** Spec H3a Abweichung 7 -- Abschluss-Schritt: „Auch dort herausnehmen: …“, Preis-Hinweis, Aufräum-Fehler. */
+@Composable
+private fun DoneContent(d: DoneStep, onAdjust: (() -> Unit)?, onFinish: () -> Unit) {
+    val ctx = LocalContext.current
+    var linkError by remember { mutableStateOf<String?>(null) }
+    Text("Gebucht.",style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
+    d.cleanupError?.let {
+        Text("Angebote nicht aufgeräumt: $it – sie zeigen „Karte fehlt“.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+    }
+    val after = d.after
+    if (after?.listingSkipped == true) {
+        Text("Angebot war nicht mehr aktiv – nur der Verkauf wurde gebucht.", color = OnSurface, style = MaterialTheme.typography.bodyMedium)
+    }
+    if (after != null && after.reminders.isNotEmpty()) {
+        Text("Auch dort herausnehmen:", color = OnSurface, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        after.reminders.forEach { r ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${r.channelName} – ${r.title}", color = OnSurface, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                r.externalUrl?.let { url ->
+                    TextButton(onClick = {
+                        if (!openWebLink(ctx, url)) linkError = "Link konnte nicht geöffnet werden."
+                    }) { Text("Anzeige öffnen") }
+                }
+            }
+        }
+    }
+    if (after?.askAdjust == true) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Preis für die übrigen Karten anpassen?", color = OnSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            onAdjust?.let { TextButton(onClick = it) { Text("Bearbeiten") } }
+        }
+    }
+    linkError?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Button(onClick = onFinish) { Text("Fertig") }
     }
 }

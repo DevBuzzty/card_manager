@@ -230,6 +230,7 @@ fun AppNav() {
                     // gespeicherten Sammlungs-Reiter (z. B. Binder) wieder her und der Chip erscheint nie.
                     onOpenForSale = { CollectionChip.open(CollectionChip.VERKAUF); nav.openSammlungKarten() },
                     onOpenDuplicates = { CollectionChip.open(CollectionChip.DUPLIKATE); nav.openSammlungKarten() },
+                    onOpenListings = { CollectionChip.open(CollectionChip.ANGEBOTE); nav.openSammlungKarten() },
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(

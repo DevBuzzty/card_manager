@@ -28,7 +28,11 @@ const H1_CHANNELS = ['list-sale-copies', 'set-for-sale'];
 const H2_CHANNELS = ['sale-channels', 'sale-channel-save', 'sale-channel-hide', 'sale-preview', 'sale-book', 'sale-update',
   'sale-cancel', 'sales-overview', 'sale-detail', 'card-sales'];
 
-for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS, ...H2_CHANNELS]) {
+// Spec H3a §5–§7: Vorschau, Anlegen, Bearbeiten, Herausnehmen, Beenden, Erneut anbieten, Übersicht, Detail, Kürzel, Link, Bilder.
+const H3A_CHANNELS = ['listing-preview', 'listing-create', 'listing-update', 'listing-remove-items', 'listing-end', 'listing-relist',
+  'listings-overview', 'listing-detail', 'listing-offers', 'listing-open-url', 'listing-save-images'];
+
+for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS, ...H2_CHANNELS, ...H3A_CHANNELS]) {
   test(`Kanal ${ch} steht in main.cjs und preload.cjs`, () => {
     assert.ok(MAIN.includes(`ipcMain.handle('${ch}'`), `main.cjs fehlt ipcMain.handle('${ch}'`);
     assert.ok(PRELOAD.includes(`ipcRenderer.invoke('${ch}'`), `preload.cjs fehlt ipcRenderer.invoke('${ch}'`);

@@ -3,6 +3,7 @@
 // supabase/sales_schema.sql#sale_return_copy (Plan-Abweichung 2). Jede Schreibaktion ist EINE Transaktion.
 const crypto = require('crypto');
 const M = require('./sales-math.cjs');
+const listings = require('./listings.cjs');
 
 class SaleError extends Error {}
 
@@ -82,11 +83,12 @@ function checkHead(db, h, current) {
   };
 }
 
-function bookSale(db, input = {}) {
+function bookSaleDetailed(db, input = {}) {
   const ids = [...new Set(Array.isArray(input.copyIds) ? input.copyIds : [])];
   if (ids.length === 0) throw new SaleError('Mindestens eine Karte auswählen.');
   const head = checkHead(db, input);
   const saleId = crypto.randomUUID();
+  let after = null;
   db.transaction(() => {
     const rows = liveCopies(db, ids);
     if (rows.some((r) => !r)) throw new SaleError('Karte bereits verkauft oder gelöscht.');
@@ -106,8 +108,14 @@ function bookSale(db, input = {}) {
         condition: r.condition, name: r.name ?? null, image_url: r.image_url ?? null });
       sell.run(saleId, r.copy_id);
     });
+    // Spec H3a §7.2: Aufraeumen in DERSELBEN Transaktion -- auch bei einer Buchung ohne Angebot.
+    after = listings.applySaleToListings(db, saleId, rows.map((r) => r.copy_id), input.listing_id || null);
   })();
-  return saleId;
+  return { saleId, ...after };
+}
+
+function bookSale(db, input = {}) {
+  return bookSaleDetailed(db, input).saleId;
 }
 
 // Rueckkehr eines Exemplars aus Verkauf saleId -- wortgleich zu supabase sale_return_copy.
@@ -216,6 +224,6 @@ function cardSales(db, cardId) {
 }
 
 module.exports = {
-  SaleError, listChannels, saveChannel, hideChannel, previewSale, bookSale, updateSale, cancelSale,
+  SaleError, listChannels, saveChannel, hideChannel, previewSale, bookSale, bookSaleDetailed, updateSale, cancelSale,
   salesOverview, saleDetail, cardSales,
 };

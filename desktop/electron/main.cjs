@@ -21,6 +21,8 @@ const copies = require('./copies.cjs');
 const { deleteContainer } = require('./containers-schema.cjs');
 const sealed = require('./sealed-items.cjs');
 const sales = require('./sales.cjs');
+const listings = require('./listings.cjs');
+const { saveListingImages } = require('./listing-images.cjs');
 const { readSealedProducts, searchSealedProducts, sealedProductsAvailable } = require('./sealed-products.cjs');
 const { collectionSql, parseImportCsv } = require('./collection-query.cjs');
 const { setDeckContainer, addMissingToWishlist, moveCopiesToContainer, readYdkFile, createImportedDeck, saveDeck } = require('./decks.cjs');
@@ -901,12 +903,70 @@ ipcMain.handle('sale-channels', saleRead('sale-channels', () => sales.listChanne
 ipcMain.handle('sale-channel-save', saleWrite('sale-channel-save', (d) => ({ channel_id: sales.saveChannel(db, d || {}) })));
 ipcMain.handle('sale-channel-hide', saleWrite('sale-channel-hide', (id) => { sales.hideChannel(db, id); return {}; }));
 ipcMain.handle('sale-preview', saleRead('sale-preview', (ids) => sales.previewSale(db, ids)));
-ipcMain.handle('sale-book', saleWrite('sale-book', (d) => ({ sale_id: sales.bookSale(db, d || {}) })));
+ipcMain.handle('sale-book', saleWrite('sale-book', (d) => {
+    // Spec H3a §7: dieselbe Buchung, dazu Erinnerung/Teilverkauf aus dem Aufraeumen in derselben Transaktion.
+    const r = sales.bookSaleDetailed(db, d || {});
+    return { sale_id: r.saleId, reminders: r.reminders, askAdjust: r.askAdjust, listingSkipped: r.listingSkipped };
+}));
 ipcMain.handle('sale-update', saleWrite('sale-update', (d) => { sales.updateSale(db, d || {}); return {}; }));
 ipcMain.handle('sale-cancel', saleWrite('sale-cancel', (id) => { sales.cancelSale(db, id); return {}; }));
 ipcMain.handle('sales-overview', saleRead('sales-overview', (d) => sales.salesOverview(db, d || {})));
 ipcMain.handle('sale-detail', saleRead('sale-detail', (id) => sales.saleDetail(db, id)));
 ipcMain.handle('card-sales', saleRead('card-sales', (id) => sales.cardSales(db, id)));
+
+// --- Spec H3a: Angebote (halbautomatisch) ---
+// Regeln in listings.cjs/listing-text.cjs; hier nur die Kanaele. Erwartete Fehler (ListingError) tragen eine deutsche Meldung.
+// Anzeigename/englischer Name aus dem Offline-Katalog ueber die Artwork-Zuordnung (Befund 1); ohne Katalog null.
+function listingNames(id) {
+    const cards = readCatalogCards(userDataPath);
+    const c = cards && cards.get(catalogMainId(userDataPath, id));
+    return c ? { de: c.name_de || null, en: c.name_en || null } : null;
+}
+function listingErrorMessage(e, channel) {
+    if (e instanceof listings.ListingError) return e.message;
+    console.error(`[${channel}]`, e);
+    return CONTAINER_COPY_ERROR_MSG;
+}
+const listingWrite = (channel, fn) => (event, d) => {
+    try { return { success: true, ...fn(d) }; }
+    catch (e) { return { success: false, error: listingErrorMessage(e, channel) }; }
+};
+const listingRead = (channel, fn) => (event, d) => {
+    try { return fn(d); }
+    catch (e) { throw new Error(listingErrorMessage(e, channel)); }
+};
+ipcMain.handle('listing-preview', listingRead('listing-preview', (ids) => listings.previewListing(db, ids, listingNames)));
+ipcMain.handle('listing-create', listingWrite('listing-create', (d) => ({ listing_ids: listings.createListings(db, d || {}, listingNames) })));
+ipcMain.handle('listing-update', listingWrite('listing-update', (d) => listings.updateListing(db, d || {})));
+ipcMain.handle('listing-remove-items', listingWrite('listing-remove-items', (d) => listings.removeListingItems(db, d?.listing_id, d?.copyIds)));
+ipcMain.handle('listing-end', listingWrite('listing-end', (id) => { listings.endListing(db, id); return {}; }));
+ipcMain.handle('listing-relist', listingRead('listing-relist', (id) => listings.relistPrefill(db, id)));
+ipcMain.handle('listings-overview', listingRead('listings-overview', (d) => listings.listingsOverview(db, d || {})));
+ipcMain.handle('listing-detail', listingRead('listing-detail', (d) => listings.listingDetail(db, d?.listing_id, d || {})));
+ipcMain.handle('listing-offers', listingRead('listing-offers', () => listings.listingOffers(db)));
+// Spec §5.5/§6: nur http(s) an den Browser (Abweichung 8) -- open-external prueft nichts.
+ipcMain.handle('listing-open-url', async (event, url) => {
+    const u = String(url ?? '').trim();
+    if (!/^https?:\/\//i.test(u)) return { success: false, error: 'Ungültiger Link.' };
+    try { await shell.openExternal(u); return { success: true }; }
+    catch (e) { console.error('[listing-open-url]', e); return { success: false, error: 'Link konnte nicht geöffnet werden.' }; }
+});
+// Spec §5.6: Katalogbilder nach Bilder\Yu-Gi-Oh Angebote\<Titel>\, danach den Ordner im Explorer oeffnen.
+ipcMain.handle('listing-save-images', async (event, d) => {
+    try {
+        const r = await saveListingImages({ baseDir: app.getPath('pictures'), title: d?.title, urls: d?.urls }, {
+            fetch: (u) => fetch(u, { signal: AbortSignal.timeout(15000) }),
+            mkdir: (dir) => fs.mkdirSync(dir, { recursive: true }),
+            writeFile: (file, buf) => fs.writeFileSync(file, buf),
+        });
+        const openError = await shell.openPath(r.folder); // '' bei Erfolg
+        if (openError) console.error('[listing-save-images] Ordner:', openError);
+        return { success: true, ...r };
+    } catch (e) {
+        console.error('[listing-save-images]', e);
+        return { success: false, error: 'Bilder konnten nicht gespeichert werden.' };
+    }
+});
 
 // --- Other Handlers ---
 

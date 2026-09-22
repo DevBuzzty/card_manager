@@ -112,6 +112,20 @@ contextBridge.exposeInMainWorld('api', {
   cardSales: (cardId) => ipcRenderer.invoke('card-sales', cardId),
   onSalesChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('sales-changed', s); return () => ipcRenderer.removeListener('sales-changed', s); },
 
+  // Spec H3a: Angebote
+  previewListing: (copyIds) => ipcRenderer.invoke('listing-preview', copyIds),
+  createListings: (data) => ipcRenderer.invoke('listing-create', data),
+  updateListing: (data) => ipcRenderer.invoke('listing-update', data),
+  removeListingItems: (data) => ipcRenderer.invoke('listing-remove-items', data),
+  endListing: (listingId) => ipcRenderer.invoke('listing-end', listingId),
+  relistPrefill: (listingId) => ipcRenderer.invoke('listing-relist', listingId),
+  listingsOverview: (data) => ipcRenderer.invoke('listings-overview', data),
+  listingDetail: (data) => ipcRenderer.invoke('listing-detail', data),
+  listingOffers: () => ipcRenderer.invoke('listing-offers'),
+  openListingUrl: (url) => ipcRenderer.invoke('listing-open-url', url),
+  saveListingImages: (data) => ipcRenderer.invoke('listing-save-images', data),
+  onListingsChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('listings-changed', s); return () => ipcRenderer.removeListener('listings-changed', s); },
+
   // Wishlist
   getWishlist: () => ipcRenderer.invoke('get-wishlist'),
   addToWishlist: (card) => ipcRenderer.invoke('add-to-wishlist', card),

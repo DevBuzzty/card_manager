@@ -87,6 +87,8 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
     var markingSale by remember { mutableStateOf(false) }
     // Spec H2 §5.1: "Verkauft…" oeffnet das Buchungs-Sheet fuer genau dieses Exemplar (Spontanverkauf).
     var selling by remember { mutableStateOf(false) }
+    // Spec H3a §5.1: "Anbieten…" oeffnet das Angebots-Sheet fuer genau dieses Exemplar.
+    var listing by remember { mutableStateOf(false) }
     // Plain (non-Compose-state) guard, geprueft SYNCHRON ganz am Anfang von save()/remove() -- ein
     // Doppel-Tap auf "Speichern" bzw. "Entfernen" waehrend eine der beiden Aktionen noch laeuft
     // wird sofort verworfen, nicht erst nach der naechsten Neuzeichnung. Gleiches Muster wie
@@ -296,6 +298,9 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
                     TextButton(onClick = { if (!savingRef[0]) selling = true }, enabled = !saving && !removing && !markingSale) {
                         Text("Verkauft…")
                     }
+                    TextButton(onClick = { if (!savingRef[0]) listing = true }, enabled = !saving && !removing && !markingSale) {
+                        Text("Anbieten…")
+                    }
                 }
                 Row {
                     TextButton(onClick = onDismiss, enabled = !saving && !removing) { Text("Abbrechen") }
@@ -310,6 +315,9 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
 
     if (selling) {
         SaleSheet(listOf(copy.copyId), onDismiss = { selling = false }, onBooked = { _, _ -> selling = false; onSaved(); onDismiss() })
+    }
+    if (listing) {
+        ListingSheet(listOf(copy.copyId), onDismiss = { listing = false }, onSaved = { listing = false; forSale = true; onSaved() })
     }
 
     if (pendingRemove) {

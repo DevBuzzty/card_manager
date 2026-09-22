@@ -29,6 +29,7 @@ import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.ml.DuplicateEntry
 import com.example.yugiohscanner.ml.Duplicates
+import com.example.yugiohscanner.ml.ListingText
 import com.example.yugiohscanner.ml.SaleCopy
 import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ui.components.SpaceCard
@@ -37,6 +38,7 @@ import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
+import com.example.yugiohscanner.ui.theme.Primary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +51,8 @@ object CollectionChip {
     const val ALLE = "alle"
     const val DUPLIKATE = "duplikate"
     const val VERKAUF = "verkauf"
+    // Spec H3a §6: Übersicht „Angebote“.
+    const val ANGEBOTE = "angebote"
     private val pending = MutableStateFlow<String?>(null)
     val request: StateFlow<String?> = pending
 
@@ -221,12 +225,18 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     val sales by SideStores.sales.state.collectAsState()
     // Plan-Abweichung 4: Storno gesperrt, solange die Verkaeufe nicht geladen sind oder das letzte Laden scheiterte.
     val salesOffline = sales.value == null || sales.error != null
+    // Spec H3a §5.1/§6: dieselben Häkchen -> "Angebot erstellen"; je Exemplar das Kanal-Kürzel aktiver Angebote.
+    var listingFor by remember { mutableStateOf<List<String>?>(null) }
+    val listingsState by SideStores.listings.state.collectAsState()
+    LaunchedEffect(Unit) { SideStores.listings.ensureLoaded() }
+    val byCopy = remember(listingsState.value) { listingsState.value?.byCopy() ?: emptyMap() }
 
     // VOR dem fruehen Return: ein kurzes Flackern des Speichers (data == null) waehrend des Buchens darf
     // das Sheet nicht aus der Komposition werfen (sein Scope wuerde die laufende Buchung abbrechen).
     selling?.let {
         SaleSheet(it, onDismiss = { selling = null }, onBooked = { id, n -> undo = id to n; selling = null; picked = emptySet() })
     }
+    listingFor?.let { ListingSheet(it, onDismiss = { listingFor = null }, onSaved = { listingFor = null; picked = emptySet() }) }
 
     if (data == null) {
         Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
@@ -242,8 +252,13 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
 
     Column(modifier) {
         Text(Duplicates.forSaleHeaderText(summary), color = OnSurface, style = MaterialTheme.typography.bodyMedium)
-        Button(onClick = { selling = livePicked }, enabled = !busy && livePicked.isNotEmpty()) {
-            Text("Verkauft buchen (${livePicked.size})")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { selling = livePicked }, enabled = !busy && livePicked.isNotEmpty()) {
+                Text("Verkauft buchen (${livePicked.size})")
+            }
+            OutlinedButton(onClick = { listingFor = livePicked }, enabled = !busy && livePicked.isNotEmpty()) {
+                Text("Angebot erstellen (${livePicked.size})")
+            }
         }
         undo?.let { (saleId, n) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -286,6 +301,9 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                         Text(CopyLocation.format(s.copy, containers.find { it.containerId == s.copy.containerId }), color = Muted,
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                        ListingText.copyBadges(byCopy[id] ?: emptyList()).joinToString(" ").takeIf { it.isNotEmpty() }?.let {
+                                            Text(it, color = Primary, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                                        }
                                         Text(suggestions[id]?.let { "Vorschlag ${SalesMath.euroCentsText(it)}" } ?: "–", color = Muted,
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                     }
