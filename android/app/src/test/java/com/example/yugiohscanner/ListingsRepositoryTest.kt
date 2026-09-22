@@ -66,6 +66,12 @@ class ListingsRepositoryTest {
         assertTrue(ListingsRepository.checkNew(ok.copy(channelId = "cardmarket", items = listOf(li("c1"), li("c2", "EX"))), live, ch)!!.startsWith("Ein Cardmarket-Angebot"))
         assertEquals("Mindestens eine Karte auswählen.", ListingsRepository.checkNew(ok.copy(items = emptyList()), live, ch))
     }
+    @Test fun `checkEdit -- Preis und Link wie beim Anlegen`() {
+        assertEquals("Der Angebotspreis muss über 0 € liegen.", ListingsRepository.checkEdit(0, "https://x"))
+        assertEquals("Der Link muss mit http:// oder https:// beginnen.", ListingsRepository.checkEdit(100, "ftp://x"))
+        assertEquals("Der Link muss mit http:// oder https:// beginnen.", ListingsRepository.checkEdit(100, "javascript:alert(1)"))
+        assertNull(ListingsRepository.checkEdit(1, "https://x"))
+    }
     @Test fun `Anlegen -- erst Positionen, dann Koepfe, Cardmarket ohne Titel und Text`() {
         val ops = ListingsRepository.createOps(listOf("L1"), listOf(NewListing("cardmarket", "Cardmarket", "2026-09-21", 1001, "X", "Y", " ", null, listOf(li("c2"), li("c1")))))
         assertEquals(listOf("listing_items", "listings"), ops.map { it.table })

@@ -87,17 +87,27 @@ object ListingsRepository {
     private val DELETED = JSONObject().put("deleted", true).toString()
     private val ENDED = JSONObject().put("status", "beendet").toString()
 
+    /**
+     * Spec §5.7/Abweichung 8 -- Preis- und Link-Prüfung, geteilt zwischen Anlegen ([checkNew]) und Bearbeiten
+     * ([update]). Dieselben Texte wie listings.cjs#checkFields.
+     */
+    internal fun checkEdit(priceCents: Long?, externalUrl: String?): String? = when {
+        priceCents != null && priceCents <= 0 -> "Der Angebotspreis muss über 0 € liegen."
+        !externalUrl.isNullOrBlank() && !URL_OK.containsMatchIn(externalUrl.trim()) -> "Der Link muss mit http:// oder https:// beginnen."
+        else -> null
+    }
+
     /** Spec §5.7 -- dieselben Prüfungen und Texte wie listings.cjs#createOne, in derselben Reihenfolge. */
     internal fun checkNew(l: NewListing, liveCopyIds: Set<String>, liveChannelIds: Set<String>): String? = when {
         l.items.isEmpty() -> "Mindestens eine Karte auswählen."
         !DATE.matches(l.listedOn) -> "Ungültiges Datum."
-        l.priceCents <= 0 -> "Der Angebotspreis muss über 0 € liegen."
-        !l.externalUrl.isNullOrBlank() && !URL_OK.containsMatchIn(l.externalUrl.trim()) -> "Der Link muss mit http:// oder https:// beginnen."
-        l.channelId !in liveChannelIds -> "Kanal nicht gefunden."
-        l.items.any { it.copyId !in liveCopyIds } -> "Karte bereits verkauft oder gelöscht."
-        l.channelId == "cardmarket" && ListingText.groupItems(l.items).size != 1 ->
-            "Ein Cardmarket-Angebot enthält nur gleiche Karten (Druck, Sprache, Zustand, Auflage)."
-        else -> null
+        else -> checkEdit(l.priceCents, l.externalUrl) ?: when {
+            l.channelId !in liveChannelIds -> "Kanal nicht gefunden."
+            l.items.any { it.copyId !in liveCopyIds } -> "Karte bereits verkauft oder gelöscht."
+            l.channelId == "cardmarket" && ListingText.groupItems(l.items).size != 1 ->
+                "Ein Cardmarket-Angebot enthält nur gleiche Karten (Druck, Sprache, Zustand, Auflage)."
+            else -> null
+        }
     }
 
     internal fun createOps(ids: List<String>, list: List<NewListing>): List<Op> {
@@ -153,9 +163,13 @@ object ListingsRepository {
             removeOps(l.listingId, removeCopyIds, liveCopyIds)
     }
 
-    /** Bearbeiten; [fresh] = innerhalb des InFlight-Gatters frisch geladen. -> true, wenn das Angebot dabei endete. */
+    /**
+     * Bearbeiten; [fresh] = innerhalb des InFlight-Gatters frisch geladen. -> true, wenn das Angebot dabei endete.
+     * Prüft Preis/Link ([checkEdit], Abweichung 8) vor jedem Schreibzugriff -- dieselben Texte wie beim Anlegen.
+     */
     suspend fun update(fresh: ListingsData, listingId: String, priceCents: Long, title: String?, description: String?,
                        externalUrl: String?, note: String?, removeCopyIds: List<String>): Boolean {
+        checkEdit(priceCents, externalUrl)?.let { throw IllegalArgumentException(it) }
         val l = fresh.listings.find { it.listingId == listingId && it.status == "aktiv" } ?: throw IllegalStateException(CHANGED)
         val live = fresh.liveItemsOf(listingId).map { it.copyId }
         val ops = updateOps(l, priceCents, title, description, externalUrl, note, removeCopyIds, live)
