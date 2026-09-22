@@ -7,6 +7,7 @@ const { CONTAINER_COLS, clearContainerLocations } = require('./containers-schema
 const { mergeRemotePriceHistory } = require('./price-history.cjs');
 const { nextNotification, openSignature } = require('./alert-notify.cjs');
 const { CHANNEL_COLS, SALE_COLS, ITEM_COLS } = require('./sales-schema.cjs');
+const { LISTING_COLS, LISTING_ITEM_COLS } = require('./listings-schema.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
@@ -255,8 +256,11 @@ const SALES_STREAMS = {
   sale_channels: { cols: noStamps(CHANNEL_COLS), bools: new Set(['builtin', 'deleted']), key: ['channel_id'], cursor: 'sync_sale_channels' },
   sales: { cols: noStamps(SALE_COLS), bools: new Set(['deleted']), key: ['sale_id'], cursor: 'sync_sales' },
   sale_items: { cols: noStamps(ITEM_COLS), bools: new Set(['was_for_sale', 'deleted']), key: ['sale_id', 'copy_id'], cursor: 'sync_sale_items' },
+  // Spec H3a §4.3 -- Angebote und ihre Positionen, dieselbe Bauart (Echo-Sperre, Obergrenze Fix I2).
+  listings: { cols: noStamps(LISTING_COLS), bools: new Set(['deleted']), key: ['listing_id'], cursor: 'sync_listings' },
+  listing_items: { cols: noStamps(LISTING_ITEM_COLS), bools: new Set(['deleted']), key: ['listing_id', 'copy_id'], cursor: 'sync_listing_items' },
 };
-const recentlyPushedSalesByTable = { sale_channels: new Map(), sales: new Map(), sale_items: new Map() };
+const recentlyPushedSalesByTable = { sale_channels: new Map(), sales: new Map(), sale_items: new Map(), listings: new Map(), listing_items: new Map() };
 const echoKey = (table, r) => SALES_STREAMS[table].key.map((k) => String(r[k])).join('|');
 
 function salesRowToRemote(table, row) {
@@ -267,8 +271,8 @@ function salesRowToRemote(table, row) {
 function remoteToLocalSalesRow(table, r) {
   const s = SALES_STREAMS[table]; const out = {};
   for (const c of s.cols) out[c] = s.bools.has(c) ? (r[c] ? 1 : 0) : (r[c] ?? null);
-  for (const k of ['gross', 'fees', 'shipping', 'value_at_sale', 'share', 'fee_percent']) if (k in out && out[k] != null) out[k] = Number(out[k]);
-  if ('sold_on' in out && out.sold_on) out.sold_on = String(out.sold_on).slice(0, 10);
+  for (const k of ['gross', 'fees', 'shipping', 'value_at_sale', 'share', 'fee_percent', 'price']) if (k in out && out[k] != null) out[k] = Number(out[k]);
+  for (const k of ['sold_on', 'listed_on']) if (k in out && out[k]) out[k] = String(out[k]).slice(0, 10);
   return out;
 }
 function applyRemoteSalesRow(db, table, r) {
@@ -627,6 +631,22 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     }
   }
 
+  // Spec H3a §4.3: Angebote als zwei weitere Stroeme nach den Verkaeufen; fehlt eine Cloud-Tabelle
+  // (listings_schema.sql nicht eingespielt), laufen alle anderen Stroeme weiter.
+  const LISTING_TABLES = ['listings', 'listing_items'];
+  async function pullListingsSafe(c) {
+    let n = 0;
+    for (const t of LISTING_TABLES) {
+      try { n += await pullSalesTable(c, t); } catch (e) { console.error(`[sync] ${t} pull:`, e.message); }
+    }
+    return n;
+  }
+  async function pushListingsSafe(c) {
+    for (const t of LISTING_TABLES) {
+      try { await pushSalesTable(c, t); } catch (e) { console.error(`[sync] ${t} push:`, e.message); }
+    }
+  }
+
   // Spec G1 §4.12 — the daily cloud Edge Function writes source='cloud' rows the desktop would
   // otherwise never see; pull them first (INSERT OR IGNORE via mergeRemotePriceHistory, so an
   // existing local row with the same key is left untouched), then push local rows as before.
@@ -731,11 +751,13 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       // Spec G3 §7.1: Sealed als vierter Strom nach den Exemplaren, in beide Richtungen; nie fatal.
       const pulledSealed = await pullSealedSafe(c);
       const pulledSales = await pullSalesSafe(c);
+      const pulledListings = await pullListingsSafe(c);
       await push(c);
       await pushContainers(c);
       await pushCopies(c);
       await pushSealedSafe(c);
       await pushSalesSafe(c);
+      await pushListingsSafe(c);
       await pullPriceHistory(c);
       await pushPriceHistory(c);
       await syncSnapshot(c);
@@ -749,7 +771,8 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
         try { recordPortfolioValue(db); } catch (e) { console.error('[sync] recordPortfolioValue:', e.message); }
       }
       if (pulledSales > 0) { const w = getWindow(); if (w) w.webContents.send('sales-changed'); }
-      const totalPulled = pulledCollection + pulledSealed + pulledSales;
+      if (pulledListings > 0) { const w = getWindow(); if (w) w.webContents.send('listings-changed'); }
+      const totalPulled = pulledCollection + pulledSealed + pulledSales + pulledListings;
       emit('idle', totalPulled > 0 ? `pulled ${totalPulled}` : 'up to date');
     } catch (e) {
       // Only drop the session on auth/token failures; keep it through transient
@@ -786,6 +809,12 @@ module.exports = {
   _recentlyPushedItems: recentlyPushedSalesByTable.sale_items,
   _recentlyPushedChannels: recentlyPushedSalesByTable.sale_channels,
   _salesPushRows: salesPushRows,
+  listingToRemote: (r) => salesRowToRemote('listings', r), remoteToLocalListing: (r) => remoteToLocalSalesRow('listings', r),
+  listingItemToRemote: (r) => salesRowToRemote('listing_items', r), remoteToLocalListingItem: (r) => remoteToLocalSalesRow('listing_items', r),
+  _applyPulledListings: (db, rows) => applyPulledSalesRows(db, 'listings', rows),
+  _applyPulledListingItems: (db, rows) => applyPulledSalesRows(db, 'listing_items', rows),
+  _recentlyPushedListings: recentlyPushedSalesByTable.listings,
+  _recentlyPushedListingItems: recentlyPushedSalesByTable.listing_items,
   // Test-only hooks into the containers echo-lock (see test-sync.cjs): the module-level map and
   // apply function that pullContainers itself uses internally. Not called by production code
   // outside sync.cjs; calling startSync() just to reach them would also start its real timers.
