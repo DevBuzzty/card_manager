@@ -257,8 +257,10 @@ const SALES_STREAMS = {
   sales: { cols: noStamps(SALE_COLS), bools: new Set(['deleted']), key: ['sale_id'], cursor: 'sync_sales' },
   sale_items: { cols: noStamps(ITEM_COLS), bools: new Set(['was_for_sale', 'deleted']), key: ['sale_id', 'copy_id'], cursor: 'sync_sale_items' },
   // Spec H3a §4.3 -- Angebote und ihre Positionen, dieselbe Bauart (Echo-Sperre, Obergrenze Fix I2).
-  listings: { cols: noStamps(LISTING_COLS), bools: new Set(['deleted']), key: ['listing_id'], cursor: 'sync_listings' },
-  listing_items: { cols: noStamps(LISTING_ITEM_COLS), bools: new Set(['deleted']), key: ['listing_id', 'copy_id'], cursor: 'sync_listing_items' },
+  // localWinsUnpushed (Abschluss-Fix I1): eine noch nicht geschobene lokale Aenderung wird vom Pull nicht
+  // ueberschrieben; der naechste Push traegt sie in die Cloud. Die H2-Stroeme bleiben absichtlich ohne Flag.
+  listings: { cols: noStamps(LISTING_COLS), bools: new Set(['deleted']), key: ['listing_id'], cursor: 'sync_listings', localWinsUnpushed: true },
+  listing_items: { cols: noStamps(LISTING_ITEM_COLS), bools: new Set(['deleted']), key: ['listing_id', 'copy_id'], cursor: 'sync_listing_items', localWinsUnpushed: true },
 };
 const recentlyPushedSalesByTable = { sale_channels: new Map(), sales: new Map(), sale_items: new Map(), listings: new Map(), listing_items: new Map() };
 const echoKey = (table, r) => SALES_STREAMS[table].key.map((k) => String(r[k])).join('|');
@@ -286,6 +288,7 @@ function applyRemoteSalesRow(db, table, r) {
     db.prepare(`INSERT INTO ${table} (${s.cols.join(',')}, updated_at) VALUES (${s.cols.map((c) => '@' + c).join(',')}, @updated_at)`).run(l);
     return;
   }
+  if (s.localWinsUnpushed && cur.updated_at > ceiling) return;
   if (!s.cols.some((c) => !s.key.includes(c) && (cur[c] ?? null) !== (l[c] ?? null))) return;
   l.updated_at = pulledUpdatedAtFor(ceiling, cur.updated_at);
   const sets = s.cols.filter((c) => !s.key.includes(c)).map((c) => `${c} = @${c}`).join(', ') + ', updated_at = @updated_at';
