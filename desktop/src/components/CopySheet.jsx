@@ -5,6 +5,7 @@ import { EDITION_LABELS } from '../utils/valuation';
 import { KIND_LABELS } from '../utils/containerKinds';
 import { suggestionCents, normalizeDiscount, normalizeMinPrice } from '../utils/saleMath';
 import SaleDialog from './SaleDialog';
+import ListingDialog from './ListingDialog';
 
 // Spec B1 §7.3: Das Exemplar-Sheet ist die EINZIGE Stelle, an der Standort, Tags und Notiz eines
 // Exemplars geschrieben werden -- kein zweiter Schreibweg irgendwo sonst. Gleiche Ueberlagerung,
@@ -37,6 +38,8 @@ export default function CopySheet({ copy, onClose, onSaved }) {
   const [markingSale, setMarkingSale] = useState(false);
   // Spec H2 §5.1: Spontanverkauf direkt aus dem Sheet, unabhaengig von "Zum Verkauf".
   const [sellingOpen, setSellingOpen] = useState(false);
+  // Spec H3a §5.1: Angebot direkt aus dem Sheet anlegen.
+  const [listingOpen, setListingOpen] = useState(false);
   // Spec H2 §9 -- Preisvorschlag als Vorbelegung des Buchungsdialogs. copy traegt hier keine
   // Preisfelder (copies.cjs#listCopies/#listAllCopies liefern nur die Exemplarspalten), daher der
   // Umweg ueber previewSale (denselben Marktwert, den SaleDialog sonst selbst nachlaedt); die
@@ -88,11 +91,11 @@ export default function CopySheet({ copy, onClose, onSaved }) {
   // wuerde ein Druck das ganze Sheet schliessen und den laufenden Verkaufs-Dialog mit wegreissen
   // (gleiches Muster wie CardDetailPanel.jsx: paletteOpen/sheetCopy).
   useEffect(() => {
-    if (sellingOpen) return;
+    if (sellingOpen || listingOpen) return;
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, sellingOpen]);
+  }, [onClose, sellingOpen, listingOpen]);
 
   const selectedContainer = containers.find(c => c.container_id === containerId);
   const isBinder = selectedContainer?.kind === 'binder';
@@ -304,6 +307,12 @@ export default function CopySheet({ copy, onClose, onSaved }) {
                 Verkauft…
               </button>
             )}
+            {copy?.copy_id && (
+              <button type="button" onClick={() => setListingOpen(true)} disabled={saving || removing || markingSale}
+                className="px-3 py-2 text-sm text-ink-muted hover:text-ink rounded-lg transition-colors disabled:opacity-50">
+                Anbieten…
+              </button>
+            )}
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors">Abbrechen</button>
@@ -316,6 +325,9 @@ export default function CopySheet({ copy, onClose, onSaved }) {
       </div>
       {sellingOpen && (
         <SaleDialog copyIds={[copy.copy_id]} initialGrossCents={saleInitialCents} onClose={() => setSellingOpen(false)} onBooked={() => { setSellingOpen(false); onSaved?.(); onClose?.(); }} />
+      )}
+      {listingOpen && (
+        <ListingDialog copyIds={[copy.copy_id]} onClose={() => setListingOpen(false)} onSaved={() => { setListingOpen(false); setForSale(true); onSaved?.(); }} />
       )}
     </div>
   );

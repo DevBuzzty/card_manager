@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import ExportDialog from './ExportDialog';
 import SaleDialog from './SaleDialog';
+import ListingDialog from './ListingDialog';
 import { LOADING, forSaleSummary, forSaleGroups, forSaleHeaderText, copyValueText } from '../utils/duplicates';
-import { createBusyGate } from '../utils/busyGate';
+import { createBusyGate, createLatestOnly } from '../utils/busyGate';
 import { EDITION_LABELS } from '../utils/valuation';
 import { formatCopyLocation } from '../utils/copyLocation';
 import { marketValueCents, suggestionCents, normalizeDiscount, normalizeMinPrice, euroCentsText } from '../utils/saleMath';
+import { copyBadges } from '../utils/listingText';
 
 // Spec H1 §5.1 -- Sammlung › Karten › Zum Verkauf. copies: Zeilen aus list-sale-copies (null = laedt), containers fuer
 // den Standort, reload(): Promise, onOpenCard(copy). "Exportieren" oeffnet den F1-Export mit Format Verkaufsliste und
@@ -20,6 +22,7 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
   const [picked, setPicked] = useState(() => new Set());
   const [selling, setSelling] = useState(null); // copyIds | null
   const [undo, setUndo] = useState(null); // { saleId, n }
+  const [listingFor, setListingFor] = useState(null); // copyIds | null
   // Spec H2 §9 -- Preisvorschlag: Einstellungen einmal laden, Standard wie saleMath.js.
   const [rule, setRule] = useState({ discount: 5, minCents: 10 });
 
@@ -28,6 +31,23 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
       setRule({ discount: normalizeDiscount(s?.sale_discount_percent), minCents: normalizeMinPrice(s?.sale_min_price) });
     });
   }, []);
+
+  // Spec H3a §6 "Überall sonst" -- Kanal-Kürzel je Exemplar in aktiven Angeboten.
+  const [offers, setOffers] = useState({});
+  const offersSeq = useRef(createLatestOnly());
+  const loadOffers = useCallback(() => {
+    const token = offersSeq.current.start();
+    window.api?.listingOffers?.()
+      .then((o) => { if (offersSeq.current.isCurrent(token)) setOffers(o || {}); })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    loadOffers();
+    const off = window.api?.onListingsChanged?.(loadOffers);
+    window.addEventListener('listings-dirty', loadOffers);
+    window.addEventListener('collection-dirty', loadOffers);
+    return () => { off?.(); window.removeEventListener('listings-dirty', loadOffers); window.removeEventListener('collection-dirty', loadOffers); };
+  }, [loadOffers]);
 
   const byId = useMemo(() => new Map((copies || []).map((c) => [c.copy_id, c])), [copies]);
   const groups = useMemo(() => (copies ? forSaleGroups(copies) : null), [copies]);
@@ -89,6 +109,10 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-obsidian-600 border border-line text-ink hover:border-space-violet/40 disabled:opacity-50">
           Verkauft buchen ({pickedLive.size})
         </button>
+        <button type="button" onClick={() => setListingFor([...pickedLive])} disabled={pickedLive.size === 0 || busy}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-obsidian-600 border border-line text-ink hover:border-space-violet/40 disabled:opacity-50">
+          Angebot erstellen ({pickedLive.size})
+        </button>
         <button type="button" onClick={() => setExportIds(groups.flatMap((g) => g.copy_ids))} disabled={summary.copies === 0}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-obsidian-600 border border-line text-ink hover:border-space-violet/40 disabled:opacity-50">
           <Download className="w-3.5 h-3.5" /> Exportieren
@@ -101,6 +125,13 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
         <SaleDialog copyIds={selling} initialGrossCents={sellingInitialGrossCents} onClose={() => setSelling(null)} onBooked={async (saleId) => {
           setUndo({ saleId, n: selling.length });
           setSelling(null);
+          setPicked(new Set());
+          await reload();
+        }} />
+      )}
+      {listingFor && (
+        <ListingDialog copyIds={listingFor} onClose={() => setListingFor(null)} onSaved={async () => {
+          setListingFor(null);
           setPicked(new Set());
           await reload();
         }} />
@@ -138,6 +169,7 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
                         <input type="checkbox" checked={pickedLive.has(id)} onChange={() => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; })} aria-label="Für Verkauf auswählen" />
                         <span className="font-mono text-ink-muted">{c.condition} · {EDITION_LABELS[c.edition] || c.edition}</span>
                         <span className="font-mono text-ink-faint truncate">{formatCopyLocation(c, (containers || []).find((ct) => ct.container_id === c.container_id))}</span>
+                        {copyBadges(offers[id] || []).map((b) => <span key={b} className="px-1 rounded bg-space-violet/15 text-space-violet text-[10px] font-mono">{b}</span>)}
                         <span className="ml-auto font-mono text-gold">{copyValueText(c)}</span>
                         <span className="font-mono text-ink-muted">Vorschlag {sugg == null ? '–' : euroCentsText(sugg)}</span>
                         <button type="button" onClick={() => giveBack(id)} disabled={busy}
