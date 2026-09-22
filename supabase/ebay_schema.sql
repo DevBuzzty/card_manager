@@ -41,6 +41,12 @@ alter table public.ebay_account enable row level security;
 revoke all on public.ebay_account from anon, authenticated;
 
 -- 2. Stand für die Geräte (ohne Tokens). Die Ansicht gehört postgres und liest ebay_account daher trotz RLS.
+-- Der Supabase-Advisor meldet hier "security_definer_view" (Ansicht ohne security_invoker, liest RLS-geschuetzte
+-- Tabelle als Eigentuemer) — das ist beabsichtigt: die Ansicht zeigt nur unbedenkliche Spalten (keine Tokens),
+-- deshalb ist Konto-Zeile 1 fuer authenticated per Ansicht sichtbar, obwohl die Tabelle selbst gesperrt ist.
+-- Ohne die revoke/grant-Zeilen darunter waere sie ausserdem per Voreinstellung fuer authenticated/anon beschreibbar
+-- (auto-updatable single-table view) und liesse ein PATCH/DELETE bis in ebay_account durch — deshalb erst alles
+-- entziehen, dann nur select fuer authenticated erlauben.
 create or replace view public.ebay_status as
 select a.environment,
        (a.refresh_token is not null and (a.refresh_expires_at is null or a.refresh_expires_at > now())) as connected,
@@ -56,7 +62,7 @@ select a.environment,
        a.last_run_at, a.last_run_summary, a.last_error, a.connected_at, a.updated_at
   from public.ebay_account a
  where a.id = 1;
-revoke all on public.ebay_status from anon;
+revoke all on public.ebay_status from anon, authenticated;
 grant select on public.ebay_status to authenticated;
 
 -- 3. eBay-Stand je Angebot (nur die Funktion schreibt; Geräte lesen)
@@ -84,6 +90,7 @@ create trigger trg_ebay_listings_updated_at before insert or update on public.eb
 alter table public.ebay_listings enable row level security;
 drop policy if exists ebay_listings_authenticated_read on public.ebay_listings;
 create policy ebay_listings_authenticated_read on public.ebay_listings for select to authenticated using (true);
+revoke insert, update, delete on public.ebay_listings from anon, authenticated;
 
 -- 4. Eigene Fotos (Strom in beide Richtungen wie listings; weiches Löschen)
 create table if not exists public.listing_photos (
@@ -119,7 +126,7 @@ create or replace function public.ebay_try_lock(p_holder text, p_seconds integer
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
   update public.ebay_account
-     set sync_lock_holder = p_holder, sync_lock_until = now() + make_interval(secs => p_seconds)
+     set sync_lock_holder = p_holder, sync_lock_until = now() + make_interval(secs => greatest(coalesce(p_seconds, 300), 1))
    where id = 1 and (sync_lock_until is null or sync_lock_until < now());
   return found;
 end;
