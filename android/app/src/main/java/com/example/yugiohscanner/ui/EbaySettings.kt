@@ -7,11 +7,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.EbayRepository
 import com.example.yugiohscanner.cloud.SideStores
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.example.yugiohscanner.ml.EbayMarks
+import com.example.yugiohscanner.ml.isSecureWebLink
 import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
@@ -71,7 +75,16 @@ fun EbaySettings() {
     var dropdownOpenKind by remember { mutableStateOf<String?>(null) }
 
     val state by SideStores.ebayStatus.state.collectAsState()
-    LaunchedEffect(Unit) { SideStores.ebayStatus.ensureLoaded() }
+    // Abschluss-Fix C1: beim Öffnen und bei jeder Rückkehr (z. B. aus dem Browser nach dem Verbinden) den eBay-Stand
+    // frisch laden. Das Hinzufügen des Beobachters liefert im Zustand RESUMED sofort ON_RESUME (= beim Öffnen).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) SideStores.ebayStatus.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val pair = state.value?.firstOrNull()
     val status = pair?.first
     val runInfo = pair?.second
@@ -94,8 +107,11 @@ fun EbaySettings() {
         SideStores.ebayStatus.refreshAndWait()
         after(r)
     }
+    // Abschluss-Fix C5: die Zustimmungs-URL nur öffnen, wenn sie mit https:// beginnt.
     fun connect() = auth("start", after = { r ->
-        if (!openWebLink(ctx, r.optString("url"))) error = "Ungültige Adresse von eBay."
+        val url = r.optString("url")
+        if (!isSecureWebLink(url)) error = "Ungültige Adresse von eBay."
+        else if (!openWebLink(ctx, url)) error = "Browser konnte nicht geöffnet werden."
         else notice = "Browser geöffnet – nach dem Bestätigen hier „Prüfen“ tippen."
     })
     fun disconnect() = auth("disconnect", after = { check = null })
@@ -159,7 +175,9 @@ fun EbaySettings() {
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
-                        TextButton(onClick = { auth("check") }, enabled = !busy && status.connected, contentPadding = PaddingValues(0.dp)) {
+                        // Abschluss-Fix C1: nicht an status.connected koppeln (Stand kann noch alt sein; der Server meldet
+                        // selbst „Nicht mit eBay verbunden.“).
+                        TextButton(onClick = { auth("check") }, enabled = !busy, contentPadding = PaddingValues(0.dp)) {
                             Text("Prüfen")
                         }
 
@@ -255,7 +273,12 @@ fun EbaySettings() {
         AlertDialog(
             onDismissRequest = { confirmDisconnect = false },
             title = { Text("eBay trennen?") },
-            text = { Text("Neue eBay-Angebote warten dann.") },
+            text = {
+                Text(
+                    "Laufende eBay-Anzeigen bleiben online und werden nicht mehr angepasst – beende sie vorher, wenn möglich. " +
+                        "Neue eBay-Angebote warten dann.",
+                )
+            },
             confirmButton = { TextButton(onClick = { confirmDisconnect = false; disconnect() }) { Text("Trennen") } },
             dismissButton = { TextButton(onClick = { confirmDisconnect = false }) { Text("Abbrechen") } },
         )

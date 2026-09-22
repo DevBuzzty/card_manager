@@ -8,6 +8,10 @@ import android.net.Uri
 private val WEB = Regex("^https?://\\S",RegexOption.IGNORE_CASE)
 fun isWebLink(url: String?): Boolean = url != null && WEB.containsMatchIn(url.trim())
 
+/** Abschluss-Fix C5: nur https (Groß/Klein egal, getrimmt) -- für die eBay-Zustimmungs-URL. */
+private val SECURE_WEB = Regex("^https://\\S",RegexOption.IGNORE_CASE)
+fun isSecureWebLink(url: String?): Boolean = url != null && SECURE_WEB.containsMatchIn(url.trim())
+
 /** Öffnet [url] per ACTION_VIEW, aber nur, wenn [isWebLink]; sonst oder bei Fehlschlag false. */
 fun openWebLink(ctx: Context, url: String?): Boolean {
     if (!isWebLink(url)) return false

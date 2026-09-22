@@ -1,6 +1,7 @@
 package com.example.yugiohscanner.ui
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -27,7 +28,9 @@ import com.example.yugiohscanner.ml.PhotoScale
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Muted
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Spec H3b1 §6 -- eigene Fotos eines Angebots am Handy: Vorschau (LazyRow), verschieben (Nachbar tauschen), entfernen
@@ -36,11 +39,15 @@ import kotlinx.coroutines.launch
  * entscheidet. Die Aufnahme-Launcher stehen oben im Composable, nie in einem Zweig (Global Constraints §Sheets).
  */
 @Composable
-fun ListingPhotos(listingId: String, enabled: Boolean) {
+fun ListingPhotos(listingId: String, enabled: Boolean, onBusyChange: (Boolean) -> Unit = {}) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val inFlight = remember { InFlight() }
     var busy by remember { mutableStateOf(false) }
+    // Abschluss-Fix C2: busy nach oben melden (das Sheet sperrt dann das Schließen); beim Verlassen wieder frei.
+    val currentOnBusyChange by rememberUpdatedState(onBusyChange)
+    LaunchedEffect(busy) { currentOnBusyChange(busy) }
+    DisposableEffect(Unit) { onDispose { currentOnBusyChange(false) } }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<String?>(null) }
 
@@ -55,13 +62,18 @@ fun ListingPhotos(listingId: String, enabled: Boolean) {
         scope.launch {
             try {
                 val jpeg = PhotoImport.jpegFrom(ctx, uri)
-                SideStores.listingPhotos.refreshAndWait()
-                val fresh = SideStores.listingPhotos.state.value.value ?: throw IllegalStateException("Fotos nicht geladen.")
-                val mine = EbayRepository.photosOf(fresh, listingId)
-                if (mine.size >= PhotoScale.MAX_PHOTOS) throw IllegalStateException(PhotoScale.TOO_MANY)
-                EbayRepository.addPhoto(listingId, jpeg, (mine.maxOfOrNull { it.sort } ?: -1) + 1)
-                SideStores.listingPhotos.refreshAndWait()
-                EbayRepository.kick()
+                // Abschluss-Fix C2: frisch prüfen, hochladen, Zeile anlegen, neu laden und anstoßen als EIN nicht
+                // abbrechbarer Block -- ein Abbruch (Sheet/Bildschirm verlassen) hinterlässt keine halbe Arbeit
+                // (Datei ohne Zeile oder Zeile ohne Anstoß).
+                withContext(NonCancellable) {
+                    SideStores.listingPhotos.refreshAndWait()
+                    val fresh = SideStores.listingPhotos.state.value.value ?: throw IllegalStateException("Fotos nicht geladen.")
+                    val mine = EbayRepository.photosOf(fresh, listingId)
+                    if (mine.size >= PhotoScale.MAX_PHOTOS) throw IllegalStateException(PhotoScale.TOO_MANY)
+                    EbayRepository.addPhoto(listingId, jpeg, (mine.maxOfOrNull { it.sort } ?: -1) + 1)
+                    SideStores.listingPhotos.refreshAndWait()
+                    EbayRepository.kick()
+                }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) { error = e.message ?: "Foto konnte nicht hinzugefügt werden." }
             finally { inFlight.finish(); busy = false }
@@ -105,11 +117,16 @@ fun ListingPhotos(listingId: String, enabled: Boolean) {
     }
 
     // Oben im Composable, nie in einem Zweig.
-    var pendingCamera by remember { mutableStateOf<Uri?>(null) }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) pendingCamera?.let { add(it) } }
+    // Abschluss-Fix C3: die Ziel-Datei ist immer dieselbe (PhotoImport.cameraUri) -- im Rückruf neu berechnen statt
+    // aus einem remember-State, der einen Prozesstod während der Aufnahme nicht überlebt.
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok -> if (ok) add(PhotoImport.cameraUri(ctx)) }
     val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) add(uri) }
+    // Abschluss-Fix C4: ohne Kamera-App kein Absturz, sondern eine Meldung.
+    fun launchCamera() {
+        try { camera.launch(PhotoImport.cameraUri(ctx)) } catch (e: ActivityNotFoundException) { error = "Keine Kamera-App gefunden." }
+    }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) { val u = PhotoImport.cameraUri(ctx); pendingCamera = u; camera.launch(u) } else error = "Kamera nicht erlaubt."
+        if (granted) launchCamera() else error = "Kamera nicht erlaubt."
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -147,7 +164,7 @@ fun ListingPhotos(listingId: String, enabled: Boolean) {
             OutlinedButton(
                 onClick = {
                     if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                        val u = PhotoImport.cameraUri(ctx); pendingCamera = u; camera.launch(u)
+                        launchCamera()
                     } else cameraPermission.launch(Manifest.permission.CAMERA)
                 },
                 enabled = enabled && !busy && !limitReached,

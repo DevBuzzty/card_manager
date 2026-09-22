@@ -269,7 +269,9 @@ private fun ListingDetailSheet(
     val scope = rememberCoroutineScope()
     val inFlight = remember { InFlight() }
     var busy by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !busy })
+    // Abschluss-Fix C2: auch während eines Foto-Uploads/-Umsortierens (ListingPhotos) nicht schließen.
+    var photosBusy by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || (!busy && !photosBusy) })
 
     val state by SideStores.listings.state.collectAsState()
     LaunchedEffect(listingId) { SideStores.listings.refresh() }
@@ -355,7 +357,7 @@ private fun ListingDetailSheet(
         return ListingOverview.liveCopyIds(fresh.lineItems(), listingId) { it in live }
     }
 
-    ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = { if (!busy && !photosBusy) onDismiss() }, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -387,7 +389,8 @@ private fun ListingDetailSheet(
                 EbayMarkRow(ebayMark, onRetry = {
                     write(requireActive = true) { _, l ->
                         val r = EbayRepository.syncNow(l.listingId)
-                        if (!r.optBoolean("ok")) error = r.optString("error")
+                        // Abschluss-Fix C6: leere Fehlermeldung nie als leere Zeile zeigen.
+                        if (!r.optBoolean("ok")) error = r.optString("error").ifEmpty { "eBay-Abgleich fehlgeschlagen." }
                         else notice = if (r.optBoolean("busy")) "Abgleich läuft schon – gleich noch einmal versuchen." else "eBay-Abgleich angestoßen."
                     }
                 })
@@ -453,7 +456,7 @@ private fun ListingDetailSheet(
                 }
             }
 
-            ListingPhotos(listingId, enabled = active && !offline)
+            ListingPhotos(listingId, enabled = active && !offline, onBusyChange = { photosBusy = it })
 
             if (!editing) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
