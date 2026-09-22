@@ -105,6 +105,37 @@ Deno.test("auf eBay verkauft (soldQuantity) -> fehler vor dem Ändern; Erneut ve
   assertEquals([w.state.rows.get("l1")!.state, w.state.rows.get("l1")!.sold_seen], ["online", 1]);
 });
 
+// -- Abschluss-Fix A1: verkauft UND beendet -> SOLD_ON_EBAY, nie "erneut einstellen" (Doppelverkauf) -----------
+
+Deno.test("verkauft und beendet (Änderung) -> SOLD_ON_EBAY statt ENDED_ON_EBAY; Erneut versuchen stellt nicht mit alter Menge neu ein", async () => {
+  const w = world();
+  await w.run();
+  const o = w.eb.offers.get("O1")!;
+  o.listing!.soldQuantity = 2;
+  o.listing!.listingStatus = "ENDED";
+  w.state.listings[0] = L("l1", { price: "11.00" });
+  await w.run();
+  assertEquals([w.state.rows.get("l1")!.state, w.state.rows.get("l1")!.error], ["fehler", SOLD_ON_EBAY]);
+  assertEquals(o.body.pricingSummary.price.value, "5.00", "nichts überschrieben");
+  assertEquals(o.listing!.listingStatus, "ENDED", "nicht neu eingestellt");
+});
+
+Deno.test("verkauft und beendet (Prüfung ohne Änderung) -> SOLD_ON_EBAY statt ENDED_ON_EBAY", async () => {
+  const w = world();
+  await w.run();
+  const o = w.eb.offers.get("O1")!;
+  o.listing!.soldQuantity = 2;
+  o.listing!.listingStatus = "ENDED";
+  w.later(60 * 60 * 1000);
+  await w.run();
+  assertEquals([w.state.rows.get("l1")!.state, w.state.rows.get("l1")!.error], ["fehler", SOLD_ON_EBAY]);
+  assertEquals(o.listing!.listingStatus, "ENDED");
+});
+
+Deno.test("Abschluss-Fix A3: Laufbudget 60 s", () => {
+  assertEquals(RUN_BUDGET_MS, 60_000);
+});
+
 Deno.test("Token abgelaufen/widerrufen -> getrennt, Hinweis, neue Angebote warten, keine Inventar-Aufrufe", async () => {
   const w = world({ account: account({ access_expires_at: "2026-09-22T11:00:00Z" }) }, { refreshInvalid: true });
   const r = await w.run();

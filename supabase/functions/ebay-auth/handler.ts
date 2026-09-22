@@ -82,20 +82,40 @@ async function runCheck(d: AuthDeps, chosen: Chosen = {}) {
   return out;
 }
 
-async function callback(url: URL, d: AuthDeps): Promise<Response> {
-  if (url.searchParams.get("action") === "declined") {
+// Abschluss-Fix A2: eBay hängt an eine RuName-Adresse, die schon "?" enthält, eventuell nochmals "?" statt "&" an
+// (".../ebay-auth?action=callback?state=...&code=..."). Dann steckt der erste eigene Parameter im action-Wert --
+// hier herauslösen, damit state/code/error gefunden werden. Liefert die bereinigten Parameter.
+export function callbackParams(url: URL): URLSearchParams {
+  const p = new URLSearchParams(url.searchParams);
+  const a = p.get("action");
+  const q = a == null ? -1 : a.indexOf("?");
+  if (a != null && q >= 0) {
+    p.set("action", a.slice(0, q));
+    for (const [k, v] of new URLSearchParams(a.slice(q + 1))) if (!p.has(k)) p.set(k, v);
+  }
+  return p;
+}
+
+// Ein GET ist ein Rücksprung, sobald er code, state oder error trägt -- unabhängig vom action-Wert.
+function isCallback(p: URLSearchParams): boolean {
+  const a = p.get("action");
+  return a === "callback" || a === "declined" || p.has("code") || p.has("state") || p.has("error");
+}
+
+async function callback(p: URLSearchParams, d: AuthDeps): Promise<Response> {
+  if (p.get("action") === "declined" || (p.has("error") && !p.has("code"))) {
     // Info: offenen state gleich leeren, statt ihn ungenutzt auslaufen zu lassen.
     await d.store.saveAccount({ oauth_state: null, oauth_state_expires_at: null });
     return text(failPage("bei eBay abgelehnt."));
   }
-  const state = url.searchParams.get("state");
+  const state = p.get("state");
   // Fixrunde 1 Befund 2: state atomar verbrauchen (bedingtes Update in der Datenbank) statt lesen-dann-schreiben --
   // sonst könnten zwei gleichzeitige Rücksprünge mit demselben state beide durchkommen.
   if (!state || !(await d.store.consumeState(state))) {
     return text(failPage("Anmeldelink abgelaufen oder ungültig – bitte in der App neu verbinden."), 400);
   }
   const acc = await d.store.account();
-  const code = url.searchParams.get("code");
+  const code = p.get("code");
   if (!code) return text(failPage("eBay hat keinen Code geliefert."), 400);
   try {
     const env = acc.environment as Env;
@@ -112,8 +132,9 @@ async function callback(url: URL, d: AuthDeps): Promise<Response> {
 export async function handleAuth(req: Request, d: AuthDeps): Promise<Response> {
   const url = new URL(req.url);
   const qa = url.searchParams.get("action");
-  if (req.method === "GET" && (qa === "callback" || qa === "declined" || (qa == null && url.searchParams.has("code")))) {
-    return await callback(url, d);
+  if (req.method === "GET") {
+    const p = callbackParams(url);
+    if (isCallback(p)) return await callback(p, d);
   }
   if (req.method !== "POST") return json({ ok: false, error: "Nur POST." }, 405);
   if (!(await d.verifyUser(req.headers.get("authorization")))) return json({ ok: false, error: "Nicht angemeldet." }, 401);

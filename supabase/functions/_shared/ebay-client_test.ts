@@ -1,7 +1,7 @@
 // Spec H3b §4.3/§9 -- eBay-Client gegen nachgebaute Antworten (kein Netz).
 import { assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
-  APP_SCOPE, appToken, categoryAspects, consentUrl, credsFor, EbayError, ebayApi, ensureAccess, exchangeCode,
+  APP_SCOPE, appToken, CALL_TIMEOUT_MS, categoryAspects, consentUrl, credsFor, EbayError, ebayApi, ensureAccess, exchangeCode,
   type Fetch, refreshAccess,
 } from "./ebay-client.ts";
 import { fakeFetch } from "./fake-fetch.ts";
@@ -130,6 +130,18 @@ Deno.test("Jeder Aufruf trägt ein Zeitlimit (AbortSignal) mit, sofern keines ü
   };
   await appToken(fetchFn, "sandbox", C);
   assertEquals(seenSignal instanceof AbortSignal, true);
+});
+
+Deno.test("Abschluss-Fix A3: Zeitlimit je eBay-Aufruf 20 s", async () => {
+  assertEquals(CALL_TIMEOUT_MS, 20_000);
+  const orig = AbortSignal.timeout;
+  let ms: number | undefined;
+  AbortSignal.timeout = (t: number) => { ms = t; return orig.call(AbortSignal, t); };
+  try {
+    const fetchFn: Fetch = () => Promise.resolve(new Response(JSON.stringify({ access_token: "APP1", expires_in: 7200 }), { status: 200 }));
+    await appToken(fetchFn, "sandbox", C);
+  } finally { AbortSignal.timeout = orig; }
+  assertEquals(ms, 20_000);
 });
 
 Deno.test("API-Aufrufe: Pfade, Kopfzeilen, 404 bei getOffers/getOffer", async () => {

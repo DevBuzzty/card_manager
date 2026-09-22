@@ -71,11 +71,13 @@ function toError(body: any, status: number, oauth: boolean): EbayError {
   const auth = oauth ? (status === 400 || status === 401) && code === "invalid_grant" : status === 401;
   return new EbayError(errorText(body, status), status, transient, auth);
 }
+// Abschluss-Fix A3: 20 s je eBay-Aufruf (vorher 30 s), passend zum Laufbudget von 60 s.
+export const CALL_TIMEOUT_MS = 20_000;
 // Fixrunde 1 Befund 5: Zeitlimit für jeden Aufruf, damit ein hängender eBay-Aufruf den Abgleich nicht blockiert.
 // Ein Abbruch/Netzwerkfehler ist kein eBay-Fehler mit Status, sondern vorübergehend (Durchgang abbrechen, später erneut).
 async function send(fetchFn: Fetch, url: string, init: RequestInit, oauth = false): Promise<any> {
   let r: Response;
-  try { r = await fetchFn(url, { ...init, signal: init.signal ?? AbortSignal.timeout(30_000) }); }
+  try { r = await fetchFn(url, { ...init, signal: init.signal ?? AbortSignal.timeout(CALL_TIMEOUT_MS) }); }
   catch (e) { throw new EbayError(`eBay nicht erreichbar: ${(e as Error).message}`, 0, true, false); }
   const body = await readJson(r);
   if (!r.ok) throw toError(body, r.status, oauth);

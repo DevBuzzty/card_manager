@@ -86,6 +86,25 @@ Deno.test("Rücksprung: falscher/abgelaufener state -> kein Tausch; abgelehnt ->
   assertEquals(once.eb.calls.length, 1);
 });
 
+Deno.test("Abschluss-Fix A2: Rücksprung mit „?“ statt „&“ angehängt -> trotzdem erkannt und Tokens gespeichert", async () => {
+  const w = setup({ refresh_token: null, access_token: null, oauth_state: "state-123", oauth_state_expires_at: "2026-09-22T12:05:00Z" });
+  const r = await w.get("action=callback?state=state-123&code=abc&expires_in=299");
+  assertEquals([r.status, await r.text()], [200, OK_PAGE]);
+  assertEquals([w.st.account.refresh_token, w.st.account.oauth_state], ["RT", null]);
+  // Unbekannter action-Wert, aber state+code -> Rücksprung (nicht "Nur POST.").
+  const w2 = setup({ refresh_token: null, oauth_state: "state-123", oauth_state_expires_at: "2026-09-22T12:05:00Z" });
+  assertEquals((await w2.get("action=irgendwas&state=state-123&code=abc")).status, 200);
+  // Abgelehnt, von eBay mit "?" angehängt -> weiterhin der declined-Pfad, state geleert.
+  const dec = setup({ oauth_state: "state-123", oauth_state_expires_at: "2026-09-22T12:05:00Z" });
+  assertEquals(await (await dec.get("action=declined?error=access_denied&state=state-123")).text(), failPage("bei eBay abgelehnt."));
+  assertEquals([dec.st.account.oauth_state, dec.eb.calls.length], [null, 0]);
+  // Nur error ohne code -> ebenfalls abgelehnt.
+  const err = setup({ oauth_state: "state-123", oauth_state_expires_at: "2026-09-22T12:05:00Z" });
+  assertEquals(await (await err.get("error=access_denied")).text(), failPage("bei eBay abgelehnt."));
+  // GET ohne Rücksprung-Parameter bleibt abgewiesen.
+  assertEquals((await w.get("action=start")).status, 405);
+});
+
 Deno.test("check: mehrere Zahlungsrichtlinien -> keine Auswahl; select speichert ID und Namen; unbekannt -> Fehler", async () => {
   const w = setup({ payment_policy_id: null, location_key: null },
     { payment: [{ id: "P1", name: "PayPal" }, { id: "P2", name: "Überweisung" }], programs: [] });

@@ -18,7 +18,8 @@ export const LOCK_SECONDS = 300;
 export const MAX_PER_RUN = 50;
 // Fixrunde 1 (Task 5) Important 1: Frist ab Laufstart -- danach werden verbleibende Angebote nicht mehr
 // bearbeitet, sondern als "deferred" gezählt (nächster Lauf holt sie nach). Uhr kommt von d.now(), testbar.
-export const RUN_BUDGET_MS = 100_000;
+// Abschluss-Fix A3: 60 s (vorher 100 s), damit der Lauf sicher unter dem Funktions-Zeitlimit bleibt.
+export const RUN_BUDGET_MS = 60_000;
 
 export type SyncDeps = { store: Store; fetch: Fetch; env: (k: string) => string | undefined; now: () => Date; holder: string };
 export type SyncResult =
@@ -56,8 +57,10 @@ async function revise(api: EbayApi, b: Built, p: Policies, row: EbayRow, ack: bo
   if (!offer) return await publish(api, b, p);
   const ended = offerEnded(offer);
   const sold = offer.listing?.soldQuantity ?? 0;
+  // Abschluss-Fix A1: Verkauf vor "beendet" prüfen -- eine verkaufte und danach beendete Anzeige darf nicht als
+  // "erneut einstellen" erscheinen (ack würde sie mit alter Menge neu einstellen -> Doppelverkauf).
+  if (sold > (row.sold_seen ?? 0) && !ack) throw new ListingProblem(SOLD_ON_EBAY);
   if (ended && !ack) throw new ListingProblem(ENDED_ON_EBAY);
-  if (!ended && sold > (row.sold_seen ?? 0) && !ack) throw new ListingProblem(SOLD_ON_EBAY);
   await api.putInventoryItem(b.sku, inventoryItemBody(b));
   await api.updateOffer(offer.offerId, offerBody(b, p));
   if (ended) return { offerId: offer.offerId, listingId: await api.publishOffer(offer.offerId), sold: 0 };
@@ -196,8 +199,9 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
           s.withdrawn++;
         } else if (action === "check") {
           const offer = await api!.getOffer(base.offer_id!);
+          // Abschluss-Fix A1: Verkauf zuerst, auch wenn die Anzeige inzwischen beendet ist.
+          if ((offer?.listing?.soldQuantity ?? 0) > (base.sold_seen ?? 0)) throw new ListingProblem(SOLD_ON_EBAY);
           if (offerEnded(offer)) throw new ListingProblem(ENDED_ON_EBAY);
-          if ((offer!.listing?.soldQuantity ?? 0) > (base.sold_seen ?? 0)) throw new ListingProblem(SOLD_ON_EBAY);
           await d.store.saveRow({ ...base, synced_at: nowIso });
           s.checked++;
         } else {

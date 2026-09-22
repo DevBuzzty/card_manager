@@ -48,8 +48,16 @@ developer.ebay.com, je Umgebung: Keyset (App ID = Client ID, Cert ID = Client Se
 - *Your auth declined URL*: `https://uirfqwklvavgjklgqpnn.supabase.co/functions/v1/ebay-auth?action=declined`
 - *Privacy Policy URL*: beliebige eigene Seite (Pflichtfeld bei eBay).
 
-Die Funktion erkennt den Rücksprung auch ohne `action`, sobald `code` in der Adresse steht (falls
-eBay die Abfrage anders anhängt).
+Die Adresse `…/ebay-auth?action=callback` (bzw. `?action=declined`) kann so bleiben, obwohl sie schon
+ein `?` enthält: hängt eBay seine Parameter mit einem zweiten `?` statt mit `&` an
+(`…?action=callback?state=…&code=…`), löst die Funktion sie trotzdem richtig heraus. Jeder Aufruf
+mit `code`, `state` oder `error` in der Adresse gilt als Rücksprung, egal was in `action` steht.
+
+**Geschäftsrichtlinien im Sandbox-Verkäuferkonto:** Im eBay-Sandbox-Verkäuferkonto (bzw. später im
+echten Konto) müssen die Geschäftsrichtlinien (*Business Policies*, Programm
+`SELLING_POLICY_MANAGEMENT`) aktiviert sein, und es muss je eine **Zahlungs-, Versand- und
+Rücknahme-Richtlinie** angelegt sein — sonst bleibt der Check in der App rot und keine Anzeige wird
+eingestellt. Bei der Abnahme außerdem die Adresse (Artikelstandort mit PLZ und Ort) prüfen.
 
 ## 3. Secrets setzen
 
@@ -94,8 +102,8 @@ Prüfen: `select * from cron.job_run_details where jobid = (select jobid from cr
 und `select last_run_at, last_run_summary, last_error from public.ebay_status;`.
 Abschalten: `select cron.unschedule('ebay-sync');`.
 
-Jeder Lauf hat ein Zeitbudget von rund 100 Sekunden; was in dieser Zeit nicht fertig wird, holt der
-nächste 5-Minuten-Lauf nach. Eine Abgleich-Sperre (`ebay_try_lock`) verhindert für 300 Sekunden
+Jeder Lauf hat ein Zeitbudget von rund 60 Sekunden, jeder einzelne eBay-Aufruf ein Zeitlimit von
+20 Sekunden; was in dieser Zeit nicht fertig wird, holt der nächste 5-Minuten-Lauf nach. Eine Abgleich-Sperre (`ebay_try_lock`) verhindert für 300 Sekunden
 einen zweiten gleichzeitigen Lauf; endet ein Lauf, ohne sie freizugeben, läuft die Sperre nach 300
 Sekunden von selbst ab.
 
