@@ -16,6 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ListingsRepositoryTest {
+    private val ALL = setOf("c1", "c2", "c3")
     private fun row(id: String, channel: String, price: Double, status: String = "aktiv") =
         ListingRow(id, channel, if (channel == "cardmarket") "Cardmarket" else "eBay", "T", null, price, status, "2026-09-21", null, null, null, null, false)
     private fun item(listing: String, copy: String) =
@@ -105,7 +106,7 @@ class ListingsRepositoryTest {
     @Test fun `Nach book_sale -- Teilverkauf Cardmarket und Aufraeumen der anderen Angebote`() {
         val data = ListingsData(listOf(row("l1", "cardmarket", 10.0), row("l2", "ebay", 12.0)),
             listOf(item("l1", "c1"), item("l1", "c2"), item("l2", "c1"), item("l2", "c3")))
-        val (ops, r) = ListingsRepository.afterBookingOps(data, "s1", listOf("c1"), "l1")
+        val (ops, r) = ListingsRepository.afterBookingOps(data, "s1", listOf("c1"), "l1", ALL)
         assertEquals(listOf(
             Triple("listing_items", "in.(\"c1\")", """{"deleted":true}"""),
             Triple("listings", null, JSONObject().put("price", 5.0).toString()),
@@ -118,16 +119,23 @@ class ListingsRepositoryTest {
     @Test fun `Nach book_sale -- ganz verkauft, ohne Angebot nur Aufraeumen, beendetes Angebot wird uebersprungen`() {
         val data = ListingsData(listOf(row("l1", "ebay", 12.0), row("l2", "ebay", 5.0), row("l3", "ebay", 3.0, "beendet")),
             listOf(item("l1", "c1"), item("l2", "c1"), item("l3", "c1")))
-        val (whole, r1) = ListingsRepository.afterBookingOps(data, "s1", listOf("c1"), "l1")
+        val (whole, r1) = ListingsRepository.afterBookingOps(data, "s1", listOf("c1"), "l1", ALL)
         assertEquals(JSONObject().put("status", "verkauft").put("sale_id", "s1").toString(), whole[0].body)
         assertEquals(listOf("listings", "listing_items", "listings"), whole.map { it.table })
         assertEquals("""{"status":"beendet"}""", whole[2].body)
         assertEquals(listOf("l2"), r1.reminders.map { it.listingId })
-        val (plain, r2) = ListingsRepository.afterBookingOps(data, "s2", listOf("c1"), null)
+        val (plain, r2) = ListingsRepository.afterBookingOps(data, "s2", listOf("c1"), null, ALL)
         assertEquals(4, plain.size) // l1 und l2: je Position herausnehmen + beenden
         assertEquals(listOf("l1", "l2"), r2.reminders.map { it.listingId })
-        val (_, r3) = ListingsRepository.afterBookingOps(data, "s3", listOf("c1"), "l3")
+        val (_, r3) = ListingsRepository.afterBookingOps(data, "s3", listOf("c1"), "l3", ALL)
         assertTrue(r3.listingSkipped)
+    }
+    @Test fun `I2 -- Teilverkauf zaehlt tote Positionen nicht als Rest -- Angebot a tot, b verkauft ergibt verkauft`() {
+        val data = ListingsData(listOf(row("l1", "cardmarket", 10.0)), listOf(item("l1", "a"), item("l1", "b")))
+        // Nach awaitSync lebt weder a (gelöscht) noch b (verkauft) im CollectionStore; b kommt über bookedIds dazu.
+        val (ops, r) = ListingsRepository.afterBookingOps(data, "s1", listOf("b"), "l1", emptySet())
+        assertEquals(listOf(JSONObject().put("status", "verkauft").put("sale_id", "s1").toString()), ops.map { it.body })
+        assertEquals(false, r.askAdjust)
     }
     @Test fun `in-Liste maskiert Anfuehrungszeichen`() {
         assertEquals("in.(\"a\",\"b\\\"c\")", ListingsRepository.inList(listOf("a", "b\"c")))

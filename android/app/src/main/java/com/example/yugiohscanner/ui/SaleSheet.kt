@@ -220,7 +220,9 @@ fun SaleSheet(
                     val ls = SideStores.listings.state.value
                     val data = ls.value
                     if (data == null || ls.error != null) throw IllegalStateException("Angebote nicht geladen.")
-                    after = ListingsRepository.afterBooking(data, saleId, bookedIds, listing?.listingId)
+                    val coll = CollectionStore.state.value as? StoreState.Ready ?: throw IllegalStateException("Sammlung ist nicht geladen.")
+                    val liveIds = coll.copies.filter { !it.deleted }.map { it.copyId }.toSet()
+                    after = ListingsRepository.afterBooking(data, saleId, bookedIds, listing?.listingId, liveIds)
                     SideStores.listings.refreshAndWait()
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) { cleanupError = e.message ?: "Unbekannter Fehler" }

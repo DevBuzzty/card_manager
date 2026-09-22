@@ -190,8 +190,11 @@ function applySaleToListings(db, saleId, soldCopyIds, listingId = null) {
     if (!l || l.status !== 'aktiv') {
       out.listingSkipped = true;
     } else {
-      const live = db.prepare('SELECT copy_id FROM listing_items WHERE listing_id = ? AND deleted = 0 ORDER BY copy_id')
-        .all(listingId).map((r) => r.copy_id);
+      // Abschluss-Fix I2: nur Positionen, deren Exemplar vor diesem Verkauf lebte -- tote Positionen sind kein Rest.
+      const live = db.prepare(`SELECT li.copy_id FROM listing_items li JOIN card_copies cp ON cp.copy_id = li.copy_id
+         WHERE li.listing_id = ? AND li.deleted = 0
+           AND ((cp.deleted = 0 AND cp.sold_in IS NULL) OR li.copy_id IN (SELECT value FROM json_each(?)))
+         ORDER BY li.copy_id`).all(listingId, JSON.stringify(soldCopyIds)).map((r) => r.copy_id);
       const r = T.afterListingSale(l, live, soldCopyIds);
       if (r.status === 'verkauft') {
         db.prepare("UPDATE listings SET status = 'verkauft', sale_id = ? WHERE listing_id = ?").run(saleId, listingId);

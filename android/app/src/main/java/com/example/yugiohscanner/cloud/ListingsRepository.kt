@@ -199,9 +199,10 @@ object ListingsRepository {
     /**
      * Spec §7.1/§7.2 -- nach erfolgreichem book_sale: das Angebot, aus dem verkauft wurde, verkauft/teilweise verkauft,
      * danach die verkauften Exemplare aus allen ANDEREN aktiven Angeboten nehmen. [data] frisch geladen.
-     * Gegenstück: listings.cjs#applySaleToListings (dort in der bookSale-Transaktion).
+     * Gegenstück: listings.cjs#applySaleToListings (dort in der bookSale-Transaktion). [liveCopyIds]: Exemplare, die im
+     * frisch geladenen CollectionStore leben (Abschluss-Fix I2: tote Positionen zählen nicht als Rest).
      */
-    internal fun afterBookingOps(data: ListingsData, saleId: String, soldCopyIds: List<String>, fromListingId: String?): Pair<List<Op>, AfterBooking> {
+    internal fun afterBookingOps(data: ListingsData, saleId: String, soldCopyIds: List<String>, fromListingId: String?, liveCopyIds: Set<String>): Pair<List<Op>, AfterBooking> {
         val ops = ArrayList<Op>()
         var askAdjust = false
         var skipped = false
@@ -210,7 +211,7 @@ object ListingsRepository {
             if (l == null || l.status != "aktiv" || l.deleted) {
                 skipped = true
             } else {
-                val live = data.liveItemsOf(l.listingId).map { it.copyId }
+                val live = data.liveItemsOf(l.listingId).map { it.copyId }.filter { it in liveCopyIds || it in soldCopyIds }
                 val r = ListingText.afterListingSale(l.channelId, l.status, l.priceCents, live, soldCopyIds)
                 if (r.status == "verkauft") {
                     ops += Op("PATCH", "listings", activeFilter(l.listingId), JSONObject().put("status", "verkauft").put("sale_id", saleId).toString())
@@ -227,8 +228,8 @@ object ListingsRepository {
         return ops to AfterBooking(c.remind, askAdjust, skipped)
     }
 
-    suspend fun afterBooking(data: ListingsData, saleId: String, soldCopyIds: List<String>, fromListingId: String?): AfterBooking {
-        val (ops, r) = afterBookingOps(data, saleId, soldCopyIds, fromListingId)
+    suspend fun afterBooking(data: ListingsData, saleId: String, soldCopyIds: List<String>, fromListingId: String?, liveCopyIds: Set<String>): AfterBooking {
+        val (ops, r) = afterBookingOps(data, saleId, soldCopyIds, fromListingId, liveCopyIds)
         run(ops)
         return r
     }

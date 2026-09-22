@@ -118,6 +118,16 @@ test('Teilverkauf Cardmarket: Stückpreis x Rest; anderer Kanal: Preis bleibt, H
   assert.deepEqual(liveItems(db, e), [eb[0]]);
 });
 
+test('I2: Teilverkauf zählt tote Positionen nicht als Rest -- Angebot [a tot, b], b verkauft -> verkauft', () => {
+  const db = freshDb();
+  const [a, b] = addCard(db, '1', 3, 2);
+  const [id] = L.createListings(db, { listings: [base({ channel_id: 'cardmarket', copyIds: [a, b], price: 10 })] });
+  copies.deleteCopy(db, { copy_id: a });
+  const r = S.bookSaleDetailed(db, { ...sale, copyIds: [b], listing_id: id });
+  assert.deepEqual([listing(db, id).status, listing(db, id).sale_id, listing(db, id).price, r.askAdjust], ['verkauft', r.saleId, 10, false]);
+  assert.deepEqual(liveItems(db, id), [a, b]);
+});
+
 test('Aufräumen in derselben Transaktion -- auch bei Buchung ohne Angebot', () => {
   const db = freshDb();
   const [a, b] = addCard(db, '1', 3, 2);
