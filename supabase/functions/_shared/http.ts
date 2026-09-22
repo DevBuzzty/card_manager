@@ -17,3 +17,9 @@ export function bearer(header: string | null): string | null {
   const m = /^Bearer\s+(.+)$/i.exec(header ?? "");
   return m ? m[1].trim() : null;
 }
+// Fixrunde 1 (Task 5) Minor 6: kaputtes JSON, `null`, ein Array oder ein Primitiv als Body zählen wie ein leeres
+// Objekt -- sonst wirft z.B. `body.retry` auf `null` eine rohe TypeError statt einer sauberen Antwort.
+export async function jsonBody(req: Request): Promise<Record<string, unknown>> {
+  const v = await req.json().catch(() => null);
+  return v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
+}

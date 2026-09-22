@@ -22,6 +22,10 @@ export interface Store {
   photoBase: string;
   account(): Promise<Account>;
   saveAccount(patch: Partial<Account>): Promise<void>;
+  // Fixrunde 1 (Task 5) Minor 5: Token-Patch/-Löschung nur schreiben, wenn die Zeile seit dem Lesen nicht durch
+  // set_environment/disconnect (ebay-auth) oder einen anderen Lauf verändert wurde -- sonst Wettlauf um Zeile 1.
+  // -> true, wenn geschrieben wurde; false, wenn refresh_token/environment nicht mehr passten (dann nichts geändert).
+  saveAccountIf(expect: { refresh_token: string | null; environment: string }, patch: Partial<Account>): Promise<boolean>;
   tryLock(holder: string, seconds: number): Promise<boolean>;
   unlock(holder: string): Promise<void>;
   // Fixrunde 1 Befund 2 (Task 4): Rücksprung-state atomar verbrauchen -- löscht ihn nur, wenn er noch zum
@@ -71,6 +75,13 @@ export function supabaseStore(sb: SupabaseClient, supabaseUrl: string): Store {
     async saveAccount(patch) {
       const { error } = await sb.from("ebay_account").update(patch).eq("id", 1);
       if (error) fail("ebay_account speichern", error);
+    },
+    async saveAccountIf(expect, patch) {
+      let q = sb.from("ebay_account").update(patch).eq("id", 1).eq("environment", expect.environment);
+      q = expect.refresh_token === null ? q.is("refresh_token", null) : q.eq("refresh_token", expect.refresh_token);
+      const { data, error } = await q.select("id");
+      if (error) fail("ebay_account bedingt speichern", error);
+      return (data?.length ?? 0) > 0;
     },
     async tryLock(holder, seconds) {
       const { data, error } = await sb.rpc("ebay_try_lock", { p_holder: holder, p_seconds: seconds });

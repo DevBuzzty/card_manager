@@ -1,10 +1,11 @@
 // Spec H3b §8/§9/§10 -- Abgleicher mit nachgebautem eBay und Speicher-Store (kein Netz, keine Datenbank).
 import { assertEquals } from "jsr:@std/assert@1";
-import { runSync } from "./sync.ts";
+import { RUN_BUDGET_MS, runSync } from "./sync.ts";
 import { fakeEbay, type FakeEbayOpts } from "../_shared/fake-ebay.ts";
 import { account, fakeStore } from "../_shared/fake-store.ts";
 import type { AspectDef, SollItem, SollListing } from "../_shared/ebay-map.ts";
 import { ENDED_ON_EBAY, EXPIRED, SOLD_ON_EBAY } from "../_shared/ebay-plan.ts";
+import type { Store } from "../_shared/ebay-store.ts";
 
 const NOW = new Date("2026-09-22T12:00:00Z");
 const ENV: Record<string, string> = { EBAY_SANDBOX_CLIENT_ID: "id", EBAY_SANDBOX_CLIENT_SECRET: "sec", EBAY_SANDBOX_RUNAME: "ru" };
@@ -169,4 +170,100 @@ Deno.test("Zeile aus der Produktion wird nicht angefasst; in der Sandbox neu ein
   await w.run();
   assertEquals(w.eb.calls.some((c) => c.url.startsWith("https://api.ebay.com")), false);
   assertEquals([w.state.rows.get("l1")!.environment, w.state.rows.get("l1")!.offer_id], ["sandbox", "O1"]);
+});
+
+// -- Fixrunde 1 (Task 5) --------------------------------------------------------------------------------------
+
+Deno.test("Zeitbudget überschritten -> Rest als deferred, nicht bearbeitet", async () => {
+  const st = fakeStore({ listings: [L("l1"), L("l2")], items: [I("l1", "c1"), I("l2", "c3")], live: ["c1", "c3"] });
+  const eb = fakeEbay({ aspects: ASPECTS });
+  let calls = 0;
+  // Erster Aufruf = Laufstart, zweiter = Fristprüfung für l1 (noch innerhalb der Frist), dritter = Fristprüfung
+  // für l2 (Frist überschritten) -- eine Uhr, die mit jedem Aufruf "vergeht", statt eines festen Werts.
+  const now = () => { calls++; return calls <= 2 ? NOW : new Date(NOW.getTime() + RUN_BUDGET_MS + 1); };
+  const r = await runSync({ store: st.store, fetch: eb.fetchFn, env: (k) => ENV[k], now, holder: "t" });
+  assertEquals(r.ok && !r.busy && [r.summary.published, r.summary.deferred], [1, 1]);
+  assertEquals(st.state.rows.get("l1")!.state, "online");
+  assertEquals(st.state.rows.has("l2"), false);
+});
+
+Deno.test("EXPIRED bleibt stehen, solange nicht neu verbunden statt am Laufende auf null überschrieben", async () => {
+  const w = world({ account: account({ access_expires_at: "2026-09-22T11:00:00Z" }) }, { refreshInvalid: true });
+  await w.run();
+  assertEquals(w.state.account.last_error, EXPIRED);
+  await w.run();
+  assertEquals(w.state.account.last_error, EXPIRED, "zweiter Lauf ohne neue Verbindung löscht den Hinweis nicht");
+});
+
+Deno.test("dauerhafter Merkmale-Fehler betrifft nur seine Kategorie; andere Aktionen laufen weiter", async () => {
+  const prodRow = { listing_id: "l3", environment: "sandbox", state: "online" as const, sku: "L-l3", offer_id: "O9", item_id: "I9",
+    item_url: "https://sandbox.ebay.de/itm/I9", published_qty: 1, synced_hash: "h", failed_hash: null, sold_seen: 0, error: null, synced_at: null };
+  const w = world(
+    { listings: [L("l1"), L("l2", { price: "20.00" })], items: [I("l1", "c1"), I("l2", "c3")], live: ["c1", "c3"], rows: [prodRow] },
+    { aspectsError: { status: 400, message: "Unbekannte Kategorie." } },
+  );
+  // l3 ist nicht mehr im Soll (kein Listing) -> soll zurückgezogen werden; das darf trotz kaputter Merkmale klappen.
+  w.eb.offers.set("O9", { offerId: "O9", sku: "L-l3", marketplaceId: "EBAY_DE", status: "PUBLISHED",
+    body: {}, listing: { listingId: "I9", listingStatus: "ACTIVE", soldQuantity: 0 } });
+  const r = await w.run();
+  assertEquals(r.ok && !r.busy && [r.summary.errors, r.summary.published, r.summary.withdrawn], [2, 0, 1]);
+  assertEquals(w.state.rows.get("l1")!.error, "eBay-Merkmale nicht lesbar: Unbekannte Kategorie.");
+  assertEquals(w.state.rows.get("l2")!.error, "eBay-Merkmale nicht lesbar: Unbekannte Kategorie.");
+  assertEquals(w.state.rows.get("l3")!.state, "beendet");
+});
+
+Deno.test("Zurückziehen scheitert dauerhaft (schon nicht mehr veröffentlicht) -> trotzdem beendet, kein Endlos-Versuch", async () => {
+  const w = world({}, { withdrawError: "Angebot ist nicht aktiv." });
+  await w.run();
+  w.state.listings[0] = L("l1", { status: "verkauft" });
+  const r = await w.run();
+  assertEquals(r.ok && !r.busy && r.summary.withdrawn, 1);
+  assertEquals(w.state.rows.get("l1")!.state, "beendet");
+  const before = w.eb.ebayCalls().length;
+  await w.run();
+  assertEquals(w.eb.ebayCalls().length, before, "beendet -> kein erneuter Zurückzieh-Versuch");
+});
+
+Deno.test("saveAccountIf: schreibt nur bei passendem Refresh-Token/Umgebung, sonst false ohne Änderung", async () => {
+  const st = fakeStore({});
+  const ok1 = await st.store.saveAccountIf({ refresh_token: "RT", environment: "sandbox" }, { access_token: "NEU" });
+  assertEquals([ok1, st.state.account.access_token], [true, "NEU"]);
+  const ok2 = await st.store.saveAccountIf({ refresh_token: "ALT", environment: "sandbox" }, { access_token: "SOLLTE-NICHT" });
+  assertEquals([ok2, st.state.account.access_token], [false, "NEU"]);
+  const ok3 = await st.store.saveAccountIf({ refresh_token: "RT", environment: "production" }, { access_token: "SOLLTE-NICHT" });
+  assertEquals([ok3, st.state.account.access_token], [false, "NEU"]);
+});
+
+Deno.test("Sperre nicht zu bekommen (Store-Fehler) -> {ok:false,error}, keine Tokens im Fehlertext, kein Absturz", async () => {
+  const boom = () => Promise.reject(new Error("sollte nicht aufgerufen werden"));
+  const store: Store = {
+    photoBase: "https://proj.supabase.co",
+    account: boom, saveAccount: boom, unlock: boom,
+    tryLock: () => Promise.reject(new Error("DB nicht erreichbar")),
+    consumeState: () => Promise.resolve(false),
+    openRows: () => Promise.resolve([]),
+    soll: () => Promise.resolve({ listings: [], items: [], liveCopyIds: new Set(), photos: [] }),
+    saveRow: () => Promise.resolve(),
+    liveOfferCount: () => Promise.resolve(0),
+    saveAccountIf: () => Promise.resolve(true),
+  };
+  const eb = fakeEbay();
+  const r = await runSync({ store, fetch: eb.fetchFn, env: (k) => ENV[k], now: () => NOW, holder: "t" });
+  assertEquals(r, { ok: false, error: "DB nicht erreichbar" });
+});
+
+Deno.test("Abbruch mitten im Einstellen -> Folgelauf verwendet die vorhandene Offer statt einer zweiten", async () => {
+  const st = fakeStore({ listings: [L("l1")], items: [I("l1", "c1"), I("l1", "c2")], live: ["c1", "c2"] });
+  const opts: FakeEbayOpts = { aspects: ASPECTS, publishDown: true };
+  const eb = fakeEbay(opts);
+  const deps = { store: st.store, fetch: eb.fetchFn, env: (k: string) => ENV[k], now: () => NOW, holder: "t" };
+  const r1 = await runSync(deps);
+  assertEquals(r1.ok, false);
+  assertEquals(eb.offers.size, 1);
+  assertEquals(st.state.rows.has("l1"), false);
+  opts.publishDown = false;
+  const r2 = await runSync(deps);
+  assertEquals(r2.ok && !r2.busy && r2.summary.published, 1);
+  assertEquals(eb.offers.size, 1, "keine zweite Offer angelegt");
+  assertEquals(st.state.rows.get("l1")!.state, "online");
 });

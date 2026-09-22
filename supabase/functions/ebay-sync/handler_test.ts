@@ -36,3 +36,15 @@ Deno.test("angemeldetes Gerät: Anstoß und Erneut versuchen", async () => {
   assertEquals(x.runs, [null, "l7"]);
   assertEquals((await handleSync(new Request(FN), x.d)).status, 405);
 });
+
+// Fixrunde 1 (Task 5) Minor 6: kaputtes JSON, `null`, ein Array oder ein Primitiv als Body zählen wie leer --
+// kein roher Absturz, `retry` bleibt einfach unbeachtet/null.
+Deno.test("kaputter oder kein Objekt als Body -> wie leer behandelt, kein Absturz", async () => {
+  const x = deps("s3cret");
+  const raw = (body: string) => new Request(FN, { method: "POST", headers: { "x-ebay-secret": "s3cret" }, body });
+  for (const body of ["null", "[1,2]", "\"text\"", "", "{kaputt"]) {
+    const r = await handleSync(raw(body), x.d);
+    assertEquals(r.status, 200);
+  }
+  assertEquals(x.runs, [null, null, null, null, null]);
+});

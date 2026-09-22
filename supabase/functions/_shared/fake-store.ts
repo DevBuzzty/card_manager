@@ -26,6 +26,12 @@ export function fakeStore(init: {
     photoBase: "https://proj.supabase.co",
     account: () => Promise.resolve({ ...state.account }),
     saveAccount: (p) => { state.account = { ...state.account, ...p }; return Promise.resolve(); },
+    saveAccountIf: (expect, p) => {
+      const a = state.account;
+      if (a.environment !== expect.environment || a.refresh_token !== expect.refresh_token) return Promise.resolve(false);
+      state.account = { ...a, ...p };
+      return Promise.resolve(true);
+    },
     tryLock: (h) => { if (state.lockHolder) return Promise.resolve(false); state.lockHolder = h; return Promise.resolve(true); },
     unlock: (h) => { if (state.lockHolder === h) state.lockHolder = null; state.unlocked++; return Promise.resolve(); },
     consumeState: (s) => {

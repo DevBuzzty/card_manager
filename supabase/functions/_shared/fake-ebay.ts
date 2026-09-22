@@ -8,6 +8,10 @@ type FakeOffer = {
 export type FakeEbayOpts = {
   aspects?: AspectDef[]; rejectPublish?: Record<string, string>; down?: boolean; publishDown?: boolean;
   refreshInvalid?: boolean; codeInvalid?: boolean;
+  // Fixrunde 1 (Task 5): dauerhafter (nicht-transienter) Fehler beim Lesen der Kategorie-Merkmale bzw. beim
+  // Zurückziehen -- beide sind änderbar (`let`), damit ein Test sie zwischen zwei Läufen umschalten kann.
+  aspectsError?: { status: number; message: string };
+  withdrawError?: string;
   programs?: string[]; payment?: { id: string; name: string }[]; fulfillment?: { id: string; name: string }[];
   returns?: { id: string; name: string }[]; locations?: { key: string; name: string }[];
 };
@@ -37,7 +41,10 @@ export function fakeEbay(opts: FakeEbayOpts = {}) {
       return reply(200, { access_token: "AT2", expires_in: 7200 });
     }
     if (p === "/commerce/taxonomy/v1/get_default_category_tree_id") return reply(200, { categoryTreeId: "77" });
-    if (p === "/commerce/taxonomy/v1/category_tree/77/get_item_aspects_for_category") return reply(200, { aspects: opts.aspects ?? [] });
+    if (p === "/commerce/taxonomy/v1/category_tree/77/get_item_aspects_for_category") {
+      if (opts.aspectsError) return reply(opts.aspectsError.status, { errors: [{ message: opts.aspectsError.message }] });
+      return reply(200, { aspects: opts.aspects ?? [] });
+    }
     const pol = (list: { id: string; name: string }[] | undefined, def: string, key: string) =>
       (list ?? [{ id: def, name: `Richtlinie ${def}` }]).map((x) => ({ [key]: x.id, name: x.name }));
     if (p === "/sell/account/v1/program/get_opted_in_programs") {
@@ -80,7 +87,10 @@ export function fakeEbay(opts: FakeEbayOpts = {}) {
         o.listing = { listingId: `I${++n}`, listingStatus: "ACTIVE", soldQuantity: 0 };
         return reply(200, { listingId: o.listing.listingId });
       }
-      if (m[2] === "/withdraw") { o.status = "UNPUBLISHED"; delete o.listing; return reply(200, { offerId: o.offerId }); }
+      if (m[2] === "/withdraw") {
+        if (opts.withdrawError) return reply(400, { errors: [{ message: opts.withdrawError }] });
+        o.status = "UNPUBLISHED"; delete o.listing; return reply(200, { offerId: o.offerId });
+      }
     }
     return reply(599, { errors: [{ message: `keine Route ${method} ${url}` }] });
   };

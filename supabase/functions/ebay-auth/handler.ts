@@ -5,7 +5,7 @@ import {
   consentUrl, credsFor, type EbayApi, ebayApi, EbayError, ensureAccess, type Env, exchangeCode, type Fetch,
 } from "../_shared/ebay-client.ts";
 import type { Account } from "../_shared/ebay-store.ts";
-import { json, text } from "../_shared/http.ts";
+import { json, jsonBody, text } from "../_shared/http.ts";
 import { type Chosen, checkLocationInput, KINDS, type Lists, locationBody, POLICY_PAGE, resolveSetup, SetupError } from "./setup.ts";
 
 export type AuthStore = {
@@ -117,7 +117,7 @@ export async function handleAuth(req: Request, d: AuthDeps): Promise<Response> {
   }
   if (req.method !== "POST") return json({ ok: false, error: "Nur POST." }, 405);
   if (!(await d.verifyUser(req.headers.get("authorization")))) return json({ ok: false, error: "Nicht angemeldet." }, 401);
-  const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+  const body = await jsonBody(req);
   const action = String(body.action ?? qa ?? "");
   try {
     switch (action) {

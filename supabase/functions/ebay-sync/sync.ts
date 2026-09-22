@@ -16,6 +16,9 @@ import type { Store } from "../_shared/ebay-store.ts";
 
 export const LOCK_SECONDS = 300;
 export const MAX_PER_RUN = 50;
+// Fixrunde 1 (Task 5) Important 1: Frist ab Laufstart -- danach werden verbleibende Angebote nicht mehr
+// bearbeitet, sondern als "deferred" gezählt (nächster Lauf holt sie nach). Uhr kommt von d.now(), testbar.
+export const RUN_BUDGET_MS = 100_000;
 
 export type SyncDeps = { store: Store; fetch: Fetch; env: (k: string) => string | undefined; now: () => Date; holder: string };
 export type SyncResult =
@@ -64,11 +67,17 @@ async function revise(api: EbayApi, b: Built, p: Policies, row: EbayRow, ack: bo
 export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: number } = {}): Promise<SyncResult> {
   const retryId = opts.retry ?? null;
   const max = opts.max ?? MAX_PER_RUN;
-  if (!(await d.store.tryLock(d.holder, LOCK_SECONDS))) return { ok: true, busy: true, text: "läuft schon" };
   const now = d.now();
   const nowIso = now.toISOString();
+  const deadline = now.getTime() + RUN_BUDGET_MS;
+  // Fixrunde 1 (Task 5) Minor 6: die Sperre selbst gehört in den try -- ein Store-Fehler hier (z.B. DB weg) soll
+  // als {ok:false,error} zurückkommen statt die Funktion roh scheitern zu lassen. `locked` steuert, ob am Ende
+  // entsperrt/ein Fehlerstand geschrieben wird (vor einer erfolgreichen Sperre gibt es beides nicht zu tun).
+  let locked = false;
   const s = emptySummary();
   try {
+    if (!(await d.store.tryLock(d.holder, LOCK_SECONDS))) return { ok: true, busy: true, text: "läuft schon" };
+    locked = true;
     const acc = await d.store.account();
     const env = acc.environment as Env;
     let lastError: string | null = null;
@@ -80,7 +89,9 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     if (connected && !expired) {
       try {
         const t = await ensureAccess(d.fetch, env, creds!, acc, now);
-        if (t.patch) await d.store.saveAccount(t.patch);
+        // Fixrunde 1 (Task 5) Minor 5: nur schreiben, wenn Refresh-Token/Umgebung noch zur gelesenen Zeile passen
+        // (Wettlauf mit set_environment/disconnect in ebay-auth oder einem zweiten Lauf).
+        if (t.patch) await d.store.saveAccountIf({ refresh_token: acc.refresh_token, environment: env }, t.patch);
         api = ebayApi(d.fetch, env, t.token);
       } catch (e) {
         if (!(e instanceof EbayError && e.auth)) throw e;
@@ -88,8 +99,15 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
       }
     } else connected = false;
     if (!connected && acc.refresh_token) {
-      await d.store.saveAccount({ refresh_token: null, refresh_expires_at: null, access_token: null, access_expires_at: null });
+      await d.store.saveAccountIf(
+        { refresh_token: acc.refresh_token, environment: env },
+        { refresh_token: null, refresh_expires_at: null, access_token: null, access_expires_at: null },
+      );
       lastError = EXPIRED;
+    } else if (!connected) {
+      // Fixrunde 1 (Task 5) Important 2: ohne (neue) Verbindung bleibt ein zuvor gesetzter Hinweis stehen, statt
+      // am Laufende auf null überschrieben zu werden -- sonst verschwindet EXPIRED nach dem ersten Folgelauf.
+      lastError = acc.last_error;
     }
     const setupOk = connected && !!(acc.payment_policy_id && acc.fulfillment_policy_id && acc.return_policy_id && acc.location_key);
     const policies: Policies = acc;
@@ -101,18 +119,27 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     const listingById = new Map(soll.listings.map((l) => [l.listing_id, l]));
     const ids = [...new Set([...listingById.keys(), ...rowById.keys()])].sort(cmp);
     // Abweichung 10: Merkmale je Kategorie (Einzelkarten 183454, Konvolute 183455), einmal je Durchgang.
+    // Fixrunde 1 (Task 5) Important 3: ein vorübergehender (transient/auth) Fehler bricht wie bisher den ganzen
+    // Durchgang ab (weitergereicht); ein dauerhafter Fehler (z.B. unbekannte Kategorie) wird je Kategorie gemerkt
+    // und betrifft nur die Angebote dieser Kategorie -- als ListingProblem, also Einzelfehler wie ein abgelehntes
+    // Veröffentlichen. Andere Kategorien und andere Aktionen (Zurückziehen, Warten, ...) laufen normal weiter.
     const aspectsByCategory = new Map<string, AspectDef[]>();
-    const loadAspects = async (categoryId: string) => {
+    const categoryErrors = new Map<string, string>();
+    const loadAspects = async (categoryId: string): Promise<AspectDef[]> => {
       const hit = aspectsByCategory.get(categoryId);
       if (hit) return hit;
-      let aspects: AspectDef[];
-      try { aspects = await categoryAspects(d.fetch, env, await appToken(d.fetch, env, creds!), categoryId); }
-      catch (e) {
-        // Ohne Merkmale scheitert jedes Einstellen gleich -> Durchgang abbrechen statt 50 gleiche Fehler.
-        throw new EbayError(`eBay-Merkmale nicht lesbar: ${(e as Error).message}`, (e as EbayError).status ?? 0, true, false);
+      const priorError = categoryErrors.get(categoryId);
+      if (priorError) throw new ListingProblem(priorError);
+      try {
+        const aspects = await categoryAspects(d.fetch, env, await appToken(d.fetch, env, creds!), categoryId);
+        aspectsByCategory.set(categoryId, aspects);
+        return aspects;
+      } catch (e) {
+        if (e instanceof EbayError && (e.transient || e.auth)) throw e;
+        const msg = `eBay-Merkmale nicht lesbar: ${(e as Error).message}`;
+        categoryErrors.set(categoryId, msg);
+        throw new ListingProblem(msg);
       }
-      aspectsByCategory.set(categoryId, aspects);
-      return aspects;
     };
     let used = 0;
     for (const id of ids) {
@@ -124,7 +151,7 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
       const sameEnv = row && row.environment === env ? row : null;
       const action = decide({ active: want.active, hash, row, env, connected, setupOk, retry: id === retryId, nowMs: now.getTime() });
       if (action === "none") continue;
-      if (used >= max) { s.deferred++; continue; }
+      if (used >= max || d.now().getTime() >= deadline) { s.deferred++; continue; }
       used++;
       const base = sameEnv ?? freshRow(id, env);
       try {
@@ -136,7 +163,14 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
           s.withdrawn++;
         } else if (action === "withdraw") {
           const offer = await api!.getOffer(base.offer_id!);
-          if (offer && offer.status === "PUBLISHED") await api!.withdrawOffer(offer.offerId);
+          if (offer && !offerEnded(offer)) {
+            try { await api!.withdrawOffer(offer.offerId); }
+            catch (e) {
+              // Minor 4: eBay sagt, die Anzeige sei schon nicht mehr veröffentlicht -- wie zurückgezogen werten
+              // statt endlos zu wiederholen (nur ein echter Verbindungsfehler bricht weiterhin den Durchgang ab).
+              if (!(e instanceof EbayError) || e.transient || e.auth) throw e;
+            }
+          }
           await d.store.saveRow({ ...base, state: "beendet", published_qty: 0, error: null, synced_at: nowIso });
           s.withdrawn++;
         } else if (action === "check") {
@@ -169,10 +203,12 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     return { ok: true, busy: false, summary: s, text };
   } catch (e) {
     const msg = e instanceof EbayError && e.auth ? EXPIRED : (e as Error).message;
-    try { await d.store.saveAccount({ last_run_at: nowIso, last_error: msg }); }
-    catch (e2) { console.error("[ebay-sync] Stand nicht gespeichert:", (e2 as Error).message); }
+    if (locked) {
+      try { await d.store.saveAccount({ last_run_at: nowIso, last_error: msg }); }
+      catch (e2) { console.error("[ebay-sync] Stand nicht gespeichert:", (e2 as Error).message); }
+    }
     return { ok: false, error: msg };
   } finally {
-    await d.store.unlock(d.holder);
+    if (locked) await d.store.unlock(d.holder);
   }
 }

@@ -40,7 +40,7 @@ function setup(acc: Partial<Account> = {}, ebay: FakeEbayOpts = {}, user = true,
   };
   const post = (body: unknown) => handleAuth(new Request(FN, { method: "POST", headers: { Authorization: "Bearer JWT" }, body: JSON.stringify(body) }), d);
   const get = (q: string) => handleAuth(new Request(`${FN}?${q}`), d);
-  return { st, eb, post, get };
+  return { st, eb, post, get, d };
 }
 
 Deno.test("ohne Anmeldung: 401, kein Zugriff", async () => {
@@ -154,6 +154,17 @@ Deno.test("check: zweiter Aufruf ohne Änderung schreibt nicht erneut", async ()
   assertEquals(after1 > 0, true);
   await w.post({ action: "check" });
   assertEquals(w.st.saveAccountCalls, after1);
+});
+
+// Fixrunde 1 (Task 5) Minor 6: kaputtes JSON, `null`, ein Array oder ein Primitiv als Body zählen wie leer -- kein
+// roher Absturz (z.B. an `body.action` auf `null`), sondern die normale "unbekannte Aktion"-Antwort.
+Deno.test("kaputter oder kein Objekt als Body -> wie leer behandelt, kein Absturz", async () => {
+  const w = setup();
+  const raw = (body: string) => handleAuth(new Request(FN, { method: "POST", headers: { Authorization: "Bearer JWT" }, body }), w.d);
+  for (const body of ["null", "[1,2]", "\"text\"", "", "{kaputt"]) {
+    const r = await raw(body);
+    assertEquals([r.status, (await r.json()).error], [400, "Unbekannte Aktion."]);
+  }
 });
 
 Deno.test("Einrichtung rein: bisherige Wahl bleibt, genau eine -> automatisch", () => {
