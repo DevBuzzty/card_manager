@@ -103,9 +103,9 @@ und `select last_run_at, last_run_summary, last_error from public.ebay_status;`.
 Abschalten: `select cron.unschedule('ebay-sync');`.
 
 Jeder Lauf hat ein Zeitbudget von rund 60 Sekunden, jeder einzelne eBay-Aufruf ein Zeitlimit von
-20 Sekunden; was in dieser Zeit nicht fertig wird, holt der nächste 5-Minuten-Lauf nach. Eine Abgleich-Sperre (`ebay_try_lock`) verhindert für 300 Sekunden
-einen zweiten gleichzeitigen Lauf; endet ein Lauf, ohne sie freizugeben, läuft die Sperre nach 300
-Sekunden von selbst ab.
+20 Sekunden; was in dieser Zeit nicht fertig wird, holt der nächste 5-Minuten-Lauf nach. Eine
+Abgleich-Sperre (`ebay_try_lock`) verhindert für 300 Sekunden einen zweiten gleichzeitigen Lauf;
+endet ein Lauf, ohne sie freizugeben, läuft die Sperre nach 300 Sekunden von selbst ab.
 
 ## 6. Von Hand testen (nur der Nutzer)
 
