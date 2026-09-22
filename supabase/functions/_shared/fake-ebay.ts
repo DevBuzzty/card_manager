@@ -12,6 +12,9 @@ export type FakeEbayOpts = {
   // Zurückziehen -- beide sind änderbar (`let`), damit ein Test sie zwischen zwei Läufen umschalten kann.
   aspectsError?: { status: number; message: string };
   withdrawError?: string;
+  // Fixrunde 2 (Task 5): der fehlgeschlagene Zurückzieh-Versuch endet die Anzeige trotzdem (eBay hat sie
+  // unabhängig schon beendet) -- Gegenstück: withdrawError allein lässt sie ACTIVE (die Anzeige bleibt live).
+  withdrawEndsAnyway?: boolean;
   programs?: string[]; payment?: { id: string; name: string }[]; fulfillment?: { id: string; name: string }[];
   returns?: { id: string; name: string }[]; locations?: { key: string; name: string }[];
 };
@@ -88,7 +91,10 @@ export function fakeEbay(opts: FakeEbayOpts = {}) {
         return reply(200, { listingId: o.listing.listingId });
       }
       if (m[2] === "/withdraw") {
-        if (opts.withdrawError) return reply(400, { errors: [{ message: opts.withdrawError }] });
+        if (opts.withdrawError) {
+          if (opts.withdrawEndsAnyway && o.listing) o.listing.listingStatus = "ENDED";
+          return reply(400, { errors: [{ message: opts.withdrawError }] });
+        }
         o.status = "UNPUBLISHED"; delete o.listing; return reply(200, { offerId: o.offerId });
       }
     }

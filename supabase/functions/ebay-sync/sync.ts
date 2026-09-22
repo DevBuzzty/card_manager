@@ -74,11 +74,17 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
   // als {ok:false,error} zurückkommen statt die Funktion roh scheitern zu lassen. `locked` steuert, ob am Ende
   // entsperrt/ein Fehlerstand geschrieben wird (vor einer erfolgreichen Sperre gibt es beides nicht zu tun).
   let locked = false;
+  // Fixrunde 2 (Task 5) Minor 3: "war zu Laufbeginn verbunden" und der bisherige Hinweis -- damit ein unabhängiger
+  // Fehler (z.B. Store weg) im äußeren catch einen stehenden EXPIRED nicht mit einer Zufallsmeldung überschreibt.
+  let connectedSnapshot = false;
+  let priorLastError: string | null = null;
   const s = emptySummary();
   try {
     if (!(await d.store.tryLock(d.holder, LOCK_SECONDS))) return { ok: true, busy: true, text: "läuft schon" };
     locked = true;
     const acc = await d.store.account();
+    connectedSnapshot = !!acc.refresh_token;
+    priorLastError = acc.last_error;
     const env = acc.environment as Env;
     let lastError: string | null = null;
     let api: EbayApi | null = null;
@@ -91,7 +97,13 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
         const t = await ensureAccess(d.fetch, env, creds!, acc, now);
         // Fixrunde 1 (Task 5) Minor 5: nur schreiben, wenn Refresh-Token/Umgebung noch zur gelesenen Zeile passen
         // (Wettlauf mit set_environment/disconnect in ebay-auth oder einem zweiten Lauf).
-        if (t.patch) await d.store.saveAccountIf({ refresh_token: acc.refresh_token, environment: env }, t.patch);
+        if (t.patch) {
+          const ok = await d.store.saveAccountIf({ refresh_token: acc.refresh_token, environment: env }, t.patch);
+          // Fixrunde 2 (Task 5) Minor 2: die Zeile hat sich seit dem Lesen geändert (z.B. frischer Rücksprung) --
+          // unser `acc`/`api` ist jetzt stale. Sauber abbrechen, keine weiteren eBay-Aufrufe; der nächste Lauf
+          // sieht die frische Zeile. Kein last_error/last_run_summary schreiben (würde die neue Verbindung stören).
+          if (!ok) return { ok: true, busy: false, summary: s, text: summaryText(s) };
+        }
         api = ebayApi(d.fetch, env, t.token);
       } catch (e) {
         if (!(e instanceof EbayError && e.auth)) throw e;
@@ -99,10 +111,13 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
       }
     } else connected = false;
     if (!connected && acc.refresh_token) {
-      await d.store.saveAccountIf(
+      const ok = await d.store.saveAccountIf(
         { refresh_token: acc.refresh_token, environment: env },
         { refresh_token: null, refresh_expires_at: null, access_token: null, access_expires_at: null },
       );
+      // Fixrunde 2 (Task 5) Minor 2: ebenso hier -- die Zeile passt nicht mehr (z.B. inzwischen neu verbunden);
+      // dann nicht fälschlich EXPIRED setzen, sondern sauber abbrechen und den nächsten Lauf entscheiden lassen.
+      if (!ok) return { ok: true, busy: false, summary: s, text: summaryText(s) };
       lastError = EXPIRED;
     } else if (!connected) {
       // Fixrunde 1 (Task 5) Important 2: ohne (neue) Verbindung bleibt ein zuvor gesetzter Hinweis stehen, statt
@@ -166,9 +181,15 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
           if (offer && !offerEnded(offer)) {
             try { await api!.withdrawOffer(offer.offerId); }
             catch (e) {
-              // Minor 4: eBay sagt, die Anzeige sei schon nicht mehr veröffentlicht -- wie zurückgezogen werten
-              // statt endlos zu wiederholen (nur ein echter Verbindungsfehler bricht weiterhin den Durchgang ab).
+              // Fixrunde 2 (Task 5) Important 1: ein 400/403 usw. beim Zurückziehen heißt nicht automatisch, dass
+              // die Anzeige schon beendet ist -- sie kann noch live sein (Doppelverkaufsrisiko, wenn wir sie
+              // trotzdem als "beendet" verbuchen). Erst nachsehen: nur ein tatsächlich beendetes/verschwundenes
+              // Angebot zählt als "schon zurückgezogen"; sonst der ursprüngliche Fehler als Einzelfehler, damit
+              // der nächste Lauf das Zurückziehen erneut versucht (kein failed_hash-Blocker nötig: `hash` ist bei
+              // inaktiven Angeboten ohnehin null, decide() prüft ihn für "withdraw" nicht).
               if (!(e instanceof EbayError) || e.transient || e.auth) throw e;
+              const after = await api!.getOffer(offer.offerId);
+              if (!offerEnded(after)) throw new ListingProblem((e as Error).message);
             }
           }
           await d.store.saveRow({ ...base, state: "beendet", published_qty: 0, error: null, synced_at: nowIso });
@@ -204,8 +225,14 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
   } catch (e) {
     const msg = e instanceof EbayError && e.auth ? EXPIRED : (e as Error).message;
     if (locked) {
-      try { await d.store.saveAccount({ last_run_at: nowIso, last_error: msg }); }
-      catch (e2) { console.error("[ebay-sync] Stand nicht gespeichert:", (e2 as Error).message); }
+      try {
+        const patch: { last_run_at: string; last_error?: string } = { last_run_at: nowIso };
+        // Fixrunde 2 (Task 5) Minor 3: ohne Verbindung bleibt ein stehender Hinweis (z.B. EXPIRED) bestehen --
+        // ein unabhängiger Fehler dieses Laufs (z.B. Store weg) soll ihn nicht überschreiben. Nur setzen, wenn
+        // wir zu Laufbeginn verbunden waren, oder bisher noch gar kein Hinweis stand.
+        if (connectedSnapshot || !priorLastError) patch.last_error = msg;
+        await d.store.saveAccount(patch);
+      } catch (e2) { console.error("[ebay-sync] Stand nicht gespeichert:", (e2 as Error).message); }
     }
     return { ok: false, error: msg };
   } finally {

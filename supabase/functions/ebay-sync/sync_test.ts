@@ -212,16 +212,29 @@ Deno.test("dauerhafter Merkmale-Fehler betrifft nur seine Kategorie; andere Akti
   assertEquals(w.state.rows.get("l3")!.state, "beendet");
 });
 
-Deno.test("Zurückziehen scheitert dauerhaft (schon nicht mehr veröffentlicht) -> trotzdem beendet, kein Endlos-Versuch", async () => {
-  const w = world({}, { withdrawError: "Angebot ist nicht aktiv." });
+// Fixrunde 2 (Task 5) Important 1: der bisherige Test nahm an, ein fehlgeschlagenes Zurückziehen sei immer schon
+// "beendet" -- Doppelverkaufsrisiko, wenn die Anzeige in Wahrheit noch aktiv ist. Ersetzt durch zwei Fälle:
+// (a) danach wirklich beendet -> beendet; (b) danach weiter aktiv -> fehler, nächster Lauf versucht es erneut.
+Deno.test("Zurückziehen scheitert, Anzeige bei eBay inzwischen wirklich beendet -> lokal beendet", async () => {
+  const w = world({}, { withdrawError: "Angebot ist nicht aktiv.", withdrawEndsAnyway: true });
   await w.run();
   w.state.listings[0] = L("l1", { status: "verkauft" });
   const r = await w.run();
   assertEquals(r.ok && !r.busy && r.summary.withdrawn, 1);
   assertEquals(w.state.rows.get("l1")!.state, "beendet");
+});
+
+Deno.test("Zurückziehen scheitert, Anzeige bei eBay weiter aktiv -> fehler statt beendet (kein Doppelverkaufsrisiko), nächster Lauf versucht erneut", async () => {
+  const w = world({}, { withdrawError: "Angebot ist nicht aktiv." });
+  await w.run();
+  w.state.listings[0] = L("l1", { status: "verkauft" });
+  const r = await w.run();
+  assertEquals(r.ok && !r.busy && [r.summary.errors, r.summary.withdrawn], [1, 0]);
+  assertEquals([w.state.rows.get("l1")!.state, w.state.rows.get("l1")!.error], ["fehler", "Angebot ist nicht aktiv."]);
+  assertEquals(w.eb.offers.get("O1")!.listing!.listingStatus, "ACTIVE", "Anzeige bleibt live, nicht als beendet verbucht");
   const before = w.eb.ebayCalls().length;
   await w.run();
-  assertEquals(w.eb.ebayCalls().length, before, "beendet -> kein erneuter Zurückzieh-Versuch");
+  assertEquals(w.eb.ebayCalls().length > before, true, "fehler (nicht beendet) -> wird erneut versucht");
 });
 
 Deno.test("saveAccountIf: schreibt nur bei passendem Refresh-Token/Umgebung, sonst false ohne Änderung", async () => {
@@ -266,4 +279,43 @@ Deno.test("Abbruch mitten im Einstellen -> Folgelauf verwendet die vorhandene Of
   assertEquals(r2.ok && !r2.busy && r2.summary.published, 1);
   assertEquals(eb.offers.size, 1, "keine zweite Offer angelegt");
   assertEquals(st.state.rows.get("l1")!.state, "online");
+});
+
+// -- Fixrunde 2 (Task 5) ----------------------------------------------------------------------------------------
+
+Deno.test("saveAccountIf liefert false beim Token-Patch -> Lauf bricht sofort ab, keine eBay-Aufrufe, nichts geschrieben", async () => {
+  const w = world({ account: account({ access_expires_at: "2026-09-22T11:00:00Z" }) });
+  const store: Store = { ...w.store, saveAccountIf: () => Promise.resolve(false) };
+  const r = await runSync({ store, fetch: w.eb.fetchFn, env: (k) => ENV[k], now: () => NOW, holder: "t" });
+  assertEquals(r.ok && !r.busy && [r.summary.published, r.text], [0, "0 eingestellt · 0 geändert · 0 beendet · 0 Fehler"]);
+  assertEquals(w.eb.ebayCalls().length, 0, "kein Inventar-/Offer-Aufruf danach");
+  assertEquals(w.state.rows.size, 0, "keine Zeile geschrieben");
+  assertEquals(w.state.account.last_error, null, "last_error unverändert -- nicht mit stale Werten überschrieben");
+});
+
+Deno.test("saveAccountIf liefert false beim Trennen (Zeile inzwischen anders, z.B. frischer Rücksprung) -> kein EXPIRED, sauberer Abbruch", async () => {
+  const w = world({ account: account({ access_expires_at: "2026-09-22T11:00:00Z" }) }, { refreshInvalid: true });
+  const store: Store = { ...w.store, saveAccountIf: () => Promise.resolve(false) };
+  const r = await runSync({ store, fetch: w.eb.fetchFn, env: (k) => ENV[k], now: () => NOW, holder: "t" });
+  assertEquals(r.ok && !r.busy && r.summary.published, 0);
+  assertEquals(w.state.account.last_error, null, "kein EXPIRED gesetzt -- die Zeile war schon anders");
+  assertEquals(w.state.account.refresh_token, "RT", "Tokens nicht angefasst");
+  assertEquals(w.state.rows.size, 0);
+});
+
+Deno.test("Laufabbruch ohne Verbindung überschreibt einen stehenden EXPIRED-Hinweis nicht mit einer unabhängigen Fehlermeldung", async () => {
+  const w = world({ account: account({ refresh_token: null, last_error: EXPIRED }) });
+  const store: Store = { ...w.store, openRows: () => Promise.reject(new Error("DB weg")) };
+  const r = await runSync({ store, fetch: w.eb.fetchFn, env: (k) => ENV[k], now: () => NOW, holder: "t" });
+  assertEquals(r, { ok: false, error: "DB weg" });
+  assertEquals(w.state.account.last_error, EXPIRED, "steht weiterhin, nicht durch 'DB weg' ersetzt");
+  assertEquals(w.state.account.last_run_at, "2026-09-22T12:00:00.000Z", "Laufzeitpunkt trotzdem vermerkt");
+});
+
+Deno.test("Laufabbruch, während verbunden -> last_error wird wie bisher gesetzt (keine Regression zu Minor 3)", async () => {
+  const w = world({ account: account({ last_error: EXPIRED }) });
+  const store: Store = { ...w.store, openRows: () => Promise.reject(new Error("DB weg")) };
+  const r = await runSync({ store, fetch: w.eb.fetchFn, env: (k) => ENV[k], now: () => NOW, holder: "t" });
+  assertEquals(r, { ok: false, error: "DB weg" });
+  assertEquals(w.state.account.last_error, "DB weg", "verbunden -> der neue Fehler ersetzt den alten Hinweis");
 });
