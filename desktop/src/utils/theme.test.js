@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ROLES, resolveMode, contrastRatio, applyTheme } from './theme.js';
+import { ROLES, resolveMode, contrastRatio, applyTheme, startTheme } from './theme.js';
 
 // ZWILLING: android DesignTokensTest.kt liest dieselbe Datei.
 const TOK = JSON.parse(readFileSync(new URL('../../../docs/fixtures/design/tokens.json', import.meta.url), 'utf8'));
@@ -50,4 +50,32 @@ test('applyTheme setzt data-theme am Dokument', () => {
   assert.equal(doc.documentElement.dataset.theme, 'dark');
   assert.equal(applyTheme(doc, 'light', true), 'light');
   assert.equal(doc.documentElement.dataset.theme, 'light');
+});
+
+// Fake matchMedia, die addEventListener/removeEventListener wie im Browser als Zuhoerer-Menge fuehrt.
+function fakeDocMitMatchMedia() {
+  const listeners = new Set();
+  const mq = {
+    matches: true,
+    addEventListener: (ev, fn) => { if (ev === 'change') listeners.add(fn); },
+    removeEventListener: (ev, fn) => { if (ev === 'change') listeners.delete(fn); },
+  };
+  const doc = { documentElement: { dataset: {} }, defaultView: { matchMedia: () => mq } };
+  return { doc, listeners };
+}
+
+test('startTheme gibt eine Abmeldefunktion zurueck, die den Zuhoerer wirklich entfernt', () => {
+  const { doc, listeners } = fakeDocMitMatchMedia();
+  const stop = startTheme(doc, 'system');
+  assert.equal(listeners.size, 1, 'ein Zuhoerer nach dem Start');
+  stop();
+  assert.equal(listeners.size, 0, 'kein Zuhoerer mehr nach der Abmeldung');
+});
+
+test('Abmelden vor einem erneuten Start haeuft keine Zuhoerer an (Settings.jsx-Muster)', () => {
+  const { doc, listeners } = fakeDocMitMatchMedia();
+  let stop = startTheme(doc, 'system');
+  stop(); // wie stopThemeRef.current?.() vor jeder neuen Auswahl in Settings.jsx
+  stop = startTheme(doc, 'system');
+  assert.equal(listeners.size, 1, 'genau ein aktiver Zuhoerer, kein Leck');
 });

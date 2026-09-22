@@ -33,7 +33,6 @@
 body { background: var(--bg); color: var(--text); }
 
 body {
-  @apply bg-obsidian text-ink;
   margin: 0;
   font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;

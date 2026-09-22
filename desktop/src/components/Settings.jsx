@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { NavLink, Navigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers, Cpu, UploadCloud } from 'lucide-react';
@@ -31,6 +31,9 @@ export default function Settings() {
 
     const [priceSource, setPriceSource] = useState('cardmarket');
     const [theme, setTheme] = useState('light');
+    // Haelt die Abmeldefunktion von startTheme, damit ein Wechsel nicht mehrere System-Zuhoerer anhaeuft.
+    const stopThemeRef = useRef(null);
+    useEffect(() => () => stopThemeRef.current?.(), []);
     const [loading, setLoading] = useState(false);
     // Which long-running action owns `loading`/`progress` — the two sections that show a bar
     // ("preise" and "gefahrenzone") must only show their own. 'prices' | 'downgrade' | null.
@@ -314,7 +317,13 @@ export default function Settings() {
                         <div className="flex gap-2">
                             {[['light', 'Hell'], ['dark', 'Dunkel'], ['system', 'Wie das System']].map(([id, label]) => (
                                 <button key={id} type="button"
-                                    onClick={async () => { setTheme(id); startTheme(document, id); await window.api?.saveSetting?.({ key: 'theme', value: id }); }}
+                                    onClick={async () => {
+                                        setTheme(id);
+                                        stopThemeRef.current?.();
+                                        stopThemeRef.current = startTheme(document, id);
+                                        try { localStorage.setItem('theme', id); } catch { /* z.B. privater Modus */ }
+                                        await window.api?.saveSetting?.({ key: 'theme', value: id });
+                                    }}
                                     className={clsx('px-4 py-2 rounded-lg text-sm border',
                                         theme === id ? 'bg-accent text-accent-fg border-transparent' : 'bg-surface-2 text-muted border-line')}>
                                     {label}
