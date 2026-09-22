@@ -7,6 +7,8 @@ import {
   TITLE_MAX, groupItems, listingTitle, listingDescription, cardmarketProduct, cardmarketEntry, listingLink,
   suggestionSum, imageUrls, imagesText,
 } from '../utils/listingText';
+import { setupOk } from '../utils/ebayMarks';
+import { useEbayData } from '../utils/useEbayData';
 
 const toInput = (cents) => (cents == null ? '' : (cents / 100).toFixed(2).replace('.', ','));
 const parse = (s) => (String(s ?? '').trim() === '' ? null : Number(String(s).replace(',', '.')));
@@ -29,6 +31,7 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
     external_url: '', note: '',
   }));
   const [cmPrices, setCmPrices] = useState({}); // groupKey -> Eingabe, erst nach einer Aenderung gesetzt
+  const ebay = useEbayData();
 
   // Eigener Escape-Handler; der Aufrufer (CopySheet, ListingDetail) setzt seinen aus, solange der Dialog offen ist.
   useEffect(() => {
@@ -196,7 +199,10 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
             <label className="block text-xs text-ink-muted">Notiz
               <input className={field} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
             </label>
-            <p className="text-ink-faint text-xs">Käufer erwarten oft eigene Fotos.</p>
+            <p className="text-ink-faint text-xs">Eigene Fotos fügst du nach dem Speichern im Angebot hinzu.</p>
+            {form.channel_id === 'ebay' && ebay.status !== undefined && !setupOk(ebay.status) && (
+              <p className="text-sm text-gold">eBay ist noch nicht eingerichtet – das Angebot wartet, bis der Check in den Einstellungen vollständig ist.</p>
+            )}
             {notice && <p className="text-sm text-emerald-400">{notice}</p>}
             {error && <p className="text-sm text-crit">{error}</p>}
             <div className="flex justify-end gap-2">

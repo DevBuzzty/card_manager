@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
-import ListingDetail, { ListingMarks } from './ListingDetail';
+import ListingDetail, { ListingMarks, EbayMark } from './ListingDetail';
 import { LOADING } from '../utils/duplicates';
 import { toCents, euroCentsText, diffText } from '../utils/saleMath';
 import { listingsSummary, summaryText, sinceText } from '../utils/listingText';
+import { ebayMark } from '../utils/ebayMarks';
+import { useEbayData } from '../utils/useEbayData';
 
 const STATUS = [{ id: 'aktiv', label: 'Aktiv' }, { id: 'verkauft', label: 'Verkauft' }, { id: 'beendet', label: 'Beendet' }, { id: 'alle', label: 'Alle' }];
 const ALL_CHANNELS = '__alle__';
@@ -13,6 +15,7 @@ export default function ListingsList({ data, error, reload, onOpenCard }) {
   const [status, setStatus] = useState('aktiv');
   const [channel, setChannel] = useState(ALL_CHANNELS);
   const [openId, setOpenId] = useState(null);
+  const ebay = useEbayData();
 
   // Je vorkommendem Kanal der Name des juengsten Angebots (die Liste ist schon juengste zuerst).
   const channels = useMemo(() => {
@@ -64,6 +67,7 @@ export default function ListingsList({ data, error, reload, onOpenCard }) {
                     <span className="text-ink-muted">{sinceText(l.days)}</span>
                     {!active && <span className="text-xs">{l.status}</span>}
                     <ListingMarks marks={l.marks} />
+                    <EbayMark mark={ebayMark(l, ebay.rows[l.listing_id] ?? null, ebay.status)} />
                     <span className="ml-auto font-mono">{euroCentsText(price)}</span>
                     {active && (
                       <span className={`font-mono ${price >= l.marketCents ? 'text-emerald-400' : 'text-crit'}`}>
