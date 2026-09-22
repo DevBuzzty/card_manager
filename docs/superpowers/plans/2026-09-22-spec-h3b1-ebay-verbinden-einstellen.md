@@ -132,6 +132,7 @@ $$);
 6. **Zurückziehen braucht die Verbindung:** ist die Verbindung weg, bleibt eine Online-Anzeige online, bis wieder verbunden ist; dann zieht der nächste Lauf sie zurück.
 7. **Umgebung wechseln wird verweigert, solange in der alten Umgebung Anzeigen online sind** („Zuerst die n eBay-Anzeigen in der Sandbox beenden – sonst bleiben sie dort online.“). Ohne diese Sperre bliebe eine echte Produktions-Anzeige nach einem Wechsel zur Sandbox für immer stehen, weil der Abgleicher Zeilen der anderen Umgebung nie anfasst (§5.3).
 8. **Fotos erst am gespeicherten Angebot:** „Foto hinzufügen“ gibt es im Angebots-Detail (PC `ListingDetail`, Handy `ListingDetailSheet`), nicht im Anlegen-Dialog — der Speicherpfad braucht die `listing_id`. Der Anlegen-Dialog zeigt den Hinweis „Eigene Fotos fügst du nach dem Speichern im Angebot hinzu.“ Eigene Fotos gelten auch für „Bilder“ (PC-Ordner, Handy-Teilen) aller Kanäle.
+10. **Konvolute in Kategorie 183455** (Nutzer 22.09., Spec §5.2 nannte 183454 für alle): Einzelkarten/gleiche Karten → `183454`, Konvolut → `183455` „Sammlungen & Lots“ (`categoryFor`, `Built.categoryId`); Pflichtmerkmale je Kategorie; der Kartenzustand-Deskriptor `40001` nur bei 183454 (eBay listet ihn für 183455 nicht) — ob eBay bei 183455 `USED_VERY_GOOD` ohne Deskriptor annimmt, prüft die Sandbox-Abnahme.
 9. **Anstoß am PC nach jeder Angebots-Schreibaktion** (nicht nur für eBay-Angebote), nach `sale-book` und nach Foto-Änderungen, entprellt (1,5 s) und nur, wenn der Zwischenspeicher „verbunden“ sagt; der PC schiebt vorher (`sync.syncNow()`), damit die Funktion die Änderung sieht. Am Handy stößt `ListingsRepository.run` nach jeder erfolgreichen Schreibfolge an. Die Funktion ist gleichbleibend (Soll/Ist), überflüssige Anstöße kosten nur einen Lauf.
 
 ## Befunde aus dem Code-Abgleich
@@ -207,7 +208,7 @@ Reihenfolge 1 → 11 im selben Worktree. Parallel erlaubt (disjunkte Dateien, Co
 **Interfaces:**
 - Consumes: `docs/fixtures/listings/listings.json` (H3a, unverändert: `items`, `titles`, `descriptions`, `pieceCents`).
 - Produces (`listing-text.ts`): `TITLE_MAX = 65`, `LANGUAGE_NAMES`, `type LineItem`, `type Group`, `euroCentsText(c)`, `groupItems(items)`, `truncateTitle(text, ellipsis)`, `listingTitle(items)`, `listingDescription(items, priceCents|null)`, `pieceCents(total, n)` — Namen und Verhalten wie `desktop/electron/listing-text.cjs`.
-- Produces (`ebay-map.ts`): Konstanten `MARKETPLACE = "EBAY_DE"`, `CATEGORY_ID = "183454"`, `EBAY_TITLE_MAX = 80`, `MAX_IMAGES = 24`, `MAX_OWN_PHOTOS = 12`, `PHOTO_BUCKET = "listing-photos"`, `CONDITION_UNGRADED = "USED_VERY_GOOD"`, `CARD_CONDITION_DESCRIPTOR = "40001"`, `CARD_CONDITION_VALUE`, `NO_IMAGE`; Typen `SollListing`, `SollItem`, `Photo`, `AspectDef`, `Policies`, `Built`; Funktionen `toCents`, `skuOf(listingId) -> "L-<id>"`, `desired(listing|null, items, liveCopyIds) -> { active, liveItems }`, `photoUrl(baseUrl, path)`, `ownPhotos(photos, listingId)`, `imageList(photoUrls, liveItems)`, `worstCondition(items)`, `escapeHtml(s)`, `descriptionHtml(text)`, `aspectCandidates(liveItems)`, `fillAspects(defs, liveItems) -> { aspects, missing }`, `missingText(missing)`, `buildListing(listing, liveItems, photoUrls, defs) -> Built`, `inventoryItemBody(b)`, `offerBody(b, policies)`, `hashOf(b) -> Promise<hex>`, `itemUrl(env, itemId)`.
+- Produces (`ebay-map.ts`): Konstanten `MARKETPLACE = "EBAY_DE"`, `CATEGORY_ID = "183454"`, `CATEGORY_LOTS = "183455"`, `EBAY_TITLE_MAX = 80`, `MAX_IMAGES = 24`, `MAX_OWN_PHOTOS = 12`, `PHOTO_BUCKET = "listing-photos"`, `CONDITION_UNGRADED = "USED_VERY_GOOD"`, `CARD_CONDITION_DESCRIPTOR = "40001"`, `CARD_CONDITION_VALUE`, `NO_IMAGE`; Typen `SollListing`, `SollItem`, `Photo`, `AspectDef`, `Policies`, `Built`; Funktionen `toCents`, `skuOf(listingId) -> "L-<id>"`, `desired(listing|null, items, liveCopyIds) -> { active, liveItems }`, `photoUrl(baseUrl, path)`, `ownPhotos(photos, listingId)`, `imageList(photoUrls, liveItems)`, `worstCondition(items)`, `escapeHtml(s)`, `descriptionHtml(text)`, `aspectCandidates(liveItems)`, `fillAspects(defs, liveItems) -> { aspects, missing }`, `missingText(missing)`, `categoryFor(liveItems) -> "183454" | "183455"`, `buildListing(listing, liveItems, photoUrls, defs) -> Built` (mit `categoryId`), `inventoryItemBody(b)`, `offerBody(b, policies)`, `hashOf(b) -> Promise<hex>`, `itemUrl(env, itemId)`.
 - Produces (`ebay-plan.ts`): `type RowState`, `type EbayRow` (Spalten von `ebay_listings` ohne Zeitstempel der Tabelle), `type Action = "none"|"wait"|"end_local"|"publish"|"revise"|"withdraw"|"check"`, `CHECK_EVERY_MS`, `decide(input) -> Action`, `offerEnded(offer|null)`, Texte `ENDED_ON_EBAY`, `SOLD_ON_EBAY`, `EXPIRED`, `type Summary`, `emptySummary()`, `summaryText(s)`.
 
 - [ ] **Step 1: Fixtures schreiben**
@@ -284,8 +285,8 @@ Reihenfolge 1 → 11 im selben Worktree. Parallel erlaubt (disjunkte Dateien, Co
       "condition": "PL",
       "problem": null,
       "hash": "bc330cd26c1d93f0746c43d5836ca8ed3c22190370381d83a74b702aaa68d1ec",
-      "inventoryItem": {"availability":{"shipToLocationAvailability":{"quantity":1}},"condition":"USED_VERY_GOOD","conditionDescriptors":[{"name":"40001","values":["400017"]}],"product":{"title":"Yu-Gi-Oh! Konvolut 3 Karten – Aschblüte & Freudiger Frühling…","description":"1× Aschblüte &amp; Freudiger Frühling – MACR-DE036 – Secret Rare – Limitiert – MT<br>1× Blauäugiger w. Drache – SDK-DE001 – Common – Unlimitiert – EX<br>1× Topf der Gier – PL<br><br>Preis: 25,00 €<br><br>Privatverkauf, keine Garantie oder Rücknahme.","aspects":{"Spiel":["Yu-Gi-Oh! TCG"],"Kartenname":["Aschblüte & Freudiger Frühling"],"Hersteller":["Konami"],"Set":["MACR-DE036","SDK-DE001"],"Seltenheit":["Secret Rare"],"Sprache":["Deutsch","English"]},"imageUrls":["https://proj.supabase.co/storage/v1/object/public/listing-photos/l2/x.jpg","https://images.ygoprodeck.com/images/cards/14558127.jpg","https://images.ygoprodeck.com/images/cards/89631139.jpg"]}},
-      "offer": {"sku":"L-l2","marketplaceId":"EBAY_DE","format":"FIXED_PRICE","availableQuantity":1,"categoryId":"183454","listingDescription":"1× Aschblüte &amp; Freudiger Frühling – MACR-DE036 – Secret Rare – Limitiert – MT<br>1× Blauäugiger w. Drache – SDK-DE001 – Common – Unlimitiert – EX<br>1× Topf der Gier – PL<br><br>Preis: 25,00 €<br><br>Privatverkauf, keine Garantie oder Rücknahme.","listingDuration":"GTC","listingPolicies":{"fulfillmentPolicyId":"FUL1","paymentPolicyId":"PAY1","returnPolicyId":"RET1"},"merchantLocationKey":"ygo-default","pricingSummary":{"price":{"value":"25.00","currency":"EUR"}}},
+      "inventoryItem": {"availability":{"shipToLocationAvailability":{"quantity":1}},"condition":"USED_VERY_GOOD","product":{"title":"Yu-Gi-Oh! Konvolut 3 Karten – Aschblüte & Freudiger Frühling…","description":"1× Aschblüte &amp; Freudiger Frühling – MACR-DE036 – Secret Rare – Limitiert – MT<br>1× Blauäugiger w. Drache – SDK-DE001 – Common – Unlimitiert – EX<br>1× Topf der Gier – PL<br><br>Preis: 25,00 €<br><br>Privatverkauf, keine Garantie oder Rücknahme.","aspects":{"Spiel":["Yu-Gi-Oh! TCG"],"Kartenname":["Aschblüte & Freudiger Frühling"],"Hersteller":["Konami"],"Set":["MACR-DE036","SDK-DE001"],"Seltenheit":["Secret Rare"],"Sprache":["Deutsch","English"]},"imageUrls":["https://proj.supabase.co/storage/v1/object/public/listing-photos/l2/x.jpg","https://images.ygoprodeck.com/images/cards/14558127.jpg","https://images.ygoprodeck.com/images/cards/89631139.jpg"]}},
+      "offer": {"sku":"L-l2","marketplaceId":"EBAY_DE","format":"FIXED_PRICE","availableQuantity":1,"categoryId":"183455","listingDescription":"1× Aschblüte &amp; Freudiger Frühling – MACR-DE036 – Secret Rare – Limitiert – MT<br>1× Blauäugiger w. Drache – SDK-DE001 – Common – Unlimitiert – EX<br>1× Topf der Gier – PL<br><br>Preis: 25,00 €<br><br>Privatverkauf, keine Garantie oder Rücknahme.","listingDuration":"GTC","listingPolicies":{"fulfillmentPolicyId":"FUL1","paymentPolicyId":"PAY1","returnPolicyId":"RET1"},"merchantLocationKey":"ygo-default","pricingSummary":{"price":{"value":"25.00","currency":"EUR"}}},
       "strictMissing": ["Charakter","Kartentyp"]
     },
     "l3": {
@@ -618,7 +619,8 @@ export function pieceCents(totalCents: number, quantity: number): number {
 import { groupItems, LANGUAGE_NAMES, type LineItem, listingDescription, listingTitle, pieceCents } from "./listing-text.ts";
 
 export const MARKETPLACE = "EBAY_DE";
-export const CATEGORY_ID = "183454";
+export const CATEGORY_ID = "183454";      // Einzelkarten (Nutzer 22.09.: Konvolute in 183455)
+export const CATEGORY_LOTS = "183455";    // „Sammlungen & Lots“ (Befund Doku 15)
 export const EBAY_TITLE_MAX = 80;
 export const MAX_IMAGES = 24;
 export const MAX_OWN_PHOTOS = 12;
@@ -654,8 +656,14 @@ export type Policies = {
 export type Built = {
   sku: string; kind: "gleich" | "konvolut"; quantity: number; totalCents: number; pieceCents: number;
   title: string; descriptionHtml: string; condition: string; conditionValue: string; imageUrls: string[];
-  aspects: Record<string, string[]>; missing: string[]; problem: string | null;
+  aspects: Record<string, string[]>; missing: string[]; problem: string | null; categoryId: string;
 };
+
+// Abweichung 10: Konvolut (mehrere Drucke) -> Kategorie 183455, sonst 183454. Vor buildListing aufrufbar, damit der
+// Abgleicher die Pflichtmerkmale der richtigen Kategorie laden kann.
+export function categoryFor(liveItems: SollItem[]): string {
+  return groupItems(liveItems).length === 1 ? CATEGORY_ID : CATEGORY_LOTS;
+}
 
 const blank = (v: string | null | undefined) => v == null || v.trim() === "";
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -796,6 +804,7 @@ export function buildListing(
     sku: skuOf(listing.listing_id), kind: same ? "gleich" : "konvolut", quantity, totalCents,
     pieceCents: same ? pieceCents(totalCents, quantity) : totalCents, title, descriptionHtml: descriptionHtml(text),
     condition, conditionValue: CARD_CONDITION_VALUE[condition], imageUrls, aspects, missing, problem,
+    categoryId: same ? CATEGORY_ID : CATEGORY_LOTS,
   };
 }
 
@@ -805,14 +814,15 @@ export function inventoryItemBody(b: Built) {
   return {
     availability: { shipToLocationAvailability: { quantity: b.quantity } },
     condition: CONDITION_UNGRADED,
-    conditionDescriptors: [{ name: CARD_CONDITION_DESCRIPTOR, values: [b.conditionValue] }],
+    // Kartenzustand-Deskriptor nur in der Einzelkarten-Kategorie (eBay listet ihn für 183050/183454/261328, nicht für 183455).
+    ...(b.categoryId === CATEGORY_ID ? { conditionDescriptors: [{ name: CARD_CONDITION_DESCRIPTOR, values: [b.conditionValue] }] } : {}),
     product: { title: b.title, description: b.descriptionHtml, aspects: b.aspects, imageUrls: b.imageUrls },
   };
 }
 export function offerBody(b: Built, p: Policies) {
   return {
     sku: b.sku, marketplaceId: MARKETPLACE, format: "FIXED_PRICE", availableQuantity: b.quantity,
-    categoryId: CATEGORY_ID, listingDescription: b.descriptionHtml, listingDuration: "GTC",
+    categoryId: b.categoryId, listingDescription: b.descriptionHtml, listingDuration: "GTC",
     listingPolicies: {
       fulfillmentPolicyId: p.fulfillment_policy_id, paymentPolicyId: p.payment_policy_id, returnPolicyId: p.return_policy_id,
     },
@@ -2410,7 +2420,7 @@ import {
   appToken, categoryAspects, credsFor, type EbayApi, ebayApi, EbayError, ensureAccess, type Env, type Fetch, type Offer,
 } from "../_shared/ebay-client.ts";
 import {
-  type AspectDef, type Built, buildListing, CATEGORY_ID, desired, hashOf, inventoryItemBody, itemUrl, MARKETPLACE,
+  type AspectDef, type Built, buildListing, categoryFor, desired, hashOf, inventoryItemBody, itemUrl, MARKETPLACE,
   offerBody, ownPhotos, photoUrl, type Policies,
 } from "../_shared/ebay-map.ts";
 import {
@@ -2504,14 +2514,18 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     const soll = await d.store.soll([...rowById.keys()]);
     const listingById = new Map(soll.listings.map((l) => [l.listing_id, l]));
     const ids = [...new Set([...listingById.keys(), ...rowById.keys()])].sort(cmp);
-    let aspects: AspectDef[] | null = null;
-    const loadAspects = async () => {
-      if (aspects) return aspects;
-      try { aspects = await categoryAspects(d.fetch, env, await appToken(d.fetch, env, creds!), CATEGORY_ID); }
+    // Abweichung 10: Merkmale je Kategorie (Einzelkarten 183454, Konvolute 183455), einmal je Durchgang.
+    const aspectsByCategory = new Map<string, AspectDef[]>();
+    const loadAspects = async (categoryId: string) => {
+      const hit = aspectsByCategory.get(categoryId);
+      if (hit) return hit;
+      let aspects: AspectDef[];
+      try { aspects = await categoryAspects(d.fetch, env, await appToken(d.fetch, env, creds!), categoryId); }
       catch (e) {
         // Ohne Merkmale scheitert jedes Einstellen gleich -> Durchgang abbrechen statt 50 gleiche Fehler.
         throw new EbayError(`eBay-Merkmale nicht lesbar: ${(e as Error).message}`, (e as EbayError).status ?? 0, true, false);
       }
+      aspectsByCategory.set(categoryId, aspects);
       return aspects;
     };
     let used = 0;
@@ -2546,7 +2560,7 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
           await d.store.saveRow({ ...base, synced_at: nowIso });
           s.checked++;
         } else {
-          const b = buildListing(listing!, want.liveItems, photoUrls, await loadAspects());
+          const b = buildListing(listing!, want.liveItems, photoUrls, await loadAspects(categoryFor(want.liveItems)));
           if (b.problem) throw new ListingProblem(b.problem);
           const ack = id === retryId || base.state === "beendet";
           const r = action === "publish" || !base.offer_id ? await publish(api!, b, policies) : await revise(api!, b, policies, base, ack);
@@ -4306,6 +4320,6 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 **Widersprüche und Lücken in der Spec (dem Nutzer vorlegen):**
 - §4.3 „HTML-Seite“ ist auf der Supabase-Standard-Domain nicht möglich (Abweichung 1).
 - §8 `pg_try_advisory_lock` wirkt über PostgREST nicht über einen ganzen Lauf (Abweichung 2).
-- §5.2 nennt 183454 auch für Konvolute; eBay.de führt „Sammlungen & Lots“ unter 183455 (Befund Doku 15) — bleibt Spec-wörtlich, Risiko.
+- §5.2: Konvolute in 183455 (Abweichung 10, Nutzer 22.09.); Zustand ohne Deskriptor in 183455 unbestätigt — Sandbox.
 - §5.3 sagt nichts dazu, wie oft „manuell beendet“ geprüft wird und was ein unverändertes, abgelehntes Angebot tut (Abweichungen 3, 5).
 - §4.3 `set_environment` „trennt“ — ohne Sperre blieben Anzeigen der alten Umgebung für immer online (Abweichung 7).

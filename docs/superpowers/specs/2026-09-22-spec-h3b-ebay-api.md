@@ -69,7 +69,7 @@ Umgebung, Verbinden/Trennen (öffnet die Zustimmungs-URL im Browser), Check-List
 | SKU | `L-<listing_id>` |
 | Titel | Angebotstitel (≤ 65 aus H3a, eBay erlaubt 80); leer → Titel-Regel aus H3a |
 | Beschreibung | Angebotsbeschreibung, HTML-entschärft, Zeilenumbrüche als `<br>` |
-| Kategorie | `183454` (Einzelkarten Sammelkartenspiele), eBay.de, Festpreis, `GTC` |
+| Kategorie | Einzelkarten/gleiche Karten `183454` („Einzelne Yu-Gi-Oh! TCG Karten“), Konvolut `183455` („Sammlungen & Lots“, Nutzer 22.09.); eBay.de, Festpreis, `GTC` |
 | Merkmale | Pflichtmerkmale einmal je Lauf aus der eBay-Taxonomie (`getItemAspectsForCategory`), befüllt aus den Kartendaten: Spiel „Yu-Gi-Oh! TCG", Hersteller „Konami", Kartenname (deutsch, Rückfall englisch), Set, Rarität, Sprache, Merkmal „1. Auflage" falls zutreffend. Fehlt eBay ein Pflichtmerkmal → `fehler` mit eBays Meldung. |
 | Zustand | „Ungraded" + Kartenzustand: MT/NM → Near mint or better; EX → Lightly played; GD/LP → Moderately played; PL/PO → Heavily played. Konvolut: schlechtester Zustand. |
 | Bilder | eigene Fotos (Reihenfolge), danach Katalogbild je Druck, höchstens 24 |
