@@ -44,6 +44,11 @@ object SideStores {
     // Spec H3a §4.3: Angebote. Voll neu laden (geblättert), wie sales.
     val listings = ListCache(scope) { ListingsRepository.load() }
 
+    // Spec H3b1: eBay-Stand (0 oder 1 Zeile, Muster priceAlertMoveRule), eBay-Zeilen je Angebot, eigene Fotos (geblättert).
+    val ebayStatus = ListCache(scope) { listOfNotNull(EbayRepository.loadStatus()) }
+    val ebayRows = ListCache(scope) { EbayRepository.loadRows() }
+    val listingPhotos = ListCache(scope) { EbayRepository.loadPhotos() }
+
     private val historyCaches = BoundedMap<String, ListCache<List<PriceRef>>>(20)
 
     fun history(card: CardRow): ListCache<List<PriceRef>> =
@@ -65,6 +70,7 @@ object SideStores {
         sealedItems.clear()
         sales.clear()
         listings.clear()
+        ebayStatus.clear(); ebayRows.clear(); listingPhotos.clear()
         historyCaches.values().forEach { it.clear() }
         historyCaches.clear()
         synchronized(deckCardCaches) {

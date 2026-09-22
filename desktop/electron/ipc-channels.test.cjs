@@ -32,7 +32,11 @@ const H2_CHANNELS = ['sale-channels', 'sale-channel-save', 'sale-channel-hide', 
 const H3A_CHANNELS = ['listing-preview', 'listing-create', 'listing-update', 'listing-remove-items', 'listing-end', 'listing-relist',
   'listings-overview', 'listing-detail', 'listing-offers', 'listing-open-url', 'listing-save-images'];
 
-for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS, ...H2_CHANNELS, ...H3A_CHANNELS]) {
+// Spec H3b1 §4.4/§5.4/§6: eBay-Stand, eBay-Zeilen, Verbinden/Einrichten, Abgleich anstoßen, eigene Fotos.
+const H3B1_CHANNELS = ['ebay-status', 'ebay-listings', 'ebay-auth', 'ebay-sync-now', 'listing-photos', 'listing-photo-add',
+  'listing-photo-delete', 'listing-photo-reorder'];
+
+for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS, ...H2_CHANNELS, ...H3A_CHANNELS, ...H3B1_CHANNELS]) {
   test(`Kanal ${ch} steht in main.cjs und preload.cjs`, () => {
     assert.ok(MAIN.includes(`ipcMain.handle('${ch}'`), `main.cjs fehlt ipcMain.handle('${ch}'`);
     assert.ok(PRELOAD.includes(`ipcRenderer.invoke('${ch}'`), `preload.cjs fehlt ipcRenderer.invoke('${ch}'`);

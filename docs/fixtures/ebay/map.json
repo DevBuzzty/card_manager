@@ -1,0 +1,104 @@
+{
+  "_comment": "Spec H3b §5.2/§5.3 -- Fixture fuer supabase/functions/_shared/ebay-map.ts. Geld in Cent, price wie PostgREST (Text oder Zahl).",
+  "baseUrl": "https://proj.supabase.co",
+  "listings": {
+    "l1": {"listing_id":"l1","channel_id":"ebay","title":"Dunkler Magier LOB-DE005 1. Auflage NM","description":"Zwei Stück.\r\nVersand <sicher> & \"schnell\"","price":"10.01","status":"aktiv","deleted":false},
+    "l2": {"listing_id":"l2","channel_id":"ebay","title":"  ","description":null,"price":25,"status":"aktiv","deleted":false},
+    "l3": {"listing_id":"l3","channel_id":"cardmarket","title":null,"description":null,"price":"5.00","status":"aktiv","deleted":false},
+    "l4": {"listing_id":"l4","channel_id":"ebay","title":"Alt","description":null,"price":"5.00","status":"beendet","deleted":false},
+    "l5": {"listing_id":"l5","channel_id":"ebay","title":"Nur tote Karte","description":null,"price":"5.00","status":"aktiv","deleted":false},
+    "l6": {"listing_id":"l6","channel_id":"ebay","title":"Yu-Gi-Oh! Sehr langer Titel mit vielen Worten der die Grenze von achtzig Zeichen weit überschreitet","description":"Text","price":"0.99","status":"aktiv","deleted":false}
+  },
+  "items": [
+    {"listing_id":"l1","copy_id":"dm1","card_id":"46986414","name":"Dunkler Magier","set_code":"LOB-DE005","language":"DE","rarity":"Ultra Rare","edition":"first","condition":"NM","image_url":"https://images.ygoprodeck.com/images/cards/46986414.jpg","deleted":false},
+    {"listing_id":"l1","copy_id":"dm2","card_id":"46986414","name":"Dunkler Magier","set_code":"LOB-DE005","language":"DE","rarity":"Ultra Rare","edition":"first","condition":"NM","image_url":"https://images.ygoprodeck.com/images/cards/46986414.jpg","deleted":false},
+    {"listing_id":"l1","copy_id":"dm3","card_id":"46986414","name":"Dunkler Magier","set_code":"LOB-DE005","language":"DE","rarity":"Ultra Rare","edition":"first","condition":"NM","image_url":"https://images.ygoprodeck.com/images/cards/46986414.jpg","deleted":false},
+    {"listing_id":"l1","copy_id":"dm9","card_id":"46986414","name":"Dunkler Magier","set_code":"LOB-DE005","language":"DE","rarity":"Ultra Rare","edition":"first","condition":"NM","image_url":"https://images.ygoprodeck.com/images/cards/46986414.jpg","deleted":true},
+    {"listing_id":"l2","copy_id":"be1","card_id":"89631139","name":"Blauäugiger w. Drache","set_code":"SDK-DE001","language":"DE","rarity":"Common","edition":"unlimited","condition":"EX","image_url":"https://images.ygoprodeck.com/images/cards/89631139.jpg","deleted":false},
+    {"listing_id":"l2","copy_id":"ab1","card_id":"14558127","name":"Aschblüte & Freudiger Frühling","set_code":"MACR-DE036","language":"DE","rarity":"Secret Rare","edition":"limited","condition":"MT","image_url":"https://images.ygoprodeck.com/images/cards/14558127.jpg","deleted":false},
+    {"listing_id":"l2","copy_id":"tg1","card_id":"55144522","name":"Topf der Gier","set_code":"Unknown","language":"EN","rarity":"","edition":"unknown","condition":"PL","image_url":"http://unsicher.example/55144522.jpg","deleted":false},
+    {"listing_id":"l3","copy_id":"cm1","card_id":"46986414","name":"Dunkler Magier","set_code":"LOB-DE005","language":"DE","rarity":"Ultra Rare","edition":"first","condition":"NM","image_url":null,"deleted":false},
+    {"listing_id":"l4","copy_id":"old1","card_id":"46986414","name":"Dunkler Magier","set_code":"LOB-DE005","language":"DE","rarity":"Ultra Rare","edition":"first","condition":"NM","image_url":null,"deleted":false},
+    {"listing_id":"l5","copy_id":"dead1","card_id":"46986414","name":"Dunkler Magier","set_code":"LOB-DE005","language":"DE","rarity":"Ultra Rare","edition":"first","condition":"NM","image_url":null,"deleted":false},
+    {"listing_id":"l6","copy_id":"nn1","card_id":"12345678","name":null,"set_code":"ABC-DE001","language":"IT","rarity":"Rare","edition":"first","condition":"LP","image_url":null,"deleted":false}
+  ],
+  "liveCopyIds": ["dm1","dm2","dm9","be1","ab1","tg1","cm1","old1","nn1"],
+  "photos": [
+    {"photo_id":"p2","listing_id":"l1","path":"l1/b b.jpg","sort":1,"deleted":false},
+    {"photo_id":"p1","listing_id":"l1","path":"l1/a.jpg","sort":0,"deleted":false},
+    {"photo_id":"p3","listing_id":"l1","path":"l1/c.jpg","sort":0,"deleted":true},
+    {"photo_id":"p4","listing_id":"l2","path":"l2/x.jpg","sort":0,"deleted":false}
+  ],
+  "defs": [
+    {"localizedAspectName":"Spiel","aspectConstraint":{"aspectRequired":true,"aspectMode":"SELECTION_ONLY","itemToAspectCardinality":"SINGLE"},"aspectValues":[{"localizedValue":"Pokémon TCG"},{"localizedValue":"Yu-Gi-Oh! TCG"}]},
+    {"localizedAspectName":"Kartenname","aspectConstraint":{"aspectRequired":true,"aspectMode":"FREE_TEXT","itemToAspectCardinality":"SINGLE"}},
+    {"localizedAspectName":"Hersteller","aspectConstraint":{"aspectRequired":false,"aspectMode":"FREE_TEXT","itemToAspectCardinality":"SINGLE"}},
+    {"localizedAspectName":"Set","aspectConstraint":{"aspectRequired":false,"aspectMode":"FREE_TEXT","itemToAspectCardinality":"MULTI"}},
+    {"localizedAspectName":"Seltenheit","aspectConstraint":{"aspectRequired":false,"aspectMode":"FREE_TEXT","itemToAspectCardinality":"SINGLE"}},
+    {"localizedAspectName":"Sprache","aspectConstraint":{"aspectRequired":false,"aspectMode":"SELECTION_ONLY","itemToAspectCardinality":"MULTI"},"aspectValues":[{"localizedValue":"Deutsch"},{"localizedValue":"English"}]},
+    {"localizedAspectName":"Besonderheiten","aspectConstraint":{"aspectRequired":false,"aspectMode":"SELECTION_ONLY","itemToAspectCardinality":"MULTI"},"aspectValues":[{"localizedValue":"1st Edition"},{"localizedValue":"Holo"}]},
+    {"localizedAspectName":"Grad","aspectConstraint":{"aspectRequired":false,"aspectMode":"FREE_TEXT","itemToAspectCardinality":"SINGLE"}}
+  ],
+  "strictExtra": [
+    {"localizedAspectName":"Charakter","aspectConstraint":{"aspectRequired":true,"aspectMode":"FREE_TEXT","itemToAspectCardinality":"SINGLE"}},
+    {"localizedAspectName":"Kartentyp","aspectConstraint":{"aspectRequired":true,"aspectMode":"FREE_TEXT","itemToAspectCardinality":"SINGLE"}}
+  ],
+  "policies": {"payment_policy_id":"PAY1","fulfillment_policy_id":"FUL1","return_policy_id":"RET1","location_key":"ygo-default"},
+  "expected": {
+    "l1": {
+      "active": true,
+      "live": ["dm1","dm2"],
+      "kind": "gleich",
+      "quantity": 2,
+      "pieceCents": 501,
+      "condition": "NM",
+      "problem": null,
+      "hash": "841d3162039f1d74e0d2e8faf5e6efce07999915c681de4825a557effff6223a",
+      "inventoryItem": {"availability":{"shipToLocationAvailability":{"quantity":2}},"condition":"USED_VERY_GOOD","conditionDescriptors":[{"name":"40001","values":["400010"]}],"product":{"title":"Dunkler Magier LOB-DE005 1. Auflage NM","description":"Zwei Stück.<br>Versand &lt;sicher&gt; &amp; &quot;schnell&quot;","aspects":{"Spiel":["Yu-Gi-Oh! TCG"],"Kartenname":["Dunkler Magier"],"Hersteller":["Konami"],"Set":["LOB-DE005"],"Seltenheit":["Ultra Rare"],"Sprache":["Deutsch"],"Besonderheiten":["1st Edition"]},"imageUrls":["https://proj.supabase.co/storage/v1/object/public/listing-photos/l1/a.jpg","https://proj.supabase.co/storage/v1/object/public/listing-photos/l1/b%20b.jpg","https://images.ygoprodeck.com/images/cards/46986414.jpg"]}},
+      "offer": {"sku":"L-l1","marketplaceId":"EBAY_DE","format":"FIXED_PRICE","availableQuantity":2,"categoryId":"183454","listingDescription":"Zwei Stück.<br>Versand &lt;sicher&gt; &amp; &quot;schnell&quot;","listingDuration":"GTC","listingPolicies":{"fulfillmentPolicyId":"FUL1","paymentPolicyId":"PAY1","returnPolicyId":"RET1"},"merchantLocationKey":"ygo-default","pricingSummary":{"price":{"value":"5.01","currency":"EUR"}}},
+      "strictMissing": ["Charakter","Kartentyp"]
+    },
+    "l2": {
+      "active": true,
+      "live": ["ab1","be1","tg1"],
+      "kind": "konvolut",
+      "quantity": 1,
+      "pieceCents": 2500,
+      "condition": "PL",
+      "problem": null,
+      "hash": "63bb1eb036ed10f483a6af16337ba640ff841ce8246ce97b5f890ca1bccec0c3",
+      "inventoryItem": {"availability":{"shipToLocationAvailability":{"quantity":1}},"condition":"USED_VERY_GOOD","product":{"title":"Yu-Gi-Oh! Konvolut 3 Karten – Aschblüte & Freudiger Frühling…","description":"1× Aschblüte &amp; Freudiger Frühling – MACR-DE036 – Secret Rare – Limitiert – MT<br>1× Blauäugiger w. Drache – SDK-DE001 – Common – Unlimitiert – EX<br>1× Topf der Gier – PL<br><br>Preis: 25,00 €<br><br>Privatverkauf, keine Garantie oder Rücknahme.","aspects":{"Spiel":["Yu-Gi-Oh! TCG"],"Kartenname":["Aschblüte & Freudiger Frühling"],"Hersteller":["Konami"],"Set":["MACR-DE036","SDK-DE001"],"Seltenheit":["Secret Rare"],"Sprache":["Deutsch","English"]},"imageUrls":["https://proj.supabase.co/storage/v1/object/public/listing-photos/l2/x.jpg","https://images.ygoprodeck.com/images/cards/14558127.jpg","https://images.ygoprodeck.com/images/cards/89631139.jpg"]}},
+      "offer": {"sku":"L-l2","marketplaceId":"EBAY_DE","format":"FIXED_PRICE","availableQuantity":1,"categoryId":"183455","listingDescription":"1× Aschblüte &amp; Freudiger Frühling – MACR-DE036 – Secret Rare – Limitiert – MT<br>1× Blauäugiger w. Drache – SDK-DE001 – Common – Unlimitiert – EX<br>1× Topf der Gier – PL<br><br>Preis: 25,00 €<br><br>Privatverkauf, keine Garantie oder Rücknahme.","listingDuration":"GTC","listingPolicies":{"fulfillmentPolicyId":"FUL1","paymentPolicyId":"PAY1","returnPolicyId":"RET1"},"merchantLocationKey":"ygo-default","pricingSummary":{"price":{"value":"25.00","currency":"EUR"}}},
+      "strictMissing": ["Charakter","Kartentyp"]
+    },
+    "l3": {
+      "active": false,
+      "live": ["cm1"]
+    },
+    "l4": {
+      "active": false,
+      "live": ["old1"]
+    },
+    "l5": {
+      "active": false,
+      "live": []
+    },
+    "l6": {
+      "active": true,
+      "live": ["nn1"],
+      "kind": "gleich",
+      "quantity": 1,
+      "pieceCents": 99,
+      "condition": "LP",
+      "problem": "Kein Bild vorhanden – bitte ein eigenes Foto hinzufügen.",
+      "hash": "bf83fd623d54a228260954e1f3765bc314c41e5d2619b98e009da7d33a9f8c0d",
+      "inventoryItem": {"availability":{"shipToLocationAvailability":{"quantity":1}},"condition":"USED_VERY_GOOD","conditionDescriptors":[{"name":"40001","values":["400016"]}],"product":{"title":"Yu-Gi-Oh! Sehr langer Titel mit vielen Worten der die Grenze von achtzig Zeichen","description":"Text","aspects":{"Spiel":["Yu-Gi-Oh! TCG"],"Kartenname":["12345678"],"Hersteller":["Konami"],"Set":["ABC-DE001"],"Seltenheit":["Rare"],"Besonderheiten":["1st Edition"]},"imageUrls":[]}},
+      "offer": {"sku":"L-l6","marketplaceId":"EBAY_DE","format":"FIXED_PRICE","availableQuantity":1,"categoryId":"183454","listingDescription":"Text","listingDuration":"GTC","listingPolicies":{"fulfillmentPolicyId":"FUL1","paymentPolicyId":"PAY1","returnPolicyId":"RET1"},"merchantLocationKey":"ygo-default","pricingSummary":{"price":{"value":"0.99","currency":"EUR"}}},
+      "strictMissing": ["Charakter","Kartentyp"]
+    }
+  },
+  "missingTexts": [
+    {"missing":["Kartenname"],"text":"eBay verlangt das Merkmal „Kartenname“."},
+    {"missing":["Charakter","Kartentyp"],"text":"eBay verlangt die Merkmale „Charakter“, „Kartentyp“."}
+  ]
+}

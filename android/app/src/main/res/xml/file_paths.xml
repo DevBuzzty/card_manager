@@ -2,4 +2,5 @@
 <!-- Spec H3a §5.6: nur der Cache-Ordner der Angebotsbilder wird über den FileProvider geteilt (ListingShare.CACHE_DIR). -->
 <paths>
     <cache-path name="listing_images" path="listing_images/" />
+    <cache-path name="listing_photos" path="listing_photos/" />
 </paths>

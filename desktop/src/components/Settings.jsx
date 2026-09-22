@@ -10,10 +10,12 @@ import { createBusyGate } from '../utils/busyGate';
 import PriceAlertSettings from './PriceAlertSettings';
 import ImportDialog from './ImportDialog';
 import ExportDialog from './ExportDialog';
+import EbaySettings from './EbaySettings';
 
 const SECTIONS = [
     { id: 'konto', label: 'Konto & Sync' },
     { id: 'preise', label: 'Preise' },
+    { id: 'ebay', label: 'eBay' },
     { id: 'verbindung', label: 'Verbindung' },
     { id: 'daten', label: 'Daten' },
     { id: 'standards', label: 'Standards' },
@@ -359,6 +361,8 @@ export default function Settings() {
                         </div>
                     </div>
                 )}
+
+                {active === 'ebay' && <EbaySettings />}
 
                 {active === 'verbindung' && (
                     <div className="bg-obsidian-700 border border-line rounded-2xl p-6">

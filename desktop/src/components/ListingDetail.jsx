@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import SaleDialog from './SaleDialog';
 import ListingDialog from './ListingDialog';
+import ListingPhotos from './ListingPhotos';
 import { createBusyGate, createLatestOnly } from '../utils/busyGate';
 import { todayLocal } from '../utils/today';
 import { toCents, euroCentsText } from '../utils/saleMath';
 import { EDITION_LABELS } from '../utils/valuation';
 import { TITLE_MAX, sinceText, imageUrls, imagesText } from '../utils/listingText';
+import { ebayMark } from '../utils/ebayMarks';
+import { useEbayData } from '../utils/useEbayData';
 
 const toInput = (v) => { const c = toCents(v); return c == null ? '' : (c / 100).toFixed(2).replace('.', ','); };
 const parse = (s) => (String(s ?? '').trim() === '' ? null : Number(String(s).replace(',', '.')));
@@ -26,6 +29,22 @@ export function ListingMarks({ marks }) {
   );
 }
 
+// Spec H3b §5.4 -- eBay-Marke (Liste und Detail). mark aus ebayMarks.js#ebayMark; onRetry nur im Detail.
+export function EbayMark({ mark, onRetry, busy }) {
+  if (!mark) return null;
+  const chip = 'inline-block text-[10px] px-1.5 py-0.5 rounded';
+  const color = mark.kind === 'online' ? 'bg-emerald-500/15 text-emerald-400' : mark.kind === 'fehler' ? 'bg-crit/20 text-crit' : 'bg-gold/15 text-gold';
+  return (
+    <>
+      <span className={`${chip} ${color}`}>{mark.text}</span>
+      {mark.retry && onRetry && (
+        <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onRetry(); }}
+          className="text-[10px] px-1.5 py-0.5 rounded border border-crit/40 text-crit disabled:opacity-50">Erneut versuchen</button>
+      )}
+    </>
+  );
+}
+
 // Spec H3a §6/§7/§8 -- ein Angebot: Positionen, Kopieren, Bilder, Link, Bearbeiten, Verkauft, Beenden, Erneut anbieten.
 // Geprueft und geschrieben wird im Hauptprozess (listings.cjs); hier nur Anzeige und Aufrufe.
 export default function ListingDetail({ listingId, onClose, onChanged, onOpenCard }) {
@@ -38,8 +57,10 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
   const [linkInput, setLinkInput] = useState('');
   const [selling, setSelling] = useState(false);
   const [relist, setRelist] = useState(null); // Vorbelegung aus relistPrefill | null
+  const [photoUrls, setPhotoUrls] = useState([]);
   const latest = useRef(createLatestOnly());
   const editing = form != null;
+  const ebay = useEbayData();
 
   // Nur die zuletzt gestartete Abfrage darf setzen (wie CardDetailPanel.loadSold).
   const load = useCallback(() => {
@@ -78,6 +99,7 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
   const active = listing?.status === 'aktiv';
   const cm = listing?.channel_id === 'cardmarket';
   const liveItems = items.filter((i) => i.copyLive);
+  const mark = listing ? ebayMark(listing, ebay.rows[listing.listing_id] ?? null, ebay.status) : null;
 
   // Nach jeder Schreibaktion: Ereignis, Aufrufer, frisch laden.
   const afterWrite = async () => {
@@ -99,10 +121,18 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
     if (!res?.success) setError(res?.error || 'Link konnte nicht geöffnet werden.');
   };
   const saveImages = () => write(async () => {
-    const res = await window.api.saveListingImages({ title: listing.rowTitle, urls: imageUrls(items) });
+    const res = await window.api.saveListingImages({ title: listing.rowTitle, urls: [...photoUrls, ...imageUrls(items)] });
     if (!res?.success) { setError(res?.error || 'Bilder konnten nicht gespeichert werden.'); return; }
     setNotice(imagesText(res.saved, res.total));
   }, 'Bilder konnten nicht gespeichert werden.');
+
+  // Spec H3b §5.4 -- "Erneut versuchen" bei eBay-Fehler: gleich abgleichen, nicht auf den Zeitplan warten.
+  const retryEbay = () => write(async () => {
+    const r = await window.api.ebaySyncNow({ retry: listing.listing_id });
+    if (!r?.ok) { setError(r?.error || 'eBay-Abgleich fehlgeschlagen.'); return; }
+    setNotice(r.busy ? 'Abgleich läuft schon – gleich noch einmal versuchen.' : 'eBay-Abgleich angestoßen.');
+    await ebay.reload();
+  }, 'eBay-Abgleich fehlgeschlagen.');
 
   // updateListing ersetzt alle Felder -- immer den vollen Satz schicken (hier: alles ausser dem Link unveraendert).
   const saveLink = () => write(async () => {
@@ -172,7 +202,10 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
                 </div>
                 <div className="text-ink font-bold">{listing.rowTitle}</div>
                 <div className="font-mono text-gold">{euroCentsText(toCents(listing.price) || 0)}</div>
-                <div className="flex flex-wrap gap-1"><ListingMarks marks={listing.marks} /></div>
+                <div className="flex flex-wrap items-center gap-1">
+                  <ListingMarks marks={listing.marks} />
+                  <EbayMark mark={mark} busy={busy} onRetry={retryEbay} />
+                </div>
                 {listing.note && <div className="text-ink-muted">{listing.note}</div>}
               </div>
             )}
@@ -233,6 +266,8 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
               ))}
             </div>
 
+            <ListingPhotos listingId={listing.listing_id} onChanged={(ps) => setPhotoUrls(ps.map((p) => p.url))} />
+
             {!editing && (
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
@@ -244,8 +279,9 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
                   )}
                   <button type="button" disabled={busy} onClick={saveImages} className={btn}>Bilder</button>
                   {listing.external_url && <button type="button" onClick={() => openUrl(listing.external_url)} className={btn}>Anzeige öffnen</button>}
+                  {mark?.url && <button type="button" onClick={() => openUrl(mark.url)} className={btn}>Auf eBay ansehen</button>}
                 </div>
-                <p className="text-ink-faint text-xs">Käufer erwarten oft eigene Fotos.</p>
+                <p className="text-ink-faint text-xs">Eigene Fotos gehen vor dem Katalogbild zu eBay und in „Bilder“.</p>
                 {!listing.external_url && active && (
                   <div className="flex gap-2">
                     <input className={field} placeholder="Link der Anzeige" value={linkInput} onChange={(e) => setLinkInput(e.target.value)} />

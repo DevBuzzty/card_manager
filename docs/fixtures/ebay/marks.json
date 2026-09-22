@@ -1,0 +1,47 @@
+{
+  "_comment": "Spec H3b §4.4/§5.4 -- gemeinsame Fixture fuer desktop/src/utils/ebayMarks.js und android ml/EbayMarks.kt. status: \"U\" = laedt (undefined/Kotlin Loading), \"N\" = kein Stand (null), \"S\" = status unten.",
+  "status": {
+    "environment": "sandbox",
+    "connected": true,
+    "refresh_expires_at": "2028-03-23T00:00:00Z",
+    "has_payment_policy": true,
+    "payment_policy_name": "PayPal",
+    "has_fulfillment_policy": true,
+    "fulfillment_policy_name": "Brief",
+    "has_return_policy": false,
+    "return_policy_name": null,
+    "has_location": true,
+    "location_key": "ygo-default"
+  },
+  "marks": [
+    {"name":"kein eBay-Angebot","listing":{"channel_id":"cardmarket","status":"aktiv","deleted":false},"row":{"listing_id":"l1","environment":"sandbox","state":"online","item_url":"https://sandbox.ebay.de/itm/I2","error":null},"status":"S","mark":null},
+    {"name":"Stand lädt","listing":{"channel_id":"ebay","status":"aktiv","deleted":false},"row":null,"status":"U","mark":{"kind":"laden","text":"…","url":null,"retry":false}},
+    {"name":"kein Stand (Tabellen fehlen), aktiv","listing":{"channel_id":"ebay","status":"aktiv","deleted":false},"row":null,"status":"N","mark":{"kind":"wartet","text":"wartet auf eBay","url":null,"retry":false}},
+    {"name":"kein Stand, beendet","listing":{"channel_id":"ebay","status":"beendet","deleted":false},"row":null,"status":"N","mark":null},
+    {"name":"keine Zeile, aktiv","listing":{"channel_id":"ebay","status":"aktiv","deleted":false},"row":null,"status":"S","mark":{"kind":"wartet","text":"wartet auf eBay","url":null,"retry":false}},
+    {"name":"keine Zeile, beendet","listing":{"channel_id":"ebay","status":"beendet","deleted":false},"row":null,"status":"S","mark":null},
+    {"name":"online mit Link","listing":{"channel_id":"ebay","status":"aktiv","deleted":false},"row":{"listing_id":"l1","environment":"sandbox","state":"online","item_url":"https://sandbox.ebay.de/itm/I2","error":null},"status":"S","mark":{"kind":"online","text":"auf eBay online","url":"https://sandbox.ebay.de/itm/I2","retry":false}},
+    {"name":"online, Link nicht https","listing":{"channel_id":"ebay","status":"aktiv","deleted":false},"row":{"listing_id":"l1","environment":"sandbox","state":"online","item_url":"http://x/itm/1","error":null},"status":"S","mark":{"kind":"online","text":"auf eBay online","url":null,"retry":false}},
+    {"name":"Fehler, aktiv -> Erneut versuchen","listing":{"channel_id":"ebay","status":"aktiv","deleted":false},"row":{"listing_id":"l1","environment":"sandbox","state":"fehler","item_url":"https://sandbox.ebay.de/itm/I2","error":"Das Merkmal Spiel fehlt."},"status":"S","mark":{"kind":"fehler","text":"eBay-Fehler: Das Merkmal Spiel fehlt.","url":"https://sandbox.ebay.de/itm/I2","retry":true}},
+    {"name":"Fehler, beendet -> kein Erneut versuchen","listing":{"channel_id":"ebay","status":"beendet","deleted":false},"row":{"listing_id":"l1","environment":"sandbox","state":"fehler","item_url":null,"error":null},"status":"S","mark":{"kind":"fehler","text":"eBay-Fehler: unbekannt","url":null,"retry":false}},
+    {"name":"wartet","listing":{"channel_id":"ebay","status":"aktiv","deleted":false},"row":{"listing_id":"l1","environment":"sandbox","state":"wartet","item_url":null,"error":null},"status":"S","mark":{"kind":"wartet","text":"wartet auf eBay","url":null,"retry":false}},
+    {"name":"beendet","listing":{"channel_id":"ebay","status":"beendet","deleted":false},"row":{"listing_id":"l1","environment":"sandbox","state":"beendet","item_url":"https://sandbox.ebay.de/itm/I2","error":null},"status":"S","mark":{"kind":"beendet","text":"auf eBay beendet","url":null,"retry":false}},
+    {"name":"andere Umgebung, aktiv -> wartet","listing":{"channel_id":"ebay","status":"aktiv","deleted":false},"row":{"listing_id":"l1","environment":"production","state":"online","item_url":"https://sandbox.ebay.de/itm/I2","error":null},"status":"S","mark":{"kind":"wartet","text":"wartet auf eBay","url":null,"retry":false}},
+    {"name":"andere Umgebung, beendet","listing":{"channel_id":"ebay","status":"beendet","deleted":false},"row":{"listing_id":"l1","environment":"production","state":"online","item_url":"https://sandbox.ebay.de/itm/I2","error":null},"status":"S","mark":{"kind":"andere","text":"auf eBay beendet (andere Umgebung)","url":null,"retry":false}},
+    {"name":"gelöscht","listing":{"channel_id":"ebay","status":"aktiv","deleted":true},"row":{"listing_id":"l1","environment":"sandbox","state":"wartet","item_url":"https://sandbox.ebay.de/itm/I2","error":null},"status":"S","mark":null}
+  ],
+  "setup": [
+    {"status":"S","items":[{"label":"Mit eBay verbunden","ok":true},{"label":"Zahlungsrichtlinie: PayPal","ok":true},{"label":"Versandrichtlinie: Brief","ok":true},{"label":"Rücknahmerichtlinie","ok":false},{"label":"Artikelstandort: ygo-default","ok":true}],"ok":false},
+    {"status":"N","items":[{"label":"Mit eBay verbunden","ok":false},{"label":"Zahlungsrichtlinie","ok":false},{"label":"Versandrichtlinie","ok":false},{"label":"Rücknahmerichtlinie","ok":false},{"label":"Artikelstandort","ok":false}],"ok":false}
+  ],
+  "expiry": [
+    {"today":"2028-02-22","text":"Verbindung läuft am 23.03.2028 ab – bitte neu verbinden."},
+    {"today":"2028-02-21","text":null},
+    {"today":"2028-03-23","text":"Verbindung läuft am 23.03.2028 ab – bitte neu verbinden."},
+    {"today":"2028-02-22","disconnected":true,"text":null}
+  ],
+  "photoCount": [
+    {"n":0,"text":"0/12 Fotos"},
+    {"n":12,"text":"12/12 Fotos"}
+  ]
+}

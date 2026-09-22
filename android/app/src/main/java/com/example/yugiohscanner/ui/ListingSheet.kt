@@ -23,11 +23,13 @@ import com.example.yugiohscanner.cloud.NewListing
 import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.EbayMarks
 import com.example.yugiohscanner.ml.ListingText
 import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.theme.ErrorColor
+import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
@@ -90,7 +92,8 @@ fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismi
 
     val listingsState by SideStores.listings.state.collectAsState()
     val salesState by SideStores.sales.state.collectAsState()
-    LaunchedEffect(Unit) { SideStores.listings.ensureLoaded(); SideStores.sales.ensureLoaded() }
+    val ebayStatusState by SideStores.ebayStatus.state.collectAsState()
+    LaunchedEffect(Unit) { SideStores.listings.ensureLoaded(); SideStores.sales.ensureLoaded(); SideStores.ebayStatus.ensureLoaded() }
     val offline = listingsState.value == null || listingsState.error != null || salesState.value == null || salesState.error != null
     val loadingSide = (listingsState.value == null && listingsState.error == null) || (salesState.value == null && salesState.error == null)
 
@@ -355,6 +358,15 @@ fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismi
                 ) { Text(if (sharing) "Bilder werden geladen…" else "Bilder") }
             }
             Text("Käufer erwarten oft eigene Fotos.", color = Muted, style = MaterialTheme.typography.bodySmall)
+            Text("Eigene Fotos fügst du nach dem Speichern im Angebot hinzu.", color = Muted, style = MaterialTheme.typography.bodySmall)
+            if (channel?.channelId == "ebay" && ebayStatusState.value != null &&
+                !EbayMarks.setupOk(ebayStatusState.value?.firstOrNull()?.first)
+            ) {
+                Text(
+                    "eBay ist noch nicht eingerichtet – das Angebot wartet, bis der Check in den Einstellungen vollständig ist.",
+                    color = Gold, style = MaterialTheme.typography.bodySmall,
+                )
+            }
             notice?.let { Text(it, color = OnSurface, style = MaterialTheme.typography.bodySmall) }
             error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
 

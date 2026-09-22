@@ -273,6 +273,9 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
         // ---- Verkaufskanäle (Spec H2 §8) ---------------------------------------
         SaleChannelSettings()
 
+        // ---- eBay (Spec H3b1 §4.4) ----------------------------------------------
+        EbaySettings()
+
         // ---- Über -------------------------------------------------------------
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionHeader("Über")
