@@ -79,3 +79,52 @@ test('Löschen weich, Reihenfolge nur mit genau den lebenden Fotos', () => {
   assert.throws(() => P.reorderPhotos(db, 'l1', ['c']), /inzwischen geändert/);
   assert.throws(() => P.reorderPhotos(db, 'l1', ['c', 'b']), /inzwischen geändert/);
 });
+
+// Fixrunde 1 §1: EXIF-Ausrichtung -- Hochformat-Handyfotos ohne Korrektur landen seitlich auf eBay.
+// Kleine, handgebaute JPEG-Header statt echter Bilddateien (keine Testfixtures im Repo, keine Netz-/Plattenzugriffe).
+function u16(little) { return (buf, off, v) => (little ? buf.writeUInt16LE(v, off) : buf.writeUInt16BE(v, off)); }
+function u32(little) { return (buf, off, v) => (little ? buf.writeUInt32LE(v, off) : buf.writeUInt32BE(v, off)); }
+function buildExifJpeg(orientation, little) {
+  const w16 = u16(little); const w32 = u32(little);
+  const header = Buffer.alloc(8);
+  header.write(little ? 'II' : 'MM', 0, 'ascii'); w16(header, 2, 42); w32(header, 4, 8); // IFD folgt direkt nach dem Header
+  const entry = Buffer.alloc(12);
+  w16(entry, 0, 0x0112); w16(entry, 2, 3); w32(entry, 4, 1); w16(entry, 8, orientation); w16(entry, 10, 0);
+  const ifdCount = Buffer.alloc(2); w16(ifdCount, 0, 1);
+  const nextIfd = Buffer.alloc(4); // kein weiteres IFD
+  const exifBlob = Buffer.concat([Buffer.from('Exif\0\0', 'ascii'), header, ifdCount, entry, nextIfd]);
+  const lenBuf = Buffer.alloc(2); lenBuf.writeUInt16BE(exifBlob.length + 2, 0); // Laenge zaehlt sich selbst mit
+  return Buffer.concat([Buffer.from([0xFF, 0xD8]), Buffer.from([0xFF, 0xE1]), lenBuf, exifBlob, Buffer.from([0xFF, 0xD9])]);
+}
+
+test('jpegOrientation: Tag 0x0112 in beiden Byte-Reihenfolgen, ohne EXIF und kaputt -> 1', () => {
+  assert.equal(P.jpegOrientation(buildExifJpeg(6, true)), 6, 'II (little-endian)');
+  assert.equal(P.jpegOrientation(buildExifJpeg(8, false)), 8, 'MM (big-endian)');
+  assert.equal(P.jpegOrientation(Buffer.from([0xFF, 0xD8, 0xFF, 0xD9])), 1, 'kein APP1 -> 1');
+  assert.equal(P.jpegOrientation(Buffer.from([0xFF, 0xD8, 0xFF, 0xE1, 0xFF, 0xFF])), 1, 'Laenge zeigt hinters Ende -> 1');
+  assert.equal(P.jpegOrientation(Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0d, 0x0a])), 1, 'kein JPEG (PNG-Signatur) -> 1');
+});
+
+// 2x3-Bitmap (Breite 2, Hoehe 3), ein Byte je Pixel als eindeutige Marke (A..F), BGRA mit 3 Fuellbytes.
+function pixelBitmap(labels) {
+  const buf = Buffer.alloc(labels.length * 4);
+  labels.forEach((l, i) => { buf[i * 4] = l; buf[i * 4 + 1] = 0; buf[i * 4 + 2] = 0; buf[i * 4 + 3] = 255; });
+  return buf;
+}
+const [A, B, C, D, E, F] = [10, 11, 12, 13, 14, 15];
+// Reihenfolge row-major: (0,0)=A (1,0)=B / (0,1)=C (1,1)=D / (0,2)=E (1,2)=F
+const GRID = pixelBitmap([A, B, C, D, E, F]);
+const marks = (buf, w, h) => { const out = []; for (let i = 0; i < w * h; i++) out.push(buf[i * 4]); return out; };
+
+test('orientBitmap: Spiegelung (2), 180 (3), 90 CW (6), 90 CCW (8) auf 2x3-Bitmap -- exakte Pixelpositionen', () => {
+  const r2 = P.orientBitmap(GRID, 2, 3, 2);
+  assert.deepEqual([r2.width, r2.height, marks(r2.data, r2.width, r2.height)], [2, 3, [B, A, D, C, F, E]]);
+  const r3 = P.orientBitmap(GRID, 2, 3, 3);
+  assert.deepEqual([r3.width, r3.height, marks(r3.data, r3.width, r3.height)], [2, 3, [F, E, D, C, B, A]]);
+  const r6 = P.orientBitmap(GRID, 2, 3, 6);
+  assert.deepEqual([r6.width, r6.height, marks(r6.data, r6.width, r6.height)], [3, 2, [E, C, A, F, D, B]]);
+  const r8 = P.orientBitmap(GRID, 2, 3, 8);
+  assert.deepEqual([r8.width, r8.height, marks(r8.data, r8.width, r8.height)], [3, 2, [B, D, F, A, C, E]]);
+  const r1 = P.orientBitmap(GRID, 2, 3, 1);
+  assert.deepEqual([r1.width, r1.height, marks(r1.data, r1.width, r1.height)], [2, 3, [A, B, C, D, E, F]]);
+});

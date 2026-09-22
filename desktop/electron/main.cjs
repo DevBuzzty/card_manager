@@ -995,7 +995,10 @@ function kickEbay() {
     clearTimeout(ebayKickTimer);
     ebayKickTimer = setTimeout(async () => {
         try {
-            await sync.syncNow();
+            // Fixrunde 1 §3: syncNow() meldet jetzt Push-Fehler/Zeitueberschreitung statt sie zu verschlucken --
+            // dann NICHT anstossen (die naechste Kick/Zeitplan-Runde holt es nach), nur ins Protokoll.
+            const s1 = await sync.syncNow();
+            if (!s1.ok) { console.error('[ebay-kick]', s1.error); return; }
             const r = await invokeEbay('ebay-sync', {});
             if (r?.ok === false) console.error('[ebay-kick]', r.error);
             await sync.syncNow();
@@ -1022,7 +1025,12 @@ ipcMain.handle('ebay-auth', async (event, d) => {
 });
 ipcMain.handle('ebay-sync-now', async (event, d) => {
     try {
-        if (sync) await sync.syncNow();
+        // Fixrunde 1 §3: schlaegt der Push (oder das Zeitlimit) fehl, wird ebay-sync NICHT angestossen --
+        // sonst liefe die Cloud-Funktion auf einem Stand, den der PC noch nicht geschoben hat.
+        if (sync) {
+            const s1 = await sync.syncNow();
+            if (!s1.ok) return s1;
+        }
         const r = await invokeEbay('ebay-sync', d?.retry ? { retry: String(d.retry) } : {});
         if (sync) await sync.syncNow();
         return r;
@@ -1034,9 +1042,18 @@ function photoDeps(c) {
         fileSize: (f) => fs.statSync(f).size,
         readFile: (f) => fs.readFileSync(f),
         decode: (buf) => {
-            const img = nativeImage.createFromBuffer(buf);
+            let img = nativeImage.createFromBuffer(buf);
             if (img.isEmpty()) return null;
-            const { width, height } = img.getSize();
+            let { width, height } = img.getSize();
+            // Fixrunde 1 §1: nativeImage verwirft das EXIF-Orientation-Tag; ohne Korrektur landen Hochformat-
+            // Handyfotos seitlich auf eBay. jpegOrientation liest das Tag noch aus dem rohen Dateipuffer (nur
+            // JPEG hat es -- bei PNG/ohne EXIF liefert es 1 und die Bitmap bleibt unangetastet).
+            const orientation = photos.jpegOrientation(buf);
+            if (orientation !== 1) {
+                const oriented = photos.orientBitmap(img.toBitmap(), width, height, orientation);
+                img = nativeImage.createFromBitmap(oriented.data, { width: oriented.width, height: oriented.height });
+                width = oriented.width; height = oriented.height;
+            }
             return { width, height, resize: (s) => { const r = img.resize({ ...s, quality: 'best' }); return { toJPEG: (q) => r.toJPEG(q) }; } };
         },
         upload: async (p, buf) => {

@@ -88,3 +88,39 @@ test('listing_photos: lokal ungeschoben gewinnt gegen den Pull (localWinsUnpushe
   Sync._applyPulledListingPhotos(db, [{ ...PHOTO, sort: 5 }]);
   assert.deepEqual(db.prepare("SELECT sort, deleted FROM listing_photos WHERE photo_id = 'p1'").get(), { sort: 0, deleted: 1 });
 });
+
+// Fixrunde 1 §2: updated_at/last_run_at springen bei jedem Lauf der Cloud-Funktion, auch ohne inhaltliche
+// Aenderung -- nur eine echte Inhaltsaenderung soll ebay-changed ausloesen.
+test('ebay_status: nur updated_at/last_run_at aendern sich -> keine Aenderung gemeldet, Zwischenspeicher bleibt frisch', async () => {
+  const db = freshDb();
+  const S1 = { environment: 'sandbox', connected: true, updated_at: '2026-09-22T12:00:00+00:00', last_run_at: '2026-09-22T12:00:00+00:00' };
+  assert.equal(await Sync._pullEbayStatus(fakeClient([S1]), db), true);
+  const S2 = { ...S1, updated_at: '2026-09-22T12:05:00+00:00', last_run_at: '2026-09-22T12:05:00+00:00' };
+  assert.equal(await Sync._pullEbayStatus(fakeClient([S2]), db), false);
+  assert.deepEqual(JSON.parse(db.prepare("SELECT value FROM settings WHERE key = 'ebay_status_cache'").get().value), S2);
+  const S3 = { ...S2, connected: false, updated_at: '2026-09-22T12:10:00+00:00' };
+  assert.equal(await Sync._pullEbayStatus(fakeClient([S3]), db), true);
+});
+
+// Fixrunde 1 §3: syncNow (als testbare Kernlogik syncNowCore) muss Push-Fehler und Zeitueberschreitung melden
+// statt sie zu verschlucken; bei beidem darf der Aufrufer ebay-sync NICHT anstossen (main.cjs prueft `ok`).
+test('syncNowCore: Erfolg, Fehlschlag und Zeitueberschreitung', async () => {
+  const okResult = await Sync._syncNowCore(async () => {}, () => false, 5000);
+  assert.deepEqual(okResult, { ok: true });
+
+  const failResult = await Sync._syncNowCore(async () => { throw new Error('push kaputt'); }, () => false, 5000);
+  assert.deepEqual(failResult, { ok: false, error: Sync._SYNC_NOW_FAILED_MSG });
+
+  const slowCycle = () => new Promise((r) => setTimeout(r, 300));
+  const timeoutResult = await Sync._syncNowCore(slowCycle, () => false, 30);
+  assert.deepEqual(timeoutResult, { ok: false, error: Sync._SYNC_NOW_TIMEOUT_MSG });
+
+  // Ein bereits laufender Zyklus wird abgewartet (Zeitlimit gilt fuer die gesamte Wartezeit inklusive).
+  let stillRunning = true;
+  setTimeout(() => { stillRunning = false; }, 20);
+  const waitedResult = await Sync._syncNowCore(async () => {}, () => stillRunning, 5000);
+  assert.deepEqual(waitedResult, { ok: true });
+
+  const neverStops = await Sync._syncNowCore(async () => {}, () => true, 30);
+  assert.deepEqual(neverStops, { ok: false, error: Sync._SYNC_NOW_TIMEOUT_MSG });
+});

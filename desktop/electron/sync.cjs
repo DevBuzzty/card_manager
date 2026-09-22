@@ -338,13 +338,22 @@ async function pullReadOnlyTable(c, db, table) {
   return applied;
 }
 // Spec H3b1 §4.2 -- ebay_status (eine Zeile, ohne Tokens) als JSON in settings.ebay_status_cache. -> true, wenn geändert.
+// Fixrunde 1 §2: updated_at/last_run_at springen bei jedem Lauf der Funktion, auch ohne inhaltliche Aenderung --
+// beide bleiben beim Vergleich aussen vor, damit ebay-changed nicht bei jedem Zyklus unnoetig feuert. Der
+// Zwischenspeicher selbst bleibt trotzdem der volle, letzte Stand (frische Zeitstempel fuer die Anzeige).
+function ebayStatusContentKey(s) {
+  if (!s || typeof s !== 'object') return JSON.stringify(s ?? null);
+  const { updated_at, last_run_at, ...rest } = s;
+  return JSON.stringify(rest);
+}
 async function pullEbayStatus(c, db) {
   const { data, error } = await c.from('ebay_status').select('*').maybeSingle();
   if (error) throw new Error('Pull ebay_status failed: ' + error.message);
-  const next = JSON.stringify(data ?? null);
-  if (getSetting(db, 'ebay_status_cache') === next) return false;
-  setSetting(db, 'ebay_status_cache', next);
-  return true;
+  const prevRaw = getSetting(db, 'ebay_status_cache');
+  const prev = prevRaw == null ? null : JSON.parse(prevRaw);
+  const changed = ebayStatusContentKey(prev) !== ebayStatusContentKey(data ?? null);
+  setSetting(db, 'ebay_status_cache', JSON.stringify(data ?? null));
+  return changed;
 }
 
 function getSetting(db, key) {
@@ -425,10 +434,41 @@ function sealedPushRows(db, cursor) {
   return db.prepare("SELECT * FROM sealed_items WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
 }
 
+// Spec H3b1 §5.4, Fixrunde 1 §3 -- Kernlogik von syncNow(), von startSync() getrennt, damit sie ohne echten
+// Supabase-Client und ohne 60 echte Sekunden Wartezeit geprueft werden kann (ebay-sync.test.cjs). Wartet auf
+// `isRunning()` (Zeitlimit inklusive), fuehrt dann `runCycle()` mit dem restlichen Zeitlimit aus. `runCycle()`
+// muss werfen, wenn der Zyklus gescheitert ist -- cycle() selbst verschluckt Fehler (siehe cycleReporting oben).
+const SYNC_NOW_TIMEOUT_MS = 60000;
+const SYNC_NOW_TIMEOUT_MSG = 'Abgleich mit der Cloud dauert zu lange – bitte später erneut.';
+const SYNC_NOW_FAILED_MSG = 'Abgleich mit der Cloud gescheitert – bitte später erneut.';
+async function syncNowCore(runCycle, isRunning, timeoutMs = SYNC_NOW_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  while (isRunning()) {
+    if (Date.now() >= deadline) return { ok: false, error: SYNC_NOW_TIMEOUT_MSG };
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  const remaining = Math.max(0, deadline - Date.now());
+  const cyclePromise = runCycle();
+  cyclePromise.catch(() => {}); // verliert der Zyklus das Rennen gegen das Zeitlimit, trotzdem keine unbehandelte Ablehnung
+  let timer;
+  const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve('timeout'), remaining); });
+  try {
+    const result = await Promise.race([cyclePromise.then(() => 'done'), timeout]);
+    return result === 'timeout' ? { ok: false, error: SYNC_NOW_TIMEOUT_MSG } : { ok: true };
+  } catch (e) {
+    return { ok: false, error: SYNC_NOW_FAILED_MSG };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function startSync(db, getWindow, { onPriceAlerts } = {}) {
   let client = null;
   let running = false;
   let lastAlertSignature = null;
+  // Fixrunde 1 §3: cycle() verschluckt Fehler bewusst (der automatische Zeitplan soll nicht sterben) --
+  // syncNow() muss sie aber melden koennen, deshalb hier gemerkt statt geworfen.
+  let lastCycleFailed = false;
 
   // One-time backfill (2026-09-02): rows resolved before cm_product_id/price_locked were mirrored
   // were already pushed without them. Touch them once so the normal dirty-row push re-uploads
@@ -826,6 +866,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       if (ebayChanged) { const w = getWindow(); if (w) w.webContents.send('ebay-changed'); }
       const totalPulled = pulledCollection + pulledSealed + pulledSales + pulledListings;
       emit('idle', totalPulled > 0 ? `pulled ${totalPulled}` : 'up to date');
+      lastCycleFailed = false;
     } catch (e) {
       // Only drop the session on auth/token failures; keep it through transient
       // network blips so we don't re-authenticate every cycle (rate-limit risk).
@@ -833,6 +874,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
         client = null;
       }
       emit('error', e.message);
+      lastCycleFailed = true;
     } finally {
       running = false;
     }
@@ -843,9 +885,14 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
 
   // Spec H3b1 §5.4: „jetzt“ abgleichen (vor/nach dem Anstoß von ebay-sync) -- wartet einen laufenden Zyklus ab
   // und startet dann einen eigenen, damit lokale Änderungen sicher geschoben und der eBay-Stand gezogen ist.
-  async function syncNow() {
-    while (running) await new Promise((r) => setTimeout(r, 200));
+  // Fixrunde 1 §3: cycle() selbst verschluckt Fehler -- dieser Wrapper wirft, wenn der letzte Lauf gescheitert
+  // ist, damit syncNowCore() das als Fehlschlag statt als stillen Erfolg meldet.
+  async function cycleReporting() {
     await cycle();
+    if (lastCycleFailed) throw new Error('cycle failed');
+  }
+  async function syncNow() {
+    return syncNowCore(cycleReporting, () => running, SYNC_NOW_TIMEOUT_MS);
   }
 
   // Expose the authed client so other main-process features (deals) can use the same
@@ -894,4 +941,8 @@ module.exports = {
   // Test-only hook (sync-push-chunks.test.cjs): the cards echo-lock map, to verify
   // upsertCardsInChunks populates it per successful block even when a later block fails.
   _recentlyPushed: recentlyPushed,
+  // Fixrunde 1 §3: Test-Haken der syncNow-Kernlogik (ebay-sync.test.cjs) -- ohne echten Client/60s Wartezeit.
+  _syncNowCore: syncNowCore,
+  _SYNC_NOW_TIMEOUT_MSG: SYNC_NOW_TIMEOUT_MSG,
+  _SYNC_NOW_FAILED_MSG: SYNC_NOW_FAILED_MSG,
 };
