@@ -53,9 +53,16 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
     const seq = latest.current;
     load();
     const onDirty = () => { load(); };
-    const off = window.api?.onListingsChanged?.(onDirty);
+    // Wie useListingsData: Angebote, Sammlung und Verkaeufe (anderes Geraet) aendern copyLive/Marktwert.
+    const offs = [window.api?.onListingsChanged?.(onDirty), window.api?.onCollectionChanged?.(onDirty), window.api?.onSalesChanged?.(onDirty)];
     window.addEventListener('listings-dirty', onDirty);
-    return () => { seq.start(); off?.(); window.removeEventListener('listings-dirty', onDirty); };
+    window.addEventListener('collection-dirty', onDirty);
+    return () => {
+      seq.start();
+      offs.forEach((off) => off?.());
+      window.removeEventListener('listings-dirty', onDirty);
+      window.removeEventListener('collection-dirty', onDirty);
+    };
   }, [load]);
 
   // Eigener Escape-Handler; ausgesetzt, solange ein Dialog darueber offen ist oder bearbeitet wird.
@@ -206,11 +213,14 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
                       <div className="text-[11px] font-mono text-ink-muted">{it.set_code} · {it.rarity} · {it.language}</div>
                       <div className="text-[11px] font-mono text-ink-muted">{it.condition} · {EDITION_LABELS[it.edition] || it.edition}</div>
                     </div>
-                    <div className="text-right text-[11px] font-mono text-ink-muted shrink-0">
-                      Marktwert {it.marketCents == null ? '–' : euroCentsText(it.marketCents)}
-                    </div>
+                    {/* Verkauft/beendet: Exemplare sind verkauft (sold_in) -- dort kein "Marktwert –" und kein "Karte fehlt". */}
+                    {(active || it.marketCents != null) && (
+                      <div className="text-right text-[11px] font-mono text-ink-muted shrink-0">
+                        Marktwert {it.marketCents == null ? '–' : euroCentsText(it.marketCents)}
+                      </div>
+                    )}
                   </button>
-                  {!it.copyLive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-crit/20 text-crit shrink-0">Karte fehlt</span>}
+                  {!it.copyLive && active && <span className="text-[10px] px-1.5 py-0.5 rounded bg-crit/20 text-crit shrink-0">Karte fehlt</span>}
                   {!it.copyLive && active && !editing && (
                     <button type="button" onClick={() => removeItem(it.copy_id)} disabled={busy} className={btn}>Herausnehmen</button>
                   )}

@@ -124,6 +124,13 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
 
   const finish = () => onBooked?.(done.sale_id);
   const dismiss = () => (done ? finish() : onClose?.());
+  const openReminder = async (url) => {
+    setError(null);
+    try {
+      const res = await window.api.openListingUrl(url);
+      if (!res?.success) setError(res?.error || 'Link konnte nicht geöffnet werden.');
+    } catch (e) { setError(e?.message || 'Link konnte nicht geöffnet werden.'); }
+  };
 
   const field = 'w-full bg-obsidian-800 border border-line rounded-lg px-3 py-2 text-sm text-ink';
   return (
@@ -144,7 +151,7 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
                 {done.reminders.map((r) => (
                   <div key={r.listing_id} className="flex items-center gap-2 text-xs text-ink-muted">
                     <span className="flex-1 truncate">{r.channel_name} – {r.title}</span>
-                    {r.external_url && <button type="button" onClick={() => window.api.openListingUrl(r.external_url)} className="text-space-violet hover:underline">Anzeige öffnen</button>}
+                    {r.external_url && <button type="button" onClick={() => openReminder(r.external_url)} className="text-space-violet hover:underline">Anzeige öffnen</button>}
                   </div>
                 ))}
               </div>
@@ -154,6 +161,7 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
                 <button type="button" onClick={() => { finish(); onAdjustListing?.(); }} className="text-space-violet hover:underline">Bearbeiten</button>
               </p>
             )}
+            {error && <p className="text-sm text-crit">{error}</p>}
             <div className="flex justify-end"><button type="button" onClick={finish} className="px-4 py-2 rounded-lg text-sm bg-space-violet text-white">Fertig</button></div>
           </>
         ) : !preview || !channels ? <p className="text-ink-faint">…</p> : (
