@@ -1,0 +1,50 @@
+{
+  "_comment": "Spec H3b §5.3/§8/§9 -- Entscheidungstabelle fuer supabase/functions/_shared/ebay-plan.ts#decide. nowMs = 2026-09-22T12:00:00Z. row: null = keine ebay_listings-Zeile; Felder, die fehlen, sind null.",
+  "nowMs": 1790078400000,
+  "rows": {
+    "online":      { "listing_id": "l1", "environment": "sandbox", "state": "online",  "offer_id": "O1", "synced_hash": "h1", "failed_hash": null, "sold_seen": 0, "synced_at": "2026-09-22T11:30:00Z" },
+    "onlineOld":   { "listing_id": "l1", "environment": "sandbox", "state": "online",  "offer_id": "O1", "synced_hash": "h1", "failed_hash": null, "sold_seen": 0, "synced_at": "2026-09-22T11:00:00Z" },
+    "onlineOther": { "listing_id": "l1", "environment": "production", "state": "online", "offer_id": "P1", "synced_hash": "h1", "failed_hash": null, "sold_seen": 0, "synced_at": "2026-09-22T11:30:00Z" },
+    "wartet":      { "listing_id": "l1", "environment": "sandbox", "state": "wartet",  "offer_id": null, "synced_hash": null, "failed_hash": null, "sold_seen": null, "synced_at": null },
+    "fehlerNew":   { "listing_id": "l1", "environment": "sandbox", "state": "fehler",  "offer_id": null, "synced_hash": null, "failed_hash": "h1", "sold_seen": null, "synced_at": null },
+    "fehlerOnl":   { "listing_id": "l1", "environment": "sandbox", "state": "fehler",  "offer_id": "O1", "synced_hash": "h0", "failed_hash": "h1", "sold_seen": 0, "synced_at": "2026-09-22T10:00:00Z" },
+    "beendet":     { "listing_id": "l1", "environment": "sandbox", "state": "beendet", "offer_id": "O1", "synced_hash": "h1", "failed_hash": null, "sold_seen": 0, "synced_at": "2026-09-22T10:00:00Z" }
+  },
+  "cases": [
+    { "name": "neu, verbunden, eingerichtet -> einstellen", "active": true, "hash": "h1", "row": null, "connected": true, "setupOk": true, "retry": false, "action": "publish" },
+    { "name": "neu, nicht verbunden -> wartet", "active": true, "hash": "h1", "row": null, "connected": false, "setupOk": false, "retry": false, "action": "wait" },
+    { "name": "neu, Einrichtung unvollstaendig -> wartet", "active": true, "hash": "h1", "row": null, "connected": true, "setupOk": false, "retry": false, "action": "wait" },
+    { "name": "wartet bleibt wartet ohne Einrichtung (kein Schreiben)", "active": true, "hash": "h1", "row": "wartet", "connected": true, "setupOk": false, "retry": false, "action": "none" },
+    { "name": "wartet, jetzt eingerichtet -> einstellen", "active": true, "hash": "h1", "row": "wartet", "connected": true, "setupOk": true, "retry": false, "action": "publish" },
+    { "name": "online, gleiche Pruefsumme, frisch geprueft -> nichts", "active": true, "hash": "h1", "row": "online", "connected": true, "setupOk": true, "retry": false, "action": "none" },
+    { "name": "online, gleiche Pruefsumme, vor 1 h geprueft -> Stichprobe", "active": true, "hash": "h1", "row": "onlineOld", "connected": true, "setupOk": true, "retry": false, "action": "check" },
+    { "name": "online, Pruefsumme geaendert (Preis/Menge/Text) -> aendern", "active": true, "hash": "h2", "row": "online", "connected": true, "setupOk": true, "retry": false, "action": "revise" },
+    { "name": "online, Erneut versuchen -> aendern", "active": true, "hash": "h1", "row": "online", "connected": true, "setupOk": true, "retry": true, "action": "revise" },
+    { "name": "online, Verbindung weg -> Anzeige bleibt unberuehrt", "active": true, "hash": "h2", "row": "online", "connected": false, "setupOk": false, "retry": false, "action": "none" },
+    { "name": "Soll beendet, online -> zurueckziehen", "active": false, "hash": null, "row": "online", "connected": true, "setupOk": true, "retry": false, "action": "withdraw" },
+    { "name": "Soll beendet, online, nicht verbunden -> spaeter zurueckziehen", "active": false, "hash": null, "row": "online", "connected": false, "setupOk": false, "retry": false, "action": "none" },
+    { "name": "Soll beendet, wartet ohne Offer -> lokal beenden", "active": false, "hash": null, "row": "wartet", "connected": false, "setupOk": false, "retry": false, "action": "end_local" },
+    { "name": "Soll beendet, schon beendet -> nichts", "active": false, "hash": null, "row": "beendet", "connected": true, "setupOk": true, "retry": false, "action": "none" },
+    { "name": "Soll beendet, Zeile aus anderer Umgebung -> nie anfassen", "active": false, "hash": null, "row": "onlineOther", "connected": true, "setupOk": true, "retry": false, "action": "none" },
+    { "name": "Soll aktiv, Zeile aus anderer Umgebung -> neu einstellen", "active": true, "hash": "h1", "row": "onlineOther", "connected": true, "setupOk": true, "retry": false, "action": "publish" },
+    { "name": "Fehler beim Einstellen, unveraendert -> nicht wiederholen", "active": true, "hash": "h1", "row": "fehlerNew", "connected": true, "setupOk": true, "retry": false, "action": "none" },
+    { "name": "Fehler beim Einstellen, Erneut versuchen -> einstellen", "active": true, "hash": "h1", "row": "fehlerNew", "connected": true, "setupOk": true, "retry": true, "action": "publish" },
+    { "name": "Fehler beim Einstellen, geaendert -> einstellen", "active": true, "hash": "h2", "row": "fehlerNew", "connected": true, "setupOk": true, "retry": false, "action": "publish" },
+    { "name": "Fehler mit Offer, unveraendert -> nicht wiederholen", "active": true, "hash": "h1", "row": "fehlerOnl", "connected": true, "setupOk": true, "retry": false, "action": "none" },
+    { "name": "Fehler mit Offer, Erneut versuchen -> aendern", "active": true, "hash": "h1", "row": "fehlerOnl", "connected": true, "setupOk": true, "retry": true, "action": "revise" },
+    { "name": "Fehler mit Offer, Soll beendet -> zurueckziehen", "active": false, "hash": null, "row": "fehlerOnl", "connected": true, "setupOk": true, "retry": false, "action": "withdraw" },
+    { "name": "beendet, Soll wieder aktiv -> aendern und neu veroeffentlichen", "active": true, "hash": "h1", "row": "beendet", "connected": true, "setupOk": true, "retry": false, "action": "revise" }
+  ],
+  "ended": [
+    { "offer": null, "ended": true },
+    { "offer": { "status": "UNPUBLISHED" }, "ended": true },
+    { "offer": { "status": "PUBLISHED", "listing": { "listingStatus": "ACTIVE" } }, "ended": false },
+    { "offer": { "status": "PUBLISHED", "listing": { "listingStatus": "OUT_OF_STOCK" } }, "ended": false },
+    { "offer": { "status": "PUBLISHED", "listing": { "listingStatus": "ENDED" } }, "ended": true },
+    { "offer": { "status": "PUBLISHED" }, "ended": true }
+  ],
+  "summaries": [
+    { "s": { "published": 2, "revised": 1, "withdrawn": 0, "waiting": 0, "checked": 3, "errors": 1, "deferred": 0 }, "text": "2 eingestellt · 1 geändert · 0 beendet · 1 Fehler" },
+    { "s": { "published": 0, "revised": 0, "withdrawn": 1, "waiting": 2, "checked": 0, "errors": 0, "deferred": 4 }, "text": "0 eingestellt · 0 geändert · 1 beendet · 0 Fehler · 2 wartet · 4 im nächsten Lauf" }
+  ]
+}
