@@ -51,6 +51,8 @@ object CollectionChip {
     const val ALLE = "alle"
     const val DUPLIKATE = "duplikate"
     const val VERKAUF = "verkauf"
+    // Spec H3a §6: Übersicht „Angebote“.
+    const val ANGEBOTE = "angebote"
     private val pending = MutableStateFlow<String?>(null)
     val request: StateFlow<String?> = pending
 

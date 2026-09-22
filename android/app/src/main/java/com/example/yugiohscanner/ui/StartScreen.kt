@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Sell
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -47,6 +48,7 @@ import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.Duplicates
+import com.example.yugiohscanner.ml.ListingText
 import com.example.yugiohscanner.ml.SealedSnapshot
 import com.example.yugiohscanner.ml.SealedValue
 import com.example.yugiohscanner.ml.SnapshotSeries
@@ -89,12 +91,20 @@ fun StartScreen(
     onOpenAlerts: () -> Unit,
     onOpenForSale: () -> Unit,
     onOpenDuplicates: () -> Unit,
+    onOpenListings: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     // Spec H1 §5.3: Zaehler und "davon zum Verkauf"; null = wird gerechnet ("…").
     val sale = rememberSaleData()
     val saleSummary = remember(sale) { sale?.let { Duplicates.forSaleSummary(it.sale) } }
     val duplicateSummary = remember(sale) { sale?.let { Duplicates.summary(it.duplicates) } }
+    // Spec H3a §6: "Angebote: N aktiv"; "…" solange geladen wird, "—" nach einem Fehler ohne Wert.
+    val listingsState by SideStores.listings.state.collectAsState()
+    LaunchedEffect(Unit) { SideStores.listings.ensureLoaded() }
+    val listingsText = remember(listingsState) {
+        listingsState.value?.let { ListingText.startText(ListingText.listingsSummary(it.heads(), it.lineItems()).listings) }
+            ?: if (listingsState.error != null) "Angebote: —" else "Angebote: …"
+    }
     // Spec §5: Karten und Exemplare aus dem Speicher; der Ladebildschirm garantiert Ready.
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
@@ -189,6 +199,7 @@ fun StartScreen(
             SideStores.priceAlertEvents.refreshAndWait()
             SideStores.priceAlertTargets.refreshAndWait()
             SideStores.sealedItems.refreshAndWait()
+            SideStores.listings.refreshAndWait()
         }) {
         // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
         // passen) oder null; solange null, bleibt `d` null und die betroffenen Stellen unten
@@ -370,6 +381,11 @@ fun StartScreen(
                         Spacer(Modifier.width(12.dp))
                         Text(duplicateSummary?.let { Duplicates.startDuplicatesText(it) } ?: "Duplikate: ${Duplicates.LOADING}",
                             style = MaterialTheme.typography.bodyMedium, color = OnSurface)
+                    }
+                    Row(Modifier.fillMaxWidth().clickable { onOpenListings() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Storefront, null, tint = Gold)
+                        Spacer(Modifier.width(12.dp))
+                        Text(listingsText, style = MaterialTheme.typography.bodyMedium, color = OnSurface)
                     }
                 }
             }

@@ -37,6 +37,7 @@ import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.WishlistRepository
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.ListingText
 import com.example.yugiohscanner.ml.SalesOverview
 import com.example.yugiohscanner.ml.Tags
 import com.example.yugiohscanner.ui.components.RarityChip
@@ -79,6 +80,10 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
     var sheetCopy by remember { mutableStateOf<CopyRow?>(null) }
 
     LaunchedEffect(Unit) { SideStores.wishlist.ensureLoaded() }
+    // Spec H3a §6: "angeboten auf <Kanal> für <Preis>" am Exemplar.
+    val listingsState by SideStores.listings.state.collectAsState()
+    LaunchedEffect(Unit) { SideStores.listings.ensureLoaded() }
+    val offers = remember(listingsState.value) { listingsState.value?.byCopy() ?: emptyMap() }
 
     // Spec H2 §7: eine komplett verkaufte Karte hat keinen lebenden Druck mehr, die Ansicht bleibt aber
     // offen, solange der Verkaufs-Speicher Positionen dieser Karte hat (SalesOverview.cardSold -- dieselbe
@@ -233,7 +238,10 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                             // Standort- und Tag-Chips -- oeffnet das Exemplar-Sheet fuer GENAU dieses
                             // copy_id (nicht die Gruppe). Gegenstueck zu CardDetailPanel.jsx.
                             mine.filter { !it.deleted && it.edition == g.edition && it.condition == g.condition }
-                                .forEach { c -> CopyLocationRow(c, containers.find { ct -> ct.containerId == c.containerId }, onClick = { sheetCopy = c }) }
+                                .forEach { c ->
+                                    CopyLocationRow(c, containers.find { ct -> ct.containerId == c.containerId },
+                                        offered = ListingText.offeredText(offers[c.copyId] ?: emptyList()), onClick = { sheetCopy = c })
+                                }
                         }
                         TextButton(enabled = migrated, onClick = {
                             scope.launch { try { CollectionRepository.addCopies(v, Prefs.defaultEdition(ctx), Prefs.defaultCondition(ctx)); error = null; refresh() } catch (e: Exception) { error = e.message } }
@@ -294,29 +302,32 @@ private fun StatTile(label: String, value: String) {
 // Spec B1 §10.3: eine Zeile je Exemplar -- Standort-Chip links (CopyLocation.format, zeichengleich
 // zum Desktop), Tag-Chips rechts. Ein Klick oeffnet das Exemplar-Sheet fuer genau dieses Exemplar.
 @Composable
-private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, onClick: () -> Unit) {
-    Row(
+private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, offered: String?, onClick: () -> Unit) {
+    Column(
         Modifier.fillMaxWidth().padding(top = 2.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(Muted.copy(alpha = 0.08f))
             .clickable { onClick() }
             .padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Spec H1 §5.3: Preisschild an markierten Exemplaren.
-        if (copy.forSale) {
-            Icon(Icons.Default.Sell, "Zum Verkauf", tint = Gold, modifier = Modifier.size(14.dp))
-            Spacer(Modifier.width(4.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // Spec H1 §5.3: Preisschild an markierten Exemplaren.
+            if (copy.forSale) {
+                Icon(Icons.Default.Sell, "Zum Verkauf", tint = Gold, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+            }
+            Text(
+                // Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile.
+                if (copy.containerId == null) "ohne Standort" else CopyLocation.format(copy, container),
+                style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = Muted,
+                maxLines = 1, modifier = Modifier.weight(1f),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Tags.parse(copy.tags).forEach { t -> TagChipSmall(t) }
+            }
         }
-        Text(
-            // Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile.
-            if (copy.containerId == null) "ohne Standort" else CopyLocation.format(copy, container),
-            style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = Muted,
-            maxLines = 1, modifier = Modifier.weight(1f),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Tags.parse(copy.tags).forEach { t -> TagChipSmall(t) }
-        }
+        // Spec H3a §6: zweite Zeile "angeboten auf …".
+        offered?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Gold) }
     }
 }
 

@@ -221,10 +221,11 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
             }
             // Spec H1 §5.2: Chip-Zeile ueber der Liste; Sortierung und aktive Filter gelten nur fuer "Alle".
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(chip == CollectionChip.ALLE, { chip = CollectionChip.ALLE }, label = { Text("Alle") })
                 FilterChip(chip == CollectionChip.DUPLIKATE, { chip = CollectionChip.DUPLIKATE }, label = { Text("Duplikate") })
                 FilterChip(chip == CollectionChip.VERKAUF, { chip = CollectionChip.VERKAUF }, label = { Text("Zum Verkauf") })
+                FilterChip(chip == CollectionChip.ANGEBOTE, { chip = CollectionChip.ANGEBOTE }, label = { Text("Angebote") })
             }
             if (chip == CollectionChip.ALLE) {
                 Spacer(Modifier.height(8.dp))
@@ -254,6 +255,8 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                 DuplicatesList(sale, onOpenCard = { detailId = it }, history = duplicatesHistory, listState = duplicatesListState, modifier = Modifier.weight(1f))
             } else if (chip == CollectionChip.VERKAUF) {
                 ForSaleList(sale, onOpenCard = { detailId = it }, listState = forSaleListState, modifier = Modifier.weight(1f))
+            } else if (chip == CollectionChip.ANGEBOTE) {
+                ListingsSection(onOpenCard = { detailId = it }, modifier = Modifier.weight(1f))
             } else if (grid) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
