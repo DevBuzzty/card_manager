@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design-Richtungen</title>
+<style>
+/* ---------- Themen ---------- */
+:root{
+  --bg:#121212; --panel:#191919; --panel2:#1f1f1f; --line:#2b2b2b;
+  --fg:#f2f2f2; --muted:#9a9a9a;
+  --accent:#9D00FF; --accent-fg:#fff;
+  --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; --money:#fb923c;
+  --rare:#e879f9; --code:#facc15;
+  --radius:12px; --glow:0 0 18px rgba(157,0,255,.55); --shadow:0 8px 24px rgba(0,0,0,.45);
+  --font:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --num:var(--font); --dens:1;
+}
+/* 1 Werkstatt */
+body[data-theme="werkstatt"]{
+  --bg:#17181a; --panel:#1d1f21; --panel2:#232528; --line:#2e3134;
+  --fg:#e9eaec; --muted:#9ba0a6;
+  --accent:#8b6ad6; --accent-fg:#14151a;
+  --good:#7fa88a; --warn:#c9a36b; --bad:#c07a7a; --money:#e9eaec;
+  --rare:#9ba0a6; --code:#9ba0a6;
+  --glow:none; --shadow:0 1px 0 rgba(255,255,255,.03);
+}
+/* 2 Katalog */
+body[data-theme="katalog"]{
+  --bg:#f6f4ef; --panel:#fffdf8; --panel2:#f1eee7; --line:#e0dbd1;
+  --fg:#1b1a17; --muted:#6c675e;
+  --accent:#4b3f8f; --accent-fg:#fff;
+  --good:#3f7d54; --warn:#9a6b1f; --bad:#a23b3b; --money:#1b1a17;
+  --rare:#6c675e; --code:#6c675e;
+  --glow:none; --shadow:0 1px 2px rgba(0,0,0,.06);
+}
+/* 3 Werkzeugkasten */
+body[data-theme="werkzeug"]{
+  --bg:#101214; --panel:#141719; --panel2:#181c1f; --line:#232a2e;
+  --fg:#dfe5e8; --muted:#8a949a;
+  --accent:#3b82f6; --accent-fg:#fff;
+  --good:#3fa65f; --warn:#b8862f; --bad:#d15b5b; --money:#dfe5e8;
+  --rare:#8a949a; --code:#8a949a;
+  --radius:4px; --glow:none; --shadow:none;
+  --num:"SF Mono",Consolas,"Roboto Mono",monospace; --dens:.78;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--font);transition:background .2s,color .2s}
+
+/* ---------- Umschalter ---------- */
+.switch{position:sticky;top:0;z-index:20;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+.switch b{font-size:13px;color:var(--muted);font-weight:600;margin-right:4px}
+.switch button{font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;cursor:pointer;
+  background:transparent;color:var(--fg);border:1px solid var(--line)}
+.switch button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:transparent;box-shadow:var(--glow)}
+.note{padding:10px 16px;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line);background:var(--panel)}
+
+/* ---------- Gerüst ---------- */
+.app{display:grid;grid-template-columns:208px 1fr 320px;min-height:calc(100vh - 92px)}
+@media (max-width:980px){.app{grid-template-columns:1fr}.side,.detail{display:none}}
+
+.side{background:var(--panel);border-right:1px solid var(--line);padding:calc(16px*var(--dens))}
+.brand{font-weight:700;letter-spacing:.02em;margin:4px 8px calc(18px*var(--dens))}
+.group{margin:calc(16px*var(--dens)) 0 6px 8px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.nav{display:flex;align-items:center;gap:10px;padding:calc(9px*var(--dens)) 10px;border-radius:calc(var(--radius) - 4px);
+  color:var(--muted);cursor:default;font-size:14px}
+.nav .dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.5}
+.nav.on{background:var(--panel2);color:var(--fg)}
+body[data-theme="default"] .nav.on{background:linear-gradient(90deg,rgba(157,0,255,.35),transparent);color:#fff;box-shadow:var(--glow)}
+.nav .count{margin-left:auto;font-size:12px;color:var(--muted);font-family:var(--num)}
+
+.main{padding:calc(18px*var(--dens)) calc(20px*var(--dens));min-width:0}
+h1{font-size:calc(22px*var(--dens) + 4px);margin:0 0 4px;font-weight:650}
+.sub{color:var(--muted);font-size:13px;margin:0 0 calc(16px*var(--dens))}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:calc(14px*var(--dens))}
+.inp{flex:1;min-width:160px;background:var(--panel);border:1px solid var(--line);color:var(--fg);
+  padding:calc(8px*var(--dens)) 12px;border-radius:calc(var(--radius) - 4px);font:inherit;font-size:14px}
+.btn{font:inherit;font-size:13px;padding:calc(8px*var(--dens)) 12px;border-radius:calc(var(--radius) - 4px);
+  border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent;box-shadow:var(--glow)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:calc(14px*var(--dens))}
+.chip{font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.chip.on{background:var(--accent);color:var(--accent-fg);border-color:transparent;box-shadow:var(--glow)}
+body[data-theme="default"] .chip:nth-child(2){color:var(--code);border-color:var(--code)}
+body[data-theme="default"] .chip:nth-child(3){color:var(--rare);border-color:var(--rare)}
+body[data-theme="default"] .chip:nth-child(4){color:var(--good);border-color:var(--good)}
+body[data-theme="default"] .chip:nth-child(5){color:var(--money);border-color:var(--money)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(calc(150px*var(--dens) + 20px),1fr));gap:calc(14px*var(--dens))}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+body[data-theme="default"] .tile{box-shadow:0 0 0 1px rgba(157,0,255,.18),0 10px 24px rgba(0,0,0,.5)}
+.art{aspect-ratio:59/86;background:
+   radial-gradient(120% 80% at 50% 20%, rgba(255,255,255,.10), transparent 60%),
+   linear-gradient(160deg,#3a3f4b,#232830);
+  position:relative}
+.art::after{content:"";position:absolute;inset:10% 10% 34%;border-radius:2px;background:rgba(255,255,255,.07)}
+body[data-theme="katalog"] .art{background:linear-gradient(160deg,#cdc6b8,#aba392)}
+.tinfo{padding:calc(9px*var(--dens)) 10px}
+.tname{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tmeta{display:flex;gap:6px;align-items:center;margin-top:4px;font-size:11px;color:var(--muted)}
+.tmeta .code{color:var(--code)}
+.tmeta .rare{color:var(--rare)}
+.tprice{margin-left:auto;color:var(--money);font-family:var(--num);font-weight:600}
+
+/* Detail */
+.detail{background:var(--panel);border-left:1px solid var(--line);padding:calc(16px*var(--dens));min-width:0}
+.dtitle{font-size:17px;font-weight:650;margin:2px 0 2px}
+.dsub{color:var(--muted);font-size:12px;margin-bottom:calc(14px*var(--dens))}
+.sec{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:calc(14px*var(--dens)) 0 8px}
+.copy{display:flex;align-items:center;gap:10px;padding:calc(9px*var(--dens)) 10px;border:1px solid var(--line);
+  border-radius:calc(var(--radius) - 4px);background:var(--panel2);margin-bottom:6px;font-size:13px}
+.copy .cond{font-weight:600}
+.copy .loc{color:var(--muted);font-size:12px}
+.copy .mark{margin-left:auto;font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.copy .mark.sale{color:var(--warn);border-color:var(--warn)}
+.copy .mark.listed{color:var(--good);border-color:var(--good)}
+.old{color:var(--muted);font-size:12px;padding:6px 10px;border:1px dashed var(--line);border-radius:6px;margin-bottom:6px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:calc(14px*var(--dens))}
+.caption{font-size:12px;color:var(--muted);margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+</style>
+</head>
+<body data-theme="default">
+
+<div class="switch">
+  <b>Richtung</b>
+  <button data-t="default" aria-pressed="true">Heute</button>
+  <button data-t="werkstatt" aria-pressed="false">1 Werkstatt</button>
+  <button data-t="katalog" aria-pressed="false">2 Katalog</button>
+  <button data-t="werkzeug" aria-pressed="false">3 Werkzeugkasten</button>
+</div>
+<div class="note">Gleicher Bildschirm, gleicher Inhalt — nur die Gestaltung wechselt. Die Struktur ist schon die neue (Verkaufen als eigener Bereich, Kartenliste ohne Reiterwand).</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">Card Manager</div>
+    <div class="group">Alltag</div>
+    <div class="nav"><span class="dot"></span>Start</div>
+    <div class="nav"><span class="dot"></span>Scannen <span class="count">7</span></div>
+    <div class="group">Bestand</div>
+    <div class="nav on"><span class="dot"></span>Sammlung</div>
+    <div class="nav"><span class="dot"></span>Decks</div>
+    <div class="group">Handel</div>
+    <div class="nav"><span class="dot"></span>Verkaufen <span class="count">3</span></div>
+    <div class="nav"><span class="dot"></span>Deals</div>
+    <div class="group">Auswertung</div>
+    <div class="nav"><span class="dot"></span>Insights</div>
+    <div class="nav"><span class="dot"></span>Einstellungen</div>
+  </aside>
+
+  <main class="main">
+    <h1>Sammlung</h1>
+    <p class="sub">1 248 Karten · 3 412 Exemplare · 2 874,10 €</p>
+    <div class="chips">
+      <span class="chip on">Karten</span><span class="chip">Binder</span><span class="chip">Sets</span>
+      <span class="chip">Wunschliste</span><span class="chip">Sealed</span>
+    </div>
+    <div class="bar">
+      <input class="inp" placeholder="Karte suchen…">
+      <button class="btn">Filter</button>
+      <button class="btn">Sortierung: Name</button>
+      <button class="btn">Exportieren</button>
+      <button class="btn primary">Preise aktualisieren</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <aside class="detail">
+    <div class="dtitle">Quadogmatika Beast</div>
+    <div class="dsub">Fallenkarte · Normal · DOOD-DE078</div>
+
+    <div class="sec">Deine Exemplare · 14</div>
+    <div class="copy"><span class="cond">NM</span><span>1. Auflage</span><span class="loc">Ordner A · Seite 3</span></div>
+    <div class="copy"><span class="cond">NM</span><span>1. Auflage</span><span class="loc">noch nicht einsortiert</span><span class="mark sale">zum Verkauf</span></div>
+    <div class="copy"><span class="cond">EX</span><span>Unlimitiert</span><span class="loc">Box „Doppelte“</span><span class="mark listed">angeboten</span></div>
+    <div class="copy"><span class="cond">GD</span><span>Unlimitiert</span><span class="loc">noch nicht einsortiert</span></div>
+
+    <div class="actions">
+      <button class="btn primary">Verkaufen</button>
+      <button class="btn">Einsortieren</button>
+      <button class="btn">Bearbeiten</button>
+    </div>
+
+    <div class="caption">Vorher stand hier fünfmal „ohne Standort“ untereinander und fünf Knöpfe in einer Zeile — einer davon abgeschnitten.</div>
+  </aside>
+</div>
+
+<script>
+const namen=["Quadogmatika Beast","Dunkler Magier","Elementar-HELD Neos","Aschblütige Nachtsakura","Sturmtiger","Feenritter","Herold des Orange-Lichts","Zauberer der Zeit","Gefäß der Gier","Doppelte Beschwörung","Mystischer Raum-Taifun","Dimensionsloch"];
+const codes=["DOOD-DE078","LOB-DE005","POTD-DE001","SHVA-DE059","MP23-DE112","DUNE-DE044","SDCB-DE021","RA02-DE007","BLMR-DE066","SGX4-DEA12","LDS3-DE089","MAZE-DE031"];
+const selten=["Common","Rare","Super Rare","Secret Rare","Ultra Rare","Common","Rare","Common","Super Rare","Common","Rare","Ultra Rare"];
+const preise=["0,14 €","2,80 €","1,05 €","24,90 €","0,35 €","0,90 €","3,40 €","0,22 €","5,60 €","0,18 €","1,75 €","11,20 €"];
+document.getElementById('grid').innerHTML = namen.map((n,i)=>`
+  <div class="tile">
+    <div class="art"></div>
+    <div class="tinfo">
+      <div class="tname">${n}</div>
+      <div class="tmeta"><span class="code">${codes[i]}</span><span class="rare">${selten[i]}</span><span class="tprice">${preise[i]}</span></div>
+    </div>
+  </div>`).join('');
+
+document.querySelectorAll('.switch button').forEach(b=>b.addEventListener('click',()=>{
+  document.body.dataset.theme=b.dataset.t;
+  document.querySelectorAll('.switch button').forEach(x=>x.setAttribute('aria-pressed', String(x===b)));
+}));
+</script>
+</body>
+</html>
