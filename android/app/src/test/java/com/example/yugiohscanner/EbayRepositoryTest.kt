@@ -67,16 +67,24 @@ class EbayRepositoryTest {
         assertEquals("https://proj.supabase.co/storage/v1/object/public/listing-photos/l1/u1.jpg",
             PhotoScale.publicUrl("https://proj.supabase.co/rest/v1", "l1/u1.jpg"))
     }
-    // Zusatz zur Task-8-Vorlage (siehe PhotoScale.kt-Kopfkommentar): volle EXIF-Ausrichtung inkl. Spiegelung fuer
-    // alle 8 Tag-Werte, wie listing-photos.cjs#orientBitmap am PC (2/4/5/7 spiegeln zusaetzlich waagrecht).
-    @Test fun `EXIF-Transformation fuer alle 8 Faelle, Spiegelung wie am PC`() {
-        val want = mapOf(
-            1 to PhotoScale.ExifTransform(0, false), 2 to PhotoScale.ExifTransform(0, true),
-            3 to PhotoScale.ExifTransform(180, false), 4 to PhotoScale.ExifTransform(180, true),
-            5 to PhotoScale.ExifTransform(90, true), 6 to PhotoScale.ExifTransform(90, false),
-            7 to PhotoScale.ExifTransform(270, true), 8 to PhotoScale.ExifTransform(270, false),
-        )
-        for ((o, t) in want) assertEquals("orientation $o", t, PhotoScale.exifTransform(o))
-        assertEquals(PhotoScale.ExifTransform(0, false), PhotoScale.exifTransform(0))
+    // Fixrunde 1, Zusatz zur Task-8-Vorlage: Pixel-Zwilling von listing-photos.cjs#orientBitmap. Dieselbe 2x3-Bitmap
+    // und dieselben erwarteten Positionen wie listing-photos.test.cjs (Faelle 2, 3, 6, 8); 5 und 7 von Hand aus
+    // denselben orientBitmap-Formeln abgeleitet (siehe Task-8-Fixrunde-1-Bericht fuer die Herleitung).
+    // Reihenfolge row-major: (0,0)=A (1,0)=B / (0,1)=C (1,1)=D / (0,2)=E (1,2)=F -- Breite 2, Hoehe 3.
+    private val A = 10; private val B = 11; private val C = 12; private val D = 13; private val E = 14; private val F = 15
+    private val GRID = intArrayOf(A, B, C, D, E, F)
+    @Test fun `orientPixels -- Pixel-Zwilling von orientBitmap, alle 8 Faelle`() {
+        fun check(orientation: Int, wantW: Int, wantH: Int, want: List<Int>) {
+            val (px, w, h) = PhotoScale.orientPixels(GRID, 2, 3, orientation)
+            assertEquals("orientation $orientation", listOf(wantW, wantH, want), listOf(w, h, px.toList()))
+        }
+        check(1, 2, 3, listOf(A, B, C, D, E, F))
+        check(2, 2, 3, listOf(B, A, D, C, F, E))
+        check(3, 2, 3, listOf(F, E, D, C, B, A))
+        check(4, 2, 3, listOf(E, F, C, D, A, B))
+        check(5, 3, 2, listOf(A, C, E, B, D, F))
+        check(6, 3, 2, listOf(E, C, A, F, D, B))
+        check(7, 3, 2, listOf(F, D, B, E, C, A))
+        check(8, 3, 2, listOf(B, D, F, A, C, E))
     }
 }

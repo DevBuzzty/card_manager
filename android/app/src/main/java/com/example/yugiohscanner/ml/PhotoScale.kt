@@ -5,11 +5,15 @@ package com.example.yugiohscanner.ml
  * (MAX_EDGE 1600, MIN_EDGE 500, Ziel < 500 KB, Qualitätsstufen 85/75/65/55/50, höchstens 12, Pfad <listing_id>/<uuid>.jpg).
  * Adresse wie supabase/functions/_shared/ebay-map.ts#photoUrl.
  *
- * EXIF-Ausrichtung (Zusatz zur Task-8-Vorlage): die PC-Seite dreht/spiegelt Fotos jetzt vor dem Skalieren laut
- * EXIF-Orientation-Tag (listing-photos.cjs#jpegOrientation/orientBitmap), sonst landen Hochformat-Handyfotos seitlich
- * auf eBay. [exifTransform] ist die reine Rechenlogik dafür (welche Drehung + Spiegelung je Tag-Wert 1..8); das
- * tatsächliche Dekodieren/Drehen der Bitmap (android.graphics.Matrix, ExifInterface aus dem Dateipuffer) gehört zur
- * Aufnahme-Oberfläche und ist hier bewusst nicht verdrahtet, weil Task 8 nur die Datenschicht liefert.
+ * EXIF-Ausrichtung (Zusatz zur Task-8-Vorlage, Fixrunde 1): die PC-Seite dreht/spiegelt Fotos jetzt vor dem Skalieren
+ * laut EXIF-Orientation-Tag (listing-photos.cjs#jpegOrientation/orientBitmap), sonst landen Hochformat-Handyfotos
+ * seitlich auf eBay. [orientPixels] ist der Pixel-Zwilling von orientBitmap (ein Int je Pixel statt 4 Byte BGRA,
+ * sonst dieselben Formeln je Orientation-Wert 1..8) und damit die verbindliche Ausrichtungslogik. Die spätere
+ * Verdrahtung (Task 9) sieht so aus: erst mit [scaleSize]/[sampleSize] auf Zielgröße bringen, dann
+ * `bitmap.getPixels(px, 0, w, 0, 0, w, h)` -> [orientPixels] -> `Bitmap.createBitmap(px, outW, outH, ARGB_8888)`,
+ * bevor mit [encodeUnder] JPEG-kodiert wird. Das tatsächliche Dekodieren/EXIF-Lesen (android.media.ExifInterface aus
+ * dem Dateipuffer, Bitmap-Erzeugung) gehört zur Aufnahme-Oberfläche und ist hier bewusst nicht verdrahtet, weil
+ * Task 8 nur die Datenschicht liefert.
  */
 object PhotoScale {
     const val MAX_PHOTOS = 12
@@ -43,23 +47,42 @@ object PhotoScale {
         return last
     }
 
-    /** EXIF-Ausrichtung -> Drehung in Grad (6 = 90°, 3 = 180°, 8 = 270°, sonst 0). */
+    /**
+     * EXIF-Ausrichtung -> Drehung in Grad (6 = 90°, 3 = 180°, 8 = 270°, sonst 0). Deckt nur 4 der 8 Tag-Werte ab
+     * (keine Spiegelung für 2/4/5/7) -- aus der Task-8-Vorlage übernommen, weiterhin vom Literal-Test geprüft.
+     * **Für die tatsächliche Ausrichtung ist [orientPixels] verbindlich**, nicht diese Funktion.
+     */
     fun rotationForExif(orientation: Int): Int = when (orientation) { 6 -> 90; 3 -> 180; 8 -> 270; else -> 0 }
 
     /**
-     * Vollständige EXIF-Ausrichtung (1..8) -> Drehung (im Uhrzeigersinn) + waagrechte Spiegelung, angewandt VOR der
-     * Drehung. Gleiche Tabelle wie orientBitmap am PC (2/4/5/7 spiegeln zusätzlich). Unbekannte Werte -> keine Wirkung.
+     * Pixel-Zwilling von listing-photos.cjs#orientBitmap: exakt dieselben Formeln (Ausgabe-Pixel (ox,oy) ->
+     * Quell-Pixel (ix,iy)) je EXIF-Orientation-Wert 1..8, hier auf einem Int-je-Pixel-Feld (wie
+     * Bitmap.getPixels/createBitmap) statt 4-Byte-BGRA. Breite/Höhe vertauschen bei 5..8 (swapped). Unbekannte
+     * Werte (auch 1) -> unverändert. Rückgabe: (Pixel, Breite, Höhe) des gedrehten Bilds.
      */
-    data class ExifTransform(val rotationDegrees: Int, val mirrorHorizontal: Boolean)
-    fun exifTransform(orientation: Int): ExifTransform = when (orientation) {
-        2 -> ExifTransform(0, true)
-        3 -> ExifTransform(180, false)
-        4 -> ExifTransform(180, true)
-        5 -> ExifTransform(90, true)
-        6 -> ExifTransform(90, false)
-        7 -> ExifTransform(270, true)
-        8 -> ExifTransform(270, false)
-        else -> ExifTransform(0, false)
+    fun orientPixels(px: IntArray, w: Int, h: Int, orientation: Int): Triple<IntArray, Int, Int> {
+        val swapped = orientation in 5..8
+        val outW = if (swapped) h else w
+        val outH = if (swapped) w else h
+        val out = IntArray(outW * outH)
+        for (oy in 0 until outH) {
+            for (ox in 0 until outW) {
+                val ix: Int
+                val iy: Int
+                when (orientation) {
+                    2 -> { ix = w - 1 - ox; iy = oy }
+                    3 -> { ix = w - 1 - ox; iy = h - 1 - oy }
+                    4 -> { ix = ox; iy = h - 1 - oy }
+                    5 -> { ix = oy; iy = ox }
+                    6 -> { ix = oy; iy = h - 1 - ox }
+                    7 -> { ix = w - 1 - oy; iy = h - 1 - ox }
+                    8 -> { ix = w - 1 - oy; iy = ox }
+                    else -> { ix = ox; iy = oy }
+                }
+                out[oy * outW + ox] = px[iy * w + ix]
+            }
+        }
+        return Triple(out, outW, outH)
     }
 
     fun photoPath(listingId: String, uuid: String): String = "$listingId/$uuid.jpg"

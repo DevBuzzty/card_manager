@@ -97,7 +97,11 @@ object EbayRepository {
     fun photosOf(all: List<ListingPhoto>, listingId: String): List<ListingPhoto> =
         all.filter { it.listingId == listingId && !it.deleted }.sortedWith(compareBy<ListingPhoto> { it.sort }.thenBy { it.photoId })
 
-    /** Neue Reihenfolge -> nur die Fotos, deren sort sich ändert (photo_id to neuer sort). */
+    /**
+     * Neue Reihenfolge -> nur die Fotos, deren sort sich ändert (photo_id to neuer sort). [current] muss bereits
+     * per [photosOf] auf die lebenden Fotos genau dieses einen Angebots gefiltert sein -- sonst passt `orderedIds`
+     * (nur die Fotos EINES Angebots) nicht zur Menge der Schlüssel in [current] und die Prüfung unten schlägt fehl.
+     */
     internal fun reorderPatches(current: List<ListingPhoto>, orderedIds: List<String>): List<Pair<String, Int>> {
         val byId = current.associateBy { it.photoId }
         require(orderedIds.size == current.size && orderedIds.toSet() == byId.keys) { "Fotos wurden inzwischen geändert – bitte neu öffnen." }
