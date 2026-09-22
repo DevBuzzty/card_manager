@@ -6,7 +6,7 @@ const os = require('os');
 const { initDatabase, getDb } = require('./database.cjs');
 const { fetchCardData, fetchYugipediaSets, fetchJapaneseSets, cachedFetch } = require('./api-handler.cjs');
 const { belongsToCard, resolveSetCode } = require('./setcode-resolve.cjs');
-const { startSync } = require('./sync.cjs');
+const { startSync, ebayStatusReply } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape, runFirstEdPass } = require('./cardmarket-scraper.cjs');
 const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
@@ -1005,7 +1005,8 @@ function kickEbay() {
         } catch (e) { console.error('[ebay-kick]', e.message); }
     }, 1500);
 }
-ipcMain.handle('ebay-status', () => ({ status: ebayStatusCached() }));
+// Abschluss-Fix B2: vor dem ersten Ziehen { pending: true } statt null (Renderer: Ladezustand „…“, kein roter Fehler).
+ipcMain.handle('ebay-status', () => ebayStatusReply(getSetting('ebay_status_cache'), !!sync?.ebayStatusTried?.()));
 ipcMain.handle('ebay-listings', () => Object.fromEntries(db.prepare('SELECT * FROM ebay_listings').all().map((r) => [r.listing_id, r])));
 ipcMain.handle('ebay-auth', async (event, d) => {
     const action = d?.action;

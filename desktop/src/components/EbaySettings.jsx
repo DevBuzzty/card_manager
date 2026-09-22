@@ -32,7 +32,11 @@ export default function EbaySettings() {
     after?.(r);
   });
   const connect = () => auth({ action: 'start' }, () => setNotice('Browser geöffnet – nach dem Bestätigen hier „Prüfen“ drücken.'));
-  const disconnect = () => { if (window.confirm('eBay trennen? Neue eBay-Angebote warten dann.')) auth({ action: 'disconnect' }, () => setCheck(null)); };
+  const disconnect = () => {
+    if (window.confirm('eBay trennen? Laufende eBay-Anzeigen bleiben online und werden nicht mehr angepasst – beende sie vorher, wenn möglich. Neue eBay-Angebote warten dann.')) {
+      auth({ action: 'disconnect' }, () => setCheck(null));
+    }
+  };
   const switchEnv = (env) => {
     if (!window.confirm('Umgebung wechseln trennt die Verbindung und leert die Einrichtung. Fortfahren?')) return;
     auth({ action: 'set_environment', environment: env }, () => setCheck(null));
@@ -97,7 +101,9 @@ export default function EbaySettings() {
                 <li key={it.label} className={`text-sm ${it.ok ? 'text-good' : 'text-crit'}`}>{it.ok ? '✓' : '✗'} {it.label}</li>
               ))}
             </ul>
-            <button type="button" disabled={busy || !status.connected} onClick={() => auth({ action: 'check' })} className={btn}>Prüfen</button>
+            {/* Abschluss-Fix C1: nicht an status.connected koppeln -- der Stand kann nach dem Verbinden noch alt sein;
+                der Server meldet selbst „Nicht mit eBay verbunden.“ */}
+            <button type="button" disabled={busy} onClick={() => auth({ action: 'check' })} className={btn}>Prüfen</button>
 
             {check && (
               <div className="mt-4 space-y-3">
@@ -137,11 +143,12 @@ export default function EbaySettings() {
             <div>
               <label className="block text-sm font-bold text-ink-muted mb-2 uppercase tracking-wider">Standort anlegen</label>
               <div className="flex flex-wrap items-center gap-2">
-                <input inputMode="numeric" placeholder="PLZ" value={loc.postal_code}
-                  onChange={(e) => setLoc((l) => ({ ...l, postal_code: e.target.value }))} className={`w-24 ${field}`} />
+                {/* Abschluss-Fix B3: PLZ nur Ziffern, höchstens 5; Knopf erst bei genau 5 */}
+                <input inputMode="numeric" placeholder="PLZ" maxLength={5} value={loc.postal_code}
+                  onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 5); setLoc((l) => ({ ...l, postal_code: v })); }} className={`w-24 ${field}`} />
                 <input placeholder="Ort" value={loc.city}
                   onChange={(e) => setLoc((l) => ({ ...l, city: e.target.value }))} className={`w-48 ${field}`} />
-                <button type="button" disabled={busy} onClick={createLocation} className={btn}>Standort anlegen</button>
+                <button type="button" disabled={busy || !/^\d{5}$/.test(loc.postal_code)} onClick={createLocation} className={btn}>Standort anlegen</button>
               </div>
             </div>
           )}

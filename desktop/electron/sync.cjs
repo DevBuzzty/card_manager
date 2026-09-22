@@ -356,6 +356,13 @@ async function pullEbayStatus(c, db) {
   return changed;
 }
 
+// Abschluss-Fix B2: Antwort des IPC-Kanals ebay-status. Vor dem ersten Zieh-Versuch dieser Sitzung und ohne
+// gespeicherten Stand heisst null nicht "kein Stand", sondern "noch nicht gezogen" -> pending (Renderer zeigt "…").
+function ebayStatusReply(raw, tried) {
+  if (raw == null && !tried) return { status: null, pending: true };
+  try { return { status: JSON.parse(raw ?? 'null') }; } catch { return { status: null }; }
+}
+
 function getSetting(db, key) {
   try { const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(key); return r ? r.value : null; }
   catch { return null; }
@@ -462,6 +469,16 @@ async function syncNowCore(runCycle, isRunning, timeoutMs = SYNC_NOW_TIMEOUT_MS)
   }
 }
 
+// Abschluss-Fix B1: je Tabelle schieben, ein Fehler haelt die anderen Tabellen nicht auf -- aber das Ergebnis
+// sagt, ob alles geschoben wurde (false = mindestens eine Tabelle gescheitert), damit syncNow das meldet.
+async function pushTablesSafe(tables, pushOne) {
+  let ok = true;
+  for (const t of tables) {
+    try { await pushOne(t); } catch (e) { ok = false; console.error(`[sync] ${t} push:`, e.message); }
+  }
+  return ok;
+}
+
 function startSync(db, getWindow, { onPriceAlerts } = {}) {
   let client = null;
   let running = false;
@@ -469,6 +486,14 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
   // Fixrunde 1 §3: cycle() verschluckt Fehler bewusst (der automatische Zeitplan soll nicht sterben) --
   // syncNow() muss sie aber melden koennen, deshalb hier gemerkt statt geworfen.
   let lastCycleFailed = false;
+  // Abschluss-Fix B2: "eBay-Stand in dieser Sitzung schon einmal zu ziehen versucht" (Erfolg, Fehler oder kein
+  // Cloud-Login). Beim ersten Mal ebay-changed senden, damit der Renderer seinen Ladezustand verlaesst.
+  let ebayStatusTried = false;
+  function markEbayTried() {
+    if (ebayStatusTried) return;
+    ebayStatusTried = true;
+    const w = getWindow(); if (w) w.webContents.send('ebay-changed');
+  }
 
   // One-time backfill (2026-09-02): rows resolved before cm_product_id/price_locked were mirrored
   // were already pushed without them. Touch them once so the normal dirty-row push re-uploads
@@ -722,10 +747,9 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     }
     return n;
   }
+  // Abschluss-Fix B1: -> false, wenn eine Tabelle nicht geschoben wurde (cycle() merkt das in lastCycleFailed).
   async function pushListingsSafe(c) {
-    for (const t of LISTING_TABLES) {
-      try { await pushSalesTable(c, t); } catch (e) { console.error(`[sync] ${t} push:`, e.message); }
-    }
+    return pushTablesSafe(LISTING_TABLES, (t) => pushSalesTable(c, t));
   }
 
   // Spec H3b1: eBay-Stand nur ziehen; fehlen die Cloud-Tabellen (ebay_schema.sql nicht eingespielt), laufen alle
@@ -734,6 +758,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     let changed = false;
     try { changed = (await pullReadOnlyTable(c, db, 'ebay_listings')) > 0; } catch (e) { console.error('[sync] ebay_listings pull:', e.message); }
     try { changed = (await pullEbayStatus(c, db)) || changed; } catch (e) { console.error('[sync] ebay_status pull:', e.message); }
+    markEbayTried();
     return changed;
   }
 
@@ -829,7 +854,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     running = true;
     try {
       const c = await ensureClient();
-      if (!c) { running = false; return; }
+      if (!c) { running = false; markEbayTried(); return; }
       emit('syncing');
       const pulled = await pull(c);
       // Containers before copies, both ways: a card_copies row can point at a container_id, and
@@ -847,7 +872,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       await pushCopies(c);
       await pushSealedSafe(c);
       await pushSalesSafe(c);
-      await pushListingsSafe(c);
+      const listingsPushed = await pushListingsSafe(c);
       const ebayChanged = await pullEbaySafe(c);
       await pullPriceHistory(c);
       await pushPriceHistory(c);
@@ -866,7 +891,9 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       if (ebayChanged) { const w = getWindow(); if (w) w.webContents.send('ebay-changed'); }
       const totalPulled = pulledCollection + pulledSealed + pulledSales + pulledListings;
       emit('idle', totalPulled > 0 ? `pulled ${totalPulled}` : 'up to date');
-      lastCycleFailed = false;
+      // Abschluss-Fix B1: ein gescheiterter Angebots-Push (z.B. neue eBay-Angebote) darf syncNow nicht als
+      // Erfolg erscheinen lassen -- sonst stoesst der PC ebay-sync an, bevor die Cloud die Aenderung kennt.
+      lastCycleFailed = !listingsPushed;
     } catch (e) {
       // Only drop the session on auth/token failures; keep it through transient
       // network blips so we don't re-authenticate every cycle (rate-limit risk).
@@ -875,6 +902,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       }
       emit('error', e.message);
       lastCycleFailed = true;
+      markEbayTried();
     } finally {
       running = false;
     }
@@ -897,7 +925,7 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
 
   // Expose the authed client so other main-process features (deals) can use the same
   // signed-in Supabase session instead of a separate local store.
-  return { ensureClient, syncNow };
+  return { ensureClient, syncNow, ebayStatusTried: () => ebayStatusTried };
 }
 
 module.exports = {
@@ -943,6 +971,8 @@ module.exports = {
   _recentlyPushed: recentlyPushed,
   // Fixrunde 1 §3: Test-Haken der syncNow-Kernlogik (ebay-sync.test.cjs) -- ohne echten Client/60s Wartezeit.
   _syncNowCore: syncNowCore,
+  _pushTablesSafe: pushTablesSafe,
+  ebayStatusReply,
   _SYNC_NOW_TIMEOUT_MSG: SYNC_NOW_TIMEOUT_MSG,
   _SYNC_NOW_FAILED_MSG: SYNC_NOW_FAILED_MSG,
 };

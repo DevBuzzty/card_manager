@@ -124,3 +124,28 @@ test('syncNowCore: Erfolg, Fehlschlag und Zeitueberschreitung', async () => {
   const neverStops = await Sync._syncNowCore(async () => {}, () => true, 30);
   assert.deepEqual(neverStops, { ok: false, error: Sync._SYNC_NOW_TIMEOUT_MSG });
 });
+
+// Abschluss-Fix B1: ein Push-Fehler je Tabelle wird nicht mehr verschluckt, sondern als false gemeldet.
+test('pushTablesSafe: alle Tabellen versucht, Fehlschlag gemeldet', async () => {
+  const seen = [];
+  const ok = await Sync._pushTablesSafe(['a', 'b', 'c'], async (t) => { seen.push(t); });
+  assert.equal(ok, true);
+  const seen2 = [];
+  const origError = console.error;
+  console.error = () => {};
+  let failed;
+  try {
+    failed = await Sync._pushTablesSafe(['a', 'b', 'c'], async (t) => { seen2.push(t); if (t === 'b') throw new Error('kaputt'); });
+  } finally { console.error = origError; }
+  assert.equal(failed, false);
+  assert.deepEqual([seen, seen2], [['a', 'b', 'c'], ['a', 'b', 'c']], 'die anderen Tabellen laufen weiter');
+});
+
+// Abschluss-Fix B2: vor dem ersten Ziehen "pending" statt null (sonst roter Fehler + "wartet auf eBay" beim Start).
+test('ebayStatusReply: noch nie gezogen -> pending; danach Stand bzw. null', () => {
+  assert.deepEqual(Sync.ebayStatusReply(null, false), { status: null, pending: true });
+  assert.deepEqual(Sync.ebayStatusReply(null, true), { status: null });
+  assert.deepEqual(Sync.ebayStatusReply('null', false), { status: null });
+  assert.deepEqual(Sync.ebayStatusReply('{"connected":true}', false), { status: { connected: true } });
+  assert.deepEqual(Sync.ebayStatusReply('kaputt', true), { status: null });
+});
