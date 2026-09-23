@@ -449,7 +449,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
-        <div className="flex flex-col gap-4 mb-4 bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 shrink-0">
+        <div className="flex flex-col gap-4 mb-4 bg-surface p-4 rounded-xl border border-line shrink-0">
             {/* Row 1: count, search, sort, filter toggle, prices menu */}
             <div className="flex flex-wrap items-center gap-3">
                 <span className="text-muted text-sm shrink-0">{filtered.length} Karten</span>
@@ -558,7 +558,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                   <CustomSelect value={filterCondition} onChange={setFilterCondition} placeholder="Zustand" className="w-[110px]" options={[{ value: 'All', label: 'Zustand' }, ...CONDITIONS.map(c => ({ value: c, label: c }))]} />
                   <CustomSelect value={filterEdition} onChange={setFilterEdition} placeholder="Edition" className="w-[120px]" options={[{ value: 'All', label: 'Edition' }, ...EDITIONS.map(e => ({ value: e, label: EDITION_LABELS[e] }))]} />
                   <CustomSelect value={filterSet} onChange={setFilterSet} placeholder="Set" className="w-[120px]" options={[{ value: "All", label: "Set" }, ...sets]} />
-                  <button onClick={clearFilters} title="Filter zurücksetzen" className="p-2 text-gray-500 hover:text-red-400"><FilterX className="w-4 h-4" /></button>
+                  <button onClick={clearFilters} title="Filter zurücksetzen" className="p-2 text-muted hover:text-bad"><FilterX className="w-4 h-4" /></button>
               </div>
             )}
 
@@ -606,7 +606,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
         <div className="flex-1 overflow-hidden">
             {filtered.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-gray-600">Keine Karten gefunden.</div>
+                <div className="h-full flex items-center justify-center text-muted">Keine Karten gefunden.</div>
             ) : (
                 <AutoSizer>
                     {({ height, width }) => {

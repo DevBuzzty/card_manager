@@ -79,7 +79,7 @@ export default function Deals() {
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-lg px-4 py-2 mb-4 text-sm">
+        <div className="bg-bad/10 border border-bad/30 text-bad rounded-lg px-4 py-2 mb-4 text-sm">
           {error}
         </div>
       )}
@@ -128,7 +128,7 @@ export default function Deals() {
                 <span className="text-muted">{w.query}</span>
                 <span className="font-mono text-text">≤{w.max_price}€</span>
                 <button onClick={() => window.api.deleteDealWatch(w.id).then(refresh)}
-                  className="text-muted hover:text-red-400" title="Watch löschen">
+                  className="text-muted hover:text-bad" title="Watch löschen">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </span>
@@ -165,7 +165,7 @@ export default function Deals() {
                 <ExternalLink className="w-4.5 h-4.5" />
               </button>
               <button onClick={() => window.api.dismissDealAlert(a.id).then(refresh)}
-                className="p-2 text-muted hover:text-red-400" title="Ausblenden">
+                className="p-2 text-muted hover:text-bad" title="Ausblenden">
                 <X className="w-4.5 h-4.5" />
               </button>
             </div>

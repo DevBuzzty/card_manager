@@ -206,7 +206,7 @@ export default function Binders() {
                   onClick={() => openCard(copy)}
                   className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-bg text-left transition-colors"
                 >
-                  <div className="w-8 h-11 bg-black rounded overflow-hidden shrink-0">
+                  <div className="w-8 h-11 bg-bg rounded overflow-hidden shrink-0">
                     {copy.card_image_url && <img src={copy.card_image_url} alt="" className="w-full h-full object-cover" />}
                   </div>
                   <span className="flex-1 truncate text-sm text-text">{copy.card_name}</span>
@@ -303,7 +303,7 @@ export default function Binders() {
       )}
 
       {dialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={closeDialog}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm" onClick={closeDialog}>
           <form onClick={(e) => e.stopPropagation()} onSubmit={submitDialog}
                 className="w-full max-w-md bg-surface border border-line rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">

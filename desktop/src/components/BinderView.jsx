@@ -268,7 +268,7 @@ export default function BinderView({ panelOpen = false }) {
               onClick={() => openCard(first)}
               onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, page, slot }); }}
               title={`${nameOf(first) || first.card_id} — Seite ${page} · Fach ${slot}`}
-              className="relative aspect-[0.68] rounded-md overflow-hidden bg-black cursor-pointer ring-1 ring-transparent hover:ring-accent transition-shadow"
+              className="relative aspect-[0.68] rounded-md overflow-hidden bg-bg cursor-pointer ring-1 ring-transparent hover:ring-accent transition-shadow"
             >
               {imageOf(first)
                 ? <img src={imageOf(first)} alt={nameOf(first) || first.card_id} className="w-full h-full object-cover" />
@@ -293,7 +293,7 @@ export default function BinderView({ panelOpen = false }) {
       onContextMenu={(e) => { e.preventDefault(); setSheetCopy(cp); }}
       className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-bg text-left transition-colors"
     >
-      <div className="w-8 h-11 bg-black rounded overflow-hidden shrink-0">
+      <div className="w-8 h-11 bg-bg rounded overflow-hidden shrink-0">
         {imageOf(cp) && <img src={imageOf(cp)} alt="" className="w-full h-full object-cover" />}
       </div>
       <span className="flex-1 truncate text-sm text-text">{nameOf(cp) || cp.card_id}</span>
@@ -448,7 +448,7 @@ export default function BinderView({ panelOpen = false }) {
       )}
 
       {fill && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm"
              onClick={() => { if (!busy) { setFill(null); setQuery(''); } }}>
           <div onClick={(e) => e.stopPropagation()}
                className="w-full max-w-md max-h-[85vh] bg-surface border border-line rounded-2xl flex flex-col overflow-hidden">

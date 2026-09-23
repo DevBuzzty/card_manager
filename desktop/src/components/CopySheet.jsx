@@ -204,16 +204,16 @@ export default function CopySheet({ copy, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="bg-[#1E1E1E] w-full max-w-md max-h-[85vh] rounded-2xl border border-gray-700 shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-[#252525]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+      <div className="bg-surface w-full max-w-md max-h-[85vh] rounded-2xl border border-line shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="p-6 border-b border-line flex justify-between items-center bg-surface-2">
           <div>
-            <h2 className="text-xl font-bold text-white">Exemplar</h2>
-            <p className="text-xs text-gray-400 font-mono mt-0.5">
+            <h2 className="text-xl font-bold text-text">Exemplar</h2>
+            <p className="text-xs text-muted font-mono mt-0.5">
               {copy.set_code} · {copy.rarity} · {EDITION_LABELS[copy.edition] || copy.edition} · {copy.condition}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-surface-2 rounded-full text-muted hover:text-text transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -227,11 +227,11 @@ export default function CopySheet({ copy, onClose, onSaved }) {
           )}
 
           <div>
-            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Standort</label>
+            <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Standort</label>
             <select
               value={containerId}
               onChange={e => onContainerChange(e.target.value)}
-              className="w-full bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
+              className="w-full bg-bg/40 border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
             >
               <option value="">Kein Behälter</option>
               {containers.map(c => (
@@ -241,21 +241,21 @@ export default function CopySheet({ copy, onClose, onSaved }) {
             {isBinder && (
               <div className="flex gap-2 mt-2">
                 <input type="number" min="1" placeholder="Seite" value={page} onChange={e => setPage(e.target.value)}
-                  className="w-1/2 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent" />
+                  className="w-1/2 bg-bg/40 border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent" />
                 <input type="number" min="1" placeholder="Fach" value={slot} onChange={e => setSlot(e.target.value)}
-                  className="w-1/2 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent" />
+                  className="w-1/2 bg-bg/40 border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent" />
               </div>
             )}
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Tags</label>
+            <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Tags</label>
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {tags.map(t => (
                   <span key={t} className="flex items-center gap-1 pl-2.5 pr-1.5 py-1 bg-accent/20 text-accent rounded-full text-xs font-medium border border-accent/30">
                     {t}
-                    <button type="button" onClick={() => setTags(list => removeTag(list, t))} className="hover:text-white">
+                    <button type="button" onClick={() => setTags(list => removeTag(list, t))} className="hover:text-text">
                       <X className="w-3 h-3" />
                     </button>
                   </span>
@@ -269,7 +269,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
               onChange={e => setTagInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitTagInput(); } }}
               placeholder="Tag eingeben, Enter zum Anlegen…"
-              className="w-full bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
+              className="w-full bg-bg/40 border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
             />
             <datalist id="copy-sheet-tag-suggestions">
               {tagSuggestions.map(t => <option key={t} value={t} />)}
@@ -277,25 +277,25 @@ export default function CopySheet({ copy, onClose, onSaved }) {
           </div>
 
           <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Zum Verkauf</span>
+            <span className="text-xs font-bold text-muted uppercase tracking-wider">Zum Verkauf</span>
             <input type="checkbox" role="switch" checked={forSale} disabled={markingSale || saving || removing}
               onChange={toggleForSale} className="accent-accent w-4 h-4" />
           </label>
 
           <div>
-            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Notiz</label>
+            <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Notiz</label>
             <textarea
               rows={3}
               value={note}
               onChange={e => setNote(e.target.value)}
-              className="w-full bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent resize-none"
+              className="w-full bg-bg/40 border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent resize-none"
             />
           </div>
 
           {error && <p className="text-sm text-bad">{error}</p>}
         </div>
 
-        <div className="p-6 border-t border-gray-700 bg-[#252525] flex items-center justify-between">
+        <div className="p-6 border-t border-line bg-surface-2 flex items-center justify-between">
           <div className="flex gap-2">
             <button type="button" onClick={removeExemplar} disabled={removing || saving || markingSale}
               className="flex items-center gap-1.5 px-3 py-2 text-sm text-bad hover:bg-bad/10 rounded-lg transition-colors disabled:opacity-50">
@@ -315,7 +315,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
             )}
           </div>
           <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors">Abbrechen</button>
+            <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text transition-colors">Abbrechen</button>
             <button type="button" onClick={save} disabled={saving || removing || markingSale}
               className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {saving ? 'Wird gespeichert…' : 'Speichern'}

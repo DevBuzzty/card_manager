@@ -101,7 +101,7 @@ function App() {
       <Sidebar />
       <main className="flex-1 overflow-auto bg-bg p-6 flex flex-col">
         {updateProgress && (
-            <div className="bg-gray-900 border-b border-gray-800 px-6 py-2 flex items-center justify-between text-xs text-accent animate-pulse">
+            <div className="bg-bg border-b border-line px-6 py-2 flex items-center justify-between text-xs text-accent animate-pulse">
                 <span className="font-bold uppercase tracking-wider">Kartendaten werden aktualisiert…</span>
                 <span>{updateProgress.current} / {updateProgress.total}</span>
             </div>

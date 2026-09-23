@@ -262,12 +262,12 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                   {card.type}
               </span>
               {card.race && (
-                   <span className="px-3 py-1 bg-gray-800 text-gray-300 rounded-full text-sm font-medium border border-gray-700">
+                   <span className="px-3 py-1 bg-surface-2 text-text rounded-full text-sm font-medium border border-line">
                       {card.race}
                    </span>
               )}
               {card.attribute && (
-                   <span className="px-3 py-1 bg-gray-800 text-gray-300 rounded-full text-sm font-medium border border-gray-700 font-mono">
+                   <span className="px-3 py-1 bg-surface-2 text-text rounded-full text-sm font-medium border border-line font-mono">
                       {card.attribute}
                    </span>
               )}
@@ -275,21 +275,21 @@ export default function CardDetailPanel({ paletteOpen = false }) {
       </div>
 
       {/* Inventory / Variants Section */}
-      <div className="bg-[#2a2a2a] p-4 rounded-xl border border-gray-700">
+      <div className="bg-surface-2 p-4 rounded-xl border border-line">
           <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-bold uppercase text-gray-400">Deine Exemplare</span>
-              <span className="text-xs text-gray-500">Gesamt: {localVariants.reduce((s, v) => s + (v.quantity || 0), 0)}</span>
+              <span className="text-sm font-bold uppercase text-muted">Deine Exemplare</span>
+              <span className="text-xs text-muted">Gesamt: {localVariants.reduce((s, v) => s + (v.quantity || 0), 0)}</span>
           </div>
 
           <div className="space-y-3 mb-4">
-              {localVariants.length === 0 && <p className="text-gray-500 text-sm italic">Noch keine Exemplare.</p>}
+              {localVariants.length === 0 && <p className="text-muted text-sm italic">Noch keine Exemplare.</p>}
               {localVariants.map((variant, idx2) => (
-                  <div key={idx2} className="flex flex-col gap-2 bg-black/40 p-2 rounded-lg border border-gray-800">
+                  <div key={idx2} className="flex flex-col gap-2 bg-bg/40 p-2 rounded-lg border border-line">
                       <div className="flex items-start justify-between">
                           <div className="flex flex-col">
                               <div className="flex items-center gap-2">
-                                  <span className="font-mono text-sm text-yellow-500 font-bold">{variant.set_code}</span>
-                                  <span className="text-xs text-gray-400 border border-gray-700 px-1 rounded">{variant.rarity}</span>
+                                  <span className="font-mono text-sm text-warn font-bold">{variant.set_code}</span>
+                                  <span className="text-xs text-muted border border-line px-1 rounded">{variant.rarity}</span>
                               </div>
                               <span className="text-xs text-accent">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
                           </div>
@@ -301,10 +301,10 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   await window.api.setCardPrice({ id: card.id, set_code: variant.set_code, language: variant.language || 'DE', rarity: variant.rarity, price });
                                   window.dispatchEvent(new Event('collection-dirty'));
                                 }}
-                                className="w-16 bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white"
+                                className="w-16 bg-bg/40 border border-line rounded px-1 py-0.5 text-xs text-text"
                                 title="Preis manuell setzen (überschreibt Auto-Preis)" />
                               {variant.cm_updated_at && !variant.cm_url && (
-                                <span className="text-[9px] text-yellow-500/80" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
+                                <span className="text-[9px] text-warn/80" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
                               )}
                               <button onClick={() => { if (confirm(`${variant.set_code} (${variant.rarity}) mit allen Exemplaren löschen?`)) handleDeleteVariant(variant); }}
                                   className="p-1.5 bg-bad/10 hover:bg-bad/20 text-bad rounded transition-colors" title="Printing löschen">
@@ -324,17 +324,17 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                               return (
                               <div key={`${g.edition}|${g.condition}`} className="py-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                  <div className="flex items-center bg-[#1E1E1E] rounded border border-gray-600">
-                                      <button onClick={() => changeGroup(variant, g, -1)} className="p-1 hover:bg-gray-700 rounded-l text-gray-400 hover:text-white"><Minus className="w-3 h-3" /></button>
+                                  <div className="flex items-center bg-surface rounded border border-line">
+                                      <button onClick={() => changeGroup(variant, g, -1)} className="p-1 hover:bg-surface-2 rounded-l text-muted hover:text-text"><Minus className="w-3 h-3" /></button>
                                       <span className="w-8 text-center font-mono text-sm font-bold">{g.count}×</span>
-                                      <button onClick={() => changeGroup(variant, g, 1)} className="p-1 hover:bg-gray-700 rounded-r text-gray-400 hover:text-white"><Plus className="w-3 h-3" /></button>
+                                      <button onClick={() => changeGroup(variant, g, 1)} className="p-1 hover:bg-surface-2 rounded-r text-muted hover:text-text"><Plus className="w-3 h-3" /></button>
                                   </div>
                                   <select value={g.condition} onChange={e => moveGroup(variant, g, { edition: g.edition, condition: e.target.value })}
-                                      className="bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white font-mono">
+                                      className="bg-bg/40 border border-line rounded px-1 py-0.5 text-xs text-text font-mono">
                                       {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
                                   </select>
                                   <select value={g.edition} onChange={e => moveGroup(variant, g, { edition: e.target.value, condition: g.condition })}
-                                      className="bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white">
+                                      className="bg-bg/40 border border-line rounded px-1 py-0.5 text-xs text-text">
                                       {EDITIONS.map(ed => <option key={ed} value={ed}>{EDITION_LABELS[ed]}</option>)}
                                   </select>
                                   <span className="ml-auto font-mono text-xs text-text">{fmtEUR(valueOf(variant, [g]))}</span>
@@ -343,10 +343,10 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                               <div className="mt-1 space-y-1">
                                   {groupRows.map(c => (
                                       <button key={c.copy_id} type="button" onClick={() => setSheetCopy(c)}
-                                          className="w-full flex items-center gap-2 px-2 py-1 rounded-lg bg-black/20 hover:bg-black/40 border border-gray-800 text-left transition-colors">
+                                          className="w-full flex items-center gap-2 px-2 py-1 rounded-lg bg-bg/20 hover:bg-bg/40 border border-line text-left transition-colors">
                                           {/* Spec H1 §5.3: Preisschild an markierten Exemplaren */}
                                           {!!c.for_sale && <Tag className="w-3 h-3 text-warn shrink-0" aria-label="Zum Verkauf" />}
-                                          <span className="text-[11px] text-gray-400 font-mono truncate">
+                                          <span className="text-[11px] text-muted font-mono truncate">
                                               {/* Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile. */}
                                               {c.container_id ? formatCopyLocation(c, containers.find(ct => ct.container_id === c.container_id)) : 'ohne Standort'}
                                           </span>
@@ -362,7 +362,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                               </div>
                               );
                           })}
-                          <button onClick={() => addStandardCopy(variant)} className="mt-1 text-xs text-gray-400 hover:text-accent flex items-center gap-1">
+                          <button onClick={() => addStandardCopy(variant)} className="mt-1 text-xs text-muted hover:text-accent flex items-center gap-1">
                               <Plus className="w-3 h-3" /> Exemplar hinzufügen
                           </button>
                       </div>
@@ -371,8 +371,8 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           </div>
 
           {/* Add New Variant */}
-          <div className="pt-3 border-t border-gray-700">
-              <label className="text-xs text-gray-500 uppercase font-bold mb-2 block">Weiteres Printing hinzufügen</label>
+          <div className="pt-3 border-t border-line">
+              <label className="text-xs text-muted uppercase font-bold mb-2 block">Weiteres Printing hinzufügen</label>
               <div className="flex flex-col gap-2">
                    <CustomSelect
                         value={selectedNewSet}
@@ -404,7 +404,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                   <button
                       onClick={handleAddVariant}
                       disabled={!selectedNewSet || isAdding}
-                      className="bg-accent hover:bg-violet-600 text-accent-fg px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-accent hover:bg-accent/90 text-accent-fg px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                       {isAdding ? 'Füge hinzu…' : 'Hinzufügen'}
                   </button>
@@ -415,39 +415,39 @@ export default function CardDetailPanel({ paletteOpen = false }) {
       <div className="grid grid-cols-2 gap-4">
           {/* Level / Rank / Link Rating */}
           {card.level != null && (
-              <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                  <span className="text-xs text-gray-500 uppercase tracking-wider block mb-1">{levelLabel}</span>
-                  <span className="text-xl font-bold text-yellow-500">{isLink ? `LINK-${card.level}` : `★ ${card.level}`}</span>
+              <div className="bg-bg/50 p-3 rounded-lg border border-line">
+                  <span className="text-xs text-muted uppercase tracking-wider block mb-1">{levelLabel}</span>
+                  <span className="text-xl font-bold text-warn">{isLink ? `LINK-${card.level}` : `★ ${card.level}`}</span>
               </div>
           )}
 
           {/* ATK */}
           {card.atk != null && (
-              <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                  <span className="text-xs text-gray-500 uppercase tracking-wider block mb-1">ATK</span>
-                  <span className="text-xl font-bold text-red-400">{card.atk}</span>
+              <div className="bg-bg/50 p-3 rounded-lg border border-line">
+                  <span className="text-xs text-muted uppercase tracking-wider block mb-1">ATK</span>
+                  <span className="text-xl font-bold text-bad">{card.atk}</span>
               </div>
           )}
 
            {/* DEF (Hide if Link) */}
            {!isLink && card.def != null && (
-              <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                  <span className="text-xs text-gray-500 uppercase tracking-wider block mb-1">DEF</span>
-                  <span className="text-xl font-bold text-blue-400">{card.def}</span>
+              <div className="bg-bg/50 p-3 rounded-lg border border-line">
+                  <span className="text-xs text-muted uppercase tracking-wider block mb-1">DEF</span>
+                  <span className="text-xl font-bold text-accent">{card.def}</span>
               </div>
           )}
 
            {/* Passcode */}
-          <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-              <span className="text-xs text-gray-500 uppercase tracking-wider block mb-1">Passcode</span>
+          <div className="bg-bg/50 p-3 rounded-lg border border-line">
+              <span className="text-xs text-muted uppercase tracking-wider block mb-1">Passcode</span>
               {/* Achtstellig, wie auf der Karte gedruckt -- intern steht er ohne fuehrende Nullen. */}
-              <span className="text-xl font-mono text-gray-300">{formatPasscode(card.id)}</span>
+              <span className="text-xl font-mono text-text">{formatPasscode(card.id)}</span>
           </div>
       </div>
 
       {sold.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-gray-300 mb-2">Verkauft</h3>
+          <h3 className="text-lg font-semibold text-text mb-2">Verkauft</h3>
           <div className="space-y-1">
             {sold.map((s) => (
               <div key={`${s.sale_id}|${s.copy_id}`} className={`flex items-center gap-2 text-[11px] font-mono ${s.status === 'storniert' ? 'line-through text-muted' : 'text-muted'}`}>
@@ -461,8 +461,8 @@ export default function CardDetailPanel({ paletteOpen = false }) {
       )}
 
       <div className="prose prose-invert max-w-none">
-          <h3 className="text-lg font-semibold text-gray-300 mb-2">Beschreibung</h3>
-          <p className="text-gray-400 leading-relaxed whitespace-pre-wrap font-serif text-base bg-black/20 p-4 rounded-lg border border-gray-800 max-h-[200px] overflow-y-auto custom-scrollbar">
+          <h3 className="text-lg font-semibold text-text mb-2">Beschreibung</h3>
+          <p className="text-muted leading-relaxed whitespace-pre-wrap font-serif text-base bg-bg/20 p-4 rounded-lg border border-line max-h-[200px] overflow-y-auto custom-scrollbar">
               {card.desc}
           </p>
       </div>

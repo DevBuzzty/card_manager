@@ -66,7 +66,7 @@ export default function DuplicatesList({ list, copies, reload, onOpenCard }) {
       </div>
       {error && <p className="text-sm text-bad">{error}</p>}
       {list.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-gray-600">Keine Duplikate.</div>
+        <div className="flex-1 flex items-center justify-center text-muted">Keine Duplikate.</div>
       ) : (
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1">
           {list.map((entry) => {

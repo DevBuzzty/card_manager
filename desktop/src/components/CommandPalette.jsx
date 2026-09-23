@@ -80,7 +80,7 @@ export default function CommandPalette({ open, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-start justify-center pt-[12vh] px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-40 flex items-start justify-center pt-[12vh] px-4 bg-bg/70 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div className="w-full max-w-xl bg-bg border border-line rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
