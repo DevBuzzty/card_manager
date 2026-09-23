@@ -64,6 +64,7 @@ import com.example.yugiohscanner.ml.WishPlan
 import com.example.yugiohscanner.ml.WishResult
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
+import com.example.yugiohscanner.ui.theme.AppColors
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Warn
@@ -133,8 +134,12 @@ private fun LegalityBadge(format: String, result: LegalityResult?) {
 private fun BanIcon(ban: String?) {
     val label = ban?.let { DeckLegality.BAN_LABELS[it] } ?: return
     val bg = when (ban) { "forbidden" -> ErrorColor; "limited" -> BanOrange; else -> Warn }
+    // Fixrunde 2, Punkt A: onPrimary haelt >= 4,5:1 auf bad/warn in beiden Modi, aber nicht auf dem
+    // festen BanOrange-Literal (wechselt nicht mit dem Modus) -- dort fest der dunkle Text aus
+    // AppColors.light.
+    val fg = if (ban == "limited") AppColors.light.getValue("text") else MaterialTheme.colorScheme.onPrimary
     Box(Modifier.clip(RoundedCornerShape(4.dp)).background(bg).padding(horizontal = 5.dp)) {
-        Text(label, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+        Text(label, color = fg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
     }
 }
 

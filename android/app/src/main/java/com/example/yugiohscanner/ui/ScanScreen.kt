@@ -72,6 +72,7 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.PrintingRepository
 import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
+import com.example.yugiohscanner.ui.theme.AppColors
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
@@ -924,7 +925,9 @@ fun ScanScreen(onClose: () -> Unit) {
                     ) {
                         Text("${capture.sentCount} an den PC gesendet", color = Color.White, modifier = Modifier.weight(1f))
                         // Dieselben drei Ampelfarben wie im Staging-Sheet -- keine neuen Farben.
-                        Box(Modifier.size(10.dp).clip(CircleShape).background(ScanStagingLogic.dotColor(capture.lastLight)))
+                        // Liegt auf dem immer dunklen Kamera-Scrim (Fixrunde 2, Punkt B) -- fest
+                        // AppColors.dark statt der laufenden Rollen.
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(ScanStagingLogic.dotColor(capture.lastLight, AppColors.dark)))
                     }
                 }
                 if (capture.stagingCards.isNotEmpty()) {
