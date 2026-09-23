@@ -510,7 +510,7 @@ export default function BinderView({ panelOpen = false }) {
         <CopySheet
           copy={sheetCopy}
           onClose={() => setSheetCopy(null)}
-          onSaved={() => { load(); }}
+          onSaved={() => { load(); window.dispatchEvent(new Event('collection-dirty')); }}
         />
       )}
     </div>

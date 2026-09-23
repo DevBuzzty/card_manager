@@ -802,6 +802,13 @@ fun ScanScreen(onClose: () -> Unit) {
                 onClick = { zeigeKartenInfo = true },
                 modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
                     .padding(end = 24.dp, bottom = 146.dp).size(48.dp),
+                // Ruhig statt voller Akzentflaeche neben dem Ausloeser (Spec §6.2 Regel 5: eine
+                // Hauptaktion je Bildschirm); gefuellt statt outlined, damit die Flaeche auf dem
+                // wechselnd hellen Kamerabild sichtbar bleibt.
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
             ) {
                 Icon(Icons.Default.Euro, contentDescription = "Karten-Info und Preise")
             }
