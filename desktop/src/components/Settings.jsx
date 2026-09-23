@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { NavLink, Navigate, useParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { Database, FileUp, Download, RefreshCw, Trash2, DollarSign, FolderInput, TrendingDown, Cloud, Layers, Cpu, UploadCloud } from 'lucide-react';
@@ -31,9 +31,6 @@ export default function Settings() {
 
     const [priceSource, setPriceSource] = useState('cardmarket');
     const [theme, setTheme] = useState('light');
-    // Haelt die Abmeldefunktion von startTheme, damit ein Wechsel nicht mehrere System-Zuhoerer anhaeuft.
-    const stopThemeRef = useRef(null);
-    useEffect(() => () => stopThemeRef.current?.(), []);
     const [loading, setLoading] = useState(false);
     // Which long-running action owns `loading`/`progress` — the two sections that show a bar
     // ("preise" and "gefahrenzone") must only show their own. 'prices' | 'downgrade' | null.
@@ -319,8 +316,8 @@ export default function Settings() {
                                 <button key={id} type="button"
                                     onClick={async () => {
                                         setTheme(id);
-                                        stopThemeRef.current?.();
-                                        stopThemeRef.current = startTheme(document, id);
+                                        // Abschlussreview B4: startTheme meldet den vorigen System-Zuhoerer selbst ab.
+                                        startTheme(document, id);
                                         try { localStorage.setItem('theme', id); } catch { /* z.B. privater Modus */ }
                                         await window.api?.saveSetting?.({ key: 'theme', value: id });
                                     }}
@@ -562,7 +559,7 @@ export default function Settings() {
                 )}
 
                 {active === 'standards' && (
-                    <div className="bg-surface p-6 rounded-2xl border border-line shadow-xl">
+                    <div className="bg-surface p-6 rounded-2xl border border-line shadow-sm">
                         <div className="flex items-center mb-6 text-text border-b border-line pb-4">
                             <Layers className="w-6 h-6 mr-2" />
                             <h3 className="text-xl font-bold text-text">Standards für neue Exemplare</h3>

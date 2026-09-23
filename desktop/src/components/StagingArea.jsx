@@ -10,6 +10,11 @@ import { fuelleRarityAusGeschwistern } from '../utils/printingRarity';
 import { werteFuerZusatz } from '../utils/scanAggregate';
 import Flag from './Flag';
 import CopyChip from './CopyChip';
+import CardTile from './CardTile';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { cardRoute } from '../utils/routes';
+import { unknownCardGroups } from '../utils/unknownCards';
+import { useNavCounts } from '../hooks/useNavCounts';
 
 // Merge a card's printings from all sources into ONE flagged list: German (wiki+Konami) + English
 // (YGOPRODeck, with prices) + Japanese (wiki+Konami). Each entry carries its language so the picker
@@ -76,26 +81,25 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   useEffect(() => { if (window.api) window.api.getIpAddress().then(setIpAddress); }, []);
 
   // Task 6 (Umzug von CollectionList.jsx): Unbekannt-Sammelaktionen leben jetzt hier. unknownCount
-  // kommt aus nav-counts (cards.set_code = 'Unknown'), nicht mehr aus der geladenen Kartenliste.
-  const [unknownCount, setUnknownCount] = useState(0);
+  // kommt aus nav-counts (Karten mit cards.set_code = 'Unknown'). Abschlussreview B6: gemeinsamer Hook,
+  // der auch bei Sammlungs- und Verkaufsaenderung aus dem Abgleich neu laedt.
+  const nav = useNavCounts();
+  const unknownCount = nav ? nav.unknown : 0;
   const [busy, setBusy] = useState(false);
+  // Abschlussreview B2: die Unbekannten selbst als Kacheln; ein Klick oeffnet das Kartendetail wie in
+  // der Kartenliste, damit sich das Set einzeln waehlen laesst. Neu geladen, sobald nav-counts neu kommt.
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [unknownCards, setUnknownCards] = useState([]);
   useEffect(() => {
     let lebt = true;
-    const laden = () => window.api?.navCounts?.().then(c => { if (lebt && c) setUnknownCount(c.unknown); }).catch(() => {});
-    laden();
-    // Fixrunde 1 (Review Task 6): onListingsChanged kommt nur vom Cloud-Pull -- lokale Aenderungen
-    // (Karten-Detail, Verkauf, Angebot) feuern stattdessen die window-Ereignisse 'collection-dirty'/
-    // 'listings-dirty' (siehe CardDetailPanel.jsx, SaleDialog.jsx, ListingDialog.jsx, ListingDetail.jsx).
-    const ab = window.api?.onListingsChanged?.(laden);
-    window.addEventListener('collection-dirty', laden);
-    window.addEventListener('listings-dirty', laden);
-    return () => {
-        lebt = false;
-        if (typeof ab === 'function') ab();
-        window.removeEventListener('collection-dirty', laden);
-        window.removeEventListener('listings-dirty', laden);
-    };
-  }, []);
+    window.api?.getCollection?.().then(r => { if (lebt) setUnknownCards(unknownCardGroups(r)); }).catch(() => {});
+    return () => { lebt = false; };
+  }, [nav]);
+  const openUnknown = (card) => {
+    const list = unknownCards.map(c => cardRoute(c.variants[0]));
+    navigate(cardRoute(card.variants[0]), { state: { background: location, list } });
+  };
 
   const runUnknownAction = async (kind) => {
       if (!window.api || busy) return;
@@ -558,7 +562,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
 
         <div className="grid grid-cols-1 gap-3">
             {scannedCards.map(card => (
-                <div key={card.tempId} className="bg-surface p-3 rounded-xl border border-line flex items-center shadow-lg hover:border-line transition-colors">
+                <div key={card.tempId} className="bg-surface p-3 rounded-xl border border-line flex items-center shadow-sm hover:border-line transition-colors">
                     {/* Status / Image */}
                     <div className="w-12 h-16 sm:w-16 sm:h-20 bg-bg rounded flex-shrink-0 border border-line overflow-hidden flex items-center justify-center mr-4 relative">
                         {card.status === 'loading' && <Loader2 className="animate-spin text-accent w-6 h-6" />}
@@ -762,6 +766,13 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 <button type="button" className="px-3 py-2 rounded-lg text-sm bg-surface-2 border border-line text-text"
                   disabled={busy} onClick={() => runUnknownAction('merge')}>Alle zusammenführen</button>
               </div>
+              {unknownCards.length > 0 && (
+                <div className="mt-4 grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3">
+                  {unknownCards.map(card => (
+                    <CardTile key={card.id} card={card} onClick={() => openUnknown(card)} />
+                  ))}
+                </div>
+              )}
             </section>
         )}
     </div>

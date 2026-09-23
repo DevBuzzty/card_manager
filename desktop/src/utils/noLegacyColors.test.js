@@ -33,7 +33,10 @@ const VERBOTEN = [
   /\b(text|bg|border|ring|from|to|via|fill|stroke|divide|placeholder|shadow|outline|decoration|accent)-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/,
   /\bshadow-(accent|good|warn|bad|text|muted|line|bg|surface|surface-2)\b/,
   /\b(text|bg|border|ring)-crit\b/,
-  /\bgold\b/,
+  // Abschlussreview B8: "gold" nur als Klasse verboten -- als Wort im Kartentext ("name is gold") erlaubt.
+  /\b(text|bg|border|ring|from|to|via|fill|stroke)-gold\b/,
+  // Abschlussreview B7 (Spec I §6.2 Regel 1): Erhebung durch Flaeche und Linie, hoechstens shadow-sm.
+  /\bshadow-(md|lg|xl|2xl)\b/,
   /violet-soft/,
   /ink-faint/,
   // Feste Hex-Farbwerte direkt in style={{}} -- Ausnahmen unten (RarityGuide-Kartenfarben) werden vor

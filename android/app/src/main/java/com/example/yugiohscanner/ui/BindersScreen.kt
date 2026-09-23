@@ -49,16 +49,17 @@ private val POCKET_OPTIONS = listOf(4, 9, 12)
 // Same hexes as the desktop swatch (Binders.jsx COLOR_PRESETS) -- all already in the theme palette.
 // Praesets sind gespeicherte Nutzerdaten (Hex-String je Behaelter), keine Gestaltung -- vom
 // Farbrollen-Umbau ausgenommen (Fixrunde 1, Punkt 5). Feste Literale, wortgleich zu
-// desktop/src/components/Binders.jsx:13#COLOR_PRESETS (erste Farbe dort seit Task 7 #7C3AED,
+// desktop/src/utils/containerColors.js#COLOR_PRESETS (ZWILLING via docs/fixtures/design/container-colors.json,
+// ContainerColorsTest.kt; erste Farbe seit Task 7 #7C3AED,
 // nicht mehr das alte space-violet #9D00FF -- Fixrunde 2, Punkt C).
-private val COLOR_PRESETS = listOf(
+internal val COLOR_PRESETS = listOf(
     Color(0xFF7C3AED), Color(0xFFF5C542), Color(0xFF39D98A), Color(0xFFFF5D6C),
     Color(0xFF6DB4E8), Color(0xFFE8C76D), Color(0xFFE8944A), Color(0xFF1DA891),
 )
 // Wert, den der PC beim Anlegen eines neuen Behaelters ohne Auswahl setzt:
-// desktop/src/components/Binders.jsx:15 `emptyForm.color = COLOR_PRESETS[0]` (dort per Referenz
+// desktop/src/utils/containerColors.js `DEFAULT_COLOR = COLOR_PRESETS[0]` (dort per Referenz
 // auf das Array-Element, hier derselbe Literalwert).
-private val DEFAULT_COLOR_HEX = "#7C3AED"
+internal const val DEFAULT_COLOR_HEX = "#7C3AED"
 
 private fun Color.toHex(): String = "#%06X".format(0xFFFFFF and this.toArgb())
 // Muted ist jetzt @Composable (liest das laufende Schema) -- diese Funktion ist es nicht, deshalb

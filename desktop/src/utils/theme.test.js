@@ -81,10 +81,20 @@ test('startTheme gibt eine Abmeldefunktion zurueck, die den Zuhoerer wirklich en
   assert.equal(listeners.size, 0, 'kein Zuhoerer mehr nach der Abmeldung');
 });
 
+test('startTheme meldet den vorigen Zuhoerer selbst ab (Abschlussreview B4)', () => {
+  const { doc, listeners } = fakeDocMitMatchMedia();
+  startTheme(doc, 'system');
+  startTheme(doc, 'system');
+  assert.equal(listeners.size, 1, 'zweimal system -> genau ein Zuhoerer');
+  startTheme(doc, 'light');
+  assert.equal(listeners.size, 0, 'danach hell -> kein Zuhoerer mehr');
+  assert.equal(doc.documentElement.dataset.theme, 'light');
+});
+
 test('Abmelden vor einem erneuten Start haeuft keine Zuhoerer an (Settings.jsx-Muster)', () => {
   const { doc, listeners } = fakeDocMitMatchMedia();
   let stop = startTheme(doc, 'system');
-  stop(); // wie stopThemeRef.current?.() vor jeder neuen Auswahl in Settings.jsx
+  stop(); // ausdrueckliches Abmelden bleibt erlaubt (Rueckgabe von startTheme)
   stop = startTheme(doc, 'system');
   assert.equal(listeners.size, 1, 'genau ein aktiver Zuhoerer, kein Leck');
 });

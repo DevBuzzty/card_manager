@@ -26,3 +26,23 @@ export function matchesPreset(card, id) {
 export function matchesPresetGroup(variants, id) {
   return Array.isArray(variants) && variants.length > 0 && variants.some(v => matchesPreset(v, id));
 }
+
+// Abschlussreview B5: Start-Kachel "Fehlende Daten" oeffnet die Kartenliste mit aktiver Voreinstellung
+// ({ state: { preset: 'unvollstaendig' } }). Nur bekannte Voreinstellungen werden uebernommen.
+export function presetsFromState(state) {
+  const id = state && state.preset;
+  return PRESETS.some(p => p.id === id) ? [id] : [];
+}
+
+// Zaehlt Kacheln (Passcodes) wie die Kartenliste: ein Passcode zaehlt, wenn irgendein Druck trifft.
+export function countPresetGroups(rows, id) {
+  const byId = new Map();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const k = String(r.id);
+    if (!byId.has(k)) byId.set(k, []);
+    byId.get(k).push(r);
+  }
+  let n = 0;
+  for (const variants of byId.values()) if (matchesPresetGroup(variants, id)) n++;
+  return n;
+}

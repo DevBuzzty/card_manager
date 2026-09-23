@@ -8,12 +8,45 @@ import { cardRoute } from '../utils/routes';
 import { duplicates } from '../utils/duplicates';
 import { useSaleData } from '../hooks/useSaleData';
 import { useListingsData } from '../hooks/useListings';
+import { useNavCounts } from '../hooks/useNavCounts';
+import { verkaufenCounts } from '../utils/verkaufenCounts';
+import { todayLocal } from '../utils/today';
 import DuplicatesList from './DuplicatesList';
 import ForSaleList from './ForSaleList';
 import ListingsList from './ListingsList';
 import SalesPanel from './SalesPanel';
 
+// Abschlussreview B1: Anzahl der gebuchten Verkaeufe ueber den vorhandenen Kanal sales-overview
+// (Zeitraum "gesamt"); neu bei Verkaufs-/Sammlungsaenderung wie SalesPanel. null = laedt.
+function useAllSales() {
+  const [sales, setSales] = useState(null);
+  useEffect(() => {
+    let lebt = true;
+    const laden = () => window.api?.salesOverview?.({ period: 'gesamt', today: todayLocal() })
+      .then((d) => { if (lebt && d) setSales(Array.isArray(d.sales) ? d.sales : []); }).catch(() => {});
+    laden();
+    const offs = [window.api?.onSalesChanged?.(laden), window.api?.onCollectionChanged?.(laden)];
+    window.addEventListener('collection-dirty', laden);
+    return () => {
+      lebt = false;
+      offs.forEach((off) => { if (typeof off === 'function') off(); });
+      window.removeEventListener('collection-dirty', laden);
+    };
+  }, []);
+  return sales;
+}
+
 export default function VerkaufenLayout() {
+  // Spec I §5.3: jede Station mit Anzahl in der Reiterzeile (Definition in utils/verkaufenCounts.js).
+  const sale = useSaleData();
+  const nav = useNavCounts();
+  const sales = useAllSales();
+  const duplicateGroups = useMemo(() => {
+    if (!sale.data) return null;
+    const mainIds = new Map(sale.data.copies.map(c => [String(c.card_id), c.main_id]));
+    return duplicates(sale.data.copies, sale.data.keep, (id) => mainIds.get(id));
+  }, [sale.data]);
+  const counts = verkaufenCounts({ duplicateGroups, nav, sales });
   return (
     <div className="h-full flex flex-col">
       <div className="flex flex-wrap items-center gap-4 mb-5 shrink-0">
@@ -23,7 +56,13 @@ export default function VerkaufenLayout() {
             <NavLink key={s.id} to={s.to}
               className={({ isActive }) => clsx('px-4 py-1.5 rounded-lg font-display text-sm font-medium transition-colors',
                 isActive ? 'bg-accent text-accent-fg' : 'text-muted hover:text-text')}>
-              {s.label}
+              {({ isActive }) => (
+                <>
+                  {s.label}
+                  {/* Auf der Akzentflaeche des aktiven Reiters waere text-muted unlesbar -- dort accent-fg. */}
+                  {counts[s.id] != null && <span className={clsx('ml-1.5 text-[11px] font-normal', isActive ? 'text-accent-fg' : 'text-muted')}>{counts[s.id]}</span>}
+                </>
+              )}
             </NavLink>
           ))}
         </div>

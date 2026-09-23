@@ -32,7 +32,7 @@
   --warn: #c9a36b;
   --bad: #c07a7a;
 }
-/* Spec I Â§6.3 -- Zahlen mit gleicher Ziffernbreite, damit Preisspalten nicht zappeln. */
+/* Spec I §6.3 -- Zahlen mit gleicher Ziffernbreite, damit Preisspalten nicht zappeln. */
 body { background: var(--bg); color: var(--text); font-variant-numeric: tabular-nums; }
 /* Fixrunde 2, Punkt 4 -- Platzhaltertext faellt sonst auf Tailwinds Grau zurueck statt der Rolle. */
 ::placeholder { color: var(--text-muted); opacity: 1; }

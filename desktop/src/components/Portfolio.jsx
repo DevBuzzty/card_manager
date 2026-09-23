@@ -175,7 +175,7 @@ export default function Portfolio() {
             </div>
 
             {/* Main Chart */}
-            <div className="h-80 bg-surface rounded-2xl border border-line p-6 shadow-2xl relative overflow-hidden group">
+            <div className="h-80 bg-surface rounded-2xl border border-line p-6 shadow-sm relative overflow-hidden group">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={filteredHistory}>
                         {/* Hidden axis: gives the tooltip the real timestamp as its label (without it, label defaults to the point index → 1970 dates) */}

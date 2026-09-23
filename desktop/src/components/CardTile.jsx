@@ -39,7 +39,7 @@ export default function CardTile({ card, onClick, saleNote = null }) {
         {anyFoil && <span className={`foil-sheen${rarityInfos.some(r => r.foil === 'secret') ? ' secret' : ''}`} />}
 
         {qty > 1 && (
-          <span className="absolute top-2 right-2 z-10 font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-bg/80 text-good border border-good/40">
+          <span className="absolute top-2 right-2 z-10 font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-bg/80 text-text border border-line">
             ×{qty}
           </span>
         )}

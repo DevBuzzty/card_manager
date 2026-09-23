@@ -205,7 +205,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="bg-surface w-full max-w-md max-h-[85vh] rounded-2xl border border-line shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-surface w-full max-w-md max-h-[85vh] rounded-2xl border border-line shadow-sm overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="p-6 border-b border-line flex justify-between items-center bg-surface-2">
           <div>
             <h2 className="text-xl font-bold text-text">Exemplar</h2>

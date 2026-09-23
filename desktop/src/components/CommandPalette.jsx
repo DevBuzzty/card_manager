@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, Layers, Library, TrendingUp, BookOpen, Heart, CornerDownLeft } from 'lucide-react';
+import { Search, Layers, Library, TrendingUp, BookOpen, Heart, CornerDownLeft, Banknote, Copy, Tag, Store, Receipt } from 'lucide-react';
 import { ROUTES, cardRoute } from '../utils/routes';
 import { formatPasscode, passcodeMatches } from '../utils/passcode';
+import { T } from '../utils/i18n-de';
 
 export default function CommandPalette({ open, onClose }) {
   const [query, setQuery] = useState('');
@@ -42,6 +43,12 @@ export default function CommandPalette({ open, onClose }) {
     { id: 'a-insights', label: 'Insights öffnen', icon: TrendingUp, run: () => go(ROUTES.insights) },
     { id: 'a-decks', label: 'Decks öffnen', icon: BookOpen, run: () => go(ROUTES.decks) },
     { id: 'a-wishlist', label: 'Wunschliste öffnen', icon: Heart, run: () => go(ROUTES.wunschliste) },
+    // Abschlussreview B9: Bereich Verkaufen und seine vier Stationen (Spec I §5.3).
+    { id: 'a-verkaufen', label: `${T.verkaufen} öffnen`, icon: Banknote, run: () => go(ROUTES.verkaufen) },
+    { id: 'a-kandidaten', label: `${T.kandidaten} öffnen`, icon: Copy, run: () => go(ROUTES.kandidaten) },
+    { id: 'a-zum-verkauf', label: `${T.zumVerkauf} öffnen`, icon: Tag, run: () => go(ROUTES.zumVerkauf) },
+    { id: 'a-angebote', label: `${T.angebote} öffnen`, icon: Store, run: () => go(ROUTES.angebote) },
+    { id: 'a-verkaeufe', label: `${T.verkaeufe} öffnen`, icon: Receipt, run: () => go(ROUTES.verkaeufe) },
   ];
 
   const q = query.trim().toLowerCase();
@@ -83,7 +90,7 @@ export default function CommandPalette({ open, onClose }) {
       className="fixed inset-0 z-40 flex items-start justify-center pt-[12vh] px-4 bg-bg/70 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={onClose}
     >
-      <div className="w-full max-w-xl bg-bg border border-line rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-xl bg-bg border border-line rounded-2xl shadow-sm overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 py-4 border-b border-line">
           <Search className="w-5 h-5 text-accent" strokeWidth={1.8} />
           <input

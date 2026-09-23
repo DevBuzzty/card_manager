@@ -56,7 +56,7 @@ export default function CopyChip({ edition = 'unknown', condition = 'NM', onChan
   }
 
   const panel = (
-    <div ref={panelRef} style={panelStyle} className="z-50 bg-surface border border-line rounded-xl p-2 shadow-xl">
+    <div ref={panelRef} style={panelStyle} className="z-50 bg-surface border border-line rounded-xl p-2 shadow-sm">
       <div className="text-[9px] uppercase tracking-wider text-muted mb-1">Zustand</div>
       <div className="flex gap-1 mb-2">
         {CONDITIONS.map(c => (

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { BarChart3, Library, Layers, DollarSign, Package, Sparkles } from 'lucide-react';
 
 // Lightweight horizontal-bar distribution (no chart library, keeps the bundle lean).
-function BarStat({ title, icon: Icon, data, accent = 'bg-accent', valueFormatter }) {
+function BarStat({ title, icon: Icon, data, accent = 'bg-text/20', valueFormatter }) {
     const max = data.reduce((m, d) => Math.max(m, d.value), 0) || 1;
     return (
         <div className="bg-surface rounded-2xl border border-line p-6 flex flex-col">
@@ -30,7 +30,7 @@ function BarStat({ title, icon: Icon, data, accent = 'bg-accent', valueFormatter
     );
 }
 
-const Tile = ({ icon: Icon, label, value, color = 'bg-accent' }) => (
+const Tile = ({ icon: Icon, label, value, color = 'bg-surface-2' }) => (
     <div className="bg-surface p-5 rounded-2xl border border-line relative overflow-hidden">
         <div className={`absolute right-[-20px] top-[-20px] w-20 h-20 rounded-full opacity-10 ${color}`} />
         <div className="flex items-center gap-3 relative z-10">
@@ -119,7 +119,7 @@ export default function Statistics() {
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-3xl font-bold text-text flex items-center gap-3">
-                <BarChart3 className="w-7 h-7 text-accent" /> Collection Statistics
+                <BarChart3 className="w-7 h-7 text-muted" /> Collection Statistics
             </h1>
 
             {cards.length === 0 ? (
@@ -130,25 +130,25 @@ export default function Statistics() {
             ) : (
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        <Tile icon={Library} label="Total Cards" value={s.totalCards} color="bg-accent" />
-                        <Tile icon={Layers} label="Unique" value={s.uniqueCards} color="bg-accent" />
-                        <Tile icon={DollarSign} label="Total Value" value={money(s.totalValue)} color="bg-accent" />
-                        <Tile icon={DollarSign} label="Avg / Card" value={money(s.avgValue)} color="bg-accent" />
-                        <Tile icon={Package} label="Sets" value={s.distinctSets} color="bg-accent" />
-                        <Tile icon={Sparkles} label="Rarities" value={s.distinctRarities} color="bg-accent" />
+                        <Tile icon={Library} label="Total Cards" value={s.totalCards} />
+                        <Tile icon={Layers} label="Unique" value={s.uniqueCards} />
+                        <Tile icon={DollarSign} label="Total Value" value={money(s.totalValue)} />
+                        <Tile icon={DollarSign} label="Avg / Card" value={money(s.avgValue)} />
+                        <Tile icon={Package} label="Sets" value={s.distinctSets} />
+                        <Tile icon={Sparkles} label="Rarities" value={s.distinctRarities} />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <BarStat title="Card Types" data={s.byType} accent="bg-accent" />
-                        <BarStat title="Attributes" data={s.byAttr} accent="bg-accent" />
-                        <BarStat title="Rarities" data={s.byRarity} accent="bg-accent" />
-                        <BarStat title="Monster Types (Top 10)" data={s.byRace} accent="bg-accent" />
-                        <BarStat title="Levels / Ranks" data={s.byLevel} accent="bg-accent" />
-                        <BarStat title="Languages" data={s.byLang} accent="bg-accent" />
+                        <BarStat title="Card Types" data={s.byType} />
+                        <BarStat title="Attributes" data={s.byAttr} />
+                        <BarStat title="Rarities" data={s.byRarity} />
+                        <BarStat title="Monster Types (Top 10)" data={s.byRace} />
+                        <BarStat title="Levels / Ranks" data={s.byLevel} />
+                        <BarStat title="Languages" data={s.byLang} />
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <BarStat title="Top Sets (by cards owned)" data={s.bySet} accent="bg-accent" />
+                        <BarStat title="Top Sets (by cards owned)" data={s.bySet} />
                         <div className="bg-surface rounded-2xl border border-line p-6">
                             <h3 className="text-sm font-bold text-muted uppercase tracking-wider mb-4 flex items-center">
                                 <DollarSign className="w-4 h-4 mr-2" /> Most Valuable Cards
@@ -163,7 +163,7 @@ export default function Statistics() {
                                             <div className="font-bold text-text text-sm truncate">{c.name}</div>
                                             <div className="text-xs text-muted font-mono">{c.set_code} • {c.rarity} • x{c.quantity || 1}</div>
                                         </div>
-                                        <div className="text-right font-bold text-accent">{money(c.equity)}</div>
+                                        <div className="text-right font-bold text-text">{money(c.equity)}</div>
                                     </div>
                                 ))}
                             </div>

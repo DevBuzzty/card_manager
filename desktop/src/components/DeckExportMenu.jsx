@@ -36,7 +36,7 @@ export default function DeckExportMenu({ deckName, entries }) {
         Export
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 w-48 bg-bg border border-line rounded-lg shadow-lg py-1">
+        <div className="absolute right-0 top-full mt-1 z-20 w-48 bg-bg border border-line rounded-lg shadow-sm py-1">
           <button type="button" onClick={saveYdk} className="block w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-2">YDK-Datei</button>
           <button type="button" onClick={() => copy(buildYdke(entries), 'YDKE-Link kopiert')} className="block w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-2">YDKE kopieren</button>
           <button type="button" onClick={() => copy(buildTextList(entries), 'Textliste kopiert')} className="block w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-2">Textliste kopieren</button>

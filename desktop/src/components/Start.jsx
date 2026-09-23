@@ -12,6 +12,8 @@ import { LOADING, duplicates, duplicatesSummary, forSaleSummary, startSaleText, 
 import { useSaleData } from '../hooks/useSaleData';
 import { useListingsData } from '../hooks/useListings';
 import { listingsSummary, startText } from '../utils/listingText';
+import { countPresetGroups } from '../utils/cardFilters';
+import { useNavCounts } from '../hooks/useNavCounts';
 
 export default function Start({ onOpenPalette }) {
   const navigate = useNavigate();
@@ -55,22 +57,12 @@ export default function Start({ onOpenPalette }) {
     [cards]
   );
 
-  const unknownCount = useMemo(
-    () => cards.filter(c => c.set_code === 'Unknown').reduce((n, c) => n + (c.quantity || 1), 0),
-    [cards]
-  );
+  // Abschlussreview B6: Unbekannte als Karten (nicht Exemplare), dieselbe Zahl wie Seitenleiste und Scannen.
+  const nav = useNavCounts();
+  const unknownCount = nav ? nav.unknown : 0;
 
-  const incompleteCount = useMemo(() => cards.filter(c => {
-    const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');
-    const isLink = c.type && c.type.includes('Link');
-    if (isMonster) {
-      if (c.atk == null) return true;
-      if (!isLink && c.def == null) return true;
-      if (c.level == null) return true;
-      return false;
-    }
-    return !c.image_url;
-  }).length, [cards]);
+  // Abschlussreview B5: dieselbe Regel wie die Voreinstellung "Unvollständige Daten" der Kartenliste.
+  const incompleteCount = useMemo(() => countPresetGroups(cards, 'unvollstaendig'), [cards]);
 
   const spark = useMemo(() => {
     const vals = history.map(h => h.total_value).filter(v => typeof v === 'number');
@@ -194,11 +186,11 @@ export default function Start({ onOpenPalette }) {
             <div><div className="text-sm font-bold text-text">Bereit zum Scannen</div><div className="text-xs text-muted">Handy-Kamera auf eine Karte richten</div></div>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => navigate(ROUTES.karten)} className="flex-1 text-left rounded-xl p-3 border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors">
+            <button onClick={() => navigate(ROUTES.scannen)} className="flex-1 text-left rounded-xl p-3 border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-accent"><TriangleAlert className="w-4 h-4" />{unknownCount}</div>
               <div className="text-[11px] text-muted mt-0.5">Unbekanntes Set</div>
             </button>
-            <button onClick={() => navigate(ROUTES.karten)} className="flex-1 text-left rounded-xl p-3 border border-warn/30 bg-warn/5 hover:bg-warn/10 transition-colors">
+            <button onClick={() => navigate(ROUTES.karten, { state: { preset: 'unvollstaendig' } })} className="flex-1 text-left rounded-xl p-3 border border-warn/30 bg-warn/5 hover:bg-warn/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-warn"><FileWarning className="w-4 h-4" />{incompleteCount}</div>
               <div className="text-[11px] text-muted mt-0.5">Fehlende Daten</div>
             </button>

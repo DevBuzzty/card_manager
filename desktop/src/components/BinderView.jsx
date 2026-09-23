@@ -419,7 +419,7 @@ export default function BinderView({ panelOpen = false }) {
         <div
           ref={menuRef}
           style={{ position: 'fixed', left: menu.x, top: menu.y }}
-          className="z-[100] bg-bg border border-line rounded-xl shadow-2xl p-2 min-w-[220px] max-w-[320px]"
+          className="z-[100] bg-bg border border-line rounded-xl shadow-sm p-2 min-w-[220px] max-w-[320px]"
           onClick={(e) => e.stopPropagation()}
         >
           <p className="px-1 pb-1 text-xs font-mono text-muted">Seite {menu.page} · Fach {menu.slot}</p>

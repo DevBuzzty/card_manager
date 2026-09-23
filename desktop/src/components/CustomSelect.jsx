@@ -72,7 +72,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
         <div
           ref={menuRef}
           style={menuStyle}
-          className="z-[100] bg-surface border border-line rounded-xl shadow-2xl overflow-hidden min-w-[150px]"
+          className="z-[100] bg-surface border border-line rounded-xl shadow-sm overflow-hidden min-w-[150px]"
         >
           <ul className="overflow-auto custom-scrollbar p-1" style={{ maxHeight: listMaxH }}>
             {options.map((option) => (

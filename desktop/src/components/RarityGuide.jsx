@@ -47,12 +47,12 @@ export default function RarityGuide({ onClose }) {
     },
     {
         name: "Starlight Rare",
-        description: "Entire card face has a holographic foil, name is golden or red foil.",
+        description: "Entire card face has a holographic foil, name is gold or red foil.",
         color: "#67e8f9"
     },
     {
         name: "Quarter Century Secret Rare",
-        description: "25th Anniversary watermark in text box, golden/holographic sparkling finish, golden name.",
+        description: "25th Anniversary watermark in text box, gold/holographic sparkling finish, gold name.",
         color: "#fef08a"
     },
     {
@@ -74,7 +74,7 @@ export default function RarityGuide({ onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="bg-surface w-full max-w-2xl max-h-[80vh] rounded-2xl border border-line shadow-2xl overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-surface w-full max-w-2xl max-h-[80vh] rounded-2xl border border-line shadow-sm overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="p-6 border-b border-line flex justify-between items-center bg-surface-2">
           <h2 className="text-2xl font-bold text-text">Rarity Guide</h2>
           <button onClick={onClose} className="p-2 hover:bg-surface rounded-full text-muted hover:text-text transition-colors">
@@ -93,7 +93,7 @@ export default function RarityGuide({ onClose }) {
             {rarities.map((r, idx) => (
               <div key={idx} className="flex gap-4 p-4 bg-bg/30 rounded-xl border border-line hover:border-accent/50 transition-colors group">
                 {/* Visual Representation (Placeholder) */}
-                <div className="w-16 h-24 rounded border border-line flex-shrink-0 relative overflow-hidden shadow-lg bg-surface-2">
+                <div className="w-16 h-24 rounded border border-line flex-shrink-0 relative overflow-hidden shadow-sm bg-surface-2">
                     {/* Simulated Foil Effect -- normale Deckkraft statt mix-blend-screen: auf hellem Grund
                         machte der Mischmodus die Farbfelder fast weiss und damit ununterscheidbar. */}
                     <div className="absolute inset-2 rounded-sm border border-line" style={{ backgroundColor: r.color }}></div>

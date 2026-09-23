@@ -34,13 +34,22 @@ export function applyTheme(doc, setting, prefersDark) {
   return mode;
 }
 
-// Wendet die Einstellung an und folgt dem System, solange 'system' gewaehlt ist.
+// Abmeldung des zuletzt gestarteten System-Zuhoerers. Abschlussreview B4: startTheme ruft sie vor
+// jedem neuen Start selbst auf -- main.jsx (zweimal beim Start) und Settings.jsx muessen nichts halten.
+let stopBisher = () => {};
+
+// Wendet die Einstellung an und folgt dem System, solange 'system' gewaehlt ist. Es lebt immer
+// hoechstens ein Zuhoerer; die Rueckgabe meldet ihn ab.
 export function startTheme(doc, setting) {
+  stopBisher();
+  stopBisher = () => {};
   const mq = typeof doc.defaultView?.matchMedia === 'function'
     ? doc.defaultView.matchMedia('(prefers-color-scheme: dark)') : null;
   applyTheme(doc, setting, !!mq?.matches);
-  if (!mq || setting !== 'system') return () => {};
+  if (!mq || setting !== 'system') return stopBisher;
   const on = () => applyTheme(doc, setting, mq.matches);
   mq.addEventListener('change', on);
-  return () => mq.removeEventListener('change', on);
+  const stop = () => mq.removeEventListener('change', on);
+  stopBisher = stop;
+  return stop;
 }

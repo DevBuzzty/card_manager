@@ -6,13 +6,11 @@ import CustomSelect from './CustomSelect';
 import { fmtEUR } from '../utils/format';
 import { binderRoute, cardRoute } from '../utils/routes';
 import { KIND_LABELS, KIND_OPTIONS } from '../utils/containerKinds';
+import { COLOR_PRESETS, DEFAULT_COLOR } from '../utils/containerColors';
 
 const POCKET_OPTIONS = [4, 9, 12].map(p => ({ value: String(p), label: `${p} Fächer pro Seite` }));
-// Freie Etiketten-Farben fuer Behaelter -- Inhalt, keine Oberflaechenfarbe, darum unabhaengig
-// von den Farbrollen aus Spec I §6.2.
-const COLOR_PRESETS = ['#7C3AED', '#F5C542', '#39d98a', '#ff5d6c', '#6db4e8', '#e8c76d', '#E8944A', '#1DA891'];
-
-const emptyForm = { container_id: null, name: '', kind: 'binder', pockets_per_page: '4', color: COLOR_PRESETS[0] };
+// Freie Etiketten-Farben fuer Behaelter: utils/containerColors.js (Zwilling mit dem Handy, Abschlussreview B10).
+const emptyForm = { container_id: null, name: '', kind: 'binder', pockets_per_page: '4', color: DEFAULT_COLOR };
 
 // Spec B1 §7.1: Behälter (Ordner/Box/Deckbox) mit Belegung, Anlegen/Umbenennen/Löschen und dem
 // Zähler für Exemplare ohne Behälter. window.api ist im reinen Browser-Modus (`npm run dev`)
@@ -84,7 +82,7 @@ export default function Binders() {
         name: c.name,
         kind: c.kind,
         pockets_per_page: c.pockets_per_page ? String(c.pockets_per_page) : '4',
-        color: c.color || COLOR_PRESETS[0],
+        color: c.color || DEFAULT_COLOR,
       },
       error: null,
       saving: false,
@@ -288,7 +286,7 @@ export default function Binders() {
         <div
           ref={menuRef}
           style={{ position: 'fixed', left: menu.x, top: menu.y }}
-          className="z-[100] bg-bg border border-line rounded-xl shadow-2xl p-1 min-w-[160px]"
+          className="z-[100] bg-bg border border-line rounded-xl shadow-sm p-1 min-w-[160px]"
           onClick={(e) => e.stopPropagation()}
         >
           <button type="button" onClick={() => openEdit(menu.container)}

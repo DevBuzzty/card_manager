@@ -14,7 +14,7 @@ import { formatCopyLocation } from '../utils/copyLocation';
 // ../utils/printingKey.js, damit es ihn nur EINMAL gibt (BinderView.jsx liest denselben).
 import { printingKey } from '../utils/printingKey';
 import { passcodeMatches } from '../utils/passcode';
-import { PRESETS, matchesPresetGroup } from '../utils/cardFilters.js';
+import { PRESETS, matchesPresetGroup, presetsFromState } from '../utils/cardFilters.js';
 import ExportDialog from './ExportDialog';
 import { filterCopyIds } from '../utils/exportScope';
 import { forSaleSuffix } from '../utils/duplicates';
@@ -85,7 +85,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [copiesLoadError, setCopiesLoadError] = useState(null);
   const sale = useSaleData(); // fuer den "davon zum Verkauf"-Zusatz an jeder Kachel (forSaleByCard unten)
   // Spec I §3.3: "Unvollstaendig" und "Foils" sind jetzt gespeicherte Filter statt Chips, siehe cardFilters.js.
-  const [presets, setPresets] = useState([]);
+  // Abschlussreview B5: eine Start-Kachel kann eine Voreinstellung mitgeben (location.state.preset).
+  const [presets, setPresets] = useState(() => presetsFromState(location.state));
   const togglePreset = (id) => setPresets(ps => ps.includes(id) ? ps.filter(x => x !== id) : [...ps, id]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
@@ -476,7 +477,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                         <Coins className="w-4 h-4" /> Preise
                     </button>
                     {pricesOpen && (
-                      <div className="absolute right-0 top-11 z-30 w-[320px] bg-bg border border-line rounded-xl shadow-2xl p-3 space-y-2"
+                      <div className="absolute right-0 top-11 z-30 w-[320px] bg-bg border border-line rounded-xl shadow-sm p-3 space-y-2"
                            onMouseLeave={() => setPricesOpen(false)}>
                         <button onClick={runBulk} disabled={cmBulkBusy || cmRunning}
                                 className="w-full text-left px-3 py-2 rounded-lg bg-accent hover:underline text-accent-fg text-sm disabled:opacity-50">
@@ -536,8 +537,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 </div>
             )}
 
-            {/* Row 2: gespeicherte Filter (Spec I §3.3) */}
-            <div className="flex flex-wrap gap-2">
+            {/* Row 2: gespeicherte Filter (Spec I §3.3) -- Abschlussreview B3: erste Zeile im Filter-Bereich,
+                keine dauerhaft sichtbare Chip-Zeile. Aktive Voreinstellungen stehen als entfernbare Chips unten. */}
+            {filtersOpen && (
+            <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wide text-muted mr-1 shrink-0">Voreinstellungen</span>
                 {PRESETS.map(p => (
                     <button key={p.id} type="button" onClick={() => togglePreset(p.id)}
                         className={clsx('px-3 py-1.5 rounded-full text-xs border',
@@ -546,6 +550,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                     </button>
                 ))}
             </div>
+            )}
 
             {/* Row 3: filter dropdowns, only when open */}
             {filtersOpen && (

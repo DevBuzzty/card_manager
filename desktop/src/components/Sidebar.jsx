@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
 import { NAV_GROUPS } from '../utils/i18n-de';
+import { useNavCounts } from '../hooks/useNavCounts';
 
 const ICONS = { start: Home, scannen: ScanLine, sammlung: Library, decks: Layers, verkaufen: Banknote, deals: Tag, insights: BarChart3, einstellungen: SettingsIcon };
 
@@ -37,26 +38,9 @@ const NavItem = ({ to, icon, label, match, badge }) => {
 export default function Sidebar() {
   const [phoneOnline, setPhoneOnline] = useState(false);
   // Spec I §3.1: Zaehler an "Scannen" (offene Unbekannte) und "Verkaufen" (vorgemerkte Exemplare +
-  // laufende Angebote), aus dem nav-counts-Kanal (Task 6).
-  const [counts, setCounts] = useState({ unknown: 0, forSale: 0, listingsOpen: 0 });
-  useEffect(() => {
-    let lebt = true;
-    const laden = () => window.api?.navCounts?.().then(c => { if (lebt && c) setCounts(c); }).catch(() => {});
-    laden();
-    // Fixrunde 1 (Review Task 6): onListingsChanged kommt nur vom Cloud-Pull -- lokale Aenderungen
-    // (Karten-Detail, Verkauf, Angebot, Scannen) feuern stattdessen die window-Ereignisse
-    // 'collection-dirty'/'listings-dirty' (siehe CardDetailPanel.jsx, SaleDialog.jsx, ListingDialog.jsx,
-    // ListingDetail.jsx, StagingArea.jsx).
-    const ab = window.api?.onListingsChanged?.(laden);
-    window.addEventListener('collection-dirty', laden);
-    window.addEventListener('listings-dirty', laden);
-    return () => {
-        lebt = false;
-        if (typeof ab === 'function') ab();
-        window.removeEventListener('collection-dirty', laden);
-        window.removeEventListener('listings-dirty', laden);
-    };
-  }, []);
+  // laufende Angebote), aus dem nav-counts-Kanal. Abschlussreview B6: gemeinsamer Hook, der auch bei
+  // Sammlungs- und Verkaufsaenderung aus dem Abgleich neu laedt.
+  const counts = useNavCounts() || { unknown: 0, forSale: 0, listingsOpen: 0 };
   const badge = (key) => (key === 'scannen' ? counts.unknown : key === 'verkaufen' ? counts.forSale + counts.listingsOpen : 0);
 
   useEffect(() => window.api?.onPhoneStatus?.(setPhoneOnline), []);
