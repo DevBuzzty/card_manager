@@ -60,7 +60,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       <button
         type="button"
         onClick={() => setIsOpen(o => !o)}
-        className="w-full flex items-center justify-between bg-[#1a1a1a] border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet hover:bg-[#252525] transition-colors"
+        className="w-full flex items-center justify-between bg-[#1a1a1a] border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent hover:bg-[#252525] transition-colors"
       >
         <span className={clsx("truncate mr-2", !selectedOption && "text-gray-500")}>
           {selectedOption ? selectedOption.label : placeholder}
@@ -86,7 +86,7 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
                   className={clsx(
                     "w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors",
                     value === option.value
-                      ? "bg-space-violet text-white font-medium"
+                      ? "bg-accent text-accent-fg font-medium"
                       : "text-gray-300 hover:bg-[#2a2a2a] hover:text-white"
                   )}
                 >

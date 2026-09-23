@@ -70,7 +70,7 @@ export default function SetCompletion() {
                             </div>
                         </div>
                         <div className="text-right">
-                            <span className="text-xl font-bold text-space-violet">{set.uniqueCount}</span>
+                            <span className="text-xl font-bold text-accent">{set.uniqueCount}</span>
                             <span className="text-xs text-gray-500 block">Verschiedene</span>
                         </div>
                     </div>

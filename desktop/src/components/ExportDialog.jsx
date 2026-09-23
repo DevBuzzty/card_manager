@@ -61,35 +61,35 @@ export default function ExportDialog({ onClose, filterCopyIds = null, initialFor
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-obsidian-700 border border-line rounded-2xl p-6 space-y-4">
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-surface border border-line rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-lg text-ink">Exportieren</h3>
-          <button type="button" onClick={onClose} disabled={busy} className="text-ink-faint hover:text-ink"><X className="w-4 h-4" /></button>
+          <h3 className="font-display text-lg text-text">Exportieren</h3>
+          <button type="button" onClick={onClose} disabled={busy} className="text-muted hover:text-text"><X className="w-4 h-4" /></button>
         </div>
-        <label className="block text-xs text-ink-muted">Format
+        <label className="block text-xs text-muted">Format
           <CustomSelect value={format} onChange={setFormat} options={EXPORT_FORMAT_OPTIONS} className="mt-1 w-full" />
         </label>
         {wants ? (
-          <p className="text-sm text-ink-muted">Umfang: Wunschliste</p>
+          <p className="text-sm text-muted">Umfang: Wunschliste</p>
         ) : (
           <>
-            <label className="block text-xs text-ink-muted">Umfang
+            <label className="block text-xs text-muted">Umfang
               <CustomSelect value={scopeKind} onChange={setScopeKind} options={scopeOptions} className="mt-1 w-full" />
             </label>
             {scopeKind === 'container' && (
-              <label className="block text-xs text-ink-muted">Behälter
+              <label className="block text-xs text-muted">Behälter
                 <CustomSelect value={containerId} onChange={setContainerId}
                   options={containers.map((c) => ({ value: c.container_id, label: c.name }))} className="mt-1 w-full" />
               </label>
             )}
           </>
         )}
-        <p className="text-sm text-ink-muted">{count == null ? '…' : count === 0 ? NOTHING_TO_EXPORT : `${count} ${wants ? (count === 1 ? 'Wunsch' : 'Wünsche') : (count === 1 ? 'Exemplar' : 'Exemplare')}`}</p>
-        {note && <p className={`text-sm ${note.ok ? 'text-good' : 'text-crit'}`}>{note.text}</p>}
+        <p className="text-sm text-muted">{count == null ? '…' : count === 0 ? NOTHING_TO_EXPORT : `${count} ${wants ? (count === 1 ? 'Wunsch' : 'Wünsche') : (count === 1 ? 'Exemplar' : 'Exemplare')}`}</p>
+        {note && <p className={`text-sm ${note.ok ? 'text-good' : 'text-bad'}`}>{note.text}</p>}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">Schließen</button>
+          <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-muted hover:text-text">Schließen</button>
           <button type="button" onClick={run} disabled={busy || !count}
-            className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium disabled:opacity-50">
+            className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium disabled:opacity-50">
             {busy ? 'Wird exportiert…' : 'Speichern…'}
           </button>
         </div>
