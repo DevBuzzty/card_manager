@@ -17,7 +17,7 @@ export default function MoversList({ movers, full = false }) {
         return (
           <button key={m.key} type="button"
             onClick={() => navigate(cardRoute(m), { state: { background: location, list } })}
-            className="w-full flex items-center gap-3 py-2 text-left hover:bg-white/5 rounded-lg px-2 transition-colors">
+            className="w-full flex items-center gap-3 py-2 text-left hover:bg-surface/5 rounded-lg px-2 transition-colors">
             {m.image_url
               ? <img src={m.image_url} alt="" className="w-7 h-10 object-cover rounded border border-line shrink-0" />
               : <div className="w-7 h-10 rounded border border-line bg-bg shrink-0" />}

@@ -33,7 +33,7 @@ export function ListingMarks({ marks }) {
 export function EbayMark({ mark, onRetry, busy }) {
   if (!mark) return null;
   const chip = 'inline-block text-[10px] px-1.5 py-0.5 rounded';
-  const color = mark.kind === 'online' ? 'bg-emerald-500/15 text-emerald-400' : mark.kind === 'fehler' ? 'bg-bad/20 text-bad' : 'bg-warn/15 text-warn';
+  const color = mark.kind === 'online' ? 'bg-good/15 text-good' : mark.kind === 'fehler' ? 'bg-bad/20 text-bad' : 'bg-warn/15 text-warn';
   return (
     <>
       <span className={`${chip} ${color}`}>{mark.text}</span>
@@ -186,7 +186,7 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
 
   return (
     // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur dieses Detail.
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={(e) => { e.stopPropagation(); onClose?.(); }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); onClose?.(); }}>
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-surface border border-line rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-text">Angebot</h2>
@@ -294,7 +294,7 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
             {active && !editing && liveItems.length === 0 && (
               <p className="text-sm text-bad">Keine verkaufbare Karte – bitte herausnehmen oder beenden.</p>
             )}
-            {notice && <p className="text-sm text-emerald-400">{notice}</p>}
+            {notice && <p className="text-sm text-good">{notice}</p>}
             {error && <p className="text-sm text-bad">{error}</p>}
 
             <div className="flex flex-wrap justify-end gap-2">

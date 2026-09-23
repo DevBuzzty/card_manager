@@ -42,7 +42,7 @@ export default function FillBoxDialog({ boxId, boxName, proposal, copiesById, co
   const surplus = surplusText(proposal.surplus);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl max-h-[80vh] flex flex-col bg-surface border border-line rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-display text-lg text-text">Box befüllen · {boxName}</h3>

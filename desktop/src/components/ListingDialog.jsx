@@ -118,7 +118,7 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
 
   return (
     // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur diesen Dialog, nie den darunterliegenden (wie SaleDialog).
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); onClose(); }}>
       <div className="w-full max-w-lg bg-surface border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-text">{prefill ? 'Erneut anbieten' : 'Angebot erstellen'}</h2>
@@ -203,7 +203,7 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
             {form.channel_id === 'ebay' && ebay.status !== undefined && !setupOk(ebay.status) && (
               <p className="text-sm text-warn">eBay ist noch nicht eingerichtet – das Angebot wartet, bis der Check in den Einstellungen vollständig ist.</p>
             )}
-            {notice && <p className="text-sm text-emerald-400">{notice}</p>}
+            {notice && <p className="text-sm text-good">{notice}</p>}
             {error && <p className="text-sm text-bad">{error}</p>}
             <div className="flex justify-end gap-2">
               <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>

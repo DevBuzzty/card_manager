@@ -62,7 +62,7 @@ export default function PriceAlertTargets({ printing }) {
         onChange={(e) => setText((t) => ({ ...t, [kind]: e.target.value }))}
         onBlur={() => save(kind)}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-        className={`w-16 bg-black/40 border rounded px-1 py-0.5 text-xs text-white font-mono ${fieldError[kind] ? 'border-bad' : 'border-gray-700'}`} />
+        className={`w-16 bg-bg/40 border rounded px-1 py-0.5 text-xs text-text font-mono ${fieldError[kind] ? 'border-bad' : 'border-line'}`} />
       <span className="text-muted">€</span>
       {state.targets[kind] && !state.targets[kind].armed && <span className="text-[10px] text-warn">ausgelöst</span>}
     </span>

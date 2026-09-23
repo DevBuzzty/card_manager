@@ -52,7 +52,7 @@ export default function ListingsList({ data, error, reload, onOpenCard }) {
             </div>
           )}
           {rows.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-gray-600">Keine Angebote.</div>
+            <div className="flex-1 flex items-center justify-center text-muted">Keine Angebote.</div>
           ) : (
             <div className="flex-1 overflow-y-auto custom-scrollbar bg-surface border border-line rounded-xl divide-y divide-line">
               {rows.map((l) => {
@@ -70,7 +70,7 @@ export default function ListingsList({ data, error, reload, onOpenCard }) {
                     <EbayMark mark={ebayMark(l, ebay.rows[l.listing_id] ?? null, ebay.status)} />
                     <span className="ml-auto font-mono">{euroCentsText(price)}</span>
                     {active && (
-                      <span className={`font-mono ${price >= l.marketCents ? 'text-emerald-400' : 'text-bad'}`}>
+                      <span className={`font-mono ${price >= l.marketCents ? 'text-good' : 'text-bad'}`}>
                         {diffText(price, l.marketCents)} gegenüber Marktwert
                       </span>
                     )}

@@ -165,7 +165,7 @@ export default function EbaySettings() {
         </div>
       )}
 
-      {notice && <p className="text-sm text-emerald-400 mt-4">{notice}</p>}
+      {notice && <p className="text-sm text-good mt-4">{notice}</p>}
       {error && <p className="text-sm text-bad mt-4">{error}</p>}
     </div>
   );

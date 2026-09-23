@@ -144,7 +144,7 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
       )}
       {error && <p className="text-sm text-bad">{error}</p>}
       {groups.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-gray-600">Keine Exemplare zum Verkauf.</div>
+        <div className="flex-1 flex items-center justify-center text-muted">Keine Exemplare zum Verkauf.</div>
       ) : (
         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1">
           {groups.map((g) => {
@@ -165,7 +165,7 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
                     const c = byId.get(id);
                     const sugg = suggestionOf(c);
                     return (
-                      <div key={id} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-black/20 border border-gray-800 text-[11px]">
+                      <div key={id} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-bg/20 border border-line text-[11px]">
                         <input type="checkbox" checked={pickedLive.has(id)} onChange={() => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; })} aria-label="Für Verkauf auswählen" />
                         <span className="font-mono text-muted">{c.condition} · {EDITION_LABELS[c.edition] || c.edition}</span>
                         <span className="font-mono text-muted truncate">{formatCopyLocation(c, (containers || []).find((ct) => ct.container_id === c.container_id))}</span>

@@ -73,7 +73,7 @@ export default function ImportDialog({ opened, onClose }) {
 
   const busy = phase === 'running';
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-3xl max-h-[90vh] flex flex-col bg-surface border border-line rounded-2xl p-6 gap-4">
         <div className="flex items-center justify-between">
           <h3 className="font-display text-lg text-text">Importieren{fileName && ` – ${fileName}`}</h3>

@@ -24,7 +24,7 @@ export default function PriceAlertsList({ events }) {
           <div key={e.id} className="flex items-center gap-3 py-2">
             <button type="button"
               onClick={() => navigate(cardRoute(printingOf(e)), { state: { background: location, list } })}
-              className="min-w-0 flex-1 flex items-center gap-3 text-left hover:bg-white/5 rounded-lg px-2 py-1 transition-colors">
+              className="min-w-0 flex-1 flex items-center gap-3 text-left hover:bg-surface/5 rounded-lg px-2 py-1 transition-colors">
               <span className="font-mono text-[11px] text-muted shrink-0">{fmtDayDE(String(e.day))}</span>
               <span className="text-sm text-text truncate">{e.text}</span>
             </button>
