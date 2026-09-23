@@ -43,8 +43,19 @@ export default function Sidebar() {
     let lebt = true;
     const laden = () => window.api?.navCounts?.().then(c => { if (lebt && c) setCounts(c); }).catch(() => {});
     laden();
+    // Fixrunde 1 (Review Task 6): onListingsChanged kommt nur vom Cloud-Pull -- lokale Aenderungen
+    // (Karten-Detail, Verkauf, Angebot, Scannen) feuern stattdessen die window-Ereignisse
+    // 'collection-dirty'/'listings-dirty' (siehe CardDetailPanel.jsx, SaleDialog.jsx, ListingDialog.jsx,
+    // ListingDetail.jsx, StagingArea.jsx).
     const ab = window.api?.onListingsChanged?.(laden);
-    return () => { lebt = false; if (typeof ab === 'function') ab(); };
+    window.addEventListener('collection-dirty', laden);
+    window.addEventListener('listings-dirty', laden);
+    return () => {
+        lebt = false;
+        if (typeof ab === 'function') ab();
+        window.removeEventListener('collection-dirty', laden);
+        window.removeEventListener('listings-dirty', laden);
+    };
   }, []);
   const badge = (key) => (key === 'scannen' ? counts.unknown : key === 'verkaufen' ? counts.forSale + counts.listingsOpen : 0);
 

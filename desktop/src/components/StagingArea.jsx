@@ -83,8 +83,18 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
     let lebt = true;
     const laden = () => window.api?.navCounts?.().then(c => { if (lebt && c) setUnknownCount(c.unknown); }).catch(() => {});
     laden();
+    // Fixrunde 1 (Review Task 6): onListingsChanged kommt nur vom Cloud-Pull -- lokale Aenderungen
+    // (Karten-Detail, Verkauf, Angebot) feuern stattdessen die window-Ereignisse 'collection-dirty'/
+    // 'listings-dirty' (siehe CardDetailPanel.jsx, SaleDialog.jsx, ListingDialog.jsx, ListingDetail.jsx).
     const ab = window.api?.onListingsChanged?.(laden);
-    return () => { lebt = false; if (typeof ab === 'function') ab(); };
+    window.addEventListener('collection-dirty', laden);
+    window.addEventListener('listings-dirty', laden);
+    return () => {
+        lebt = false;
+        if (typeof ab === 'function') ab();
+        window.removeEventListener('collection-dirty', laden);
+        window.removeEventListener('listings-dirty', laden);
+    };
   }, []);
 
   const runUnknownAction = async (kind) => {
@@ -98,7 +108,8 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
           const res = kind === 'merge' ? await window.api.mergeUnknownCards() : await window.api.convertUnknownsToDefault();
           if (res.success) {
               alert(kind === 'merge' ? `${res.merged} Karten zusammengeführt.` : `${res.converted} Karten umgestellt.`);
-              window.api?.navCounts?.().then(c => c && setUnknownCount(c.unknown)).catch(() => {});
+              // Fixrunde 1: eigene Sammelaktion aendert cards/card_copies -- Seitenleiste muss mitziehen.
+              window.dispatchEvent(new Event('collection-dirty'));
           }
           else alert('Fehlgeschlagen: ' + res.error);
       } catch { alert('Aktion fehlgeschlagen.'); }
@@ -305,6 +316,10 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                     if (isPrimary) primaryWritten = p.quantity || 1;
                     else extraWritten.set(p.id, p.quantity || 1);
                 }
+                // Fixrunde 1 (Review Task 6): die Uebernahme aendert cards/card_copies, aber
+                // feuerte bisher kein 'collection-dirty' -- Sidebar-Zaehler und CollectionList
+                // erfuhren davon nur zufaellig ueber einen spaeteren Sync-Pull.
+                window.dispatchEvent(new Event('collection-dirty'));
            } else {
                 // Kein window.api (Browser-Dev) -- es wird ohnehin nichts persistiert, die Karte
                 // verschwindet wie bisher unbedingt aus dem Staging.
