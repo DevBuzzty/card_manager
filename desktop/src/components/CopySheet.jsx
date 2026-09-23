@@ -220,7 +220,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-4">
           {loadError && (
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{loadError}</span>
             </div>
@@ -231,7 +231,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
             <select
               value={containerId}
               onChange={e => onContainerChange(e.target.value)}
-              className="w-full bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet"
+              className="w-full bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
             >
               <option value="">Kein Behälter</option>
               {containers.map(c => (
@@ -241,9 +241,9 @@ export default function CopySheet({ copy, onClose, onSaved }) {
             {isBinder && (
               <div className="flex gap-2 mt-2">
                 <input type="number" min="1" placeholder="Seite" value={page} onChange={e => setPage(e.target.value)}
-                  className="w-1/2 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet" />
+                  className="w-1/2 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent" />
                 <input type="number" min="1" placeholder="Fach" value={slot} onChange={e => setSlot(e.target.value)}
-                  className="w-1/2 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet" />
+                  className="w-1/2 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent" />
               </div>
             )}
           </div>
@@ -253,7 +253,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {tags.map(t => (
-                  <span key={t} className="flex items-center gap-1 pl-2.5 pr-1.5 py-1 bg-space-violet/20 text-space-violet rounded-full text-xs font-medium border border-space-violet/30">
+                  <span key={t} className="flex items-center gap-1 pl-2.5 pr-1.5 py-1 bg-accent/20 text-accent rounded-full text-xs font-medium border border-accent/30">
                     {t}
                     <button type="button" onClick={() => setTags(list => removeTag(list, t))} className="hover:text-white">
                       <X className="w-3 h-3" />
@@ -269,7 +269,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
               onChange={e => setTagInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitTagInput(); } }}
               placeholder="Tag eingeben, Enter zum Anlegen…"
-              className="w-full bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet"
+              className="w-full bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
             />
             <datalist id="copy-sheet-tag-suggestions">
               {tagSuggestions.map(t => <option key={t} value={t} />)}
@@ -279,7 +279,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
           <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Zum Verkauf</span>
             <input type="checkbox" role="switch" checked={forSale} disabled={markingSale || saving || removing}
-              onChange={toggleForSale} className="accent-space-violet w-4 h-4" />
+              onChange={toggleForSale} className="accent-accent w-4 h-4" />
           </label>
 
           <div>
@@ -288,28 +288,28 @@ export default function CopySheet({ copy, onClose, onSaved }) {
               rows={3}
               value={note}
               onChange={e => setNote(e.target.value)}
-              className="w-full bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet resize-none"
+              className="w-full bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent resize-none"
             />
           </div>
 
-          {error && <p className="text-sm text-crit">{error}</p>}
+          {error && <p className="text-sm text-bad">{error}</p>}
         </div>
 
         <div className="p-6 border-t border-gray-700 bg-[#252525] flex items-center justify-between">
           <div className="flex gap-2">
             <button type="button" onClick={removeExemplar} disabled={removing || saving || markingSale}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-crit hover:bg-crit/10 rounded-lg transition-colors disabled:opacity-50">
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-bad hover:bg-bad/10 rounded-lg transition-colors disabled:opacity-50">
               <Trash2 className="w-3.5 h-3.5" /> {removing ? 'Wird entfernt…' : 'Entfernen'}
             </button>
             {copy?.copy_id && (
               <button type="button" onClick={() => setSellingOpen(true)} disabled={saving || removing || markingSale}
-                className="px-3 py-2 text-sm text-ink-muted hover:text-ink rounded-lg transition-colors disabled:opacity-50">
+                className="px-3 py-2 text-sm text-muted hover:text-text rounded-lg transition-colors disabled:opacity-50">
                 Verkauft…
               </button>
             )}
             {copy?.copy_id && (
               <button type="button" onClick={() => setListingOpen(true)} disabled={saving || removing || markingSale}
-                className="px-3 py-2 text-sm text-ink-muted hover:text-ink rounded-lg transition-colors disabled:opacity-50">
+                className="px-3 py-2 text-sm text-muted hover:text-text rounded-lg transition-colors disabled:opacity-50">
                 Anbieten…
               </button>
             )}
@@ -317,7 +317,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-gray-400 hover:text-white transition-colors">Abbrechen</button>
             <button type="button" onClick={save} disabled={saving || removing || markingSale}
-              className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {saving ? 'Wird gespeichert…' : 'Speichern'}
             </button>
           </div>

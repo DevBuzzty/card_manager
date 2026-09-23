@@ -99,22 +99,22 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
     }
   });
 
-  if (!groups) return <div className="h-full flex items-center justify-center text-ink-faint">{LOADING}</div>;
+  if (!groups) return <div className="h-full flex items-center justify-center text-muted">{LOADING}</div>;
 
   return (
     <div className="h-full flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3 bg-obsidian-700 border border-line rounded-xl px-4 py-3 shrink-0">
-        <span className="text-sm text-ink flex-1">{forSaleHeaderText(summary)}</span>
+      <div className="flex flex-wrap items-center gap-3 bg-surface border border-line rounded-xl px-4 py-3 shrink-0">
+        <span className="text-sm text-text flex-1">{forSaleHeaderText(summary)}</span>
         <button type="button" onClick={() => setSelling([...pickedLive])} disabled={pickedLive.size === 0 || busy}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-obsidian-600 border border-line text-ink hover:border-space-violet/40 disabled:opacity-50">
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-surface-2 border border-line text-text hover:border-accent/40 disabled:opacity-50">
           Verkauft buchen ({pickedLive.size})
         </button>
         <button type="button" onClick={() => setListingFor([...pickedLive])} disabled={pickedLive.size === 0 || busy}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-obsidian-600 border border-line text-ink hover:border-space-violet/40 disabled:opacity-50">
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-surface-2 border border-line text-text hover:border-accent/40 disabled:opacity-50">
           Angebot erstellen ({pickedLive.size})
         </button>
         <button type="button" onClick={() => setExportIds(groups.flatMap((g) => g.copy_ids))} disabled={summary.copies === 0}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-obsidian-600 border border-line text-ink hover:border-space-violet/40 disabled:opacity-50">
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-surface-2 border border-line text-text hover:border-accent/40 disabled:opacity-50">
           <Download className="w-3.5 h-3.5" /> Exportieren
         </button>
       </div>
@@ -137,12 +137,12 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
         }} />
       )}
       {undo && (
-        <p className="text-sm text-ink-muted">
+        <p className="text-sm text-muted">
           {undo.n} {undo.n === 1 ? 'Karte' : 'Karten'} als verkauft gebucht ·{' '}
-          <button type="button" onClick={undoSale} disabled={busy} className="text-space-violet hover:underline disabled:opacity-50">Rückgängig</button>
+          <button type="button" onClick={undoSale} disabled={busy} className="text-accent hover:underline disabled:opacity-50">Rückgängig</button>
         </p>
       )}
-      {error && <p className="text-sm text-crit">{error}</p>}
+      {error && <p className="text-sm text-bad">{error}</p>}
       {groups.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-gray-600">Keine Exemplare zum Verkauf.</div>
       ) : (
@@ -150,14 +150,14 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
           {groups.map((g) => {
             const first = byId.get(g.copy_ids[0]) || {};
             return (
-              <div key={`${g.card_id}|${g.set_code}|${g.language}|${g.rarity}`} className="bg-obsidian-700 border border-line rounded-xl p-3">
+              <div key={`${g.card_id}|${g.set_code}|${g.language}|${g.rarity}`} className="bg-surface border border-line rounded-xl p-3">
                 <button type="button" onClick={() => onOpenCard(first)} className="w-full flex items-center gap-3 text-left">
-                  <div className="w-9 h-12 rounded overflow-hidden bg-obsidian-800 shrink-0">
+                  <div className="w-9 h-12 rounded overflow-hidden bg-bg shrink-0">
                     {first.image_url && <img src={first.image_url} alt="" className="w-full h-full object-cover" />}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-bold text-ink truncate">{g.name || g.card_id}</div>
-                    <div className="text-[11px] font-mono text-ink-faint">{g.set_code} · {g.rarity} · {g.language}</div>
+                    <div className="text-sm font-bold text-text truncate">{g.name || g.card_id}</div>
+                    <div className="text-[11px] font-mono text-muted">{g.set_code} · {g.rarity} · {g.language}</div>
                   </div>
                 </button>
                 <div className="mt-2 space-y-1">
@@ -167,13 +167,13 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
                     return (
                       <div key={id} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-black/20 border border-gray-800 text-[11px]">
                         <input type="checkbox" checked={pickedLive.has(id)} onChange={() => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; })} aria-label="Für Verkauf auswählen" />
-                        <span className="font-mono text-ink-muted">{c.condition} · {EDITION_LABELS[c.edition] || c.edition}</span>
-                        <span className="font-mono text-ink-faint truncate">{formatCopyLocation(c, (containers || []).find((ct) => ct.container_id === c.container_id))}</span>
-                        {copyBadges(offers[id] || []).map((b) => <span key={b} className="px-1 rounded bg-space-violet/15 text-space-violet text-[10px] font-mono">{b}</span>)}
-                        <span className="ml-auto font-mono text-gold">{copyValueText(c)}</span>
-                        <span className="font-mono text-ink-muted">Vorschlag {sugg == null ? '–' : euroCentsText(sugg)}</span>
+                        <span className="font-mono text-muted">{c.condition} · {EDITION_LABELS[c.edition] || c.edition}</span>
+                        <span className="font-mono text-muted truncate">{formatCopyLocation(c, (containers || []).find((ct) => ct.container_id === c.container_id))}</span>
+                        {copyBadges(offers[id] || []).map((b) => <span key={b} className="px-1 rounded bg-accent/15 text-accent text-[10px] font-mono">{b}</span>)}
+                        <span className="ml-auto font-mono text-text">{copyValueText(c)}</span>
+                        <span className="font-mono text-muted">Vorschlag {sugg == null ? '–' : euroCentsText(sugg)}</span>
                         <button type="button" onClick={() => giveBack(id)} disabled={busy}
-                          className="px-2 py-0.5 rounded text-[11px] bg-obsidian-600 border border-line text-ink-muted hover:text-ink disabled:opacity-50">
+                          className="px-2 py-0.5 rounded text-[11px] bg-surface-2 border border-line text-muted hover:text-text disabled:opacity-50">
                           Zurück in die Sammlung
                         </button>
                       </div>

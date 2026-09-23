@@ -28,49 +28,49 @@ export default function ListingsList({ data, error, reload, onOpenCard }) {
 
   return (
     <div className="h-full flex flex-col gap-3">
-      {error && <p className="text-sm text-crit">{error}</p>}
+      {error && <p className="text-sm text-bad">{error}</p>}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
         {STATUS.map((s) => (
           <button key={s.id} type="button" onClick={() => setStatus(s.id)}
-            className={`px-3 py-1 rounded-full text-xs border ${status === s.id ? 'bg-space-violet/20 border-space-violet/50 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink'}`}>
+            className={`px-3 py-1 rounded-full text-xs border ${status === s.id ? 'bg-accent/20 border-accent/50 text-text' : 'bg-surface border-line text-muted hover:text-text'}`}>
             {s.label}
           </button>
         ))}
         <select value={channel} onChange={(e) => setChannel(e.target.value)}
-          className="bg-obsidian-700 border border-line rounded-lg px-2 py-1 text-xs text-ink">
+          className="bg-surface border border-line rounded-lg px-2 py-1 text-xs text-text">
           <option value={ALL_CHANNELS}>Alle Kanäle</option>
           {channels.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select>
       </div>
       {!data ? (
-        <div className="flex-1 flex items-center justify-center text-ink-faint">{LOADING}</div>
+        <div className="flex-1 flex items-center justify-center text-muted">{LOADING}</div>
       ) : (
         <>
           {(status === 'aktiv' || status === 'alle') && (
-            <div className="bg-obsidian-700 border border-line rounded-xl px-4 py-3 text-sm text-ink shrink-0">
+            <div className="bg-surface border border-line rounded-xl px-4 py-3 text-sm text-text shrink-0">
               {summaryText(listingsSummary(rows, data.items))}
             </div>
           )}
           {rows.length === 0 ? (
             <div className="flex-1 flex items-center justify-center text-gray-600">Keine Angebote.</div>
           ) : (
-            <div className="flex-1 overflow-y-auto custom-scrollbar bg-obsidian-700 border border-line rounded-xl divide-y divide-line">
+            <div className="flex-1 overflow-y-auto custom-scrollbar bg-surface border border-line rounded-xl divide-y divide-line">
               {rows.map((l) => {
                 const active = l.status === 'aktiv';
                 const price = toCents(l.price) || 0;
                 return (
                   <button key={l.listing_id} type="button" onClick={() => setOpenId(l.listing_id)}
-                    className={`w-full flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-left text-sm hover:bg-obsidian-800 ${active ? 'text-ink' : 'text-ink-faint'}`}>
+                    className={`w-full flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-left text-sm hover:bg-bg ${active ? 'text-text' : 'text-muted'}`}>
                     <span>{l.channel_name}</span>
                     <span className="min-w-0 truncate">{l.rowTitle}</span>
-                    <span className="text-ink-muted">{l.cards} {l.cards === 1 ? 'Karte' : 'Karten'}</span>
-                    <span className="text-ink-muted">{sinceText(l.days)}</span>
+                    <span className="text-muted">{l.cards} {l.cards === 1 ? 'Karte' : 'Karten'}</span>
+                    <span className="text-muted">{sinceText(l.days)}</span>
                     {!active && <span className="text-xs">{l.status}</span>}
                     <ListingMarks marks={l.marks} />
                     <EbayMark mark={ebayMark(l, ebay.rows[l.listing_id] ?? null, ebay.status)} />
                     <span className="ml-auto font-mono">{euroCentsText(price)}</span>
                     {active && (
-                      <span className={`font-mono ${price >= l.marketCents ? 'text-emerald-400' : 'text-crit'}`}>
+                      <span className={`font-mono ${price >= l.marketCents ? 'text-emerald-400' : 'text-bad'}`}>
                         {diffText(price, l.marketCents)} gegenüber Marktwert
                       </span>
                     )}

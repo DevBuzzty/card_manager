@@ -61,14 +61,14 @@ export default function CopyChip({ edition = 'unknown', condition = 'NM', onChan
       <div className="flex gap-1 mb-2">
         {CONDITIONS.map(c => (
           <button key={c} type="button" onClick={() => onChange({ edition, condition: c })}
-            className={`px-2 py-1 rounded text-[11px] font-mono ${c === condition ? 'bg-space-violet text-white' : 'bg-black/40 text-gray-300 hover:bg-gray-700'}`}>{c}</button>
+            className={`px-2 py-1 rounded text-[11px] font-mono ${c === condition ? 'bg-accent text-accent-fg' : 'bg-black/40 text-gray-300 hover:bg-gray-700'}`}>{c}</button>
         ))}
       </div>
       <div className="text-[9px] uppercase tracking-wider text-gray-500 mb-1">Edition</div>
       <div className="flex gap-1">
         {EDITIONS.map(e => (
           <button key={e} type="button" onClick={() => onChange({ edition: e, condition })}
-            className={`px-2 py-1 rounded text-[11px] ${e === edition ? 'bg-space-violet text-white' : 'bg-black/40 text-gray-300 hover:bg-gray-700'}`}>{EDITION_LABELS[e]}</button>
+            className={`px-2 py-1 rounded text-[11px] ${e === edition ? 'bg-accent text-accent-fg' : 'bg-black/40 text-gray-300 hover:bg-gray-700'}`}>{EDITION_LABELS[e]}</button>
         ))}
       </div>
     </div>
@@ -81,7 +81,7 @@ export default function CopyChip({ edition = 'unknown', condition = 'NM', onChan
         onClick={() => setOpen(o => !o)}
         title="Zustand · Edition (nur diese Zeile)"
         className={`h-8 px-2 rounded-lg border text-[11px] font-mono whitespace-nowrap transition-colors ${
-          std ? 'bg-black/40 border-gray-700 text-gray-400 hover:text-white' : 'bg-gold/10 border-gold/40 text-gold'
+          std ? 'bg-black/40 border-gray-700 text-gray-400 hover:text-white' : 'bg-warn/10 border-warn/40 text-warn'
         }`}
       >
         {condition} · {EDITION_LABELS[edition] || edition}
