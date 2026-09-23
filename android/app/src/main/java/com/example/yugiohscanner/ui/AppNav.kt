@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.*
@@ -74,6 +75,18 @@ object Routes {
     // beim Zurueckkommen aufschlaegt (§6.6). Ueber den SavedStateHandle des VORHERIGEN Eintrags --
     // ein Rueckgabewert ueber den Navigationsstapel, wie ihn navigation-compose vorsieht.
     const val SEITE_NACH_EINSORTIEREN = "einsortiert_seite"
+    // Spec I §5.3: eigener Bereich "Verkaufen" mit vier Stationen, Reihenfolge NavTabellen.VERKAUFEN.
+    const val VERKAUFEN = "verkaufen/{segment}"
+    fun verkaufen(segment: String = "kandidaten") = "verkaufen/$segment"
+    // Spec I §7: Decks ueber eine Start-Kachel statt eines Sammlung-Reiters.
+    const val DECKS = "decks"
+}
+
+// Spec I §3 -- die Tabellen stehen in docs/fixtures/design/nav.json; NavTabellenTest haelt beide Seiten gleich.
+object NavTabellen {
+    val LEISTE = listOf("start" to "Start", "sammlung" to "Sammlung", "verkaufen" to "Verkaufen", "deals" to "Deals")
+    val SAMMLUNG = listOf("karten" to "Karten", "binder" to "Binder", "sets" to "Sets", "wunschliste" to "Wunschliste", "sealed" to "Sealed")
+    val VERKAUFEN = listOf("kandidaten" to "Kandidaten", "zum-verkauf" to "Zum Verkauf", "angebote" to "Angebote", "verkaeufe" to "Verkäufe")
 }
 
 // Top-level destinations: the bottom bar switches between them and each keeps its own back stack.
@@ -84,6 +97,7 @@ private data class TopLevel(val route: String, val match: String, val label: Str
 private val TOP_LEVEL = listOf(
     TopLevel(Routes.START, "start", "Start", Icons.Default.Home),
     TopLevel(Routes.sammlung(), "sammlung", "Sammlung", Icons.Default.Style),
+    TopLevel(Routes.verkaufen(), "verkaufen", "Verkaufen", Icons.Default.Payments),
     TopLevel(Routes.DEALS, "deals", "Deals", Icons.Default.Sell),
 )
 
@@ -192,16 +206,10 @@ fun AppNav(onThemeChange: (String) -> Unit) {
     // Spec E2 §6: geteilter Text fuehrt zu den Decks -- erst hier, nach Login und Laden (der Text wartet im Postfach);
     // DecksScreen nimmt ihn heraus und oeffnet die Import-Vorschau.
     val sharedDeckText by DeckImportInbox.text.collectAsState()
-    // F2: navigateTop() poppt mit saveState=true/restoreState=true -- das stellt fuer "sammlung/{segment}"
-    // einen GESPEICHERTEN Rueckstapeleintrag mit seinem EIGENEN Segment-Argument wieder her (z. B. "karten"
-    // oder "binder", je nachdem, was der Nutzer zuletzt in der Sammlung offen hatte) und ignoriert dabei
-    // unser "decks"-Argument -- SammlungScreen wird dann gar nicht mit segment=decks zusammengesetzt, die
-    // Vorschau oeffnet nie. Deshalb ohne restoreState: zum Start-Ziel poppen (ohne dessen Zustand zu retten)
-    // und gezielt sammlung/decks oeffnen, damit der Reiter sicher steht -- unabhaengig davon, ob zuvor
-    // Karten/Binder offen waren oder die App kalt gestartet ist.
+    // Spec I §7: Decks zog auf eine eigene Route (Routes.DECKS) um, keine Sammlung-Unterseite mehr.
     LaunchedEffect(sharedDeckText != null, cloudReady) {
         if (sharedDeckText != null && cloudReady) {
-            nav.navigate(Routes.sammlung("decks")) {
+            nav.navigate(Routes.DECKS) {
                 popUpTo(nav.graph.findStartDestination().id) { saveState = false }
                 launchSingleTop = true
             }
@@ -225,11 +233,11 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                     onOpenBinder = { nav.navigateTop(Routes.sammlung("binder")) },
                     onOpenInsights = { nav.navigate(Routes.insights()) { launchSingleTop = true } },
                     onOpenAlerts = { nav.navigate(Routes.insights("alarme")) { launchSingleTop = true } },
-                    // Spec H1 §5.3: wie das Deck-Postfach (F2) ohne restoreState -- sonst stellt navigateTop einen
-                    // gespeicherten Sammlungs-Reiter (z. B. Binder) wieder her und der Chip erscheint nie.
-                    onOpenForSale = { CollectionChip.open(CollectionChip.VERKAUF); nav.openSammlungKarten() },
-                    onOpenDuplicates = { CollectionChip.open(CollectionChip.DUPLIKATE); nav.openSammlungKarten() },
-                    onOpenListings = { CollectionChip.open(CollectionChip.ANGEBOTE); nav.openSammlungKarten() },
+                    // Spec I §5.3/§7: springen jetzt direkt in den passenden Verkaufen-Reiter bzw. zu Decks.
+                    onOpenForSale = { nav.navigateTop(Routes.verkaufen("zum-verkauf")) },
+                    onOpenDuplicates = { nav.navigateTop(Routes.verkaufen("kandidaten")) },
+                    onOpenListings = { nav.navigateTop(Routes.verkaufen("angebote")) },
+                    onOpenDecks = { nav.navigate(Routes.DECKS) { launchSingleTop = true } },
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
@@ -254,6 +262,18 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                     onOpenScan = { nav.navigate(Routes.SCAN) { launchSingleTop = true } },
                     onOpenSealedSuche = { nav.navigate(Routes.SEALED_SUCHE) },
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
+            }
+            composable(
+                Routes.VERKAUFEN,
+                arguments = listOf(navArgument("segment") { type = NavType.StringType; defaultValue = "kandidaten" }),
+            ) { backStackEntry ->
+                if (cloudReady) VerkaufenScreen(
+                    segment = backStackEntry.arguments?.getString("segment") ?: "kandidaten",
+                    onSegment = { nav.navigate(Routes.verkaufen(it)) { popUpTo(Routes.VERKAUFEN) { inclusive = true } } },
+                ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
+            }
+            composable(Routes.DECKS) {
+                if (cloudReady) DecksScreen() else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
                 Routes.BEHAELTER,
@@ -320,12 +340,6 @@ fun AppNav(onThemeChange: (String) -> Unit) {
     }
 }
 
-// Spec H1 §5.3: Sammlung › Karten sicher oeffnen (ohne gespeicherten Reiter wiederherzustellen).
-private fun NavHostController.openSammlungKarten() = navigate(Routes.sammlung()) {
-    popUpTo(graph.findStartDestination().id) { saveState = false }
-    launchSingleTop = true
-}
-
 // Switching tabs must not stack them: pop to the graph's start, keep each tab's own state.
 private fun NavHostController.navigateTop(route: String) = navigate(route) {
     popUpTo(graph.findStartDestination().id) { saveState = true }
@@ -342,9 +356,9 @@ private fun AppBottomBar(nav: NavHostController) {
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                 NavItem(Modifier.weight(1f), TOP_LEVEL[0], current, nav)   // Start
                 NavItem(Modifier.weight(1f), TOP_LEVEL[1], current, nav)   // Sammlung
-                Spacer(Modifier.weight(1f))                                // gap under the FAB
-                NavItem(Modifier.weight(1f), TOP_LEVEL[2], current, nav)   // Deals
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.weight(0.6f))                              // Luecke unter dem Scan-Knopf
+                NavItem(Modifier.weight(1f), TOP_LEVEL[2], current, nav)   // Verkaufen
+                NavItem(Modifier.weight(1f), TOP_LEVEL[3], current, nav)   // Deals
             }
         }
         Box(
@@ -365,6 +379,7 @@ private fun NavItem(modifier: Modifier, item: TopLevel, current: androidx.naviga
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(item.icon, item.label, tint = tint, modifier = Modifier.size(24.dp))
-        Text(item.label, color = tint, style = MaterialTheme.typography.labelSmall)
+        // Spec I §5.1: vier Ziele auf 360 dp -- maxLines = 1 statt Umbruch/Abschneiden ("Verkaufen" ist das laengste Wort).
+        Text(item.label, color = tint, style = MaterialTheme.typography.labelSmall, maxLines = 1)
     }
 }

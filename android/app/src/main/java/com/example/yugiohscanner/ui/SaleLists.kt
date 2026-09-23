@@ -39,25 +39,8 @@ import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-/** Spec H1 §5.2: Start oeffnet einen Chip der Sammlung -- einmalige Anfrage, CollectionScreen nimmt sie heraus. */
-object CollectionChip {
-    const val ALLE = "alle"
-    const val DUPLIKATE = "duplikate"
-    const val VERKAUF = "verkauf"
-    // Spec H3a §6: Übersicht „Angebote“.
-    const val ANGEBOTE = "angebote"
-    private val pending = MutableStateFlow<String?>(null)
-    val request: StateFlow<String?> = pending
-
-    fun open(chip: String) { pending.value = chip }
-    fun take(): String? = pending.getAndUpdate { null }
-}
 
 /**
  * Spec H1 §4/§5: Verkaufs-Exemplare und Duplikate zu genau einem Speicherstand ([cards]/[copies] per Identitaet) und keep.

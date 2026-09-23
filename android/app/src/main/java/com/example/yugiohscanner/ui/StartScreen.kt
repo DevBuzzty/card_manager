@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Style
@@ -91,6 +92,7 @@ fun StartScreen(
     onOpenForSale: () -> Unit,
     onOpenDuplicates: () -> Unit,
     onOpenListings: () -> Unit,
+    onOpenDecks: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     // Spec H1 §5.3: Zaehler und "davon zum Verkauf"; null = wird gerechnet ("…").
@@ -341,6 +343,7 @@ fun StartScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 QuickAction("Scannen", Icons.Default.CameraAlt, Modifier.weight(1f), onOpenScan)
                 QuickAction("Sammlung", Icons.Default.Style, Modifier.weight(1f), onOpenSammlung)
+                QuickAction("Decks", Icons.Default.Layers, Modifier.weight(1f), onOpenDecks)
                 QuickAction("Deals", Icons.Default.Sell, Modifier.weight(1f), onOpenDeals)
             }
 

@@ -12,20 +12,10 @@ import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 
-// Karten · Binder · Wunschliste · Sets · Decks · Sealed -- the two most-used segments lead (Spec §11),
-// Sealed (Spec G3 §8) comes last.
-private val SEGMENTS = listOf(
-    "karten" to "Karten",
-    "binder" to "Binder",
-    "wunschliste" to "Wunschliste",
-    "sets" to "Sets",
-    "decks" to "Decks",
-    "sealed" to "Sealed",
-)
-
 // Everything that is "my collection" lives on one tab; the tabs swap the content below.
-// Five segments no longer fit un-scrolled (Spec §11 risk) -- ScrollableTabRow instead of a
-// plain Row, so nothing gets cut off on narrow screens.
+// Segments come from NavTabellen.SAMMLUNG (Spec I §3, gemeinsame Tabelle docs/fixtures/design/nav.json;
+// Decks zog auf eine eigene Start-Kachel um). Five segments no longer fit un-scrolled (Spec §11 risk)
+// -- ScrollableTabRow instead of a plain Row, so nothing gets cut off on narrow screens.
 @Composable
 fun SammlungScreen(
     segment: String,
@@ -39,14 +29,14 @@ fun SammlungScreen(
         Text("Sammlung", style = MaterialTheme.typography.headlineSmall, color = OnSurface,
             modifier = Modifier.padding(start = 16.dp, top = 12.dp))
         SyncHint(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-        val selected = SEGMENTS.indexOfFirst { it.first == segment }.coerceAtLeast(0)
+        val selected = NavTabellen.SAMMLUNG.indexOfFirst { it.first == segment }.coerceAtLeast(0)
         ScrollableTabRow(
             selectedTabIndex = selected,
             containerColor = Background,
             contentColor = Primary,
             edgePadding = 16.dp,
         ) {
-            SEGMENTS.forEachIndexed { i, (id, label) ->
+            NavTabellen.SAMMLUNG.forEachIndexed { i, (id, label) ->
                 Tab(selected = i == selected, onClick = { onSegment(id) }, text = { Text(label) })
             }
         }
@@ -54,7 +44,6 @@ fun SammlungScreen(
             onRefresh = {
                 when (segment) {
                     "wunschliste" -> SideStores.wishlist.refreshAndWait()
-                    "decks" -> { SideStores.decks.refreshAndWait(); SideStores.allDeckCards.refreshAndWait(); CollectionStore.awaitSync() }
                     "sets" -> { CollectionStore.awaitSync(); SideStores.sets.refreshAndWait() }
                     "sealed" -> SideStores.sealedItems.refreshAndWait()
                     else -> CollectionStore.awaitSync()
@@ -66,7 +55,6 @@ fun SammlungScreen(
                 "binder" -> BindersScreen(onOpenBehaelter)
                 "wunschliste" -> WishlistScreen()
                 "sets" -> SetCompletionScreen()
-                "decks" -> DecksScreen()
                 "sealed" -> SealedScreen(onOpenScan = onOpenScan, onOpenSuche = onOpenSealedSuche)
                 else -> CollectionScreen(onOpenSuche = onOpenSuche)
             }
