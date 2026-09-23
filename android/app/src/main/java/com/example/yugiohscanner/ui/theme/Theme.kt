@@ -36,7 +36,9 @@ internal fun schema(r: Map<String, Color>, dunkel: Boolean): ColorScheme {
         // Auf der getauschten Flaeche (inverseSurface = text) traegt der Akzent des Gegenmodus.
         inversePrimary = gegen.getValue("accent"),
         secondary = r.getValue("accent"), onSecondary = r.getValue("accent-fg"),
-        secondaryContainer = r.getValue("surface-2"), onSecondaryContainer = r.getValue("text"),
+        // Restrunde 3: gewaehlte FilterChips/InputChips (und FilledTonalIconButton) tragen secondaryContainer --
+        // auf surface-2 hoben sie sich nur mit ~1,1:1 von der Flaeche ab. Volle Akzentflaeche macht die Wahl deutlich.
+        secondaryContainer = r.getValue("accent"), onSecondaryContainer = r.getValue("accent-fg"),
         tertiary = r.getValue("accent"), onTertiary = r.getValue("accent-fg"),
         tertiaryContainer = r.getValue("surface-2"), onTertiaryContainer = r.getValue("text"),
         background = r.getValue("bg"), onBackground = r.getValue("text"),

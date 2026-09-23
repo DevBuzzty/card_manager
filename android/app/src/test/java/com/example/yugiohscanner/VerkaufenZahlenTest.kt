@@ -7,35 +7,41 @@ import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ml.VerkaufenZahlen
 import com.example.yugiohscanner.ui.NavTabellen
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** ZWILLING von desktop/src/utils/verkaufenCounts.test.js (dieselbe Definition je Reiter). */
 class VerkaufenZahlenTest {
     private fun listing(id: String, status: String, deleted: Boolean = false) =
         ListingRow(id, "k", "Kanal", null, null, 1.0, status, "2026-09-01", null, null, null, null, deleted)
-    private fun item(listingId: String, copyId: String, deleted: Boolean = false) =
-        ListingItemRow(listingId, copyId, "1", "LOB-DE001", "DE", "Common", "unknown", "NM", null, null, deleted)
-    private fun sale(id: String, status: String, deleted: Boolean = false) =
-        SalesMath.SaleHead(id, "2026-09-01", "k", "Kanal", 1.0, null, null, status, deleted)
+    private fun item(listingId: String, copyId: String) =
+        ListingItemRow(listingId, copyId, "1", "LOB-DE001", "DE", "Common", "unknown", "NM", null, null, false)
+    private fun sale(id: String, soldOn: String, status: String) =
+        SalesMath.SaleHead(id, soldOn, "k", "Kanal", 1.0, null, null, status, false)
 
     @Test
-    fun eineZahlJeReiterSchluesselWieNavTabellen() {
+    fun eineZahlJeReiterWieDieListeImStandardzustand() {
         val listings = ListingsData(
             listOf(listing("L1", "aktiv"), listing("L2", "beendet"), listing("L3", "aktiv", deleted = true)),
             listOf(item("L1", "c1"), item("L2", "c2")),
         )
-        val z = VerkaufenZahlen.zahlen(3, setOf("c1", "c2", "c3"), listings,
-            listOf(sale("S1", "aktiv"), sale("S2", "storniert"), sale("S3", "aktiv"), sale("S4", "aktiv", deleted = true)))
-        // c1 steckt im aktiven Angebot L1 -> zaehlt nicht bei "Zum Verkauf"; c2 nur im beendeten L2 -> zaehlt.
-        assertEquals(mapOf("kandidaten" to 3, "zum-verkauf" to 2, "angebote" to 1, "verkaeufe" to 2), z)
+        val sales = listOf(sale("S1", "2026-09-03", "aktiv"), sale("S2", "2026-09-10", "storniert"), sale("S3", "2026-08-30", "aktiv"))
+        val z = VerkaufenZahlen.zahlen(3, setOf("c1", "c2", "c3"), listings, sales, "2026-09-23")
+        // Restrunde 2: c1 steckt im aktiven Angebot L1 und zaehlt trotzdem (wie die Kopfzeile der Liste);
+        // Verkaeufe = Eintraege im Monat samt Storno, der August-Verkauf nicht.
+        assertEquals(mapOf("kandidaten" to 3, "zum-verkauf" to 3, "angebote" to 1, "verkaeufe" to 2), z)
         assertEquals(NavTabellen.VERKAUFEN.map { it.first }.sorted(), z.keys.sorted())
     }
 
     @Test
     fun solangeEineQuelleLaedtStehtDortNull() {
-        val z = VerkaufenZahlen.zahlen(null, null, null, null)
+        val z = VerkaufenZahlen.zahlen(null, null, null, null, "2026-09-23")
         assertEquals(mapOf<String, Int?>("kandidaten" to null, "zum-verkauf" to null, "angebote" to null, "verkaeufe" to null), z)
-        // Vorgemerkte bekannt, Angebote noch nicht geladen: "Zum Verkauf" bleibt offen statt falsch zu zaehlen.
-        assertEquals(null, VerkaufenZahlen.zahlen(0, setOf("c1"), null, emptyList())["zum-verkauf"])
+    }
+
+    @Test
+    fun standardZeitraumIstDerDerVerkaufsliste() {
+        val s = Fixtures.text("android/app/src/main/java/com/example/yugiohscanner/ui/SalesScreen.kt")
+        assertTrue(s.contains("mutableStateOf(\"${VerkaufenZahlen.SALES_DEFAULT_PERIOD}\")"))
     }
 }

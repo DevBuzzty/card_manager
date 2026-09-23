@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -117,7 +119,8 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashM
     var confirmAll by remember { mutableStateOf(false) }
 
     if (data == null) {
-        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
+        // Restrunde 4: scrollbar, damit Herunterziehen (RefreshableBox in VerkaufenScreen) auch hier nachlaedt.
+        Box(modifier.fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
         return
     }
     val summary = remember(data) { Duplicates.summary(data.duplicates) }
@@ -131,7 +134,10 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashM
         }
         error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
         if (data.duplicates.isEmpty()) {
-            Text("Keine Duplikate.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            // Restrunde 4: scrollbarer Leerzustand, damit Herunterziehen nachlaedt.
+            Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                Text("Keine Duplikate.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            }
         } else {
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(data.duplicates, key = { it.mainId }) { e ->
@@ -221,7 +227,8 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     listingFor?.let { ListingSheet(it, onDismiss = { listingFor = null }, onSaved = { listingFor = null; picked = emptySet() }) }
 
     if (data == null) {
-        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
+        // Restrunde 4: scrollbar, damit Herunterziehen (RefreshableBox in VerkaufenScreen) auch hier nachlaedt.
+        Box(modifier.fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
         return
     }
     val summary = remember(data) { Duplicates.forSaleSummary(data.sale) }
@@ -264,7 +271,10 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
         }
         error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
         if (groups.isEmpty()) {
-            Text("Keine Exemplare zum Verkauf.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            // Restrunde 4: scrollbarer Leerzustand, damit Herunterziehen nachlaedt.
+            Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                Text("Keine Exemplare zum Verkauf.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            }
         } else {
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
                 items(groups, key = { "${it.cardId}|${it.setCode}|${it.language}|${it.rarity}" }) { g ->

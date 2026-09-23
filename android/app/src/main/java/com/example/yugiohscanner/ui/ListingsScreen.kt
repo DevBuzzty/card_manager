@@ -169,7 +169,8 @@ fun ListingsSection(onOpenCard: (String) -> Unit, modifier: Modifier = Modifier)
 
     val data = state.value
     if (data == null || ready == null) {
-        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        // Restrunde 4: scrollbar, damit Herunterziehen (RefreshableBox in VerkaufenScreen) auch hier nachlaedt.
+        Box(modifier.fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
             if (data == null && state.error != null) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(OFFLINE, color = ErrorColor, style = MaterialTheme.typography.bodyMedium)
@@ -210,7 +211,10 @@ fun ListingsSection(onOpenCard: (String) -> Unit, modifier: Modifier = Modifier)
                 color = OnSurface, style = MaterialTheme.typography.bodyMedium)
         }
         if (rows.isEmpty()) {
-            Text("Keine Angebote.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            // Restrunde 4: scrollbarer Leerzustand, damit Herunterziehen nachlaedt.
+            Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                Text("Keine Angebote.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            }
         } else {
             val ebayStat = ebayState(ebayStatusState)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
