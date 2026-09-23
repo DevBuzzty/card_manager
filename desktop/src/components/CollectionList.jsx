@@ -438,7 +438,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               <CardTile card={card} onClick={() => openCard(card)} saleNote={forSaleSuffix(forSaleByCard.get(String(card.id)) || 0)} />
               {filterContainers.length > 0 && locationCopy && (
                   <div className="mt-1 px-0.5">
-                      <span className="inline-flex items-center font-mono text-[9.5px] text-ink-faint bg-obsidian-700 border border-line rounded px-1.5 py-0.5 truncate max-w-full">
+                      <span className="inline-flex items-center font-mono text-[9.5px] text-muted bg-surface border border-line rounded px-1.5 py-0.5 truncate max-w-full">
                           {formatCopyLocation(locationCopy, locationContainer)}
                       </span>
                   </div>
@@ -452,10 +452,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
         <div className="flex flex-col gap-4 mb-4 bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 shrink-0">
             {/* Row 1: count, search, sort, filter toggle, prices menu */}
             <div className="flex flex-wrap items-center gap-3">
-                <span className="text-ink-muted text-sm shrink-0">{filtered.length} Karten</span>
+                <span className="text-muted text-sm shrink-0">{filtered.length} Karten</span>
                 <div className="relative group flex-1 min-w-[220px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-                    <input type="text" placeholder="Suchen…" className="bg-obsidian border border-line text-ink pl-10 pr-4 py-2 rounded-lg w-full focus:border-space-violet outline-none"
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                    <input type="text" placeholder="Suchen…" className="bg-bg border border-line text-text pl-10 pr-4 py-2 rounded-lg w-full focus:border-accent outline-none"
                            value={filter} onChange={(e) => setFilter(e.target.value)} />
                 </div>
                 <CustomSelect value={sortType} onChange={setSortType} placeholder="Sortierung" className="w-[170px]" options={[
@@ -463,37 +463,37 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                     { value: 'name', label: 'Name' }, { value: 'atk', label: 'ATK' }, { value: 'def', label: 'DEF' }, { value: 'level', label: 'Level' }]} />
                 <button onClick={() => setFiltersOpen(o => !o)}
                         className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
-                          filtersOpen || activeFilters.length ? 'bg-space-violet/15 border-space-violet/40 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink')}>
+                          filtersOpen || activeFilters.length ? 'bg-accent/15 border-accent/40 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
                     <SlidersHorizontal className="w-4 h-4" /> Filter
-                    {activeFilters.length > 0 && <span className="font-mono text-[10px] bg-space-violet text-white rounded-full px-1.5">{activeFilters.length}</span>}
+                    {activeFilters.length > 0 && <span className="font-mono text-[10px] bg-accent text-accent-fg rounded-full px-1.5">{activeFilters.length}</span>}
                 </button>
-                <button onClick={openExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-obsidian-700 border border-line text-ink-muted hover:text-ink">
+                <button onClick={openExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface border border-line text-muted hover:text-text">
                     <Download className="w-4 h-4" /> Exportieren…
                 </button>
                 {exportCopyIds && <ExportDialog filterCopyIds={exportCopyIds} onClose={() => setExportCopyIds(null)} />}
                 <div className="relative">
-                    <button onClick={() => setPricesOpen(o => !o)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-obsidian-700 border border-line text-ink-muted hover:text-ink">
+                    <button onClick={() => setPricesOpen(o => !o)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface border border-line text-muted hover:text-text">
                         <Coins className="w-4 h-4" /> Preise
                     </button>
                     {pricesOpen && (
-                      <div className="absolute right-0 top-11 z-30 w-[320px] bg-obsidian-800 border border-line rounded-xl shadow-2xl p-3 space-y-2"
+                      <div className="absolute right-0 top-11 z-30 w-[320px] bg-bg border border-line rounded-xl shadow-2xl p-3 space-y-2"
                            onMouseLeave={() => setPricesOpen(false)}>
                         <button onClick={runBulk} disabled={cmBulkBusy || cmRunning}
-                                className="w-full text-left px-3 py-2 rounded-lg bg-space-violet/80 hover:bg-space-violet text-white text-sm disabled:opacity-50">
+                                className="w-full text-left px-3 py-2 rounded-lg bg-accent/80 hover:bg-accent text-accent-fg text-sm disabled:opacity-50">
                           {cmBulkBusy ? 'Aktualisiere…' : 'Jetzt aktualisieren (Preisdatei)'}
                         </button>
                         <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}
-                                className="w-full text-left px-3 py-2 rounded-lg bg-obsidian-700 border border-line text-ink text-sm hover:border-space-violet/40">
+                                className="w-full text-left px-3 py-2 rounded-lg bg-surface border border-line text-text text-sm hover:border-accent/40">
                           {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Rest scrapen'}
                         </button>
-                        <label className="flex items-center gap-2 px-3 py-2 text-sm text-ink-muted cursor-pointer select-none">
-                          <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-space-violet" />
+                        <label className="flex items-center gap-2 px-3 py-2 text-sm text-muted cursor-pointer select-none">
+                          <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-accent" />
                           Automatisch im Hintergrund
                         </label>
                         <div className="px-3">
-                          <div className="text-[10px] uppercase tracking-wider text-ink-faint mb-1">Ab Rarity</div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted mb-1">Ab Rarity</div>
                           <select value={cmMinRank} onChange={(e) => { const v = Number(e.target.value); setCmMinRank(v); if (cmAuto) window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(v) }); }}
-                                  className="w-full px-2 py-1.5 rounded bg-obsidian border border-line text-ink text-sm">
+                                  className="w-full px-2 py-1.5 rounded bg-bg border border-line text-text text-sm">
                             <option value={1}>Alle Rarities</option>
                             <option value={2}>Ab Rare</option>
                             <option value={3}>Ab Super Rare</option>
@@ -505,10 +505,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                           </select>
                         </div>
                         <div className="border-t border-line pt-2 px-3 space-y-1">
-                          <button onClick={() => handleUpdate('missing')} disabled={updating} className="text-sm text-ink-muted hover:text-ink">Fehlende Daten holen</button>
-                          <button onClick={() => handleUpdate('all')} disabled={updating} className="block text-sm text-ink-muted hover:text-ink">Alle Karten aktualisieren</button>
+                          <button onClick={() => handleUpdate('missing')} disabled={updating} className="text-sm text-muted hover:text-text">Fehlende Daten holen</button>
+                          <button onClick={() => handleUpdate('all')} disabled={updating} className="block text-sm text-muted hover:text-text">Alle Karten aktualisieren</button>
                           {cmStatus && (
-                            <div className="text-[11px] text-ink-faint pt-1">
+                            <div className="text-[11px] text-muted pt-1">
                               Letztes Update {relTime(cmStatus.lastRun)} · {cmStatus.resolvedCount} per Datei · {cmStatus.unresolvedCount} offen
                             </div>
                           )}
@@ -522,15 +522,15 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 Filter-Panel offen ist -- sonst sieht der Nutzer bei geschlossenem Panel nicht,
                 dass Behaelter-/Tag-Filter und die Notiz-/Tag-Textsuche gerade still leere
                 Ergebnisse liefern (dieselbe Fehlerklasse wie in Task 5). Gleicher Anzeigebau wie
-                Binders.jsx (roter crit-Kasten mit Symbol). */}
+                Binders.jsx (roter bad-Kasten mit Symbol). */}
             {containersTagsError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{containersTagsError}</span>
                 </div>
             )}
             {copiesLoadError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{copiesLoadError}</span>
                 </div>
@@ -566,11 +566,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 Toggle-Chips statt CustomSelect (das ist Einfachauswahl). */}
             {filtersOpen && containers.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-ink-faint mr-1 shrink-0">Behälter</span>
+                  <span className="text-[10px] uppercase tracking-wide text-muted mr-1 shrink-0">Behälter</span>
                   {containers.map(ct => (
                       <button key={ct.container_id} type="button" onClick={() => toggleContainerFilter(ct.container_id)}
                               className={clsx('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors',
-                                filterContainers.includes(ct.container_id) ? 'bg-space-violet/20 border-space-violet/50 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink')}>
+                                filterContainers.includes(ct.container_id) ? 'bg-accent/20 border-accent/50 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
                           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ct.color || '#6b6383' }} />
                           {ct.name}
                       </button>
@@ -579,11 +579,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
             )}
             {filtersOpen && tagOptions.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-ink-faint mr-1 shrink-0">Tags</span>
+                  <span className="text-[10px] uppercase tracking-wide text-muted mr-1 shrink-0">Tags</span>
                   {tagOptions.map(t => (
                       <button key={t} type="button" onClick={() => toggleTagFilter(t)}
                               className={clsx('px-2.5 py-1 rounded-full text-xs border transition-colors',
-                                filterTags.includes(t) ? 'bg-space-violet/20 border-space-violet/50 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink')}>
+                                filterTags.includes(t) ? 'bg-accent/20 border-accent/50 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
                           {t}
                       </button>
                   ))}
@@ -595,11 +595,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               <div className="flex flex-wrap items-center gap-2">
                 {activeFilters.map(f => (
                   <button key={f.key} onClick={f.clear}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-space-violet/15 border border-space-violet/30 text-ink text-xs">
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/15 border border-accent/30 text-text text-xs">
                     {f.label} <X className="w-3 h-3 opacity-60" />
                   </button>
                 ))}
-                <button onClick={clearFilters} className="text-xs text-ink-faint hover:text-crit">Alle entfernen</button>
+                <button onClick={clearFilters} className="text-xs text-muted hover:text-bad">Alle entfernen</button>
               </div>
             )}
         </div>

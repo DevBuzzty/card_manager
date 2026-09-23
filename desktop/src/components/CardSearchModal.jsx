@@ -49,7 +49,7 @@ export default function CardSearchModal({ onClose, onSelect }) {
                                 autoFocus
                                 type="text"
                                 placeholder="Search by Card Name or Passcode..."
-                                className="w-full bg-black/40 border border-gray-700 text-white pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:border-space-violet transition-colors"
+                                className="w-full bg-black/40 border border-gray-700 text-white pl-10 pr-4 py-3 rounded-xl focus:outline-none focus:border-accent transition-colors"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                             />
@@ -57,7 +57,7 @@ export default function CardSearchModal({ onClose, onSelect }) {
                         <button
                             type="submit"
                             disabled={loading || (!isPasscodeQuery && query.trim().length < 3) || !query.trim()}
-                            className="bg-space-violet hover:bg-space-violet-dark text-white px-6 rounded-xl font-bold transition-colors disabled:opacity-50"
+                            className="bg-accent hover:bg-accent/90 text-accent-fg px-6 rounded-xl font-bold transition-colors disabled:opacity-50"
                         >
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Search'}
                         </button>
@@ -75,7 +75,7 @@ export default function CardSearchModal({ onClose, onSelect }) {
                             </div>
                         )}
                         {results.map(card => (
-                            <div key={card.id} className="bg-[#1E1E1E] p-3 rounded-xl border border-gray-800 hover:border-space-violet transition-colors group flex flex-col">
+                            <div key={card.id} className="bg-[#1E1E1E] p-3 rounded-xl border border-gray-800 hover:border-accent transition-colors group flex flex-col">
                                 <div className="aspect-[2/3] mb-3 overflow-hidden rounded-lg relative">
                                     <img
                                         src={card.card_images?.[0]?.image_url_small}
@@ -86,7 +86,7 @@ export default function CardSearchModal({ onClose, onSelect }) {
                                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                         <button
                                             onClick={() => onSelect(card)}
-                                            className="bg-space-violet text-white px-4 py-2 rounded-lg font-bold transform scale-90 group-hover:scale-100 transition-transform"
+                                            className="bg-accent text-accent-fg px-4 py-2 rounded-lg font-bold transform scale-90 group-hover:scale-100 transition-transform"
                                         >
                                             Select
                                         </button>

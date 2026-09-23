@@ -8,8 +8,9 @@ import { binderRoute, cardRoute } from '../utils/routes';
 import { KIND_LABELS, KIND_OPTIONS } from '../utils/containerKinds';
 
 const POCKET_OPTIONS = [4, 9, 12].map(p => ({ value: String(p), label: `${p} Fächer pro Seite` }));
-// Sourced from tailwind.config.js -- no new colors, just reused hexes as a swatch picker.
-const COLOR_PRESETS = ['#9D00FF', '#F5C542', '#39d98a', '#ff5d6c', '#6db4e8', '#e8c76d', '#E8944A', '#1DA891'];
+// Freie Etiketten-Farben fuer Behaelter -- Inhalt, keine Oberflaechenfarbe, darum unabhaengig
+// von den Farbrollen aus Spec I §6.2.
+const COLOR_PRESETS = ['#7C3AED', '#F5C542', '#39d98a', '#ff5d6c', '#6db4e8', '#e8c76d', '#E8944A', '#1DA891'];
 
 const emptyForm = { container_id: null, name: '', kind: 'binder', pockets_per_page: '4', color: COLOR_PRESETS[0] };
 
@@ -172,7 +173,7 @@ export default function Binders() {
   return (
     <div className="h-full flex flex-col gap-4">
       {error && (
-        <div className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -183,7 +184,7 @@ export default function Binders() {
         onClick={() => setShowUnsorted(o => !o)}
         className={clsx(
           'flex items-center justify-between px-4 py-3 rounded-xl border text-left transition-colors shrink-0',
-          showUnsorted ? 'bg-space-violet/15 border-space-violet/40 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink'
+          showUnsorted ? 'bg-accent/15 border-accent/40 text-text' : 'bg-surface border-line text-muted hover:text-text'
         )}
       >
         <span className="font-display font-medium">
@@ -193,9 +194,9 @@ export default function Binders() {
       </button>
 
       {showUnsorted && (
-        <div className="bg-obsidian-700 border border-line rounded-xl p-2 shrink-0 max-h-64 overflow-y-auto custom-scrollbar">
+        <div className="bg-surface border border-line rounded-xl p-2 shrink-0 max-h-64 overflow-y-auto custom-scrollbar">
           {unsorted.length === 0 ? (
-            <p className="text-sm text-ink-faint px-2 py-1">Alle Exemplare sind einsortiert.</p>
+            <p className="text-sm text-muted px-2 py-1">Alle Exemplare sind einsortiert.</p>
           ) : (
             <div className="space-y-1">
               {unsorted.map(copy => (
@@ -203,14 +204,14 @@ export default function Binders() {
                   key={copy.copy_id}
                   type="button"
                   onClick={() => openCard(copy)}
-                  className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-obsidian text-left transition-colors"
+                  className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-bg text-left transition-colors"
                 >
                   <div className="w-8 h-11 bg-black rounded overflow-hidden shrink-0">
                     {copy.card_image_url && <img src={copy.card_image_url} alt="" className="w-full h-full object-cover" />}
                   </div>
-                  <span className="flex-1 truncate text-sm text-ink">{copy.card_name}</span>
-                  <span className="text-xs text-ink-faint font-mono shrink-0">{copy.set_code} · {copy.rarity}</span>
-                  <span className="text-xs text-ink-muted font-mono shrink-0">{fmtEUR(copy.card_price)}</span>
+                  <span className="flex-1 truncate text-sm text-text">{copy.card_name}</span>
+                  <span className="text-xs text-muted font-mono shrink-0">{copy.set_code} · {copy.rarity}</span>
+                  <span className="text-xs text-muted font-mono shrink-0">{fmtEUR(copy.card_price)}</span>
                 </button>
               ))}
             </div>
@@ -219,11 +220,11 @@ export default function Binders() {
       )}
 
       <div className="flex items-center justify-between shrink-0">
-        <h2 className="font-display text-lg text-ink">Behälter</h2>
+        <h2 className="font-display text-lg text-text">Behälter</h2>
         <button
           type="button"
           onClick={openCreate}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium transition-colors"
         >
           <Plus className="w-4 h-4" /> Neuer Behälter
         </button>
@@ -231,7 +232,7 @@ export default function Binders() {
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {containers.length === 0 && !error ? (
-          <div className="h-full flex flex-col items-center justify-center text-ink-faint">
+          <div className="h-full flex flex-col items-center justify-center text-muted">
             <PackageOpen className="w-16 h-16 mb-4 opacity-40" />
             <p>Noch keine Behälter angelegt.</p>
           </div>
@@ -246,26 +247,26 @@ export default function Binders() {
                 // öffnete jedes Umsortieren zusätzlich die Ansicht.
                 onClick={() => navigate(binderRoute(c.container_id))}
                 title={`„${c.name}“ öffnen`}
-                className="bg-obsidian-700 border border-line rounded-xl p-4 flex flex-col gap-2 hover:border-space-violet/40 transition-colors cursor-pointer"
+                className="bg-surface border border-line rounded-xl p-4 flex flex-col gap-2 hover:border-accent/40 transition-colors cursor-pointer"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: c.color || '#6b6383' }} />
-                    <span className="font-display font-medium text-ink truncate">{c.name}</span>
+                    <span className="font-display font-medium text-text truncate">{c.name}</span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button type="button" onClick={(e) => { e.stopPropagation(); move(i, -1); }} disabled={i === 0}
-                            title="Nach oben" className="p-1 text-ink-faint hover:text-ink disabled:opacity-30 disabled:cursor-default">
+                            title="Nach oben" className="p-1 text-muted hover:text-text disabled:opacity-30 disabled:cursor-default">
                       <ChevronUp className="w-4 h-4" />
                     </button>
                     <button type="button" onClick={(e) => { e.stopPropagation(); move(i, 1); }} disabled={i === containers.length - 1}
-                            title="Nach unten" className="p-1 text-ink-faint hover:text-ink disabled:opacity-30 disabled:cursor-default">
+                            title="Nach unten" className="p-1 text-muted hover:text-text disabled:opacity-30 disabled:cursor-default">
                       <ChevronDown className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
-                <span className="text-xs text-ink-muted">{KIND_LABELS[c.kind] || c.kind}</span>
-                <span className="text-sm text-ink-muted">
+                <span className="text-xs text-muted">{KIND_LABELS[c.kind] || c.kind}</span>
+                <span className="text-sm text-muted">
                   {c.copies_count} {c.copies_count === 1 ? 'Exemplar' : 'Exemplare'}
                   {/* Spec 5.3: die hoechste BELEGTE Seite bestimmt die Anzeige, nie ceil(Anzahl/Faecher).
                       Dieselbe Zahl, die der aufgeschlagene Ordner als "von N" zeigt: copies.cjs#listContainers
@@ -276,7 +277,7 @@ export default function Binders() {
                     ? ` · ${c.max_page ?? 1} ${(c.max_page ?? 1) === 1 ? 'Seite' : 'Seiten'}`
                     : ''}
                 </span>
-                <span className="text-sm font-mono text-space-violet">{fmtEUR(c.value)}</span>
+                <span className="text-sm font-mono text-accent">{fmtEUR(c.value)}</span>
               </div>
             ))}
           </div>
@@ -287,15 +288,15 @@ export default function Binders() {
         <div
           ref={menuRef}
           style={{ position: 'fixed', left: menu.x, top: menu.y }}
-          className="z-[100] bg-obsidian-800 border border-line rounded-xl shadow-2xl p-1 min-w-[160px]"
+          className="z-[100] bg-bg border border-line rounded-xl shadow-2xl p-1 min-w-[160px]"
           onClick={(e) => e.stopPropagation()}
         >
           <button type="button" onClick={() => openEdit(menu.container)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-ink hover:bg-obsidian-700 text-left">
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-text hover:bg-surface text-left">
             <Pencil className="w-3.5 h-3.5" /> Umbenennen
           </button>
           <button type="button" onClick={() => removeContainer(menu.container)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-crit hover:bg-crit/10 text-left">
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-bad hover:bg-bad/10 text-left">
             <Trash2 className="w-3.5 h-3.5" /> Löschen
           </button>
         </div>
@@ -304,56 +305,56 @@ export default function Binders() {
       {dialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={closeDialog}>
           <form onClick={(e) => e.stopPropagation()} onSubmit={submitDialog}
-                className="w-full max-w-md bg-obsidian-700 border border-line rounded-2xl p-6 space-y-4">
+                className="w-full max-w-md bg-surface border border-line rounded-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-lg text-ink">{dialog.form.container_id ? 'Behälter bearbeiten' : 'Neuer Behälter'}</h3>
-              <button type="button" onClick={closeDialog} className="text-ink-faint hover:text-ink"><X className="w-4 h-4" /></button>
+              <h3 className="font-display text-lg text-text">{dialog.form.container_id ? 'Behälter bearbeiten' : 'Neuer Behälter'}</h3>
+              <button type="button" onClick={closeDialog} className="text-muted hover:text-text"><X className="w-4 h-4" /></button>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-ink-muted mb-1 uppercase tracking-wider">Name</label>
+              <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Name</label>
               <input
                 autoFocus
                 type="text"
                 value={dialog.form.name}
                 onChange={(e) => setForm({ name: e.target.value })}
-                className="w-full bg-obsidian border border-line text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet"
+                className="w-full bg-bg border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-ink-muted mb-1 uppercase tracking-wider">Art</label>
+              <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Art</label>
               <CustomSelect value={dialog.form.kind} onChange={(v) => setForm({ kind: v })} options={KIND_OPTIONS} />
             </div>
 
             {dialog.form.kind === 'binder' && (
               <div>
-                <label className="block text-xs font-bold text-ink-muted mb-1 uppercase tracking-wider">Fächer pro Seite</label>
+                <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Fächer pro Seite</label>
                 <CustomSelect value={dialog.form.pockets_per_page} onChange={(v) => setForm({ pockets_per_page: v })} options={POCKET_OPTIONS} />
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-bold text-ink-muted mb-1 uppercase tracking-wider">Farbe</label>
+              <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Farbe</label>
               <div className="flex gap-2">
                 {COLOR_PRESETS.map(hex => (
                   <button
                     key={hex}
                     type="button"
                     onClick={() => setForm({ color: hex })}
-                    className={clsx('w-7 h-7 rounded-full border-2 transition-transform', dialog.form.color === hex ? 'border-ink scale-110' : 'border-transparent')}
+                    className={clsx('w-7 h-7 rounded-full border-2 transition-transform', dialog.form.color === hex ? 'border-text scale-110' : 'border-transparent')}
                     style={{ backgroundColor: hex }}
                   />
                 ))}
               </div>
             </div>
 
-            {dialog.error && <p className="text-sm text-crit">{dialog.error}</p>}
+            {dialog.error && <p className="text-sm text-bad">{dialog.error}</p>}
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={closeDialog} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">Abbrechen</button>
+              <button type="button" onClick={closeDialog} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
               <button type="submit" disabled={dialog.saving}
-                      className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                      className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 {dialog.saving ? 'Wird gespeichert…' : 'Speichern'}
               </button>
             </div>

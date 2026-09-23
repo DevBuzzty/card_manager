@@ -25,67 +25,66 @@ export default function CardTile({ card, onClick, saleNote = null }) {
   return (
     <div
       onClick={onClick}
-      className="group relative rounded-xl overflow-hidden bg-obsidian-600 border border-line cursor-pointer transition-transform hover:-translate-y-0.5"
+      className="group relative rounded-xl overflow-hidden bg-surface-2 border border-line cursor-pointer transition-transform hover:-translate-y-0.5"
       style={{ boxShadow: `inset 0 0 0 1.5px ${frame}55` }}
     >
       {/* Art */}
-      <div className="relative h-36 bg-obsidian-800 overflow-hidden">
+      <div className="relative h-36 bg-bg overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-1 z-10" style={{ backgroundColor: frame }} />
         {card.image_url ? (
           <img src={card.image_url} alt={card.name} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <div className="absolute inset-0 grid place-items-center text-ink-faint text-2xl">?</div>
+          <div className="absolute inset-0 grid place-items-center text-muted text-2xl">?</div>
         )}
         {anyFoil && <span className={`foil-sheen${rarityInfos.some(r => r.foil === 'secret') ? ' secret' : ''}`} />}
 
         {qty > 1 && (
-          <span className="absolute top-2 right-2 z-10 font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-obsidian/80 text-good border border-good/40">
+          <span className="absolute top-2 right-2 z-10 font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-bg/80 text-good border border-good/40">
             ×{qty}
           </span>
         )}
         {card.nonstandard > 0 && (
-          <span className="absolute top-2 left-2 z-10 w-2 h-2 rounded-full bg-gold shadow-[0_0_6px_#F5C542]" title={`${card.nonstandard} Exemplar(e) mit abweichendem Zustand/Edition`} />
+          <span className="absolute top-2 left-2 z-10 w-2 h-2 rounded-full bg-warn" title={`${card.nonstandard} Exemplar(e) mit abweichendem Zustand/Edition`} />
         )}
 
-        {/* All owned rarities */}
+        {/* All owned rarities -- Spec I §6.2 Regel 3: Seltenheit ueber Schriftschnitt, nicht Farbe. */}
         <div className="absolute bottom-2 left-2 right-2 z-10 flex flex-wrap gap-1">
           {rarityInfos.slice(0, 3).map((r, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1 font-display text-[8.5px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-obsidian/75"
-              style={{ color: r.color }}
+              className={`inline-flex items-center gap-1 font-display text-[8.5px] uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-bg/75 text-muted ${r.foil ? 'font-bold' : 'font-semibold'}`}
             >
-              <span className="w-[6px] h-[6px] rounded-full" style={{ backgroundColor: r.color, boxShadow: r.foil ? `0 0 6px ${r.color}` : 'none' }} />
+              <span className="w-[6px] h-[6px] rounded-full bg-muted" />
               {r.label}
             </span>
           ))}
           {rarityInfos.length > 3 && (
-            <span className="font-mono text-[8.5px] text-ink-faint bg-obsidian/75 px-1.5 py-0.5 rounded-full">+{rarityInfos.length - 3}</span>
+            <span className="font-mono text-[8.5px] text-muted bg-bg/75 px-1.5 py-0.5 rounded-full">+{rarityInfos.length - 3}</span>
           )}
         </div>
       </div>
 
       {/* Meta */}
       <div className="p-2.5">
-        <h4 className="text-xs font-bold text-ink leading-tight truncate">{card.name}</h4>
-        {saleNote && <div className="text-[9.5px] text-gold truncate">{saleNote}</div>}
+        <h4 className="text-xs font-bold text-text leading-tight truncate">{card.name}</h4>
+        {saleNote && <div className="text-[9.5px] text-warn truncate">{saleNote}</div>}
         <div className="flex justify-between items-center mt-1 mb-1.5">
-          <span className="text-[9px] uppercase tracking-wide text-ink-faint font-display">Gesamt</span>
-          <span className="font-mono text-[12px] font-bold text-gold">{fmtEUR(total)}</span>
+          <span className="text-[9px] uppercase tracking-wide text-muted font-display">Gesamt</span>
+          <span className="font-mono text-[12px] font-bold text-text">{fmtEUR(total)}</span>
         </div>
         {/* Per-set breakdown: set code · quantity · unit price */}
         <div className="space-y-0.5">
           {shown.map((v, i) => (
             <div key={i} className="flex items-center justify-between gap-1.5 text-[9.5px]">
-              <span className="font-mono text-ink-faint truncate">
+              <span className="font-mono text-muted truncate">
                 {v.set_code || '—'}
-                {v.rarity && v.rarity !== 'Unknown' && <span className="text-ink-faint/70"> · {v.rarity}</span>}
+                {v.rarity && v.rarity !== 'Unknown' && <span className="text-muted/70"> · {v.rarity}</span>}
               </span>
-              <span className="font-mono text-ink-muted shrink-0">×{v.quantity || 1}</span>
-              <span className="font-mono text-gold/80 shrink-0 w-12 text-right">€{(v.price || 0).toFixed(2)}</span>
+              <span className="font-mono text-muted shrink-0">×{v.quantity || 1}</span>
+              <span className="font-mono text-text/80 shrink-0 w-12 text-right">€{(v.price || 0).toFixed(2)}</span>
             </div>
           ))}
-          {moreCount > 0 && <div className="text-[9px] text-ink-faint pt-0.5">+{moreCount} weitere</div>}
+          {moreCount > 0 && <div className="text-[9px] text-muted pt-0.5">+{moreCount} weitere</div>}
         </div>
       </div>
     </div>

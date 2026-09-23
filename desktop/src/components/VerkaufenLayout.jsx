@@ -57,7 +57,7 @@ export function KandidatenPanel() {
   return (
     <div className="h-full flex flex-col">
       {sale.error && (
-        <div className="shrink-0 flex items-center gap-2 px-4 py-3 mb-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 mb-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{sale.error}</span>
         </div>
@@ -86,7 +86,7 @@ export function ZumVerkaufPanel() {
   return (
     <div className="h-full flex flex-col">
       {sale.error && (
-        <div className="shrink-0 flex items-center gap-2 px-4 py-3 mb-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 mb-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{sale.error}</span>
         </div>

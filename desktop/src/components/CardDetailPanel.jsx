@@ -238,27 +238,27 @@ export default function CardDetailPanel({ paletteOpen = false }) {
 
   return (
     <>
-    <aside className="w-[420px] shrink-0 h-full overflow-y-auto custom-scrollbar bg-obsidian-800 border-l border-line p-6 flex flex-col gap-5">
+    <aside className="w-[420px] shrink-0 h-full overflow-y-auto custom-scrollbar bg-bg border-l border-line p-6 flex flex-col gap-5">
       <div className="flex items-center gap-2">
         <button onClick={() => goRelative(-1)} disabled={idx <= 0}
-          className="p-1.5 rounded-lg bg-obsidian-700 border border-line text-ink-muted hover:text-ink disabled:opacity-30" title="Vorherige Karte">
+          className="p-1.5 rounded-lg bg-surface border border-line text-muted hover:text-text disabled:opacity-30" title="Vorherige Karte">
           <ChevronUp className="w-4 h-4" />
         </button>
         <button onClick={() => goRelative(1)} disabled={idx < 0 || idx >= list.length - 1}
-          className="p-1.5 rounded-lg bg-obsidian-700 border border-line text-ink-muted hover:text-ink disabled:opacity-30" title="Nächste Karte">
+          className="p-1.5 rounded-lg bg-surface border border-line text-muted hover:text-text disabled:opacity-30" title="Nächste Karte">
           <ChevronDown className="w-4 h-4" />
         </button>
         <span className="ml-auto" />
-        <button onClick={close} className="p-1.5 rounded-lg bg-obsidian-700 border border-line text-ink-muted hover:text-ink" title={T.zurueck}>
+        <button onClick={close} className="p-1.5 rounded-lg bg-surface border border-line text-muted hover:text-text" title={T.zurueck}>
           <X className="w-4 h-4" />
         </button>
       </div>
-      <img src={card.image_url} alt={card.name} className="w-full rounded-xl shadow-[0_0_30px_rgba(157,0,255,0.2)]" />
+      <img src={card.image_url} alt={card.name} className="w-full rounded-xl" />
 
       <div>
-          <h2 className="text-2xl font-bold text-space-white mb-2">{card.name}</h2>
+          <h2 className="text-2xl font-bold text-text mb-2">{card.name}</h2>
           <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1 bg-space-violet/20 text-space-violet rounded-full text-sm font-medium border border-space-violet/30">
+              <span className="px-3 py-1 bg-accent/20 text-accent rounded-full text-sm font-medium border border-accent/30">
                   {card.type}
               </span>
               {card.race && (
@@ -291,7 +291,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   <span className="font-mono text-sm text-yellow-500 font-bold">{variant.set_code}</span>
                                   <span className="text-xs text-gray-400 border border-gray-700 px-1 rounded">{variant.rarity}</span>
                               </div>
-                              <span className="text-xs text-space-violet">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
+                              <span className="text-xs text-accent">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
                           </div>
                           <div className="flex flex-col items-end gap-2">
                               <input type="number" step="0.01" min="0" defaultValue={variant.price ?? 0}
@@ -307,7 +307,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                 <span className="text-[9px] text-yellow-500/80" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
                               )}
                               <button onClick={() => { if (confirm(`${variant.set_code} (${variant.rarity}) mit allen Exemplaren löschen?`)) handleDeleteVariant(variant); }}
-                                  className="p-1.5 bg-crit/10 hover:bg-crit/20 text-crit rounded transition-colors" title="Printing löschen">
+                                  className="p-1.5 bg-bad/10 hover:bg-bad/20 text-bad rounded transition-colors" title="Printing löschen">
                                   <Trash2 className="w-3.5 h-3.5" />
                               </button>
                           </div>
@@ -337,7 +337,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                       className="bg-black/40 border border-gray-700 rounded px-1 py-0.5 text-xs text-white">
                                       {EDITIONS.map(ed => <option key={ed} value={ed}>{EDITION_LABELS[ed]}</option>)}
                                   </select>
-                                  <span className="ml-auto font-mono text-xs text-gold">{fmtEUR(valueOf(variant, [g]))}</span>
+                                  <span className="ml-auto font-mono text-xs text-text">{fmtEUR(valueOf(variant, [g]))}</span>
                               </div>
                               {/* Spec B1 §7.3: je Exemplar der Gruppe eine Zeile mit Standort- und Tag-Chips; ein Klick oeffnet das Exemplar-Sheet. */}
                               <div className="mt-1 space-y-1">
@@ -345,15 +345,15 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                       <button key={c.copy_id} type="button" onClick={() => setSheetCopy(c)}
                                           className="w-full flex items-center gap-2 px-2 py-1 rounded-lg bg-black/20 hover:bg-black/40 border border-gray-800 text-left transition-colors">
                                           {/* Spec H1 §5.3: Preisschild an markierten Exemplaren */}
-                                          {!!c.for_sale && <Tag className="w-3 h-3 text-gold shrink-0" aria-label="Zum Verkauf" />}
+                                          {!!c.for_sale && <Tag className="w-3 h-3 text-warn shrink-0" aria-label="Zum Verkauf" />}
                                           <span className="text-[11px] text-gray-400 font-mono truncate">
                                               {/* Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile. */}
                                               {c.container_id ? formatCopyLocation(c, containers.find(ct => ct.container_id === c.container_id)) : 'ohne Standort'}
                                           </span>
-                                          {offeredText(offers[c.copy_id] || []) && <span className="text-[10px] text-gold font-mono truncate">{offeredText(offers[c.copy_id] || [])}</span>}
+                                          {offeredText(offers[c.copy_id] || []) && <span className="text-[10px] text-warn font-mono truncate">{offeredText(offers[c.copy_id] || [])}</span>}
                                           <div className="ml-auto flex gap-1 flex-wrap justify-end">
                                               {parseTags(c.tags).map(t => (
-                                                  <span key={t} className="px-1.5 py-0.5 rounded-full bg-space-violet/15 text-space-violet text-[10px] border border-space-violet/30">{t}</span>
+                                                  <span key={t} className="px-1.5 py-0.5 rounded-full bg-accent/15 text-accent text-[10px] border border-accent/30">{t}</span>
                                               ))}
                                           </div>
                                       </button>
@@ -362,7 +362,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                               </div>
                               );
                           })}
-                          <button onClick={() => addStandardCopy(variant)} className="mt-1 text-xs text-gray-400 hover:text-space-violet flex items-center gap-1">
+                          <button onClick={() => addStandardCopy(variant)} className="mt-1 text-xs text-gray-400 hover:text-accent flex items-center gap-1">
                               <Plus className="w-3 h-3" /> Exemplar hinzufügen
                           </button>
                       </div>
@@ -404,7 +404,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                   <button
                       onClick={handleAddVariant}
                       disabled={!selectedNewSet || isAdding}
-                      className="bg-space-violet hover:bg-violet-600 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-accent hover:bg-violet-600 text-accent-fg px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                       {isAdding ? 'Füge hinzu…' : 'Hinzufügen'}
                   </button>
@@ -450,10 +450,10 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           <h3 className="text-lg font-semibold text-gray-300 mb-2">Verkauft</h3>
           <div className="space-y-1">
             {sold.map((s) => (
-              <div key={`${s.sale_id}|${s.copy_id}`} className={`flex items-center gap-2 text-[11px] font-mono ${s.status === 'storniert' ? 'line-through text-ink-faint' : 'text-ink-muted'}`}>
+              <div key={`${s.sale_id}|${s.copy_id}`} className={`flex items-center gap-2 text-[11px] font-mono ${s.status === 'storniert' ? 'line-through text-muted' : 'text-muted'}`}>
                 <span>{s.sold_on.split('-').reverse().join('.')}</span><span>{s.channel_name}</span>
                 <span>{s.set_code} · {s.rarity} · {s.condition}</span>
-                <span className="ml-auto text-gold">{euroCentsText(toCents(s.share))}</span>
+                <span className="ml-auto text-text">{euroCentsText(toCents(s.share))}</span>
               </div>
             ))}
           </div>

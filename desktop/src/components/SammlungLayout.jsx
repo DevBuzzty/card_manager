@@ -9,15 +9,15 @@ export default function SammlungLayout() {
       {/* Wraps instead of overflowing — in a narrow window the heading and the segments together
           are wider than the column, and the page would otherwise scroll sideways. */}
       <div className="flex flex-wrap items-center gap-4 mb-5 shrink-0">
-        <h1 className="font-display font-semibold text-2xl text-ink">{T.sammlung}</h1>
-        <div className="flex flex-wrap bg-obsidian-700 border border-line rounded-xl p-1 gap-1">
+        <h1 className="font-display font-semibold text-2xl text-text">{T.sammlung}</h1>
+        <div className="flex flex-wrap bg-surface border border-line rounded-xl p-1 gap-1">
           {SAMMLUNG_SEGMENTS.map(s => (
             <NavLink
               key={s.id}
               to={s.to}
               className={({ isActive }) => clsx(
                 'px-4 py-1.5 rounded-lg font-display text-sm font-medium transition-colors',
-                isActive ? 'bg-accent text-accent-fg' : 'text-ink-muted hover:text-ink'
+                isActive ? 'bg-accent text-accent-fg' : 'text-muted hover:text-text'
               )}
             >
               {s.label}
