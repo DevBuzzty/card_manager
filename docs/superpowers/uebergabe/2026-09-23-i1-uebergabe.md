@@ -81,7 +81,6 @@ Jede davon lässt sich zurückdrehen, falls sie nicht passt.
 
 ## Kleinigkeiten ohne Eile
 
-- `text-bad/70` im Gefahrenzone-Eintrag der Einstellungen-Navigation liegt vermutlich knapp unter 4,5:1.
 - Wisch-Aktualisierung wirkt im Eingabezustand des Deck-Imports nicht (kein scrollbarer Inhalt) — harmlos.
 
 ## Nachprüfung
