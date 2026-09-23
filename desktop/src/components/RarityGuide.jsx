@@ -88,12 +88,11 @@ export default function RarityGuide({ onClose }) {
 
           <div className="grid grid-cols-1 gap-4">
             {rarities.map((r, idx) => (
-              <div key={idx} className="flex gap-4 p-4 bg-black/30 rounded-xl border border-gray-800 hover:border-space-violet/50 transition-colors group">
+              <div key={idx} className="flex gap-4 p-4 bg-black/30 rounded-xl border border-gray-800 hover:border-accent/50 transition-colors group">
                 {/* Visual Representation (Placeholder) */}
                 <div className={`w-16 h-24 rounded border border-gray-600 flex-shrink-0 relative overflow-hidden shadow-lg ${r.color === 'bg-white' ? 'bg-gray-800' : 'bg-black'}`}>
                     {/* Simulated Foil Effect */}
                     <div className={`absolute inset-0 opacity-30 ${r.color} mix-blend-screen`}></div>
-                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-50 transition-opacity duration-700"></div>
                     <div className="absolute top-2 left-2 right-2 h-2 bg-gray-700 rounded-sm opacity-50"></div> {/* Name Area */}
                     <div className="absolute top-6 left-2 right-2 bottom-8 bg-gray-800 rounded-sm border border-gray-700 flex items-center justify-center">
                         <span className="text-[8px] text-gray-500 font-mono">ART</span>

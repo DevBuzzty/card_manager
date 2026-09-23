@@ -248,12 +248,12 @@ export default function Settings() {
     return (
         <div className="max-w-5xl mx-auto h-full flex gap-6">
             <nav className="w-52 shrink-0 space-y-1">
-                <h1 className="font-display font-semibold text-2xl text-ink mb-4">{T.einstellungen}</h1>
+                <h1 className="font-display font-semibold text-2xl text-text mb-4">{T.einstellungen}</h1>
                 {SECTIONS.map(s => (
                     <NavLink key={s.id} to={`/einstellungen/${s.id}`}
                         className={({ isActive }) => clsx('block px-3 py-2 rounded-lg text-sm transition-colors',
-                            isActive ? 'bg-space-violet/15 text-ink shadow-[inset_0_0_0_1px_rgba(157,0,255,0.35)]'
-                                     : (s.id === 'gefahrenzone' ? 'text-crit/70 hover:text-crit' : 'text-ink-muted hover:text-ink'))}>
+                            isActive ? 'bg-accent/15 text-text'
+                                     : (s.id === 'gefahrenzone' ? 'text-bad/70 hover:text-bad' : 'text-muted hover:text-text'))}>
                         {s.label}
                     </NavLink>
                 ))}
@@ -261,39 +261,39 @@ export default function Settings() {
 
             <div className="flex-1 min-w-0 overflow-y-auto custom-scrollbar space-y-6 pb-8">
                 {active === 'konto' && (
-                    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
-                        <div className="flex items-center mb-6 text-good border-b border-line pb-4">
+                    <div className="bg-surface border border-line rounded-2xl p-6">
+                        <div className="flex items-center mb-6 text-text border-b border-line pb-4">
                             <Cloud className="w-6 h-6 mr-2" />
-                            <h3 className="font-display text-lg text-ink">Cloud-Sync (Supabase)</h3>
+                            <h3 className="font-display text-lg text-text">Cloud-Sync (Supabase)</h3>
                         </div>
 
                         <div className="space-y-3">
                             <input
-                                className="w-full bg-obsidian border border-line text-ink rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors"
+                                className="w-full bg-bg border border-line text-text rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition-colors"
                                 placeholder="Projekt-URL"
                                 value={sync.supabase_url}
                                 onChange={e => saveSync('supabase_url', e.target.value)}
                             />
                             <input
-                                className="w-full bg-obsidian border border-line text-ink rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors"
+                                className="w-full bg-bg border border-line text-text rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition-colors"
                                 placeholder="Anon Key"
                                 value={sync.supabase_key}
                                 onChange={e => saveSync('supabase_key', e.target.value)}
                             />
                             <input
-                                className="w-full bg-obsidian border border-line text-ink rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors"
+                                className="w-full bg-bg border border-line text-text rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition-colors"
                                 placeholder="E-Mail"
                                 value={sync.supabase_email}
                                 onChange={e => saveSync('supabase_email', e.target.value)}
                             />
                             <input
                                 type="password"
-                                className="w-full bg-obsidian border border-line text-ink rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors"
+                                className="w-full bg-bg border border-line text-text rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition-colors"
                                 placeholder="Passwort"
                                 value={sync.supabase_password}
                                 onChange={e => saveSync('supabase_password', e.target.value)}
                             />
-                            <label className="flex items-center gap-2 text-ink pt-2">
+                            <label className="flex items-center gap-2 text-text pt-2">
                                 <input
                                     type="checkbox"
                                     checked={sync.sync_enabled === 'true'}
@@ -302,7 +302,7 @@ export default function Settings() {
                                 Sync aktivieren
                             </label>
                             {syncStatus && (
-                                <p className={clsx('text-sm', syncStatus.state === 'error' ? 'text-crit' : 'text-ink-muted')}>
+                                <p className={clsx('text-sm', syncStatus.state === 'error' ? 'text-bad' : 'text-muted')}>
                                     {syncStatus.state === 'error' ? 'Fehler' : 'Status'}: {syncStatus.message} {syncStatus.at && `(${new Date(syncStatus.at).toLocaleTimeString()})`}
                                 </p>
                             )}
@@ -334,20 +334,20 @@ export default function Settings() {
                 )}
 
                 {active === 'preise' && (
-                    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
-                        <div className="flex items-center mb-6 text-space-violet border-b border-line pb-4">
+                    <div className="bg-surface border border-line rounded-2xl p-6">
+                        <div className="flex items-center mb-6 text-text border-b border-line pb-4">
                             <DollarSign className="w-6 h-6 mr-2" />
-                            <h3 className="font-display text-lg text-ink">Preise</h3>
+                            <h3 className="font-display text-lg text-text">Preise</h3>
                         </div>
 
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-bold text-ink-muted mb-2 uppercase tracking-wider">Preisquelle</label>
+                                    <label className="block text-sm font-bold text-muted mb-2 uppercase tracking-wider">Preisquelle</label>
                                     <select
                                         value={priceSource}
                                         onChange={handleSaveSource}
-                                        className="w-full bg-obsidian border border-line text-ink rounded-xl px-4 py-3 focus:outline-none focus:border-space-violet transition-colors cursor-pointer appearance-none"
+                                        className="w-full bg-bg border border-line text-text rounded-xl px-4 py-3 focus:outline-none focus:border-accent transition-colors cursor-pointer appearance-none"
                                     >
                                         <option value="cardmarket">CardMarket (Europa)</option>
                                         <option value="tcgplayer">TCGPlayer (Nordamerika)</option>
@@ -355,7 +355,7 @@ export default function Settings() {
                                         <option value="amazon">Amazon</option>
                                         <option value="coolstuffinc">CoolStuffInc</option>
                                     </select>
-                                    <p className="text-xs text-ink-faint mt-2">
+                                    <p className="text-xs text-muted mt-2">
                                         Bestimmt, welche Marktdaten für Portfolio-Bewertung und Kartendetails verwendet werden.
                                     </p>
                                 </div>
@@ -364,7 +364,7 @@ export default function Settings() {
                                     <button
                                         onClick={handleUpdatePrices}
                                         disabled={runningAction === 'prices'}
-                                        className="w-full flex items-center justify-center px-6 py-3 bg-space-violet hover:bg-space-violet-dark text-white rounded-xl font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-space-violet/20"
+                                        className="w-full flex items-center justify-center px-6 py-3 bg-accent hover:bg-accent/90 text-accent-fg rounded-xl font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-accent/20"
                                     >
                                         <RefreshCw className={`w-5 h-5 mr-2 ${runningAction === 'prices' ? 'animate-spin' : ''}`} />
                                         {runningAction === 'prices' ? 'Preise werden aktualisiert…' : 'Preise jetzt aktualisieren'}
@@ -374,13 +374,13 @@ export default function Settings() {
 
                             {runningAction === 'prices' && progress.total > 0 && (
                                 <div>
-                                    <div className="flex justify-between text-xs text-ink-muted mb-1">
+                                    <div className="flex justify-between text-xs text-muted mb-1">
                                         <span>Verarbeitung läuft…</span>
                                         <span>{Math.round((progress.current / progress.total) * 100)}%</span>
                                     </div>
-                                    <div className="bg-obsidian rounded-full h-2 overflow-hidden border border-line">
+                                    <div className="bg-bg rounded-full h-2 overflow-hidden border border-line">
                                         <div
-                                            className="bg-space-violet h-full transition-all duration-300"
+                                            className="bg-accent h-full transition-all duration-300"
                                             style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
                                         />
                                     </div>
@@ -395,54 +395,54 @@ export default function Settings() {
                 {active === 'ebay' && <EbaySettings />}
 
                 {active === 'verbindung' && (
-                    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
-                        <h3 className="font-display text-lg text-ink mb-1">Verbindung zum Handy</h3>
-                        <p className="text-sm text-ink-muted mb-4">Die Handy-App verbindet sich mit dieser Adresse (Port 4000). Beide Geräte müssen im selben WLAN sein.</p>
-                        <code className="block bg-obsidian border border-line rounded-lg px-4 py-3 text-center font-mono text-lg text-ink select-all cursor-pointer hover:bg-black/40 transition-colors"
+                    <div className="bg-surface border border-line rounded-2xl p-6">
+                        <h3 className="font-display text-lg text-text mb-1">Verbindung zum Handy</h3>
+                        <p className="text-sm text-muted mb-4">Die Handy-App verbindet sich mit dieser Adresse (Port 4000). Beide Geräte müssen im selben WLAN sein.</p>
+                        <code className="block bg-bg border border-line rounded-lg px-4 py-3 text-center font-mono text-lg text-text select-all cursor-pointer hover:bg-black/40 transition-colors"
                               title="Zum Kopieren klicken" onClick={() => navigator.clipboard.writeText(ipAddress)}>{ipAddress}</code>
                     </div>
                 )}
 
                 {active === 'daten' && (
                     <>
-                    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
-                        <div className="flex items-center mb-6 text-space-violet border-b border-line pb-4">
+                    <div className="bg-surface border border-line rounded-2xl p-6">
+                        <div className="flex items-center mb-6 text-text border-b border-line pb-4">
                             <Database className="w-6 h-6 mr-2" />
-                            <h3 className="font-display text-lg text-ink">Daten</h3>
+                            <h3 className="font-display text-lg text-text">Daten</h3>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <button
                                 onClick={handleBackup}
-                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group"
+                                className="p-4 bg-bg/50 hover:bg-bg rounded-xl border border-line hover:border-accent/50 transition-all text-left group"
                             >
-                                <div className="flex items-center text-ink mb-2">
+                                <div className="flex items-center text-text mb-2">
                                     <Download className="w-5 h-5 mr-2" />
                                     <h4 className="font-bold">Datenbank sichern</h4>
                                 </div>
-                                <p className="text-sm text-ink-muted group-hover:text-ink">Speichert deine gesamte Sammlung und alle Decks in einer lokalen Datei.</p>
+                                <p className="text-sm text-muted group-hover:text-text">Speichert deine gesamte Sammlung und alle Decks in einer lokalen Datei.</p>
                             </button>
 
                             <button
                                 onClick={handleMoveDb}
-                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group"
+                                className="p-4 bg-bg/50 hover:bg-bg rounded-xl border border-line hover:border-accent/50 transition-all text-left group"
                             >
-                                <div className="flex items-center text-ink mb-2">
+                                <div className="flex items-center text-text mb-2">
                                     <FolderInput className="w-5 h-5 mr-2" />
                                     <h4 className="font-bold">Speicherort verschieben</h4>
                                 </div>
-                                <p className="text-sm text-ink-muted group-hover:text-ink">Verschiebt die Daten in einen OneDrive/Dropbox-Ordner für Cloud-Sync (Neustart erforderlich).</p>
+                                <p className="text-sm text-muted group-hover:text-text">Verschiebt die Daten in einen OneDrive/Dropbox-Ordner für Cloud-Sync (Neustart erforderlich).</p>
                             </button>
 
                             <button
                                 onClick={handleRestore}
-                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group"
+                                className="p-4 bg-bg/50 hover:bg-bg rounded-xl border border-line hover:border-accent/50 transition-all text-left group"
                             >
-                                <div className="flex items-center text-ink mb-2">
+                                <div className="flex items-center text-text mb-2">
                                     <FileUp className="w-5 h-5 mr-2" />
                                     <h4 className="font-bold">Sicherung wiederherstellen</h4>
                                 </div>
-                                <p className="text-sm text-ink-muted group-hover:text-ink">Stellt eine vorherige Sicherungsdatei wieder her (Neustart erforderlich).</p>
+                                <p className="text-sm text-muted group-hover:text-text">Stellt eine vorherige Sicherungsdatei wieder her (Neustart erforderlich).</p>
                             </button>
 
                             <button
@@ -455,48 +455,48 @@ export default function Settings() {
                                         }
                                     }
                                 }}
-                                className="p-4 bg-space-violet/10 hover:bg-space-violet/20 rounded-xl border border-space-violet/30 hover:border-space-violet/50 transition-all text-left group"
+                                className="p-4 bg-accent/10 hover:bg-accent/20 rounded-xl border border-accent/30 hover:border-accent/50 transition-all text-left group"
                             >
-                                <div className="flex items-center text-space-violet mb-2">
+                                <div className="flex items-center text-accent mb-2">
                                     <RefreshCw className="w-5 h-5 mr-2" />
                                     <h4 className="font-bold">Duplikate zusammenführen</h4>
                                 </div>
-                                <p className="text-sm text-space-violet/60 group-hover:text-space-violet">Führt alte 'Unknown'-Karten mit den passenden Sets zusammen, um doppelte Wertanzeige zu vermeiden.</p>
+                                <p className="text-sm text-accent/60 group-hover:text-accent">Führt alte 'Unknown'-Karten mit den passenden Sets zusammen, um doppelte Wertanzeige zu vermeiden.</p>
                             </button>
 
                             <button
                                 onClick={handleImport}
-                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group"
+                                className="p-4 bg-bg/50 hover:bg-bg rounded-xl border border-line hover:border-accent/50 transition-all text-left group"
                             >
-                                <div className="flex items-center text-ink mb-2">
+                                <div className="flex items-center text-text mb-2">
                                     <FileUp className="w-5 h-5 mr-2" />
                                     <h4 className="font-bold">Importieren…</h4>
                                 </div>
-                                <p className="text-sm text-ink-muted group-hover:text-ink">Liest eine Card-Dex-CSV mit Vorschau ein – Exemplare, Behälter, Seite/Fach, Tags und Notizen.</p>
+                                <p className="text-sm text-muted group-hover:text-text">Liest eine Card-Dex-CSV mit Vorschau ein – Exemplare, Behälter, Seite/Fach, Tags und Notizen.</p>
                             </button>
 
                             <button
                                 onClick={() => setExportOpen(true)}
-                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group"
+                                className="p-4 bg-bg/50 hover:bg-bg rounded-xl border border-line hover:border-accent/50 transition-all text-left group"
                             >
-                                <div className="flex items-center text-ink mb-2">
+                                <div className="flex items-center text-text mb-2">
                                     <Download className="w-5 h-5 mr-2" />
                                     <h4 className="font-bold">Exportieren…</h4>
                                 </div>
-                                <p className="text-sm text-ink-muted group-hover:text-ink">Card Dex, Dragon Shield, YGOPRODeck, Cardmarket-Wantslist oder Verkaufsliste.</p>
+                                <p className="text-sm text-muted group-hover:text-text">Card Dex, Dragon Shield, YGOPRODeck, Cardmarket-Wantslist oder Verkaufsliste.</p>
                             </button>
                         </div>
                         {importOpened && <ImportDialog opened={importOpened} onClose={() => setImportOpened(null)} />}
                         {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
                     </div>
 
-                    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
-                        <div className="flex items-center mb-6 text-space-violet border-b border-line pb-4">
+                    <div className="bg-surface border border-line rounded-2xl p-6">
+                        <div className="flex items-center mb-6 text-text border-b border-line pb-4">
                             <Cloud className="w-6 h-6 mr-2" />
-                            <h3 className="font-display text-lg text-ink">Katalog</h3>
+                            <h3 className="font-display text-lg text-text">Katalog</h3>
                         </div>
-                        <p className="text-sm text-ink-muted mb-4">Name, Text und Printings aller Karten — das Handy scannt damit ohne Netz.</p>
-                        <p className="text-sm text-ink-muted mb-4">
+                        <p className="text-sm text-muted mb-4">Name, Text und Printings aller Karten — das Handy scannt damit ohne Netz.</p>
+                        <p className="text-sm text-muted mb-4">
                             {catalogStatus.lastRun
                                 ? `Version ${catalogStatus.version} · ${formatBytes(catalogStatus.bytes)} · gebaut am ${new Date(catalogStatus.lastRun).toLocaleDateString('de-DE')}`
                                 : 'Noch nie gebaut.'}
@@ -504,31 +504,31 @@ export default function Settings() {
                         <button
                             onClick={handleBuildCatalog}
                             disabled={runningAction === 'catalog'}
-                            className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-4 bg-bg/50 hover:bg-bg rounded-xl border border-line hover:border-accent/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <div className="flex items-center text-ink mb-2">
+                            <div className="flex items-center text-text mb-2">
                                 <RefreshCw className={`w-5 h-5 mr-2 ${runningAction === 'catalog' ? 'animate-spin' : ''}`} />
                                 <h4 className="font-bold">{runningAction === 'catalog' ? 'Wird gebaut…' : 'Katalog jetzt bauen'}</h4>
                             </div>
                         </button>
                         {catalogResult && (
-                            <p className={`text-sm mt-4 ${catalogResult.ok ? 'text-good' : 'text-crit'}`}>{catalogResult.text}</p>
+                            <p className={`text-sm mt-4 ${catalogResult.ok ? 'text-good' : 'text-bad'}`}>{catalogResult.text}</p>
                         )}
                     </div>
 
-                    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
-                        <div className="flex items-center mb-6 text-space-violet border-b border-line pb-4">
+                    <div className="bg-surface border border-line rounded-2xl p-6">
+                        <div className="flex items-center mb-6 text-text border-b border-line pb-4">
                             <Cpu className="w-6 h-6 mr-2" />
-                            <h3 className="font-display text-lg text-ink">Scanner-Modell</h3>
+                            <h3 className="font-display text-lg text-text">Scanner-Modell</h3>
                         </div>
-                        <p className="text-sm text-ink-muted mb-4">Neue Modelldateien landen ohne neue App-Version auf dem Handy.</p>
+                        <p className="text-sm text-muted mb-4">Neue Modelldateien landen ohne neue App-Version auf dem Handy.</p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <button
                                 onClick={() => handleUploadModel('index')}
                                 disabled={!!uploadingKind}
-                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-4 bg-bg/50 hover:bg-bg rounded-xl border border-line hover:border-accent/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <div className="flex items-center text-ink mb-2">
+                                <div className="flex items-center text-text mb-2">
                                     <UploadCloud className={`w-5 h-5 mr-2 ${uploadingKind === 'index' ? 'animate-bounce' : ''}`} />
                                     <h4 className="font-bold">{uploadingKind === 'index' ? 'Wird hochgeladen…' : 'Index hochladen'}</h4>
                                 </div>
@@ -536,9 +536,9 @@ export default function Settings() {
                             <button
                                 onClick={() => handleUploadModel('embedder')}
                                 disabled={!!uploadingKind}
-                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-4 bg-bg/50 hover:bg-bg rounded-xl border border-line hover:border-accent/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <div className="flex items-center text-ink mb-2">
+                                <div className="flex items-center text-text mb-2">
                                     <UploadCloud className={`w-5 h-5 mr-2 ${uploadingKind === 'embedder' ? 'animate-bounce' : ''}`} />
                                     <h4 className="font-bold">{uploadingKind === 'embedder' ? 'Wird hochgeladen…' : 'Embedder hochladen'}</h4>
                                 </div>
@@ -546,89 +546,89 @@ export default function Settings() {
                             <button
                                 onClick={() => handleUploadModel('detector')}
                                 disabled={!!uploadingKind}
-                                className="p-4 bg-obsidian/50 hover:bg-obsidian rounded-xl border border-line hover:border-space-violet/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-4 bg-bg/50 hover:bg-bg rounded-xl border border-line hover:border-accent/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <div className="flex items-center text-ink mb-2">
+                                <div className="flex items-center text-text mb-2">
                                     <UploadCloud className={`w-5 h-5 mr-2 ${uploadingKind === 'detector' ? 'animate-bounce' : ''}`} />
                                     <h4 className="font-bold">{uploadingKind === 'detector' ? 'Wird hochgeladen…' : 'Detektor hochladen'}</h4>
                                 </div>
                             </button>
                         </div>
                         {modelResult && (
-                            <p className={`text-sm mt-4 ${modelResult.ok ? 'text-good' : 'text-crit'}`}>{modelResult.text}</p>
+                            <p className={`text-sm mt-4 ${modelResult.ok ? 'text-good' : 'text-bad'}`}>{modelResult.text}</p>
                         )}
                     </div>
                     </>
                 )}
 
                 {active === 'standards' && (
-                    <div className="bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800 shadow-xl">
-                        <div className="flex items-center mb-6 text-gold border-b border-gray-800 pb-4">
+                    <div className="bg-surface p-6 rounded-2xl border border-line shadow-xl">
+                        <div className="flex items-center mb-6 text-text border-b border-line pb-4">
                             <Layers className="w-6 h-6 mr-2" />
-                            <h3 className="text-xl font-bold text-white">Standards für neue Exemplare</h3>
+                            <h3 className="text-xl font-bold text-text">Standards für neue Exemplare</h3>
                         </div>
-                        <p className="text-xs text-gray-500 mb-4">Jeder Scan legt Exemplare mit diesen Werten an. Abweichungen setzt du pro Zeile im Staging oder im Karten-Detail.</p>
+                        <p className="text-xs text-muted mb-4">Jeder Scan legt Exemplare mit diesen Werten an. Abweichungen setzt du pro Zeile im Staging oder im Karten-Detail.</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Zustand</label>
+                                <label className="block text-sm font-bold text-muted mb-2 uppercase tracking-wider">Zustand</label>
                                 <div className="flex gap-1 flex-wrap">
                                     {CONDITIONS.map(c => (
                                         <button key={c} onClick={() => saveDefault('condition', c)}
-                                            className={`px-3 py-1.5 rounded-lg text-sm font-mono ${defaults.condition === c ? 'bg-space-violet text-white' : 'bg-black/40 text-gray-300 border border-gray-700 hover:bg-gray-800'}`}>{c}</button>
+                                            className={`px-3 py-1.5 rounded-lg text-sm font-mono ${defaults.condition === c ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-text border border-line hover:bg-bg'}`}>{c}</button>
                                     ))}
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Edition</label>
+                                <label className="block text-sm font-bold text-muted mb-2 uppercase tracking-wider">Edition</label>
                                 <div className="flex gap-1 flex-wrap">
                                     {EDITIONS.map(e => (
                                         <button key={e} onClick={() => saveDefault('edition', e)}
-                                            className={`px-3 py-1.5 rounded-lg text-sm ${defaults.edition === e ? 'bg-space-violet text-white' : 'bg-black/40 text-gray-300 border border-gray-700 hover:bg-gray-800'}`}>{EDITION_LABELS[e]}</button>
+                                            className={`px-3 py-1.5 rounded-lg text-sm ${defaults.edition === e ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-text border border-line hover:bg-bg'}`}>{EDITION_LABELS[e]}</button>
                                     ))}
                                 </div>
                             </div>
                         </div>
-                        <div className="mt-6 pt-6 border-t border-gray-800">
-                            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Duplikate: behalten je Karte</label>
+                        <div className="mt-6 pt-6 border-t border-line">
+                            <label className="block text-sm font-bold text-muted mb-2 uppercase tracking-wider">Duplikate: behalten je Karte</label>
                             <input type="number" min="1" max="99" step="1" value={keepInput}
                                 onChange={e => setKeepInput(e.target.value)} onBlur={saveKeep}
                                 onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                                className="w-24 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-space-violet" />
-                            <p className="text-xs text-gray-500 mt-2">Alles über dieser Anzahl je Karte (über alle Printings) erscheint unter „Duplikate“. Ganze Zahl 1–99, Standard 3. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.</p>
+                                className="w-24 bg-surface-2 border border-line text-text rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent" />
+                            <p className="text-xs text-muted mt-2">Alles über dieser Anzahl je Karte (über alle Printings) erscheint unter „Duplikate“. Ganze Zahl 1–99, Standard 3. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.</p>
                         </div>
                         <SaleChannelSettings />
-                        <div className="mt-6 pt-6 border-t border-gray-800">
-                            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Preisvorschlag: Abschlag in %</label>
+                        <div className="mt-6 pt-6 border-t border-line">
+                            <label className="block text-sm font-bold text-muted mb-2 uppercase tracking-wider">Preisvorschlag: Abschlag in %</label>
                             <input type="number" min="0" max="90" step="1" value={discountInput}
                                 onChange={e => setDiscountInput(e.target.value)} onBlur={saveDiscount}
                                 onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                                className="w-24 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-space-violet" />
-                            <label className="block text-sm font-bold text-gray-400 mb-2 mt-4 uppercase tracking-wider">Mindestpreis in €</label>
+                                className="w-24 bg-surface-2 border border-line text-text rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent" />
+                            <label className="block text-sm font-bold text-muted mb-2 mt-4 uppercase tracking-wider">Mindestpreis in €</label>
                             <input inputMode="decimal" value={minPriceInput}
                                 onChange={e => setMinPriceInput(e.target.value)} onBlur={saveMinPrice}
                                 onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                                className="w-24 bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-space-violet" />
-                            <p className="text-xs text-gray-500 mt-2">Vorschlag = Marktwert minus Abschlag, auf 5 Cent abgerundet, nie unter dem Mindestpreis. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.</p>
+                                className="w-24 bg-surface-2 border border-line text-text rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent" />
+                            <p className="text-xs text-muted mt-2">Vorschlag = Marktwert minus Abschlag, auf 5 Cent abgerundet, nie unter dem Mindestpreis. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.</p>
                         </div>
                     </div>
                 )}
 
                 {active === 'gefahrenzone' && (
-                    <div className="bg-obsidian-700 border border-crit/30 rounded-2xl p-6">
-                        <div className="flex items-center mb-6 text-crit border-b border-crit/20 pb-4">
+                    <div className="bg-surface border border-bad/30 rounded-2xl p-6">
+                        <div className="flex items-center mb-6 text-bad border-b border-bad/20 pb-4">
                             <Trash2 className="w-6 h-6 mr-2" />
-                            <h3 className="font-display text-lg text-crit">Gefahrenzone</h3>
+                            <h3 className="font-display text-lg text-bad">Gefahrenzone</h3>
                         </div>
 
                         {runningAction === 'downgrade' && progress.total > 0 && (
                             <div className="mb-6">
-                                <div className="flex justify-between text-xs text-ink-muted mb-1">
+                                <div className="flex justify-between text-xs text-muted mb-1">
                                     <span>Verarbeitung läuft…</span>
                                     <span>{Math.round((progress.current / progress.total) * 100)}%</span>
                                 </div>
-                                <div className="bg-obsidian rounded-full h-2 overflow-hidden border border-line">
+                                <div className="bg-bg rounded-full h-2 overflow-hidden border border-line">
                                     <div
-                                        className="bg-crit h-full transition-all duration-300"
+                                        className="bg-bad h-full transition-all duration-300"
                                         style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
                                     />
                                 </div>
@@ -639,26 +639,26 @@ export default function Settings() {
                             <button
                                 onClick={handleDowngrade}
                                 disabled={runningAction === 'downgrade'}
-                                className="p-4 bg-crit/10 hover:bg-crit/20 rounded-xl border border-crit/30 hover:border-crit/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-4 bg-bad/10 hover:bg-bad/20 rounded-xl border border-bad/30 hover:border-bad/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <div className="flex items-center text-crit mb-2">
+                                <div className="flex items-center text-bad mb-2">
                                     <TrendingDown className={`w-5 h-5 mr-2 ${runningAction === 'downgrade' ? 'animate-bounce' : ''}`} />
                                     <h4 className="font-bold">Auf günstigste Rarity umstellen</h4>
                                 </div>
-                                <p className="text-sm text-crit/60 group-hover:text-crit">
+                                <p className="text-sm text-bad/60 group-hover:text-bad">
                                     Setzt jede Karte auf ihre günstigste Druckvariante. Manuell gesetzte Rarities werden überschrieben.
                                 </p>
                             </button>
 
                             <button
                                 onClick={handleReset}
-                                className="p-4 bg-crit/10 hover:bg-crit/20 rounded-xl border border-crit/30 hover:border-crit/50 transition-all text-left group"
+                                className="p-4 bg-bad/10 hover:bg-bad/20 rounded-xl border border-bad/30 hover:border-bad/50 transition-all text-left group"
                             >
-                                <div className="flex items-center text-crit mb-2">
+                                <div className="flex items-center text-bad mb-2">
                                     <Trash2 className="w-5 h-5 mr-2" />
                                     <h4 className="font-bold">Alles zurücksetzen</h4>
                                 </div>
-                                <p className="text-sm text-crit/60 group-hover:text-crit">Löscht alle Daten unwiderruflich. Kann nicht rückgängig gemacht werden.</p>
+                                <p className="text-sm text-bad/60 group-hover:text-bad">Löscht alle Daten unwiderruflich. Kann nicht rückgängig gemacht werden.</p>
                             </button>
                         </div>
                     </div>
@@ -705,7 +705,7 @@ function SaleChannelSettings() {
         return res;
     });
 
-    const input = 'bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet';
+    const input = 'bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent';
     const btn = 'px-3 py-2 rounded-lg text-sm bg-black/40 text-gray-300 border border-gray-700 hover:bg-gray-800';
     return (
         <div className="mt-6 pt-6 border-t border-gray-800">
@@ -731,7 +731,7 @@ function SaleChannelSettings() {
                     </div>
                 </div>
             )}
-            {error && <p className="text-sm text-crit mt-2">{error}</p>}
+            {error && <p className="text-sm text-bad mt-2">{error}</p>}
             <p className="text-xs text-gray-500 mt-2">Gebühren sind vorbelegt – bitte mit deinen eigenen Konditionen abgleichen. Alte Verkäufe behalten den Namen, den der Kanal beim Buchen hatte.</p>
         </div>
     );
