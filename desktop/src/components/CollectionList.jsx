@@ -14,7 +14,7 @@ import { formatCopyLocation } from '../utils/copyLocation';
 // ../utils/printingKey.js, damit es ihn nur EINMAL gibt (BinderView.jsx liest denselben).
 import { printingKey } from '../utils/printingKey';
 import { passcodeMatches } from '../utils/passcode';
-import { PRESETS, matchesPreset } from '../utils/cardFilters.js';
+import { PRESETS, matchesPresetGroup } from '../utils/cardFilters.js';
 import ExportDialog from './ExportDialog';
 import { filterCopyIds } from '../utils/exportScope';
 import { forSaleSuffix } from '../utils/duplicates';
@@ -316,7 +316,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
       const matches = [];
       for (const c of groupedCards) {
-        if (presets.some(p => !matchesPreset(c, p))) continue;
+        // Fixrunde 1: c ist die gruppierte Kachel (mehrere Drucke desselben Passcodes) -- eine
+        // Voreinstellung trifft, wenn IRGENDEIN Druck sie trifft (c.variants), nicht nur der zuerst
+        // angetroffene Druck (der auf c selbst durchgereicht waere).
+        if (presets.some(p => !matchesPresetGroup(c.variants, p))) continue;
 
         // ACHTUNG, ECHTE FALLE (Spec B1 §7.4): Diese Liste gruppiert nach Printing (genauer nach
         // Passcode -- eine Gruppe kann mehrere Printings buendeln), Behaelter und Tag sitzen aber

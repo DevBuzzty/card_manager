@@ -1,5 +1,5 @@
 {
-  "_": "ZWILLING: desktop/src/utils/cardFilters.test.js und android CardFilterPresetsTest.kt. Spec I §3.3.",
+  "_": "ZWILLING: desktop/src/utils/cardFilters.test.js und android CardFilterPresetsTest.kt. Spec I §3.3. gruppen: Fixrunde 1 -- eine Kachel buendelt mehrere Drucke, drucke[] sind sie einzeln.",
   "presets": [["unvollstaendig", "Unvollständige Daten"], ["foils", "Nur Foils"]],
   "faelle": [
     { "name": "vollstaendig, kein Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Common", "price": 0.5 }, "unvollstaendig": false, "foils": false },
@@ -9,6 +9,46 @@
     { "name": "Secret Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Secret Rare", "price": 12 }, "unvollstaendig": false, "foils": true },
     { "name": "Ultra Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Ultra Rare", "price": 3 }, "unvollstaendig": false, "foils": true },
     { "name": "Super Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Super Rare", "price": 1 }, "unvollstaendig": false, "foils": true },
-    { "name": "Rare ist kein Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Rare", "price": 1 }, "unvollstaendig": false, "foils": false }
+    { "name": "Rare ist kein Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Rare", "price": 1 }, "unvollstaendig": false, "foils": false },
+    { "name": "Prismatic Secret Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Prismatic Secret Rare", "price": 15 }, "unvollstaendig": false, "foils": true },
+    { "name": "Quarter Century Secret Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Quarter Century Secret Rare", "price": 20 }, "unvollstaendig": false, "foils": true },
+    { "name": "Collector's Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Collector's Rare", "price": 8 }, "unvollstaendig": false, "foils": true },
+    { "name": "Starlight Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Starlight Rare", "price": 25 }, "unvollstaendig": false, "foils": true },
+    { "name": "Short Print ist kein Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Short Print", "price": 0.3 }, "unvollstaendig": false, "foils": false }
+  ],
+  "gruppen": [
+    {
+      "name": "Secret Rare ohne Preis + Common vollstaendig",
+      "drucke": [
+        { "set_code": "LOB-DE001", "rarity": "Secret Rare", "price": 0 },
+        { "set_code": "LOB-DE001", "rarity": "Common", "price": 0.5 }
+      ],
+      "unvollstaendig": true,
+      "foils": true
+    },
+    {
+      "name": "zwei vollstaendige Commons",
+      "drucke": [
+        { "set_code": "LOB-DE001", "rarity": "Common", "price": 0.5 },
+        { "set_code": "LOB-DE002", "rarity": "Common", "price": 0.3 }
+      ],
+      "unvollstaendig": false,
+      "foils": false
+    },
+    {
+      "name": "Common vollstaendig + Rare mit set_code Unknown",
+      "drucke": [
+        { "set_code": "LOB-DE001", "rarity": "Common", "price": 0.5 },
+        { "set_code": "Unknown", "rarity": "Rare", "price": 1 }
+      ],
+      "unvollstaendig": true,
+      "foils": false
+    },
+    {
+      "name": "leere Liste",
+      "drucke": [],
+      "unvollstaendig": false,
+      "foils": false
+    }
   ]
 }
