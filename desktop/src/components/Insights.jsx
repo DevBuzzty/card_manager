@@ -15,7 +15,7 @@ const Tab = ({ id, icon, label, view, setView }) => {
     <button
       onClick={() => setView(id)}
       className={`flex items-center gap-2 px-4 py-2 rounded-lg font-display text-sm font-medium transition-colors ${
-        view === id ? 'bg-space-violet text-white shadow-[0_6px_16px_-8px_#9D00FF]' : 'text-ink-muted hover:text-ink'
+        view === id ? 'bg-accent text-accent-fg' : 'text-muted hover:text-text'
       }`}
     >
       <Icon className="w-4 h-4" strokeWidth={1.8} /> {label}
@@ -41,7 +41,7 @@ export default function Insights() {
 
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
-      <div className="inline-flex self-start bg-obsidian-700 border border-line rounded-xl p-1 gap-1 mb-5">
+      <div className="inline-flex self-start bg-surface border border-line rounded-xl p-1 gap-1 mb-5">
         <Tab id="value" icon={TrendingUp} label="Wert" view={view} setView={setView} />
         <Tab id="bewegungen" icon={ArrowUpDown} label="Bewegungen" view={view} setView={setView} />
         <Tab id="breakdown" icon={BarChart3} label="Aufteilung" view={view} setView={setView} />
@@ -49,17 +49,17 @@ export default function Insights() {
       </div>
       <div className="flex-1 overflow-auto">
         {view === 'value' && (
-          <Suspense fallback={<div className="flex items-center justify-center h-64 text-space-violet"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
+          <Suspense fallback={<div className="flex items-center justify-center h-64 text-accent"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
             <Portfolio />
           </Suspense>
         )}
         {view === 'bewegungen' && <MoversPanel />}
         {view === 'breakdown' && (
           <div className="space-y-4">
-            <div className="inline-flex bg-obsidian-700 border border-line rounded-xl p-1 gap-1">
+            <div className="inline-flex bg-surface border border-line rounded-xl p-1 gap-1">
               {[{ id: 'count', label: 'Anzahl' }, { id: 'value', label: 'Wert' }].map((m) => (
                 <button key={m.id} onClick={() => setMetric(m.id)}
-                  className={`px-4 py-1.5 rounded-lg text-sm ${metric === m.id ? 'bg-space-violet text-white' : 'text-ink-muted hover:text-ink'}`}>{m.label}</button>
+                  className={`px-4 py-1.5 rounded-lg text-sm ${metric === m.id ? 'bg-accent text-accent-fg' : 'text-muted hover:text-text'}`}>{m.label}</button>
               ))}
             </div>
             {metric === 'count' ? <Statistics /> : <ValueBreakdown />}

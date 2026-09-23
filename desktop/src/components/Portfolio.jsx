@@ -126,7 +126,7 @@ export default function Portfolio() {
         setIsRefreshing(false);
     };
 
-    const COLORS = ['#9D00FF', '#00C49F', '#FFBB28', '#FF8042'];
+    const COLORS = ['var(--accent)', '#00C49F', '#FFBB28', '#FF8042'];
 
     return (
         <div className="max-w-7xl mx-auto h-full flex flex-col gap-6 p-2">
@@ -166,7 +166,7 @@ export default function Portfolio() {
                         <button
                             key={tf}
                             onClick={() => setTimeframe(tf)}
-                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${timeframe === tf ? 'bg-space-violet text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${timeframe === tf ? 'bg-accent text-accent-fg shadow-lg' : 'text-gray-500 hover:text-accent'}`}
                         >
                             {tf}
                         </button>
@@ -176,15 +176,8 @@ export default function Portfolio() {
 
             {/* Main Chart */}
             <div className="h-80 bg-[#1E1E1E] rounded-2xl border border-gray-800 p-6 shadow-2xl relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-b from-space-violet/5 to-transparent pointer-events-none"></div>
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={filteredHistory}>
-                        <defs>
-                            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#9D00FF" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#9D00FF" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
                         {/* Hidden axis: gives the tooltip the real timestamp as its label (without it, label defaults to the point index → 1970 dates) */}
                         <XAxis dataKey="timestamp" hide />
                         <Tooltip
@@ -197,10 +190,10 @@ export default function Portfolio() {
                         <Area
                             type="monotone"
                             dataKey="value"
-                            stroke="#9D00FF"
+                            stroke="var(--accent)"
                             strokeWidth={3}
-                            fillOpacity={1}
-                            fill="url(#colorValue)"
+                            fillOpacity={0.15}
+                            fill="var(--accent)"
                         />
                     </AreaChart>
                 </ResponsiveContainer>
@@ -211,7 +204,7 @@ export default function Portfolio() {
                 <div className="lg:col-span-2 bg-[#1E1E1E] rounded-2xl border border-gray-800 flex flex-col overflow-hidden">
                     <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-[#252525]">
                         <h3 className="text-xl font-bold text-white flex items-center">
-                            <ArrowUpRight className="w-5 h-5 mr-2 text-space-violet" />
+                            <ArrowUpRight className="w-5 h-5 mr-2 text-accent" />
                             Wertvollste Bestände
                         </h3>
                     </div>
@@ -240,7 +233,7 @@ export default function Portfolio() {
                                         </td>
                                         <td className="px-4 py-3 text-right text-gray-300">{fmtEUR(asset.price)}</td>
                                         <td className="px-4 py-3 text-right font-mono text-gray-500">x{asset.quantity}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-white group-hover:text-space-violet transition-colors">
+                                        <td className="px-4 py-3 text-right font-bold text-white group-hover:text-accent transition-colors">
                                             {fmtEUR(asset.equity)}
                                         </td>
                                     </tr>

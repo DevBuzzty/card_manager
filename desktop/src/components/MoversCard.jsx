@@ -10,22 +10,22 @@ export default function MoversCard() {
   const { loading, error, data } = useMovers(7);
   const message = data ? moversMessage(data, 7) : null;
   return (
-    <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
+    <div className="bg-surface border border-line rounded-2xl p-6">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display text-sm tracking-[0.12em] uppercase text-ink-muted flex items-center gap-2">
+        <h3 className="font-display text-sm tracking-[0.12em] uppercase text-muted flex items-center gap-2">
           <TrendingUp className="w-4 h-4" strokeWidth={1.8} /> Bewegungen · 7 Tage
         </h3>
         <button onClick={() => navigate(ROUTES.insights, { state: { tab: 'bewegungen' } })}
-          className="text-xs text-violet-soft hover:underline flex items-center gap-1">Alle <ArrowRight className="w-3 h-3" /></button>
+          className="text-xs text-accent hover:underline flex items-center gap-1">Alle <ArrowRight className="w-3 h-3" /></button>
       </div>
       {!data && loading && <MoversSkeleton />}
-      {!data && !loading && error && <div className="text-sm text-crit">{error}</div>}
-      {data && error && <div className="text-[11px] text-ink-faint mb-2">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
-      {data && message && <div className="text-sm text-ink-faint">{message}</div>}
+      {!data && !loading && error && <div className="text-sm text-bad">{error}</div>}
+      {data && error && <div className="text-[11px] text-muted mb-2">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
+      {data && message && <div className="text-sm text-muted">{message}</div>}
       {data && !message && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div><div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">Gewinner</div><MoversList movers={data.winners.slice(0, 3)} /></div>
-          <div><div className="text-[11px] uppercase tracking-wide text-ink-faint mb-1">Verlierer</div><MoversList movers={data.losers.slice(0, 3)} /></div>
+          <div><div className="text-[11px] uppercase tracking-wide text-muted mb-1">Gewinner</div><MoversList movers={data.winners.slice(0, 3)} /></div>
+          <div><div className="text-[11px] uppercase tracking-wide text-muted mb-1">Verlierer</div><MoversList movers={data.losers.slice(0, 3)} /></div>
         </div>
       )}
     </div>

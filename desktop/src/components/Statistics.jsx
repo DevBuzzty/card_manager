@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { BarChart3, Library, Layers, DollarSign, Package, Sparkles } from 'lucide-react';
 
 // Lightweight horizontal-bar distribution (no chart library, keeps the bundle lean).
-function BarStat({ title, icon: Icon, data, accent = 'bg-space-violet', valueFormatter }) {
+function BarStat({ title, icon: Icon, data, accent = 'bg-accent', valueFormatter }) {
     const max = data.reduce((m, d) => Math.max(m, d.value), 0) || 1;
     return (
         <div className="bg-[#1E1E1E] rounded-2xl border border-gray-800 p-6 flex flex-col">
@@ -30,7 +30,7 @@ function BarStat({ title, icon: Icon, data, accent = 'bg-space-violet', valueFor
     );
 }
 
-const Tile = ({ icon: Icon, label, value, color = 'bg-space-violet' }) => (
+const Tile = ({ icon: Icon, label, value, color = 'bg-accent' }) => (
     <div className="bg-[#1E1E1E] p-5 rounded-2xl border border-gray-800 relative overflow-hidden">
         <div className={`absolute right-[-20px] top-[-20px] w-20 h-20 rounded-full opacity-10 ${color}`} />
         <div className="flex items-center gap-3 relative z-10">
@@ -119,7 +119,7 @@ export default function Statistics() {
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                <BarChart3 className="w-7 h-7 text-space-violet" /> Collection Statistics
+                <BarChart3 className="w-7 h-7 text-accent" /> Collection Statistics
             </h1>
 
             {cards.length === 0 ? (
@@ -132,14 +132,14 @@ export default function Statistics() {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                         <Tile icon={Library} label="Total Cards" value={s.totalCards} color="bg-blue-500" />
                         <Tile icon={Layers} label="Unique" value={s.uniqueCards} color="bg-green-500" />
-                        <Tile icon={DollarSign} label="Total Value" value={money(s.totalValue)} color="bg-space-violet" />
+                        <Tile icon={DollarSign} label="Total Value" value={money(s.totalValue)} color="bg-accent" />
                         <Tile icon={DollarSign} label="Avg / Card" value={money(s.avgValue)} color="bg-yellow-500" />
                         <Tile icon={Package} label="Sets" value={s.distinctSets} color="bg-pink-500" />
                         <Tile icon={Sparkles} label="Rarities" value={s.distinctRarities} color="bg-cyan-500" />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <BarStat title="Card Types" data={s.byType} accent="bg-space-violet" />
+                        <BarStat title="Card Types" data={s.byType} accent="bg-accent" />
                         <BarStat title="Attributes" data={s.byAttr} accent="bg-blue-500" />
                         <BarStat title="Rarities" data={s.byRarity} accent="bg-cyan-500" />
                         <BarStat title="Monster Types (Top 10)" data={s.byRace} accent="bg-green-500" />
@@ -148,7 +148,7 @@ export default function Statistics() {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <BarStat title="Top Sets (by cards owned)" data={s.bySet} accent="bg-space-violet" />
+                        <BarStat title="Top Sets (by cards owned)" data={s.bySet} accent="bg-accent" />
                         <div className="bg-[#1E1E1E] rounded-2xl border border-gray-800 p-6">
                             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center">
                                 <DollarSign className="w-4 h-4 mr-2" /> Most Valuable Cards
@@ -163,7 +163,7 @@ export default function Statistics() {
                                             <div className="font-bold text-white text-sm truncate">{c.name}</div>
                                             <div className="text-xs text-gray-500 font-mono">{c.set_code} • {c.rarity} • x{c.quantity || 1}</div>
                                         </div>
-                                        <div className="text-right font-bold text-space-violet">{money(c.equity)}</div>
+                                        <div className="text-right font-bold text-accent">{money(c.equity)}</div>
                                     </div>
                                 ))}
                             </div>
