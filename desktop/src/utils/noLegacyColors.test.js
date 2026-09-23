@@ -37,6 +37,9 @@ const VERBOTEN = [
   /\b(text|bg|border|ring|from|to|via|fill|stroke)-gold\b/,
   // Abschlussreview B7 (Spec I §6.2 Regel 1): Erhebung durch Flaeche und Linie, hoechstens shadow-sm.
   /\bshadow-(md|lg|xl|2xl)\b/,
+  // Restrunde 5: Text mit Deckkraft-Stufe faellt unter 4,5:1 (text-bad/70 ~ 3,3) -- Text immer in voller
+  // Rolle. Hintergruende und Rahmen mit Stufe (bg-accent/15, border-line/40) bleiben erlaubt.
+  /\btext-(text|muted|accent|accent-fg|good|warn|bad)\/\d+/,
   /violet-soft/,
   /ink-faint/,
   // Feste Hex-Farbwerte direkt in style={{}} -- Ausnahmen unten (RarityGuide-Kartenfarben) werden vor

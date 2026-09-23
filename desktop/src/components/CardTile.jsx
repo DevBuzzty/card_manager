@@ -78,10 +78,10 @@ export default function CardTile({ card, onClick, saleNote = null }) {
             <div key={i} className="flex items-center justify-between gap-1.5 text-[9.5px]">
               <span className="font-mono text-muted truncate">
                 {v.set_code || '—'}
-                {v.rarity && v.rarity !== 'Unknown' && <span className="text-muted/70"> · {v.rarity}</span>}
+                {v.rarity && v.rarity !== 'Unknown' && <span className="text-muted"> · {v.rarity}</span>}
               </span>
               <span className="font-mono text-muted shrink-0">×{v.quantity || 1}</span>
-              <span className="font-mono text-text/80 shrink-0 w-12 text-right">€{(v.price || 0).toFixed(2)}</span>
+              <span className="font-mono text-text shrink-0 w-12 text-right">€{(v.price || 0).toFixed(2)}</span>
             </div>
           ))}
           {moreCount > 0 && <div className="text-[9px] text-muted pt-0.5">+{moreCount} weitere</div>}

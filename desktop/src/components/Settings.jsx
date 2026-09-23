@@ -250,7 +250,7 @@ export default function Settings() {
                     <NavLink key={s.id} to={`/einstellungen/${s.id}`}
                         className={({ isActive }) => clsx('block px-3 py-2 rounded-lg text-sm transition-colors',
                             isActive ? 'bg-accent/15 text-text'
-                                     : (s.id === 'gefahrenzone' ? 'text-bad/70 hover:text-bad' : 'text-muted hover:text-text'))}>
+                                     : (s.id === 'gefahrenzone' ? 'text-bad' : 'text-muted hover:text-text'))}>
                         {s.label}
                     </NavLink>
                 ))}

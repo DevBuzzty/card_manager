@@ -75,6 +75,8 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
     try {
       const res = await window.api.setForSale({ copyIds: [copyId], value: false });
       if (!res?.success) { setError(res?.error || 'Speichern fehlgeschlagen.'); return; }
+      // Restrunde 1: Seitenleiste und Reiterzahlen ziehen nach (nav-counts hoert auf collection-dirty).
+      window.dispatchEvent(new Event('collection-dirty'));
       await reload();
     } catch (e) {
       setError(e?.message || 'Speichern fehlgeschlagen.');

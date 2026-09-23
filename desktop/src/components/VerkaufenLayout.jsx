@@ -9,20 +9,20 @@ import { duplicates } from '../utils/duplicates';
 import { useSaleData } from '../hooks/useSaleData';
 import { useListingsData } from '../hooks/useListings';
 import { useNavCounts } from '../hooks/useNavCounts';
-import { verkaufenCounts } from '../utils/verkaufenCounts';
+import { verkaufenCounts, SALES_DEFAULT_PERIOD } from '../utils/verkaufenCounts';
 import { todayLocal } from '../utils/today';
 import DuplicatesList from './DuplicatesList';
 import ForSaleList from './ForSaleList';
 import ListingsList from './ListingsList';
 import SalesPanel from './SalesPanel';
 
-// Abschlussreview B1: Anzahl der gebuchten Verkaeufe ueber den vorhandenen Kanal sales-overview
-// (Zeitraum "gesamt"); neu bei Verkaufs-/Sammlungsaenderung wie SalesPanel. null = laedt.
-function useAllSales() {
+// Abschlussreview B1 / Restrunde 2: die Eintraege der Verkaufsliste im Standard-Zeitraum ueber den
+// vorhandenen Kanal sales-overview; neu bei Verkaufs-/Sammlungsaenderung wie SalesPanel. null = laedt.
+function useSalesDefaultPeriod() {
   const [sales, setSales] = useState(null);
   useEffect(() => {
     let lebt = true;
-    const laden = () => window.api?.salesOverview?.({ period: 'gesamt', today: todayLocal() })
+    const laden = () => window.api?.salesOverview?.({ period: SALES_DEFAULT_PERIOD, today: todayLocal() })
       .then((d) => { if (lebt && d) setSales(Array.isArray(d.sales) ? d.sales : []); }).catch(() => {});
     laden();
     const offs = [window.api?.onSalesChanged?.(laden), window.api?.onCollectionChanged?.(laden)];
@@ -40,13 +40,13 @@ export default function VerkaufenLayout() {
   // Spec I §5.3: jede Station mit Anzahl in der Reiterzeile (Definition in utils/verkaufenCounts.js).
   const sale = useSaleData();
   const nav = useNavCounts();
-  const sales = useAllSales();
+  const salesInDefaultPeriod = useSalesDefaultPeriod();
   const duplicateGroups = useMemo(() => {
     if (!sale.data) return null;
     const mainIds = new Map(sale.data.copies.map(c => [String(c.card_id), c.main_id]));
     return duplicates(sale.data.copies, sale.data.keep, (id) => mainIds.get(id));
   }, [sale.data]);
-  const counts = verkaufenCounts({ duplicateGroups, nav, sales });
+  const counts = verkaufenCounts({ duplicateGroups, saleCopies: sale.data ? sale.data.copies : null, nav, salesInDefaultPeriod });
   return (
     <div className="h-full flex flex-col">
       <div className="flex flex-wrap items-center gap-4 mb-5 shrink-0">

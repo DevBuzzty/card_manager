@@ -304,7 +304,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                 className="w-16 bg-bg/40 border border-line rounded px-1 py-0.5 text-xs text-text"
                                 title="Preis manuell setzen (überschreibt Auto-Preis)" />
                               {variant.cm_updated_at && !variant.cm_url && (
-                                <span className="text-[9px] text-warn/80" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
+                                <span className="text-[9px] text-warn" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
                               )}
                               <button onClick={() => { if (confirm(`${variant.set_code} (${variant.rarity}) mit allen Exemplaren löschen?`)) handleDeleteVariant(variant); }}
                                   className="p-1.5 bg-bad/10 hover:bg-bad/20 text-text rounded transition-colors" title="Printing löschen">

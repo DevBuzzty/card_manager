@@ -24,6 +24,8 @@ export default function DuplicatesList({ list, copies, reload, onOpenCard }) {
     if (ids.length === 0) return true;
     const res = await window.api.setForSale({ copyIds: ids, value });
     if (!res?.success) { setError(res?.error || 'Speichern fehlgeschlagen.'); return false; }
+    // Restrunde 1: Seitenleiste und Reiterzahlen ziehen nach (nav-counts hoert auf collection-dirty).
+    window.dispatchEvent(new Event('collection-dirty'));
     return true;
   };
 
