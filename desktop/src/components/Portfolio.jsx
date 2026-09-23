@@ -134,39 +134,39 @@ export default function Portfolio() {
             <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                 <div>
                     <div className="flex items-center gap-3">
-                         <span className="text-gray-500 text-sm uppercase font-bold tracking-widest">Total Portfolio Value</span>
+                         <span className="text-muted text-sm uppercase font-bold tracking-widest">Total Portfolio Value</span>
                          {isLive && (
-                             <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-500 text-[10px] uppercase font-bold tracking-wider animate-pulse border border-red-500/50">
+                             <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent text-[10px] uppercase font-bold tracking-wider animate-pulse border border-accent/50">
                                  Live Update
                              </span>
                          )}
                          <button
                             onClick={handleRefresh}
                             disabled={isRefreshing}
-                            className="p-1 hover:bg-white/10 rounded-full transition-colors text-gray-500 hover:text-white"
+                            className="p-1 hover:bg-surface-2 rounded-full transition-colors text-muted hover:text-text"
                             title="Refresh Prices"
                          >
                              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                          </button>
                     </div>
-                    <h1 className={`text-6xl font-bold text-white mt-2 tracking-tight transition-colors duration-500 ${isLive ? 'text-green-400' : ''}`}>
+                    <h1 className={`text-6xl font-bold text-text mt-2 tracking-tight transition-colors duration-500 ${isLive ? 'text-accent' : ''}`}>
                         {fmtEUR(stats.totalValue)}
                     </h1>
-                    <div className={`flex items-center mt-2 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                    <div className={`flex items-center mt-2 ${isPositive ? 'text-good' : 'text-bad'}`}>
                         {isPositive ? <TrendingUp className="w-5 h-5 mr-2" /> : <TrendingDown className="w-5 h-5 mr-2" />}
                         <span className="text-lg font-mono font-medium">
                             {fmtSignedEUR(absoluteChange)} ({fmtNum(percentChange)}%)
                         </span>
-                        <span className="text-gray-600 text-sm ml-2 uppercase font-bold">{timeframe === 'ALL' ? 'All Time' : 'Past ' + timeframe}</span>
+                        <span className="text-muted text-sm ml-2 uppercase font-bold">{timeframe === 'ALL' ? 'All Time' : 'Past ' + timeframe}</span>
                     </div>
                 </div>
 
-                <div className="flex bg-[#1E1E1E] rounded-lg p-1 border border-gray-800">
+                <div className="flex bg-surface rounded-lg p-1 border border-line">
                     {['1W', '1M', '1Y', 'ALL'].map(tf => (
                         <button
                             key={tf}
                             onClick={() => setTimeframe(tf)}
-                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${timeframe === tf ? 'bg-accent text-accent-fg shadow-lg' : 'text-gray-500 hover:text-accent'}`}
+                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${timeframe === tf ? 'bg-accent text-accent-fg' : 'text-muted hover:text-accent'}`}
                         >
                             {tf}
                         </button>
@@ -175,15 +175,15 @@ export default function Portfolio() {
             </div>
 
             {/* Main Chart */}
-            <div className="h-80 bg-[#1E1E1E] rounded-2xl border border-gray-800 p-6 shadow-2xl relative overflow-hidden group">
+            <div className="h-80 bg-surface rounded-2xl border border-line p-6 shadow-2xl relative overflow-hidden group">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={filteredHistory}>
                         {/* Hidden axis: gives the tooltip the real timestamp as its label (without it, label defaults to the point index → 1970 dates) */}
                         <XAxis dataKey="timestamp" hide />
                         <Tooltip
-                            contentStyle={{ backgroundColor: '#121212', borderColor: '#333', borderRadius: '8px' }}
-                            itemStyle={{ color: '#fff' }}
-                            labelStyle={{ color: '#888' }}
+                            contentStyle={{ backgroundColor: 'var(--surface)', borderColor: 'var(--line)', borderRadius: '8px' }}
+                            itemStyle={{ color: 'var(--text)' }}
+                            labelStyle={{ color: 'var(--text-muted)' }}
                             formatter={(value) => [fmtEUR(value), 'Value']}
                             labelFormatter={(label) => new Date(label).toLocaleDateString('de-DE', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         />
@@ -201,17 +201,17 @@ export default function Portfolio() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
                 {/* Top Assets */}
-                <div className="lg:col-span-2 bg-[#1E1E1E] rounded-2xl border border-gray-800 flex flex-col overflow-hidden">
-                    <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-[#252525]">
-                        <h3 className="text-xl font-bold text-white flex items-center">
+                <div className="lg:col-span-2 bg-surface rounded-2xl border border-line flex flex-col overflow-hidden">
+                    <div className="p-6 border-b border-line flex justify-between items-center bg-surface-2">
+                        <h3 className="text-xl font-bold text-text flex items-center">
                             <ArrowUpRight className="w-5 h-5 mr-2 text-accent" />
                             Wertvollste Bestände
                         </h3>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                        {topAssets.length === 0 && <div className="p-8 text-center text-gray-500">No assets found.</div>}
+                        {topAssets.length === 0 && <div className="p-8 text-center text-muted">No assets found.</div>}
                         <table className="w-full text-left text-sm">
-                            <thead className="text-xs uppercase text-gray-500 font-medium">
+                            <thead className="text-xs uppercase text-muted font-medium">
                                 <tr>
                                     <th className="px-4 py-3">Asset</th>
                                     <th className="px-4 py-3 text-right">Price</th>
@@ -219,21 +219,21 @@ export default function Portfolio() {
                                     <th className="px-4 py-3 text-right">Equity</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-800">
+                            <tbody className="divide-y divide-line">
                                 {topAssets.map(asset => (
-                                    <tr key={asset.id + asset.set_code} className="hover:bg-white/5 transition-colors group">
+                                    <tr key={asset.id + asset.set_code} className="hover:bg-surface-2 transition-colors group">
                                         <td className="px-4 py-3 flex items-center gap-3">
-                                            <div className="w-8 h-12 bg-black rounded overflow-hidden flex-shrink-0 border border-gray-700">
+                                            <div className="w-8 h-12 bg-bg rounded overflow-hidden flex-shrink-0 border border-line">
                                                 <img src={asset.image_url} alt="" className="w-full h-full object-cover" />
                                             </div>
                                             <div>
-                                                <div className="font-bold text-white">{asset.name}</div>
-                                                <div className="text-xs text-gray-500 font-mono">{asset.set_code} • {asset.rarity}</div>
+                                                <div className="font-bold text-text">{asset.name}</div>
+                                                <div className="text-xs text-muted font-mono">{asset.set_code} • {asset.rarity}</div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-right text-gray-300">{fmtEUR(asset.price)}</td>
-                                        <td className="px-4 py-3 text-right font-mono text-gray-500">x{asset.quantity}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-white group-hover:text-accent transition-colors">
+                                        <td className="px-4 py-3 text-right text-text">{fmtEUR(asset.price)}</td>
+                                        <td className="px-4 py-3 text-right font-mono text-muted">x{asset.quantity}</td>
+                                        <td className="px-4 py-3 text-right font-bold text-text group-hover:text-accent transition-colors">
                                             {fmtEUR(asset.equity)}
                                         </td>
                                     </tr>
@@ -245,8 +245,8 @@ export default function Portfolio() {
 
                 {/* Allocation / Stats */}
                 <div className="flex flex-col gap-6">
-                    <div className="bg-[#1E1E1E] rounded-2xl border border-gray-800 p-6 flex-1 flex flex-col">
-                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center">
+                    <div className="bg-surface rounded-2xl border border-line p-6 flex-1 flex flex-col">
+                        <h3 className="text-sm font-bold text-muted uppercase tracking-wider mb-4 flex items-center">
                             <Layers className="w-4 h-4 mr-2" /> Allocation
                         </h3>
                         <div className="flex-1 min-h-[200px] relative">
@@ -265,14 +265,14 @@ export default function Portfolio() {
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" />
                                         ))}
                                     </Pie>
-                                    <Tooltip contentStyle={{ backgroundColor: '#121212', borderRadius: '8px', border: '1px solid #333' }} itemStyle={{color: '#fff'}} formatter={(value) => fmtEUR(value)} />
+                                    <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--line)' }} itemStyle={{color: 'var(--text)'}} formatter={(value) => fmtEUR(value)} />
                                 </PieChart>
                             </ResponsiveContainer>
                             {/* Center Text */}
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <div className="text-center">
-                                    <span className="block text-2xl font-bold text-white">{stats.totalCards}</span>
-                                    <span className="text-[10px] uppercase text-gray-500 font-bold">Cards</span>
+                                    <span className="block text-2xl font-bold text-text">{stats.totalCards}</span>
+                                    <span className="text-[10px] uppercase text-muted font-bold">Cards</span>
                                 </div>
                             </div>
                         </div>
@@ -281,9 +281,9 @@ export default function Portfolio() {
                                 <div key={item.name} className="flex justify-between items-center text-xs">
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
-                                        <span className="text-gray-300">{item.name}</span>
+                                        <span className="text-text">{item.name}</span>
                                     </div>
-                                    <span className="font-mono text-gray-500">{fmtEUR(item.value)}</span>
+                                    <span className="font-mono text-text">{fmtEUR(item.value)}</span>
                                 </div>
                             ))}
                         </div>
