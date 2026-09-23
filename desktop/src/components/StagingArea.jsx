@@ -39,7 +39,7 @@ const printingKey = (s) => s ? `${s.set_code}|${s.set_rarity}|${s.language}` : '
 function PrintingPicker({ printings, selectedSet, onSelect, loading }) {
     if (!printings || printings.length === 0) {
         return (
-            <div className="flex-1 bg-gray-800 rounded px-2 py-1 text-xs text-gray-400 border border-gray-700 flex items-center justify-center">
+            <div className="flex-1 bg-surface-2 rounded px-2 py-1 text-xs text-muted border border-line flex items-center justify-center">
                 {loading ? 'Lade Druckvarianten…' : 'Keine Druckvarianten gefunden'}
             </div>
         );
@@ -463,13 +463,13 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
         <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-text flex items-center">
                 Scannen
-                <span className="ml-3 text-sm font-normal text-gray-500 bg-gray-900 px-2 py-1 rounded-full">{scannedCards.length}</span>
+                <span className="ml-3 text-sm font-normal text-muted bg-bg px-2 py-1 rounded-full">{scannedCards.length}</span>
             </h2>
             <div className="flex space-x-2">
                 {scannedCards.length > 0 && (
                     <button
                         onClick={handleClearAll}
-                        className="flex items-center px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 hover:text-red-300 rounded-lg transition-colors text-sm border border-red-500/30"
+                        className="flex items-center px-4 py-2 bg-bad/20 hover:bg-bad/30 text-bad hover:text-bad rounded-lg transition-colors text-sm border border-bad/30"
                     >
                         <X className="w-4 h-4 mr-2" />
                         Alles verwerfen
@@ -558,20 +558,20 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
 
         <div className="grid grid-cols-1 gap-3">
             {scannedCards.map(card => (
-                <div key={card.tempId} className="bg-[#1E1E1E] p-3 rounded-xl border border-gray-800 flex items-center shadow-lg hover:border-gray-700 transition-colors">
+                <div key={card.tempId} className="bg-surface p-3 rounded-xl border border-line flex items-center shadow-lg hover:border-line transition-colors">
                     {/* Status / Image */}
-                    <div className="w-12 h-16 sm:w-16 sm:h-20 bg-black rounded flex-shrink-0 border border-gray-700 overflow-hidden flex items-center justify-center mr-4 relative">
+                    <div className="w-12 h-16 sm:w-16 sm:h-20 bg-bg rounded flex-shrink-0 border border-line overflow-hidden flex items-center justify-center mr-4 relative">
                         {card.status === 'loading' && <Loader2 className="animate-spin text-accent w-6 h-6" />}
-                        {card.status === 'error' && <AlertCircle className="text-red-500 w-6 h-6" />}
+                        {card.status === 'error' && <AlertCircle className="text-bad w-6 h-6" />}
                         {card.status === 'loaded' && card.data?.card_images?.[0]?.image_url && (
                              <img src={card.data.card_images[0].image_url_small || card.data.card_images[0].image_url} alt="Card" className="w-full h-full object-cover" />
                         )}
-                        {card.status === 'pending' && <span className="text-xs text-gray-600">...</span>}
+                        {card.status === 'pending' && <span className="text-xs text-muted">...</span>}
                     </div>
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                        {card.status === 'loading' && <div className="h-5 w-40 bg-gray-800 rounded animate-pulse mb-2"></div>}
+                        {card.status === 'loading' && <div className="h-5 w-40 bg-surface-2 rounded animate-pulse mb-2"></div>}
                         {card.status === 'loaded' ? (
                             <>
                                 <div className="flex items-center gap-2">
@@ -590,26 +590,26 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     )}
                                     <h3 className="font-bold text-lg text-text truncate">{card.data.name}</h3>
                                     {card.quantity > 1 && (
-                                        <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-[10px] font-bold uppercase rounded border border-green-500/30">
+                                        <span className="px-2 py-0.5 bg-good/20 text-good text-[10px] font-bold uppercase rounded border border-good/30">
                                             x{card.quantity}
                                         </span>
                                     )}
                                     {card.inCollection && (
-                                        <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-[10px] font-bold uppercase rounded border border-yellow-500/30">
+                                        <span className="px-2 py-0.5 bg-warn/20 text-warn text-[10px] font-bold uppercase rounded border border-warn/30">
                                             Vorhanden: x{card.ownedQuantity}
                                         </span>
                                     )}
                                 </div>
                                 <div className="flex items-center text-xs space-x-2 mt-0.5 mb-2">
-                                    <span className="text-accent font-mono bg-purple-900/30 px-1.5 py-0.5 rounded">{card.passcode}</span>
-                                    <span className="text-gray-400 truncate">{card.data.type}</span>
+                                    <span className="text-accent font-mono bg-surface-2 px-1.5 py-0.5 rounded">{card.passcode}</span>
+                                    <span className="text-muted truncate">{card.data.type}</span>
                                 </div>
                                 {/* Grund (Spec D3 Task 8): read verbatim off the phone's ScanConfidence result --
                                     already German, never re-translated or paraphrased here. `null`/absent exactly
                                     for GREEN (see ScanConfidence.Result's own doc), so nothing renders for a green
                                     card, same as the phone. */}
                                 {card.scannedReason && (
-                                    <p className="text-xs text-gray-500 -mt-1 mb-2 truncate">{card.scannedReason}</p>
+                                    <p className="text-xs text-muted -mt-1 mb-2 truncate">{card.scannedReason}</p>
                                 )}
                                 {/* Der gelesene Set-Code hat die Bilderkennung ueberstimmt (main.cjs:
                                     korrigiereNachSetCode). Still korrigiert, hier nur vermerkt -- damit
@@ -622,17 +622,17 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
 
                                 <div className="flex gap-2 items-center">
                                     {/* Quantity */}
-                                    <div className="flex items-center bg-black/40 rounded-lg border border-gray-700 p-0.5 h-8">
+                                    <div className="flex items-center bg-bg/40 rounded-lg border border-line p-0.5 h-8">
                                         <button
                                             onClick={() => handleUpdateCard(card.tempId, { quantity: Math.max(1, (card.quantity || 1) - 1) })}
-                                            className="p-1 hover:bg-gray-700 rounded text-gray-400"
+                                            className="p-1 hover:bg-surface-2 rounded text-muted"
                                         >
                                             <Minus className="w-3 h-3" />
                                         </button>
                                         <span className="w-6 text-center text-xs font-mono">{card.quantity || 1}</span>
                                         <button
                                             onClick={() => handleUpdateCard(card.tempId, { quantity: (card.quantity || 1) + 1 })}
-                                            className="p-1 hover:bg-gray-700 rounded text-gray-400"
+                                            className="p-1 hover:bg-surface-2 rounded text-muted"
                                         >
                                             <Plus className="w-3 h-3" />
                                         </button>
@@ -645,14 +645,14 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                 <input
                                                     type="text"
                                                     placeholder="Set-Code"
-                                                    className="w-1/2 bg-black/40 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:border-accent outline-none"
+                                                    className="w-1/2 bg-bg/40 border border-line rounded px-2 py-1 text-xs text-text focus:border-accent outline-none"
                                                     value={card.manualSetCode || ''}
                                                     onChange={(e) => handleUpdateCard(card.tempId, { manualSetCode: e.target.value })}
                                                 />
                                                 <input
                                                     type="text"
                                                     placeholder="Rarity"
-                                                    className="w-1/2 bg-black/40 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:border-accent outline-none"
+                                                    className="w-1/2 bg-bg/40 border border-line rounded px-2 py-1 text-xs text-text focus:border-accent outline-none"
                                                     value={card.manualRarity || ''}
                                                     onChange={(e) => handleUpdateCard(card.tempId, { manualRarity: e.target.value })}
                                                 />
@@ -675,14 +675,14 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             </span>
                                         )}
                                         {card.setMatchConfidence === 'fuzzy' && !card.isManualEntry && (
-                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 rounded px-1.5 py-1" title="Set-Code aus unscharfem Scan wiederhergestellt — bitte überprüfen">
+                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-warn bg-warn/10 border border-warn/30 rounded px-1.5 py-1" title="Set-Code aus unscharfem Scan wiederhergestellt — bitte überprüfen">
                                                 Prüfen?
                                             </span>
                                         )}
 
                                         <button
                                             onClick={() => handleUpdateCard(card.tempId, { isManualEntry: !card.isManualEntry })}
-                                            className={`p-1.5 rounded transition-colors ${card.isManualEntry ? 'bg-accent text-accent-fg' : 'bg-gray-800 text-gray-400 hover:text-accent'}`}
+                                            className={`p-1.5 rounded transition-colors ${card.isManualEntry ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted hover:text-accent'}`}
                                             title="Manuelle Eingabe umschalten"
                                         >
                                             <Edit className="w-3 h-3" />
@@ -693,10 +693,10 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     {/* Extra printings of the same card (e.g. you also have the English print) */}
                                     {(card.extraPrintings || []).map((p) => (
                                         <div key={p.id} className="flex gap-2 items-center mt-2">
-                                            <div className="flex items-center bg-black/40 rounded-lg border border-gray-700 p-0.5 h-8">
-                                                <button onClick={() => updatePrinting(card.tempId, p.id, { quantity: Math.max(1, (p.quantity || 1) - 1) })} className="p-1 hover:bg-gray-700 rounded text-gray-400"><Minus className="w-3 h-3" /></button>
+                                            <div className="flex items-center bg-bg/40 rounded-lg border border-line p-0.5 h-8">
+                                                <button onClick={() => updatePrinting(card.tempId, p.id, { quantity: Math.max(1, (p.quantity || 1) - 1) })} className="p-1 hover:bg-surface-2 rounded text-muted"><Minus className="w-3 h-3" /></button>
                                                 <span className="w-6 text-center text-xs font-mono">{p.quantity || 1}</span>
-                                                <button onClick={() => updatePrinting(card.tempId, p.id, { quantity: (p.quantity || 1) + 1 })} className="p-1 hover:bg-gray-700 rounded text-gray-400"><Plus className="w-3 h-3" /></button>
+                                                <button onClick={() => updatePrinting(card.tempId, p.id, { quantity: (p.quantity || 1) + 1 })} className="p-1 hover:bg-surface-2 rounded text-muted"><Plus className="w-3 h-3" /></button>
                                             </div>
                                             <PrintingPicker
                                                 printings={card.allPrintings}
@@ -706,7 +706,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             />
                                             <CopyChip edition={p.edition} condition={p.condition}
                                                 onChange={(v) => updatePrinting(card.tempId, p.id, v)} />
-                                            <button onClick={() => removePrinting(card.tempId, p.id)} className="p-1.5 rounded bg-gray-800 text-gray-400 hover:text-red-400 transition-colors" title="Druckvariante entfernen">
+                                            <button onClick={() => removePrinting(card.tempId, p.id)} className="p-1.5 rounded bg-surface-2 text-muted hover:text-bad transition-colors" title="Druckvariante entfernen">
                                                 <X className="w-3 h-3" />
                                             </button>
                                         </div>
@@ -714,7 +714,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
 
                                     <button
                                         onClick={() => addPrinting(card.tempId)}
-                                        className="mt-2 flex items-center gap-1 text-xs text-gray-400 hover:text-accent transition-colors"
+                                        className="mt-2 flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors"
                                         title="Weitere Druckvariante dieser Karte hinzufügen"
                                     >
                                         <Plus className="w-3.5 h-3.5" /> Weitere Druckvariante
@@ -723,14 +723,14 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         ) : (
                              <p className="text-text font-mono">{card.passcode}</p>
                         )}
-                        {card.status === 'error' && <p className="text-red-400 text-sm">Details konnten nicht geladen werden.</p>}
+                        {card.status === 'error' && <p className="text-bad text-sm">Details konnten nicht geladen werden.</p>}
                     </div>
 
                     {/* Actions */}
                     <div className="flex items-center space-x-2 ml-4">
                         <button
                             onClick={() => handleDiscard(card.tempId)}
-                            className="p-2 rounded-full hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
+                            className="p-2 rounded-full hover:bg-bad/10 text-muted hover:text-bad transition-colors"
                             title="Verwerfen"
                         >
                             <X className="w-5 h-5" />
@@ -739,7 +739,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                              <button
                                 onClick={() => handleAdd(card.tempId)}
                                 disabled={isUpdating}
-                                className="flex items-center px-4 py-2 bg-accent hover:bg-accent/90 text-accent-fg rounded-lg transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center px-4 py-2 bg-surface-2 hover:bg-bg border border-line text-text rounded-lg transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                              >
                                 <Check className="w-4 h-4 mr-2" />
                                 Übernehmen

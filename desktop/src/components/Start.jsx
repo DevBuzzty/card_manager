@@ -142,7 +142,7 @@ export default function Start({ onOpenPalette }) {
               value={quickAddCode}
               onChange={(e) => { if (e.target.value.length <= 8 && /^\d*$/.test(e.target.value)) setQuickAddCode(e.target.value); }}
             />
-            <button type="submit" disabled={quickAddCode.length < 4} className="bg-surface-2 hover:bg-accent text-text px-3 transition-colors disabled:opacity-40"><Plus className="w-4 h-4" /></button>
+            <button type="submit" disabled={quickAddCode.length < 4} className="bg-surface-2 hover:bg-accent text-text hover:text-accent-fg px-3 transition-colors disabled:opacity-40"><Plus className="w-4 h-4" /></button>
           </form>
         </div>
       </div>
@@ -150,8 +150,7 @@ export default function Start({ onOpenPalette }) {
       {/* Hero row */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-5">
         {/* Value panel */}
-        <div className="relative overflow-hidden bg-surface border border-line rounded-2xl p-6"
-          style={{ backgroundImage: 'linear-gradient(150deg, rgba(245,197,66,.10), transparent 45%), linear-gradient(210deg, rgba(157,0,255,.12), transparent 50%)' }}>
+        <div className="relative overflow-hidden bg-surface border border-line rounded-2xl p-6">
           <div className="font-display text-[11px] tracking-[0.14em] uppercase text-muted">Sammlungswert</div>
           <div className="font-display font-bold text-4xl text-text mt-2">
             {statsLoaded ? money(stats.totalValue) : <span className="inline-block h-9 w-40 rounded-lg bg-bg animate-pulse align-middle" />}
@@ -203,8 +202,8 @@ export default function Start({ onOpenPalette }) {
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-warn"><FileWarning className="w-4 h-4" />{incompleteCount}</div>
               <div className="text-[11px] text-muted mt-0.5">Fehlende Daten</div>
             </button>
-            <button onClick={() => navigate(ROUTES.binder)} className="flex-1 text-left rounded-xl p-3 border border-frame-spell/30 bg-frame-spell/5 hover:bg-frame-spell/10 transition-colors">
-              <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-frame-spell"><PackageOpen className="w-4 h-4" />{unsortedError ? '—' : unsortedCount}</div>
+            <button onClick={() => navigate(ROUTES.binder)} className="flex-1 text-left rounded-xl p-3 border border-warn/30 bg-warn/5 hover:bg-warn/10 transition-colors">
+              <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-warn"><PackageOpen className="w-4 h-4" />{unsortedError ? '—' : unsortedCount}</div>
               <div className="text-[11px] text-muted mt-0.5">Nicht einsortiert{unsortedError ? ' (Ladefehler)' : ''}</div>
             </button>
           </div>
