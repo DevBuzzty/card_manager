@@ -40,36 +40,7 @@ val Good: Color @Composable get() = LocalAppRoles.current.getValue("good")
 // oder "Hinweis" (-> Warn) gemeint war (Spec I §6.2 Regel 3, Task-8-Bericht).
 val Warn: Color @Composable get() = LocalAppRoles.current.getValue("warn")
 
-// Rarity accents.
-val RarityCommon = Color(0xFF8A8594)
-val RarityRare = Color(0xFF6DB4E8)
-val RaritySuper = Color(0xFFE8C76D)
-val RarityUltra = Color(0xFFF5C542)
-val RaritySecret = Color(0xFFFF5DB1)
-
-// Type / frame accents.
-val TypeMonster = Color(0xFFE8944A)
-val TypeSpell = Color(0xFF1DA891)
-val TypeTrap = Color(0xFFC4568A)
-
-// Case-insensitive "contains" matching, most-specific first; sensible default.
-fun rarityColor(rarity: String?): Color {
-    val r = rarity?.lowercase() ?: return RarityCommon
-    return when {
-        r.contains("secret") -> RaritySecret
-        r.contains("ultra") -> RarityUltra
-        r.contains("super") -> RaritySuper
-        r.contains("rare") -> RarityRare
-        r.contains("common") -> RarityCommon
-        else -> RarityCommon
-    }
-}
-
-fun typeColor(type: String?): Color {
-    val t = type?.lowercase() ?: return TypeMonster
-    return when {
-        t.contains("spell") -> TypeSpell
-        t.contains("trap") -> TypeTrap
-        else -> TypeMonster
-    }
-}
+// Rarity-/Typ-Farben (rarityColor/typeColor) sind mit Fixrunde 1 (Punkt 1) entfallen: ihr einziger
+// Verbraucher war RarityChip/TypeChip, die jetzt neutral sind (Spec §6.2 Regel 3 -- Seltenheit/Typ
+// nur als Spielfarbe am Kartenbild, nicht als Text-/Chip-Farbe; ein Kartenbild-Verbraucher existiert
+// in dieser App nicht). Von meiner Aenderung verwaist, deshalb entfernt statt liegen gelassen.

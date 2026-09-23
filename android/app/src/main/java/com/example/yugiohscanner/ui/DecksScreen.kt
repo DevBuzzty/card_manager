@@ -134,7 +134,7 @@ private fun BanIcon(ban: String?) {
     val label = ban?.let { DeckLegality.BAN_LABELS[it] } ?: return
     val bg = when (ban) { "forbidden" -> ErrorColor; "limited" -> BanOrange; else -> Warn }
     Box(Modifier.clip(RoundedCornerShape(4.dp)).background(bg).padding(horizontal = 5.dp)) {
-        Text(label, color = Color.Black, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+        Text(label, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
     }
 }
 

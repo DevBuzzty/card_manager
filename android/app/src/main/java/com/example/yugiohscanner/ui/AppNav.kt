@@ -15,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -352,7 +351,7 @@ private fun AppBottomBar(nav: NavHostController) {
             Modifier.align(Alignment.TopCenter).size(60.dp).clip(CircleShape)
                 .background(Primary).clickable { nav.navigate(Routes.SCAN) { launchSingleTop = true } },
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Default.CameraAlt, "Scannen", tint = Color.White, modifier = Modifier.size(28.dp)) }
+        ) { Icon(Icons.Default.CameraAlt, "Scannen", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp)) }
     }
 }
 

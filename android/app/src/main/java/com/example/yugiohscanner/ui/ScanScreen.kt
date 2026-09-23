@@ -986,7 +986,7 @@ fun ScanScreen(onClose: () -> Unit) {
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Passcode", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                    Text("Passcode", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
                     Spacer(modifier = Modifier.height(16.dp))
 
                     OutlinedTextField(
@@ -1013,7 +1013,10 @@ fun ScanScreen(onClose: () -> Unit) {
                                 manualCode = ""
                             },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                            )
                         ) {
                             Text("Abbrechen")
                         }

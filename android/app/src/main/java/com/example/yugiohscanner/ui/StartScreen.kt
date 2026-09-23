@@ -67,7 +67,6 @@ import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
-import com.example.yugiohscanner.ui.theme.TypeSpell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -346,18 +345,17 @@ fun StartScreen(
             }
 
             // Spec B1 §10.5: Zähler „Nicht einsortiert", springt in den Binder-Reiter der
-            // Sammlung. TypeSpell (bereits Teil der Theme-Palette, u.a. in BindersScreen.kt
-            // als Farbvoreinstellung) statt einer neuen Farbe -- hebt sich von Primary (Scannen/
-            // Sammlung) und Text (Gesamtwert) ab, genau wie "frame-spell" es am Desktop tut.
+            // Sammlung. Warn statt einer Spielfarbe (Fixrunde 1, Punkt 9) -- der Zähler verlangt
+            // eine Handlung (einsortieren), genau wie "Fehlende Daten" an anderer Stelle.
             SpaceCard(Modifier.fillMaxWidth().clickable { onOpenBinder() }) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Inbox, null, tint = TypeSpell)
+                    Icon(Icons.Default.Inbox, null, tint = Warn)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
                             "$unsortedCount",
                             style = MaterialTheme.typography.titleLarge, fontFamily = MonoFontFamily,
-                            fontWeight = FontWeight.Bold, color = TypeSpell,
+                            fontWeight = FontWeight.Bold, color = Warn,
                         )
                         Text(
                             "Nicht einsortiert",

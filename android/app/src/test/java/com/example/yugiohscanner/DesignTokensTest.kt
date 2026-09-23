@@ -24,6 +24,12 @@ class DesignTokensTest {
     private fun pruefe(modus: String, rollen: Map<String, Color>) {
         val erwartet = roles.keys().asSequence().associateWith { roles.getJSONObject(it).getString(modus) }
         assertEquals("Rollennamen", erwartet.keys.sorted(), rollen.keys.sorted())
-        for ((name, wert) in erwartet) assertEquals("$modus/$name", wert, hex(rollen.getValue(name)))
+        for ((name, wert) in erwartet) {
+            assertEquals("$modus/$name", wert, hex(rollen.getValue(name)))
+            // Fixrunde 1, Punkt 10: jede Rolle muss volldeckend sein -- eine transparente Rolle
+            // wuerde je nach darunterliegender Flaeche einen anderen Farbton ergeben als den
+            // geprueften Hex-Wert.
+            assertEquals("$modus/$name alpha", 1f, rollen.getValue(name).alpha)
+        }
     }
 }

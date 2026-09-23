@@ -42,23 +42,19 @@ import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
-import com.example.yugiohscanner.ui.theme.RarityRare
-import com.example.yugiohscanner.ui.theme.RaritySuper
-import com.example.yugiohscanner.ui.theme.TypeMonster
-import com.example.yugiohscanner.ui.theme.TypeSpell
 import kotlinx.coroutines.launch
 import java.util.UUID
 
 private val POCKET_OPTIONS = listOf(4, 9, 12)
 // Same hexes as the desktop swatch (Binders.jsx COLOR_PRESETS) -- all already in the theme palette.
-// Praesets sind Datenbank-Werte (gespeicherter Hex-String) und liegen ausserhalb jeder @Composable --
-// deshalb feste Werte aus AppColors.light statt der Primary/Good/ErrorColor/Warn-Rollenlesungen
-// (Task-8-Bericht).
+// Praesets sind gespeicherte Nutzerdaten (Hex-String je Behaelter), keine Gestaltung -- vom
+// Farbrollen-Umbau ausgenommen (Fixrunde 1, Punkt 5). Feste Literale, wortgleich zu
+// desktop/src/components/Binders.jsx#COLOR_PRESETS.
 private val COLOR_PRESETS = listOf(
-    AppColors.light.getValue("accent"), AppColors.light.getValue("warn"), AppColors.light.getValue("good"),
-    AppColors.light.getValue("bad"), RarityRare, RaritySuper, TypeMonster, TypeSpell,
+    Color(0xFF9D00FF), Color(0xFFF5C542), Color(0xFF39D98A), Color(0xFFFF5D6C),
+    Color(0xFF6DB4E8), Color(0xFFE8C76D), Color(0xFFE8944A), Color(0xFF1DA891),
 )
-private val DEFAULT_COLOR_HEX = "#%06X".format(0xFFFFFF and AppColors.light.getValue("accent").toArgb())
+private val DEFAULT_COLOR_HEX = "#9D00FF"
 
 private fun Color.toHex(): String = "#%06X".format(0xFFFFFF and this.toArgb())
 // Muted ist jetzt @Composable (liest das laufende Schema) -- diese Funktion ist es nicht, deshalb
