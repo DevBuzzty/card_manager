@@ -164,14 +164,14 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                 }
             }
 
-            // Hero image with a soft violet glow.
+            // Kartenbild mit kleiner neutraler Erhebung (Spec I §6.2 Regel 1: kein Leuchtschatten).
             Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
                 AsyncImage(
                     model = base.imageUrl,
                     contentDescription = base.name,
                     modifier = Modifier
                         .height(320.dp)
-                        .shadow(28.dp, RoundedCornerShape(12.dp))
+                        .shadow(2.dp, RoundedCornerShape(12.dp))
                         .clip(RoundedCornerShape(12.dp)),
                 )
             }

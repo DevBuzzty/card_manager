@@ -28,6 +28,13 @@ class CardFilterPresetsTest {
         }
     }
 
+    // Abschlussreview C8: Zwilling zu "Unbekannte Voreinstellung trifft nichts" in cardFilters.test.js.
+    @Test fun unbekannteVoreinstellungTrifftNichts() {
+        assertEquals(false, CardFilterPresets.trifft("Unknown", null, 0.0, "quatsch"))
+        assertEquals(false, CardFilterPresets.trifft("LOB-DE001", "Secret Rare", 5.0, "quatsch"))
+        assertEquals(false, CardFilterPresets.trifftGruppe(listOf(CardFilterPresets.Druck("Unknown", null, 0.0)), "quatsch"))
+    }
+
     // Fixrunde 1 (siehe cardFilters.test.js): eine Kachel buendelt mehrere Drucke -- sie muss
     // treffen, wenn IRGENDEIN Druck trifft, nicht nur der erste.
     @Test fun alleGruppenTreffen() {

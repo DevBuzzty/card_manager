@@ -10,6 +10,8 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,7 +19,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.SideStores
+import com.example.yugiohscanner.ml.VerkaufenZahlen
+import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.theme.Background
+import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 
@@ -46,6 +53,14 @@ fun VerkaufenScreen(segment: String, onSegment: (String) -> Unit) {
     val duplicatesListState = rememberLazyListState()
     val forSaleListState = rememberLazyListState()
 
+    // Abschlussreview C1: Anzahl je Reiter (Definition ml/VerkaufenZahlen, Zwilling des PCs).
+    val listingsState by SideStores.listings.state.collectAsState()
+    val salesState by SideStores.sales.state.collectAsState()
+    LaunchedEffect(Unit) { SideStores.listings.ensureLoaded(); SideStores.sales.ensureLoaded() }
+    // Abschlussreview C3: beim Oeffnen des Reiters Verkaeufe frisch laden (wie frueher InsightsScreen).
+    LaunchedEffect(segment) { if (segment == "verkaeufe") SideStores.sales.refresh() }
+    val zahlen = VerkaufenZahlen.zahlen(sale?.duplicates?.size, sale?.forSaleIds, listingsState.value, salesState.value?.sales)
+
     val gewaehlt = NavTabellen.VERKAUFEN.indexOfFirst { it.first == segment }.coerceAtLeast(0)
     Column(Modifier.fillMaxSize()) {
         Text("Verkaufen", style = MaterialTheme.typography.headlineSmall, color = OnSurface,
@@ -57,18 +72,31 @@ fun VerkaufenScreen(segment: String, onSegment: (String) -> Unit) {
             edgePadding = 16.dp,
         ) {
             NavTabellen.VERKAUFEN.forEachIndexed { i, (id, label) ->
-                Tab(selected = i == gewaehlt, onClick = { onSegment(id) }, text = { Text(label) })
+                Tab(selected = i == gewaehlt, onClick = { onSegment(id) }, text = {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(label)
+                        zahlen[id]?.let { Text("  $it", color = Muted, style = MaterialTheme.typography.labelSmall) }
+                    }
+                })
             }
         }
+        // Abschlussreview C3: Wisch-Aktualisierung fuer alle vier Stationen -- Sammlung (Kandidaten,
+        // Zum Verkauf), Angebote und Verkaeufe.
+        RefreshableBox(onRefresh = {
+            CollectionStore.awaitSync()
+            SideStores.listings.refreshAndWait()
+            SideStores.sales.refreshAndWait()
+        }, modifier = Modifier.weight(1f)) {
         when (segment) {
             "zum-verkauf" -> ForSaleList(sale, onOpenCard = { detailId = it }, listState = forSaleListState,
-                modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
-            "angebote" -> ListingsSection(onOpenCard = { detailId = it }, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
-            "verkaeufe" -> Column(Modifier.weight(1f).padding(horizontal = 12.dp).verticalScroll(rememberScrollState())) {
+                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp))
+            "angebote" -> ListingsSection(onOpenCard = { detailId = it }, modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp))
+            "verkaeufe" -> Column(Modifier.fillMaxSize().padding(horizontal = 12.dp).verticalScroll(rememberScrollState())) {
                 SalesSection(onOpenCard = { detailId = it })
             }
             else -> DuplicatesList(sale, onOpenCard = { detailId = it }, history = duplicatesHistory, listState = duplicatesListState,
-                modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
+                modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp))
+        }
         }
     }
 }

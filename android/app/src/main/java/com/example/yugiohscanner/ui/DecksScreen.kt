@@ -26,7 +26,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -64,7 +63,6 @@ import com.example.yugiohscanner.ml.WishPlan
 import com.example.yugiohscanner.ml.WishResult
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
-import com.example.yugiohscanner.ui.theme.AppColors
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Warn
@@ -114,8 +112,6 @@ private fun rememberLegalityCatalog(ids: Set<String>?): LegalityLoad? {
 
 private fun legalityCardsOf(cards: List<DeckCard>) = cards.map { LegalityCard(it.cardId, it.name, it.count, it.section) }
 
-private val BanOrange = Color(0xFFFF9800)
-
 /** Spec E3 §7: Format-Chip und Badge (gruen "Legal", gelb "Legal · n Warnungen", rot "n Verstöße", grau "Frei"); null = "…". */
 @Composable
 private fun LegalityBadge(format: String, result: LegalityResult?) {
@@ -129,15 +125,16 @@ private fun LegalityBadge(format: String, result: LegalityResult?) {
     }
 }
 
-/** Spec E3 §7: Banlist-Icon rot "Verboten", orange "1", gelb "2"; uneingeschraenkt kein Icon. */
+/**
+ * Spec E3 §7: Banlist-Icon; uneingeschraenkt kein Icon. Abschlussreview C6 -- wie am PC (DeckBanIcon.jsx):
+ * verboten und limitiert "bad", halb-limitiert "warn", Text onError (= accent-fg, >= 4,5:1 auf bad und
+ * warn in beiden Modi, tokens.json contrast).
+ */
 @Composable
 private fun BanIcon(ban: String?) {
     val label = ban?.let { DeckLegality.BAN_LABELS[it] } ?: return
-    val bg = when (ban) { "forbidden" -> ErrorColor; "limited" -> BanOrange; else -> Warn }
-    // Fixrunde 2, Punkt A: onPrimary haelt >= 4,5:1 auf bad/warn in beiden Modi, aber nicht auf dem
-    // festen BanOrange-Literal (wechselt nicht mit dem Modus) -- dort fest der dunkle Text aus
-    // AppColors.light.
-    val fg = if (ban == "limited") AppColors.light.getValue("text") else MaterialTheme.colorScheme.onPrimary
+    val bg = if (ban == "semi") Warn else ErrorColor
+    val fg = MaterialTheme.colorScheme.onError
     Box(Modifier.clip(RoundedCornerShape(4.dp)).background(bg).padding(horizontal = 5.dp)) {
         Text(label, color = fg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
     }

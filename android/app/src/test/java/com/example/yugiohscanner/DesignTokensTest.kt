@@ -1,10 +1,13 @@
 package com.example.yugiohscanner
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import com.example.yugiohscanner.ui.theme.AppColors
 import com.example.yugiohscanner.ui.theme.AppTypography
+import com.example.yugiohscanner.ui.theme.schema
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** ZWILLING von desktop/src/utils/theme.test.js -- dieselbe Datei docs/fixtures/design/tokens.json. */
@@ -49,6 +52,37 @@ class DesignTokensTest {
         )
         for (s in stile) assertEquals("tnum", s.fontFeatureSettings)
     }
+
+    // Abschlussreview C4: jede Farbe des hellen und dunklen Schemas ist ein Token-Wert desselben Modus.
+    // Benannte Ausnahmen: scrim (Materials Schwarz fuer die Abdunkelung) und inversePrimary (Akzent des
+    // Gegenmodus, weil es auf inverseSurface = text steht).
+    @Test
+    fun jedeSchemaFarbeIstEinTokenWert() {
+        for ((dunkel, rollen, gegen) in listOf(Triple(false, AppColors.light, AppColors.dark), Triple(true, AppColors.dark, AppColors.light))) {
+            val farben = schemaFarben(schema(rollen, dunkel))
+            assertTrue("Schema liefert zu wenige Felder: ${farben.keys}", farben.size >= 30)
+            val erlaubt = rollen.values.map { it.value }.toSet()
+            val fehler = mutableListOf<String>()
+            for ((name, wert) in farben) {
+                when (name) {
+                    "scrim" -> continue
+                    "inversePrimary" -> if (wert != gegen.getValue("accent").value) fehler += name
+                    else -> if (wert !in erlaubt) fehler += name
+                }
+            }
+            assertEquals("${if (dunkel) "dunkel" else "hell"}: Felder ohne Rolle", emptyList<String>(), fehler)
+        }
+    }
+
+    // Alle Farb-Getter des ColorScheme (Color ist eine Wertklasse, auf der JVM also ein long-Getter mit
+    // verziertem Namen wie getPrimary-0d7_KjU).
+    private fun schemaFarben(s: ColorScheme): Map<String, ULong> =
+        ColorScheme::class.java.methods
+            .filter { it.name.startsWith("get") && it.parameterCount == 0 && it.returnType == java.lang.Long.TYPE }
+            .associate { m ->
+                val name = m.name.removePrefix("get").substringBefore('-').replaceFirstChar { it.lowercase() }
+                name to (m.invoke(s) as Long).toULong()
+            }
 
     private fun kontrast(a: Color, b: Color): Double {
         fun kanal(c: Float): Double { val v = c.toDouble(); return if (v <= 0.03928) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4) }

@@ -88,6 +88,8 @@ object NavTabellen {
     val LEISTE = listOf("start" to "Start", "sammlung" to "Sammlung", "verkaufen" to "Verkaufen", "deals" to "Deals")
     val SAMMLUNG = listOf("karten" to "Karten", "binder" to "Binder", "sets" to "Sets", "wunschliste" to "Wunschliste", "sealed" to "Sealed")
     val VERKAUFEN = listOf("kandidaten" to "Kandidaten", "zum-verkauf" to "Zum Verkauf", "angebote" to "Angebote", "verkaeufe" to "Verkäufe")
+    // Spec I §3.2: diese Bereiche erreicht man am Handy ueber Start (Kachel bzw. Knopf), nicht ueber die Leiste.
+    val UEBER_START = listOf("decks", "insights", "einstellungen")
 }
 
 // Top-level destinations: the bottom bar switches between them and each keeps its own back stack.
@@ -95,12 +97,17 @@ object NavTabellen {
 // Sammlung navigates to "sammlung/karten" but is registered as "sammlung/{segment}", so the
 // selected state has to compare prefixes, not whole routes.
 private data class TopLevel(val route: String, val match: String, val label: String, val icon: ImageVector)
-private val TOP_LEVEL = listOf(
-    TopLevel(Routes.START, "start", "Start", Icons.Default.Home),
-    TopLevel(Routes.sammlung(), "sammlung", "Sammlung", Icons.Default.Style),
-    TopLevel(Routes.verkaufen(), "verkaufen", "Verkaufen", Icons.Default.Payments),
-    TopLevel(Routes.DEALS, "deals", "Deals", Icons.Default.Sell),
-)
+// Abschlussreview C5: Reihenfolge und Beschriftung kommen aus NavTabellen.LEISTE (nav.json-Zwilling),
+// hier stehen nur Ziel und Symbol je Schluessel -- keine zweite Beschriftungsliste.
+private val TOP_LEVEL = NavTabellen.LEISTE.map { (key, label) ->
+    when (key) {
+        "start" -> TopLevel(Routes.START, key, label, Icons.Default.Home)
+        "sammlung" -> TopLevel(Routes.sammlung(), key, label, Icons.Default.Style)
+        "verkaufen" -> TopLevel(Routes.verkaufen(), key, label, Icons.Default.Payments)
+        "deals" -> TopLevel(Routes.DEALS, key, label, Icons.Default.Sell)
+        else -> error("Unbekanntes Ziel der unteren Leiste: $key")
+    }
+}
 
 @Composable
 fun AppNav(onThemeChange: (String) -> Unit) {
@@ -235,9 +242,11 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                     onOpenInsights = { nav.navigate(Routes.insights()) { launchSingleTop = true } },
                     onOpenAlerts = { nav.navigate(Routes.insights("alarme")) { launchSingleTop = true } },
                     // Spec I §5.3/§7: springen jetzt direkt in den passenden Verkaufen-Reiter bzw. zu Decks.
-                    onOpenForSale = { nav.navigateTop(Routes.verkaufen("zum-verkauf")) },
-                    onOpenDuplicates = { nav.navigateTop(Routes.verkaufen("kandidaten")) },
-                    onOpenListings = { nav.navigateTop(Routes.verkaufen("angebote")) },
+                    // Abschlussreview C2: ohne restoreState -- sonst oeffnet der gespeicherte Verkaufen-Stapel
+                    // mit dem zuletzt gewaehlten Reiter statt des angetippten.
+                    onOpenForSale = { nav.navigateTopFresh(Routes.verkaufen("zum-verkauf")) },
+                    onOpenDuplicates = { nav.navigateTopFresh(Routes.verkaufen("kandidaten")) },
+                    onOpenListings = { nav.navigateTopFresh(Routes.verkaufen("angebote")) },
                     onOpenDecks = { nav.navigate(Routes.DECKS) { launchSingleTop = true } },
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
@@ -361,6 +370,13 @@ private fun NavHostController.navigateTop(route: String) = navigate(route) {
     popUpTo(graph.findStartDestination().id) { saveState = true }
     launchSingleTop = true
     restoreState = true
+}
+
+// Abschlussreview C2: ein Bereich gezielt in einem bestimmten Reiter oeffnen (Start-Kacheln) -- der
+// gespeicherte Zustand des Bereichs wird dabei bewusst nicht wiederhergestellt.
+private fun NavHostController.navigateTopFresh(route: String) = navigate(route) {
+    popUpTo(graph.findStartDestination().id) { saveState = false }
+    launchSingleTop = true
 }
 
 @Composable
