@@ -77,7 +77,7 @@ const FALLBACK_DEFAULTS = { edition: 'unknown', condition: 'NM' };
  * @param {object} defaults Vorbelegung fuer einen neu angelegten Zusatzdruck ({ edition, condition
  *   }), z.B. aus `window.api.getDefaults()`. Spec-Fix I3: ein neuer Zusatzdruck erbt sie, wie der
  *   Kotlin-Zwilling in ScanScreen.kt:328-334 -- vorher blieben edition/condition `null`, was
- *   CopyChip.jsx als "vom Standard abweichend" gold markierte, obwohl beim Uebernehmen exakt die
+ *   CopyChip.jsx als "vom Standard abweichend" farblich markierte, obwohl beim Uebernehmen exakt die
  *   Voreinstellung greift.
  */
 export function applyScan(cards, scanned, defaults = FALLBACK_DEFAULTS) {
