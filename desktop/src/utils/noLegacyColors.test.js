@@ -16,35 +16,52 @@ const dateien = [];
 })(WURZEL);
 
 // Spec I §6.2 -- nach dem Umbau darf keine feste Farbe und kein Leuchteffekt mehr im Renderer stehen.
-// Fixrunde 1, Punkt 5: erweitert um Verlaeufe, text/bg-white|black, beliebige Hex-Klassen ([#...]),
-// Tailwinds eingebaute Buntfarben, und ein enges crit-Muster (das den Datenwert 'crit' in
-// deckLegality.js nicht mehr trifft -- die dateiweite Ausnahme dafuer entfaellt).
+// Fixrunde 2, Punkt 3: die Praefix-Listen fuer weiss/schwarz und die Tailwind-Buntfarben deckten nur
+// text/bg/border/ring(/from/to/via/fill/stroke) ab -- divide-white, placeholder-gray-500, shadow-red-500,
+// outline-blue-500, decoration-pink-400, accent-emerald-500 rutschten durch. Dazu: farbige Schatten
+// direkt ueber eine Rolle (shadow-accent/... usw. -- optisch derselbe Leuchtschatten wie ein rohes
+// shadow-[0_0_10px_rgba(...)], nur ueber die Rolle statt Hex) und feste Hex-Werte in style={{}}.
+// frame-* (Kartenrahmenfarbe) bekommt bewusst KEIN Verbot: als Dekor einer Kachel oder als echte
+// Kartenfarbe laesst es sich per Text allein nicht zuverlaessig unterscheiden -- das prueft die Abnahme.
 const VERBOTEN = [
   /\bspace-(black|charcoal|white|violet)/, /\bobsidian\b/, /\btext-ink\b/, /\bink-muted\b/,
   /\brarity-(common|rare|super|ultra|secret)\b/, /#9D00FF/i, /bg-gradient-/,
   /linear-gradient\(/, /radial-gradient\(/,
   /rgba\(157, *0, *255/,
-  /\b(text|bg)-(white|black)\b/,
+  /\b(text|bg|border|ring|divide|placeholder|shadow)-(white|black)\b/,
   /-\[#/,
-  /\b(text|bg|border|ring|from|to|via|fill|stroke)-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/,
+  /\b(text|bg|border|ring|from|to|via|fill|stroke|divide|placeholder|shadow|outline|decoration|accent)-(gray|slate|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}\b/,
+  /\bshadow-(accent|good|warn|bad|text|muted|line|bg|surface|surface-2)\b/,
   /\b(text|bg|border|ring)-crit\b/,
   /\bgold\b/,
   /violet-soft/,
   /ink-faint/,
+  // Feste Hex-Farbwerte direkt in style={{}} -- Ausnahmen unten (RarityGuide-Kartenfarben) werden vor
+  // dieser Pruefung aus dem Text herausgeschnitten, nicht dateiweit ausgenommen.
+  /(backgroundColor|color|borderColor|fill|stroke)\s*:\s*['"]#/,
 ];
 
 // .foil-sheen (index.css) ist der Folien-Glanz-Effekt auf Kartenbildern -- ein Karteninhalt, kein
-// UI-Leuchteffekt (Spec I §6.2, Ausnahme fuer RARITY_TIERS/Kartenbilder). Nur diese eine Regel wird
-// vor der Verlaufs-Pruefung herausgeschnitten, nicht die ganze Datei.
+// UI-Leuchteffekt (Spec I §6.2, Ausnahme fuer RARITY_TIERS/Kartenbilder). Ausgenommen wird nur eine
+// Regel, deren Selektor mit ".foil-sheen" BEGINNT (".foil-sheen", ".foil-sheen.secret", ".foil-sheen::after"
+// -- Fixrunde 2, Punkt 3), nicht ein Selektor, der nur darauf ENDET (z.B. ".card .foil-sheen").
 function ohneFoilSheen(text) {
-  return text.replace(/\.foil-sheen(\.secret)?\s*\{[^}]*\}/g, '');
+  return text.replace(/(^|\n)\.foil-sheen(?:[.:][\w-]+)*\s*\{[^}]*\}/g, '\n');
+}
+
+// RarityGuide.jsx: die Seltenheits-Farbmuster in der Konstante `rarities` sind Karteninhalt (wie echte
+// Rarities aussehen), keine Oberflaechenfarbe -- konstantengenau ausgenommen, nicht die ganze Datei
+// (Fixrunde 2, Punkt 3). Alles andere in der Datei (Dialog-Chrome) bleibt geprueft.
+function ohneRarityFarben(text) {
+  return text.replace(/const rarities = \[[\s\S]*?\n\s*\];/, 'const rarities = [];');
 }
 
 test('Kein Renderer-Code nutzt mehr die alte Palette oder Leuchteffekte', () => {
   const treffer = [];
   for (const f of dateien) {
-    const roh = readFileSync(f, 'utf8');
-    const t = f.endsWith('index.css') ? ohneFoilSheen(roh) : roh;
+    let t = readFileSync(f, 'utf8');
+    if (f.endsWith('index.css')) t = ohneFoilSheen(t);
+    if (f.endsWith('RarityGuide.jsx')) t = ohneRarityFarben(t);
     for (const r of VERBOTEN) if (r.test(t)) treffer.push(`${f.split('src')[1]}: ${r}`);
   }
   assert.deepEqual(treffer, []);
