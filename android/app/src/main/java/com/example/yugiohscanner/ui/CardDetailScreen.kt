@@ -48,6 +48,7 @@ import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
+import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.Warn
 import kotlinx.coroutines.Dispatchers
@@ -339,7 +340,8 @@ private fun TagChipSmall(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,
-        color = Primary,
+        // Abschlussreview A3: Text neutral, die Rolle steckt nur in Toenung und Rand.
+        color = OnSurface,
         modifier = Modifier
             .background(Primary.copy(alpha = 0.15f), shape)
             .border(1.dp, Primary.copy(alpha = 0.3f), shape)

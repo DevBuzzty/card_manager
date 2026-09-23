@@ -121,7 +121,7 @@ export default function SealedAddDialog({ onClose, onAdded }) {
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text">{T.abbrechen}</button>
           <button type="button" onClick={add} disabled={!selected || !qtyValid || save.busy}
-                  className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             {save.busy ? 'Wird gespeichert…' : 'Hinzufügen'}
           </button>
         </div>

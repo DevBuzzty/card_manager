@@ -44,6 +44,15 @@ test('index.css traegt jede Rolle in beiden Modi mit dem Token-Wert', () => {
   }
 });
 
+// Abschlussreview A5/A6: Formularfelder und Bildlaufleisten folgen dem Modus (color-scheme), Zahlen
+// haben gleiche Ziffernbreite (Spec I §6.3).
+test('index.css setzt color-scheme je Modus und tabular-nums auf body', () => {
+  const block = (sel) => CSS.slice(CSS.indexOf(sel), CSS.indexOf('}', CSS.indexOf(sel)));
+  assert.match(block(':root'), /color-scheme:\s*light\s*;/);
+  assert.match(block('[data-theme="dark"]'), /color-scheme:\s*dark\s*;/);
+  assert.match(CSS, /body\s*\{[^}]*font-variant-numeric:\s*tabular-nums\s*;/);
+});
+
 test('applyTheme setzt data-theme am Dokument', () => {
   const doc = { documentElement: { dataset: {} } };
   assert.equal(applyTheme(doc, 'system', true), 'dark');

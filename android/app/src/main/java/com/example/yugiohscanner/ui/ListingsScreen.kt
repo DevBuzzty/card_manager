@@ -98,7 +98,8 @@ private fun MarksRow(marks: ListingText.Marks?) {
 
 @Composable
 private fun MarkChip(text: String, color: Color) {
-    Text(text, color = color, style = MaterialTheme.typography.labelSmall,
+    // Abschlussreview A3: Text neutral, die Rolle nur als Toenung (Farbtext auf eigener Toenung < 4,5:1).
+    Text(text, color = OnSurface, style = MaterialTheme.typography.labelSmall,
         modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(color.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp))
 }
 

@@ -69,7 +69,7 @@ export default function Wishlist() {
                 </div>
                 <button
                     onClick={() => setIsSearching(!isSearching)}
-                    className={`flex items-center px-4 py-2 rounded-lg font-medium transition-colors ${isSearching ? 'bg-surface-2 text-text' : 'bg-accent text-accent-fg hover:bg-accent/90'}`}
+                    className={`flex items-center px-4 py-2 rounded-lg font-medium transition-colors ${isSearching ? 'bg-surface-2 text-text' : 'bg-accent text-accent-fg hover:brightness-110'}`}
                 >
                     {isSearching ? 'Wunschliste ansehen' : 'Karten hinzufügen'}
                     {isSearching ? null : <Plus className="w-4 h-4 ml-2" />}
@@ -90,7 +90,7 @@ export default function Wishlist() {
                         <button
                             type="submit"
                             disabled={loading || searchQuery.length < 3}
-                            className="bg-accent hover:bg-accent/90 text-accent-fg px-6 py-3 rounded-lg font-bold disabled:opacity-50"
+                            className="bg-accent hover:brightness-110 text-accent-fg px-6 py-3 rounded-lg font-bold disabled:opacity-50"
                         >
                             {loading ? 'Suche läuft…' : 'Suchen'}
                         </button>
@@ -112,7 +112,7 @@ export default function Wishlist() {
                                         <button
                                             onClick={() => addToWishlist(card)}
                                             disabled={inWishlist}
-                                            className={`p-1.5 rounded-lg transition-colors ${inWishlist ? 'bg-good/20 text-good cursor-default' : 'bg-surface-2 hover:bg-accent text-muted hover:text-accent-fg'}`}
+                                            className={`p-1.5 rounded-lg transition-colors ${inWishlist ? 'bg-good/20 text-text cursor-default' : 'bg-surface-2 hover:bg-accent text-muted hover:text-accent-fg'}`}
                                             title={inWishlist ? "In der Wunschliste" : "Zur Wunschliste hinzufügen"}
                                         >
                                             {inWishlist ? <Heart className="w-4 h-4 fill-current" /> : <Plus className="w-4 h-4" />}

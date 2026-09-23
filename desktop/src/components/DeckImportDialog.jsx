@@ -146,12 +146,12 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
           <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
           {resolved ? (
             <button type="button" onClick={create} disabled={busy}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium disabled:opacity-50">
+              className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium disabled:opacity-50">
               {busy ? 'Wird angelegt…' : 'Anlegen'}
             </button>
           ) : !source.text && (
             <button type="button" onClick={preview} disabled={busy || !text.trim()}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium disabled:opacity-50">
+              className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium disabled:opacity-50">
               Vorschau
             </button>
           )}

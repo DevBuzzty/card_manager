@@ -81,7 +81,7 @@ export default function CopyChip({ edition = 'unknown', condition = 'NM', onChan
         onClick={() => setOpen(o => !o)}
         title="Zustand · Edition (nur diese Zeile)"
         className={`h-8 px-2 rounded-lg border text-[11px] font-mono whitespace-nowrap transition-colors ${
-          std ? 'bg-bg/40 border-line text-muted hover:text-text' : 'bg-warn/10 border-warn/40 text-warn'
+          std ? 'bg-bg/40 border-line text-muted hover:text-text' : 'bg-warn/10 border-warn/40 text-text'
         }`}
       >
         {condition} · {EDITION_LABELS[edition] || edition}

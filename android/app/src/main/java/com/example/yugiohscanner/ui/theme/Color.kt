@@ -11,12 +11,12 @@ object AppColors {
         "bg" to Color(0xFFF6F4EF), "surface" to Color(0xFFFFFDF8), "surface-2" to Color(0xFFF1EEE7),
         "line" to Color(0xFFE0DBD1), "text" to Color(0xFF1B1A17), "text-muted" to Color(0xFF6C675E),
         "accent" to Color(0xFF4B3F8F), "accent-fg" to Color(0xFFFFFFFF),
-        "good" to Color(0xFF3F7D54), "warn" to Color(0xFF9A6B1F), "bad" to Color(0xFFA23B3B),
+        "good" to Color(0xFF37704A), "warn" to Color(0xFF8A5F18), "bad" to Color(0xFFA23B3B),
     )
     val dark: Map<String, Color> = mapOf(
         "bg" to Color(0xFF17181A), "surface" to Color(0xFF1D1F21), "surface-2" to Color(0xFF232528),
         "line" to Color(0xFF2E3134), "text" to Color(0xFFE9EAEC), "text-muted" to Color(0xFF9BA0A6),
-        "accent" to Color(0xFF8B6AD6), "accent-fg" to Color(0xFF0F1013),
+        "accent" to Color(0xFFA48BE3), "accent-fg" to Color(0xFF0F1013),
         "good" to Color(0xFF7FA88A), "warn" to Color(0xFFC9A36B), "bad" to Color(0xFFC07A7A),
     )
 }

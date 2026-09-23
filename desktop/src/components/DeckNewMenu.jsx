@@ -8,7 +8,7 @@ export default function DeckNewMenu({ onEmpty, onYdkFile, onPaste }) {
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen((v) => !v)} className="p-1.5 bg-accent hover:bg-accent/90 text-accent-fg rounded transition-colors" title="Neues Deck">
+      <button onClick={() => setOpen((v) => !v)} className="p-1.5 bg-accent hover:brightness-110 text-accent-fg rounded transition-colors" title="Neues Deck">
         <Plus className="w-4 h-4" />
       </button>
       {open && (

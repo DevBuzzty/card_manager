@@ -123,7 +123,7 @@ export default function ImportDialog({ opened, onClose }) {
           {phase !== 'done' && nothingToImport && <span className="text-sm text-muted">{NOTHING_TO_APPLY}</span>}
           {phase !== 'done' && (
             <button type="button" onClick={apply} disabled={busy || !ready}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium disabled:opacity-50">
+              className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium disabled:opacity-50">
               {phase === 'running' ? 'Wird importiert…' : 'Übernehmen'}
             </button>
           )}

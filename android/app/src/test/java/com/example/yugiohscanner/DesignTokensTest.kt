@@ -2,6 +2,7 @@ package com.example.yugiohscanner
 
 import androidx.compose.ui.graphics.Color
 import com.example.yugiohscanner.ui.theme.AppColors
+import com.example.yugiohscanner.ui.theme.AppTypography
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -20,6 +21,41 @@ class DesignTokensTest {
 
     @Test
     fun dunkleFassungStimmtMitDerTokenDateiUeberein() = pruefe("dark", AppColors.dark)
+
+    // Abschlussreview A2: dieselbe contrast-Liste wie desktop/src/utils/theme.test.js, gerechnet mit
+    // den tatsaechlich benutzten Werten aus AppColors (WCAG-Leuchtdichte).
+    @Test
+    fun jedesGeforderteKontrastpaarErreichtSeinenMindestwert() {
+        val paare = JSONObject(Fixtures.text("docs/fixtures/design/tokens.json")).getJSONArray("contrast")
+        val fehler = mutableListOf<String>()
+        for (i in 0 until paare.length()) {
+            val p = paare.getJSONObject(i)
+            for ((modus, rollen) in listOf("light" to AppColors.light, "dark" to AppColors.dark)) {
+                val r = kontrast(rollen.getValue(p.getString("fg")), rollen.getValue(p.getString("bg")))
+                if (r < p.getDouble("min")) fehler += "${p.getString("fg")} auf ${p.getString("bg")} ($modus): ${"%.2f".format(r)}"
+            }
+        }
+        assertEquals(emptyList<String>(), fehler)
+    }
+
+    // Abschlussreview A6 (Spec I §6.3): jeder Textstil des Themes hat gleich breite Ziffern.
+    @Test
+    fun jederTextstilHatTabellenziffern() {
+        val t = AppTypography
+        val stile = listOf(
+            t.displayLarge, t.displayMedium, t.displaySmall, t.headlineLarge, t.headlineMedium, t.headlineSmall,
+            t.titleLarge, t.titleMedium, t.titleSmall, t.bodyLarge, t.bodyMedium, t.bodySmall,
+            t.labelLarge, t.labelMedium, t.labelSmall,
+        )
+        for (s in stile) assertEquals("tnum", s.fontFeatureSettings)
+    }
+
+    private fun kontrast(a: Color, b: Color): Double {
+        fun kanal(c: Float): Double { val v = c.toDouble(); return if (v <= 0.03928) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4) }
+        fun lum(c: Color) = 0.2126 * kanal(c.red) + 0.7152 * kanal(c.green) + 0.0722 * kanal(c.blue)
+        val (hi, lo) = listOf(lum(a), lum(b)).sortedDescending()
+        return (hi + 0.05) / (lo + 0.05)
+    }
 
     private fun pruefe(modus: String, rollen: Map<String, Color>) {
         val erwartet = roles.keys().asSequence().associateWith { roles.getJSONObject(it).getString(modus) }

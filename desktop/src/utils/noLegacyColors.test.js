@@ -66,3 +66,24 @@ test('Kein Renderer-Code nutzt mehr die alte Palette oder Leuchteffekte', () => 
   }
   assert.deepEqual(treffer, []);
 });
+
+// Abschlussreview A3/A4: Farbtext auf eigener Toenung (bg-bad/15 text-bad usw.) faellt je nach Modus
+// unter 4,5:1. Getoente Marken tragen den Text in text-text; die Rolle steckt nur in Toenung und Rand.
+// Geprueft wird je Zeichenketten-Literal (className, clsx-Zweig, Vorlage), unabhaengig von der
+// Reihenfolge der Klassen. hover:-Toenungen zaehlen nicht (nur waehrend des Zeigens sichtbar).
+test('Getoente Marken: kein Rollentext auf der eigenen Toenung, kein hover:bg-accent/90', () => {
+  const treffer = [];
+  for (const f of dateien) {
+    if (!f.endsWith('.jsx') && !f.endsWith('.js')) continue;
+    const t = readFileSync(f, 'utf8');
+    if (/hover:bg-accent\/90\b/.test(t)) treffer.push(`${f.split('src')[1]}: hover:bg-accent/90`);
+    for (const lit of t.match(/'[^'\n]*'|"[^"\n]*"|`[^`]*`/g) || []) {
+      for (const rolle of ['good', 'warn', 'bad', 'accent']) {
+        const toenung = new RegExp(`(^|[\\s'"\`])bg-${rolle}/\\d+\\b`).test(lit);
+        const text = new RegExp(`(^|[\\s'"\`])text-${rolle}(?![\\w/-])`).test(lit);
+        if (toenung && text) treffer.push(`${f.split('src')[1]}: ${lit.slice(0, 80)}`);
+      }
+    }
+  }
+  assert.deepEqual(treffer, []);
+});

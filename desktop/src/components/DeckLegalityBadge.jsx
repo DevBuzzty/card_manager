@@ -4,9 +4,9 @@ import { FORMAT_LABELS, badgeKind, badgeText, normalizeFormat } from '../utils/d
 // Schluessel sind die Badge-Arten aus deckLegality.js#badgeKind (Zwilling mit DeckLegality.kt) --
 // nur die Farbrollen rechts sind aus Spec I §6.2 aktualisiert.
 const KIND_CLASSES = {
-  legal: 'bg-good/15 text-good border-good/40',
-  warn: 'bg-warn/15 text-warn border-warn/40',
-  crit: 'bg-bad/15 text-bad border-bad/40',
+  legal: 'bg-good/15 text-text border-good/40',
+  warn: 'bg-warn/15 text-text border-warn/40',
+  crit: 'bg-bad/15 text-text border-bad/40',
   free: 'bg-surface-2/40 text-text border-line',
 };
 

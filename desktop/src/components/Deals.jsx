@@ -79,7 +79,7 @@ export default function Deals() {
       </div>
 
       {error && (
-        <div className="bg-bad/10 border border-bad/30 text-bad rounded-lg px-4 py-2 mb-4 text-sm">
+        <div className="bg-bad/10 border border-bad/30 text-text rounded-lg px-4 py-2 mb-4 text-sm">
           {error}
         </div>
       )}
@@ -115,7 +115,7 @@ export default function Deals() {
           </select>
           <button
             onClick={addWatch}
-            className="flex items-center gap-1.5 bg-accent/20 border border-accent/40 text-accent hover:bg-accent/30 rounded-lg px-4 py-2 text-sm font-medium"
+            className="flex items-center gap-1.5 bg-accent/20 border border-accent/40 text-text hover:bg-accent/30 rounded-lg px-4 py-2 text-sm font-medium"
           >
             <Plus className="w-4 h-4" /> Watch
           </button>

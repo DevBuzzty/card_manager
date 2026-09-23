@@ -50,7 +50,7 @@ export default function DeckWishlistDialog({ coverage, cardInfo, onClose }) {
               <button type="button" onClick={onClose} disabled={state.busy} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
               <button
                 type="button" onClick={add} disabled={state.busy || !plan || plan.candidates.length === 0}
-                className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {state.busy ? 'Wird hinzugefügt…' : 'Hinzufügen'}
               </button>

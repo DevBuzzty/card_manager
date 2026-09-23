@@ -364,7 +364,7 @@ export default function Settings() {
                                     <button
                                         onClick={handleUpdatePrices}
                                         disabled={runningAction === 'prices'}
-                                        className="w-full flex items-center justify-center px-6 py-3 bg-accent hover:bg-accent/90 text-accent-fg rounded-xl font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="w-full flex items-center justify-center px-6 py-3 bg-accent hover:brightness-110 text-accent-fg rounded-xl font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <RefreshCw className={`w-5 h-5 mr-2 ${runningAction === 'prices' ? 'animate-spin' : ''}`} />
                                         {runningAction === 'prices' ? 'Preise werden aktualisiert…' : 'Preise jetzt aktualisieren'}
@@ -457,11 +457,11 @@ export default function Settings() {
                                 }}
                                 className="p-4 bg-accent/10 hover:bg-accent/20 rounded-xl border border-accent/30 hover:border-accent/50 transition-all text-left group"
                             >
-                                <div className="flex items-center text-accent mb-2">
-                                    <RefreshCw className="w-5 h-5 mr-2" />
+                                <div className="flex items-center text-text mb-2">
+                                    <RefreshCw className="w-5 h-5 mr-2 text-accent" />
                                     <h4 className="font-bold">Duplikate zusammenführen</h4>
                                 </div>
-                                <p className="text-sm text-accent/60 group-hover:text-accent">Führt alte 'Unknown'-Karten mit den passenden Sets zusammen, um doppelte Wertanzeige zu vermeiden.</p>
+                                <p className="text-sm text-muted group-hover:text-text">Führt alte 'Unknown'-Karten mit den passenden Sets zusammen, um doppelte Wertanzeige zu vermeiden.</p>
                             </button>
 
                             <button
@@ -641,11 +641,11 @@ export default function Settings() {
                                 disabled={runningAction === 'downgrade'}
                                 className="p-4 bg-bad/10 hover:bg-bad/20 rounded-xl border border-bad/30 hover:border-bad/50 transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <div className="flex items-center text-bad mb-2">
-                                    <TrendingDown className={`w-5 h-5 mr-2 ${runningAction === 'downgrade' ? 'animate-bounce' : ''}`} />
+                                <div className="flex items-center text-text mb-2">
+                                    <TrendingDown className={`w-5 h-5 mr-2 text-bad ${runningAction === 'downgrade' ? 'animate-bounce' : ''}`} />
                                     <h4 className="font-bold">Auf günstigste Rarity umstellen</h4>
                                 </div>
-                                <p className="text-sm text-bad/60 group-hover:text-bad">
+                                <p className="text-sm text-muted group-hover:text-text">
                                     Setzt jede Karte auf ihre günstigste Druckvariante. Manuell gesetzte Rarities werden überschrieben.
                                 </p>
                             </button>
@@ -654,11 +654,11 @@ export default function Settings() {
                                 onClick={handleReset}
                                 className="p-4 bg-bad/10 hover:bg-bad/20 rounded-xl border border-bad/30 hover:border-bad/50 transition-all text-left group"
                             >
-                                <div className="flex items-center text-bad mb-2">
-                                    <Trash2 className="w-5 h-5 mr-2" />
+                                <div className="flex items-center text-text mb-2">
+                                    <Trash2 className="w-5 h-5 mr-2 text-bad" />
                                     <h4 className="font-bold">Alles zurücksetzen</h4>
                                 </div>
-                                <p className="text-sm text-bad/60 group-hover:text-bad">Löscht alle Daten unwiderruflich. Kann nicht rückgängig gemacht werden.</p>
+                                <p className="text-sm text-muted group-hover:text-text">Löscht alle Daten unwiderruflich. Kann nicht rückgängig gemacht werden.</p>
                             </button>
                         </div>
                     </div>

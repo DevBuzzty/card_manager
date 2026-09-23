@@ -57,7 +57,7 @@ export default function CardSearchModal({ onClose, onSelect }) {
                         <button
                             type="submit"
                             disabled={loading || (!isPasscodeQuery && query.trim().length < 3) || !query.trim()}
-                            className="bg-accent hover:bg-accent/90 text-accent-fg px-6 rounded-xl font-bold transition-colors disabled:opacity-50"
+                            className="bg-accent hover:brightness-110 text-accent-fg px-6 rounded-xl font-bold transition-colors disabled:opacity-50"
                         >
                             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Search'}
                         </button>

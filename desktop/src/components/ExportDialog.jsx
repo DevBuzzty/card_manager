@@ -89,7 +89,7 @@ export default function ExportDialog({ onClose, filterCopyIds = null, initialFor
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-muted hover:text-text">Schließen</button>
           <button type="button" onClick={run} disabled={busy || !count}
-            className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium disabled:opacity-50">
+            className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium disabled:opacity-50">
             {busy ? 'Wird exportiert…' : 'Speichern…'}
           </button>
         </div>

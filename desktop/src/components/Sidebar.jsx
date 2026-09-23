@@ -22,7 +22,7 @@ const NavItem = ({ to, icon, label, match, badge }) => {
       className={clsx(
         'flex items-center w-full gap-3 px-3 py-2.5 rounded-[10px] transition-colors cursor-pointer text-[13.5px] font-medium relative',
         active
-          ? 'text-accent bg-accent/10'
+          ? 'text-text bg-accent/10'
           : 'text-muted hover:bg-surface hover:text-text'
       )}
     >

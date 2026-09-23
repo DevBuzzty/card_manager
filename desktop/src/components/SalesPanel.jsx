@@ -122,8 +122,8 @@ export default function SalesPanel() {
                   <span>{s.channel_name}</span>
                   <span className="text-muted">{s.cards} {s.cards === 1 ? 'Karte' : 'Karten'}</span>
                   {cancelled && <span className="inline-block text-xs">storniert</span>}
-                  {s.doubleSold && <span className="inline-block text-xs px-2 py-0.5 rounded bg-bad/20 text-bad">Karte doppelt verkauft</span>}
-                  {s.orphaned && <span className="inline-block text-xs px-2 py-0.5 rounded bg-bad/20 text-bad">Position ohne verkauftes Exemplar – bitte prüfen</span>}
+                  {s.doubleSold && <span className="inline-block text-xs px-2 py-0.5 rounded bg-bad/20 text-text">Karte doppelt verkauft</span>}
+                  {s.orphaned && <span className="inline-block text-xs px-2 py-0.5 rounded bg-bad/20 text-text">Position ohne verkauftes Exemplar – bitte prüfen</span>}
                   <span className="ml-auto font-mono">{euroCentsText(s.netCents)}</span>
                   <span className={`font-mono ${cancelled ? '' : s.netCents >= s.marketCents ? 'text-good' : 'text-bad'}`}>{diffText(s.netCents, s.marketCents)}</span>
                 </button>

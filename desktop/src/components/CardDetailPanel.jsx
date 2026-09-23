@@ -258,7 +258,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
       <div>
           <h2 className="text-2xl font-bold text-text mb-2">{card.name}</h2>
           <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1 bg-accent/20 text-accent rounded-full text-sm font-medium border border-accent/30">
+              <span className="px-3 py-1 bg-accent/20 text-text rounded-full text-sm font-medium border border-accent/30">
                   {card.type}
               </span>
               {card.race && (
@@ -307,7 +307,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                 <span className="text-[9px] text-warn/80" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
                               )}
                               <button onClick={() => { if (confirm(`${variant.set_code} (${variant.rarity}) mit allen Exemplaren löschen?`)) handleDeleteVariant(variant); }}
-                                  className="p-1.5 bg-bad/10 hover:bg-bad/20 text-bad rounded transition-colors" title="Printing löschen">
+                                  className="p-1.5 bg-bad/10 hover:bg-bad/20 text-text rounded transition-colors" title="Printing löschen">
                                   <Trash2 className="w-3.5 h-3.5" />
                               </button>
                           </div>
@@ -353,7 +353,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                           {offeredText(offers[c.copy_id] || []) && <span className="text-[10px] text-warn font-mono truncate">{offeredText(offers[c.copy_id] || [])}</span>}
                                           <div className="ml-auto flex gap-1 flex-wrap justify-end">
                                               {parseTags(c.tags).map(t => (
-                                                  <span key={t} className="px-1.5 py-0.5 rounded-full bg-accent/15 text-accent text-[10px] border border-accent/30">{t}</span>
+                                                  <span key={t} className="px-1.5 py-0.5 rounded-full bg-accent/15 text-text text-[10px] border border-accent/30">{t}</span>
                                               ))}
                                           </div>
                                       </button>
@@ -404,7 +404,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                   <button
                       onClick={handleAddVariant}
                       disabled={!selectedNewSet || isAdding}
-                      className="bg-accent hover:bg-accent/90 text-accent-fg px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-accent hover:brightness-110 text-accent-fg px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                       {isAdding ? 'Füge hinzu…' : 'Hinzufügen'}
                   </button>

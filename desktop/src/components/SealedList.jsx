@@ -109,7 +109,7 @@ export default function SealedList() {
           <div className="font-display font-bold text-2xl text-text mt-1">{data ? fmtEUR(data.sealedValue) : '—'}</div>
         </div>
         <button type="button" onClick={() => setAdding(true)}
-                className="flex items-center gap-2 bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                className="flex items-center gap-2 bg-accent hover:brightness-110 text-accent-fg text-sm font-medium px-4 py-2 rounded-lg transition-colors">
           <Plus className="w-4 h-4" /> Hinzufügen
         </button>
       </div>

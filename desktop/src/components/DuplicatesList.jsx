@@ -60,7 +60,7 @@ export default function DuplicatesList({ list, copies, reload, onOpenCard }) {
       <div className="flex flex-wrap items-center gap-3 bg-surface border border-line rounded-xl px-4 py-3 shrink-0">
         <span className="text-sm text-text flex-1">{headerText(summary)}</span>
         <button type="button" onClick={markAll} disabled={busy || list.length === 0}
-          className="px-3 py-1.5 bg-accent hover:bg-accent/90 text-accent-fg rounded-lg text-xs font-medium disabled:opacity-50">
+          className="px-3 py-1.5 bg-accent hover:brightness-110 text-accent-fg rounded-lg text-xs font-medium disabled:opacity-50">
           Alle Vorschläge auf die Verkaufsliste
         </button>
       </div>

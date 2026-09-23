@@ -426,7 +426,7 @@ export default function DeckBuilder() {
                         </div>
                         <div className="flex gap-2">
                             <DeckExportMenu deckName={activeDeck.name} entries={exportEntries} />
-                            <button onClick={handleSaveDeck} disabled={saving} className="flex items-center px-4 py-2 bg-accent hover:bg-accent/90 text-accent-fg rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button onClick={handleSaveDeck} disabled={saving} className="flex items-center px-4 py-2 bg-accent hover:brightness-110 text-accent-fg rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
                                 <Save className="w-4 h-4 mr-2" />
                                 Save Deck
                             </button>

@@ -8,7 +8,7 @@ export default function DeckCardNumbers({ card }) {
     <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
       <span className={`text-xs font-mono ${card.missing > 0 ? 'text-bad' : 'text-muted'}`}>{rowText(card)}</span>
       {reservedTexts(card).map((t) => (
-        <span key={t} className="text-[10px] px-1.5 rounded bg-warn/15 text-warn">{t}</span>
+        <span key={t} className="text-[10px] px-1.5 rounded bg-warn/15 text-text">{t}</span>
       ))}
     </div>
   );

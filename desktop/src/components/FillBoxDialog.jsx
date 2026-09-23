@@ -86,7 +86,7 @@ export default function FillBoxDialog({ boxId, boxName, proposal, copiesById, co
           {!results && (
             <button
               type="button" onClick={move} disabled={busy || proposal.rows.filter((r) => checked.has(r.copy_id) && copiesById.has(r.copy_id)).length === 0}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {busy ? 'Wird verschoben…' : 'In die Box verschieben'}
             </button>

@@ -220,7 +220,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-4">
           {loadError && (
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{loadError}</span>
             </div>
@@ -253,7 +253,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
                 {tags.map(t => (
-                  <span key={t} className="flex items-center gap-1 pl-2.5 pr-1.5 py-1 bg-accent/20 text-accent rounded-full text-xs font-medium border border-accent/30">
+                  <span key={t} className="flex items-center gap-1 pl-2.5 pr-1.5 py-1 bg-accent/20 text-text rounded-full text-xs font-medium border border-accent/30">
                     {t}
                     <button type="button" onClick={() => setTags(list => removeTag(list, t))} className="hover:text-text">
                       <X className="w-3 h-3" />
@@ -317,7 +317,7 @@ export default function CopySheet({ copy, onClose, onSaved }) {
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text transition-colors">Abbrechen</button>
             <button type="button" onClick={save} disabled={saving || removing || markingSale}
-              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               {saving ? 'Wird gespeichert…' : 'Speichern'}
             </button>
           </div>

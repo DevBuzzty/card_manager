@@ -469,7 +469,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 {scannedCards.length > 0 && (
                     <button
                         onClick={handleClearAll}
-                        className="flex items-center px-4 py-2 bg-bad/20 hover:bg-bad/30 text-bad hover:text-bad rounded-lg transition-colors text-sm border border-bad/30"
+                        className="flex items-center px-4 py-2 bg-bad/20 hover:bg-bad/30 text-text rounded-lg transition-colors text-sm border border-bad/30"
                     >
                         <X className="w-4 h-4 mr-2" />
                         Alles verwerfen
@@ -483,7 +483,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                 .forEach(c => handleAdd(c.tempId));
                         }}
                         disabled={isUpdating}
-                        className="flex items-center px-4 py-2 bg-good/20 hover:bg-good/30 text-good rounded-lg transition-colors text-sm border border-good/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center px-4 py-2 bg-good/20 hover:bg-good/30 text-text rounded-lg transition-colors text-sm border border-good/30 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Check className="w-4 h-4 mr-2" />
                         Erkannte übernehmen
@@ -496,7 +496,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                             loadedCards.forEach(c => handleAdd(c.tempId));
                         }}
                         disabled={isUpdating}
-                        className="flex items-center px-4 py-2 bg-accent hover:bg-accent/90 text-accent-fg rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center px-4 py-2 bg-accent hover:brightness-110 text-accent-fg rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Check className="w-4 h-4 mr-2" />
                         Alle übernehmen
@@ -590,12 +590,12 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     )}
                                     <h3 className="font-bold text-lg text-text truncate">{card.data.name}</h3>
                                     {card.quantity > 1 && (
-                                        <span className="px-2 py-0.5 bg-good/20 text-good text-[10px] font-bold uppercase rounded border border-good/30">
+                                        <span className="px-2 py-0.5 bg-good/20 text-text text-[10px] font-bold uppercase rounded border border-good/30">
                                             x{card.quantity}
                                         </span>
                                     )}
                                     {card.inCollection && (
-                                        <span className="px-2 py-0.5 bg-warn/20 text-warn text-[10px] font-bold uppercase rounded border border-warn/30">
+                                        <span className="px-2 py-0.5 bg-warn/20 text-text text-[10px] font-bold uppercase rounded border border-warn/30">
                                             Vorhanden: x{card.ownedQuantity}
                                         </span>
                                     )}
@@ -670,12 +670,12 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             onChange={(v) => handleUpdateCard(card.tempId, v)} />
 
                                         {card.setMatchConfidence === 'exact' && !card.isManualEntry && (
-                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-good bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set-Code aus der Karte gelesen">
+                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-text bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set-Code aus der Karte gelesen">
                                                 Erkannt
                                             </span>
                                         )}
                                         {card.setMatchConfidence === 'fuzzy' && !card.isManualEntry && (
-                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-warn bg-warn/10 border border-warn/30 rounded px-1.5 py-1" title="Set-Code aus unscharfem Scan wiederhergestellt — bitte überprüfen">
+                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-text bg-warn/10 border border-warn/30 rounded px-1.5 py-1" title="Set-Code aus unscharfem Scan wiederhergestellt — bitte überprüfen">
                                                 Prüfen?
                                             </span>
                                         )}

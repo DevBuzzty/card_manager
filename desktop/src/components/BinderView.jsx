@@ -309,7 +309,7 @@ export default function BinderView({ panelOpen = false }) {
       {/* Ganz oben und in keinem zuklappbaren Bereich -- eine Fehlermeldung, die man erst
           aufklappen muss, ist keine. */}
       {error && (
-        <div className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>

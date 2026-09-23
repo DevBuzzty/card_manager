@@ -173,7 +173,7 @@ export default function Binders() {
   return (
     <div className="h-full flex flex-col gap-4">
       {error && (
-        <div className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -224,7 +224,7 @@ export default function Binders() {
         <button
           type="button"
           onClick={openCreate}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium transition-colors"
         >
           <Plus className="w-4 h-4" /> Neuer Behälter
         </button>
@@ -354,7 +354,7 @@ export default function Binders() {
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={closeDialog} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
               <button type="submit" disabled={dialog.saving}
-                      className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                      className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                 {dialog.saving ? 'Wird gespeichert…' : 'Speichern'}
               </button>
             </div>

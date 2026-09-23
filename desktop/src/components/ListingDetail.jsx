@@ -21,10 +21,10 @@ export function ListingMarks({ marks }) {
   const chip = 'inline-block text-[10px] px-1.5 py-0.5 rounded';
   return (
     <>
-      {marks.alsoOn.length > 0 && <span className={`${chip} bg-warn/15 text-warn`}>auch auf {marks.alsoOn.join(', ')}</span>}
-      {marks.missing && <span className={`${chip} bg-bad/20 text-bad`}>Karte fehlt</span>}
-      {marks.underSuggestion && <span className={`${chip} bg-warn/15 text-warn`}>Preis unter Vorschlag</span>}
-      {marks.saleCancelled && <span className={`${chip} bg-bad/20 text-bad`}>Verkauf storniert</span>}
+      {marks.alsoOn.length > 0 && <span className={`${chip} bg-warn/15 text-text`}>auch auf {marks.alsoOn.join(', ')}</span>}
+      {marks.missing && <span className={`${chip} bg-bad/20 text-text`}>Karte fehlt</span>}
+      {marks.underSuggestion && <span className={`${chip} bg-warn/15 text-text`}>Preis unter Vorschlag</span>}
+      {marks.saleCancelled && <span className={`${chip} bg-bad/20 text-text`}>Verkauf storniert</span>}
     </>
   );
 }
@@ -33,7 +33,7 @@ export function ListingMarks({ marks }) {
 export function EbayMark({ mark, onRetry, busy }) {
   if (!mark) return null;
   const chip = 'inline-block text-[10px] px-1.5 py-0.5 rounded';
-  const color = mark.kind === 'online' ? 'bg-good/15 text-good' : mark.kind === 'fehler' ? 'bg-bad/20 text-bad' : 'bg-warn/15 text-warn';
+  const color = mark.kind === 'online' ? 'bg-good/15 text-text' : mark.kind === 'fehler' ? 'bg-bad/20 text-text' : 'bg-warn/15 text-text';
   return (
     <>
       <span className={`${chip} ${color}`}>{mark.text}</span>
@@ -253,7 +253,7 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
                       </div>
                     )}
                   </button>
-                  {!it.copyLive && active && <span className="text-[10px] px-1.5 py-0.5 rounded bg-bad/20 text-bad shrink-0">Karte fehlt</span>}
+                  {!it.copyLive && active && <span className="text-[10px] px-1.5 py-0.5 rounded bg-bad/20 text-text shrink-0">Karte fehlt</span>}
                   {!it.copyLive && active && !editing && (
                     <button type="button" onClick={() => removeItem(it.copy_id)} disabled={busy} className={btn}>Herausnehmen</button>
                   )}

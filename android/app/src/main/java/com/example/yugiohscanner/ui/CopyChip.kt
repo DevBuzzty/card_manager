@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
+import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Warn
 
 // "NM · Unbek." chip; tap opens the two rows (Zustand, Edition). Warn when off the standard.
@@ -23,7 +24,9 @@ fun CopyChip(edition: String, condition: String, onChange: (edition: String, con
     Box {
         Text(
             "$condition · ${Valuation.EDITION_LABELS[edition] ?: edition}",
-            style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = tint,
+            style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily,
+            // Abschlussreview A3: Warn nur als Toenung und Rand, der Text bleibt neutral.
+            color = if (std) Muted else OnSurface,
             modifier = Modifier
                 .border(1.dp, tint.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                 .background(tint.copy(alpha = if (std) 0.08f else 0.15f), RoundedCornerShape(8.dp))

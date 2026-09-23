@@ -218,14 +218,14 @@ private fun SaleRowView(r: SalesOverview.ListRow, onClick: () -> Unit) {
 
 @Composable
 private fun DoubleBadge() {
-    Text("Karte doppelt verkauft", color = ErrorColor, style = MaterialTheme.typography.labelSmall,
+    Text("Karte doppelt verkauft", color = OnSurface, style = MaterialTheme.typography.labelSmall,
         modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(ErrorColor.copy(alpha = 0.2f)).padding(horizontal = 6.dp, vertical = 1.dp))
 }
 
 /** Abschluss-Fixwelle I3 -- wie DoubleBadge; Gegenstueck zur Marke in SalesPanel.jsx. */
 @Composable
 private fun OrphanBadge() {
-    Text("Position ohne verkauftes Exemplar – bitte prüfen", color = ErrorColor, style = MaterialTheme.typography.labelSmall,
+    Text("Position ohne verkauftes Exemplar – bitte prüfen", color = OnSurface, style = MaterialTheme.typography.labelSmall,
         modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(ErrorColor.copy(alpha = 0.2f)).padding(horizontal = 6.dp, vertical = 1.dp))
 }
 

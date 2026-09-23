@@ -524,13 +524,13 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 Ergebnisse liefern (dieselbe Fehlerklasse wie in Task 5). Gleicher Anzeigebau wie
                 Binders.jsx (roter bad-Kasten mit Symbol). */}
             {containersTagsError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{containersTagsError}</span>
                 </div>
             )}
             {copiesLoadError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-bad">
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{copiesLoadError}</span>
                 </div>

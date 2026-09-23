@@ -169,7 +169,7 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
                         <input type="checkbox" checked={pickedLive.has(id)} onChange={() => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; })} aria-label="Für Verkauf auswählen" />
                         <span className="font-mono text-muted">{c.condition} · {EDITION_LABELS[c.edition] || c.edition}</span>
                         <span className="font-mono text-muted truncate">{formatCopyLocation(c, (containers || []).find((ct) => ct.container_id === c.container_id))}</span>
-                        {copyBadges(offers[id] || []).map((b) => <span key={b} className="px-1 rounded bg-accent/15 text-accent text-[10px] font-mono">{b}</span>)}
+                        {copyBadges(offers[id] || []).map((b) => <span key={b} className="px-1 rounded bg-accent/15 text-text text-[10px] font-mono">{b}</span>)}
                         <span className="ml-auto font-mono text-text">{copyValueText(c)}</span>
                         <span className="font-mono text-muted">Vorschlag {sugg == null ? '–' : euroCentsText(sugg)}</span>
                         <button type="button" onClick={() => giveBack(id)} disabled={busy}
