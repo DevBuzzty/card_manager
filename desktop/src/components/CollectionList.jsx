@@ -5,7 +5,6 @@ import clsx from 'clsx';
 import { Grid } from 'react-window';
 import CustomSelect from './CustomSelect';
 import CardTile from './CardTile';
-import { getRarityInfo } from '../utils/rarity.js';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { cardRoute } from '../utils/routes';
 import { parseTags } from '../utils/tags';
@@ -15,6 +14,7 @@ import { formatCopyLocation } from '../utils/copyLocation';
 // ../utils/printingKey.js, damit es ihn nur EINMAL gibt (BinderView.jsx liest denselben).
 import { printingKey } from '../utils/printingKey';
 import { passcodeMatches } from '../utils/passcode';
+import { PRESETS, matchesPreset } from '../utils/cardFilters.js';
 import ExportDialog from './ExportDialog';
 import { filterCopyIds } from '../utils/exportScope';
 import { forSaleSuffix } from '../utils/duplicates';
@@ -83,9 +83,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [copiesByPrinting, setCopiesByPrinting] = useState({}); // printingKey() -> card_copies-Zeilen dieses Printings
   const [containersTagsError, setContainersTagsError] = useState(null);
   const [copiesLoadError, setCopiesLoadError] = useState(null);
-  // all | unknown | incomplete | foils; Duplikate/Zum Verkauf/Angebote sind eigene Stationen unter /verkaufen.
-  const [segment, setSegment] = useState('all');
   const sale = useSaleData(); // fuer den "davon zum Verkauf"-Zusatz an jeder Kachel (forSaleByCard unten)
+  // Spec I §3.3: "Unvollstaendig" und "Foils" sind jetzt gespeicherte Filter statt Chips, siehe cardFilters.js.
+  const [presets, setPresets] = useState([]);
+  const togglePreset = (id) => setPresets(ps => ps.includes(id) ? ps.filter(x => x !== id) : [...ps, id]);
+  // segmentBusy gehoert zu runUnknownAction (Unbekannt-Sammelaktionen) -- Task 6 zieht diese Zeile nach Scannen.
   const [segmentBusy, setSegmentBusy] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
@@ -288,20 +290,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       };
   }, [groupedCards]);
 
-  // A grouped card is "incomplete" if a monster is missing atk/def/level, or anything lacks an image.
-  const isIncomplete = (c) => {
-      const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');
-      const isLink = c.type && c.type.includes('Link');
-      if (isMonster) {
-          if (c.atk == null) return true;
-          if (!isLink && c.def == null) return true;
-          if (c.level == null) return true;
-          return false;
-      }
-      return !c.image_url;
-  };
   const hasUnknownVariant = (c) => c.variants && c.variants.some(v => v.set_code === 'Unknown');
-  const hasFoilVariant = (c) => Array.from(c.rarities).some(r => !!getRarityInfo(r).foil);
 
   // Zusatz "(n zum Verkauf)" je Passcode auf jeder Kachel, unabhaengig vom Segment.
   const forSaleByCard = useMemo(() => {
@@ -310,12 +299,8 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       return m;
   }, [sale.data]);
 
-  const segmentCounts = useMemo(() => ({
-      all: groupedCards.length,
-      unknown: groupedCards.filter(hasUnknownVariant).length,
-      incomplete: groupedCards.filter(isIncomplete).length,
-      foils: groupedCards.filter(hasFoilVariant).length,
-  }), [groupedCards]);
+  // Fuer die Unbekannt-Sammelaktionen unten -- die bleiben bis Task 6 (Umzug nach Scannen) reichbar.
+  const unknownCount = useMemo(() => groupedCards.filter(hasUnknownVariant).length, [groupedCards]);
 
   const filtered = useMemo(() => {
       // card_copies-Zeilen ALLER Printings einer Gruppe (groupedCards buendelt einen Passcode --
@@ -331,9 +316,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
       const matches = [];
       for (const c of groupedCards) {
-        if (segment === 'unknown' && !hasUnknownVariant(c)) continue;
-        if (segment === 'incomplete' && !isIncomplete(c)) continue;
-        if (segment === 'foils' && !hasFoilVariant(c)) continue;
+        if (presets.some(p => !matchesPreset(c, p))) continue;
 
         // ACHTUNG, ECHTE FALLE (Spec B1 §7.4): Diese Liste gruppiert nach Printing (genauer nach
         // Passcode -- eine Gruppe kann mehrere Printings buendeln), Behaelter und Tag sitzen aber
@@ -389,7 +372,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               default: return 0;
           }
       });
-  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, segment, filterContainers, filterTags, copiesByPrinting]);
+  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, presets, filterContainers, filterTags, copiesByPrinting]);
 
   // Spec F1 §4: der Export-Dialog bekommt den aktuellen Filter als Exemplar-IDs (Stand beim Öffnen).
   const openExport = () => setExportCopyIds(filterCopyIds(filtered, copiesByPrinting, {
@@ -417,6 +400,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       clear: () => toggleContainerFilter(id),
     })),
     filterTags.map(t => ({ key: `tag-${t}`, label: t, clear: () => toggleTagFilter(t) })),
+    presets.map(id => ({
+      key: `preset-${id}`,
+      label: PRESETS.find(p => p.id === id)?.label || id,
+      clear: () => togglePreset(id),
+    })),
   );
 
   // The panel walks the list with the arrow buttons, so it gets the current order handed over.
@@ -428,7 +416,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
   const clearFilters = () => {
       setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All'); setFilterRarity('All'); setFilterCondition('All'); setFilterEdition('All');
-      setFilterContainers([]); setFilterTags([]);
+      setFilterContainers([]); setFilterTags([]); setPresets([]);
   };
 
   // Virtualized Grid Cell Renderer
@@ -567,35 +555,26 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 </div>
             )}
 
-            {/* Row 2: segment control */}
-            <div className="flex flex-wrap items-center gap-2">
-                {[
-                    { id: 'all', label: 'Alle' },
-                    { id: 'unknown', label: 'Unbekannt' },
-                    { id: 'incomplete', label: 'Unvollständig' },
-                    { id: 'foils', label: 'Foils' },
-                ].map(s => (
-                    <button
-                        key={s.id}
-                        onClick={() => setSegment(s.id)}
-                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-display text-xs font-medium transition-colors ${
-                            segment === s.id ? 'bg-space-violet text-white shadow-[0_6px_16px_-8px_#9D00FF]' : 'bg-obsidian-700 text-ink-muted hover:text-ink border border-line'
-                        }`}
-                    >
-                        {s.label}
-                        <span className={`font-mono text-[9.5px] px-1.5 rounded-full ${segment === s.id ? 'bg-black/25' : 'bg-black/30'}`}>{segmentCounts[s.id]}</span>
-                    </button>
-                ))}
-            </div>
-
-            {/* Unknown batch actions */}
-            {segment === 'unknown' && segmentCounts.unknown > 0 && (
+            {/* Unbekannt-Sammelaktionen: bleiben bis Task 6 (Umzug nach Scannen) erreichbar, unabhaengig
+                von den Voreinstellungen unten -- "Unbekannte Daten" ist bewusst keine Voreinstellung. */}
+            {unknownCount > 0 && (
                 <div className="flex items-center gap-3 bg-gold/5 border border-gold/25 rounded-xl px-4 py-3">
                     <span className="text-xs text-ink-muted flex-1">Diesen Karten fehlt der Set-Code — auflösen, damit der Wert stimmt.</span>
                     <button onClick={() => runUnknownAction('convert')} disabled={segmentBusy} className="px-3 py-1.5 bg-obsidian-600 hover:bg-obsidian-700 text-ink rounded-lg text-xs font-medium border border-line disabled:opacity-50">Auf Standard-Set setzen</button>
                     <button onClick={() => runUnknownAction('merge')} disabled={segmentBusy} className="px-3 py-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg text-xs font-medium disabled:opacity-50">{segmentBusy ? 'Läuft…' : 'Alle zusammenführen'}</button>
                 </div>
             )}
+
+            {/* Row 2: gespeicherte Filter (Spec I §3.3) */}
+            <div className="flex flex-wrap gap-2">
+                {PRESETS.map(p => (
+                    <button key={p.id} type="button" onClick={() => togglePreset(p.id)}
+                        className={clsx('px-3 py-1.5 rounded-full text-xs border',
+                            presets.includes(p.id) ? 'bg-accent text-accent-fg border-transparent' : 'bg-surface-2 text-muted border-line')}>
+                        {p.label}
+                    </button>
+                ))}
+            </div>
 
             {/* Row 3: filter dropdowns, only when open */}
             {filtersOpen && (

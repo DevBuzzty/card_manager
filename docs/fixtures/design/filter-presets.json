@@ -1,0 +1,14 @@
+{
+  "_": "ZWILLING: desktop/src/utils/cardFilters.test.js und android CardFilterPresetsTest.kt. Spec I §3.3.",
+  "presets": [["unvollstaendig", "Unvollständige Daten"], ["foils", "Nur Foils"]],
+  "faelle": [
+    { "name": "vollstaendig, kein Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Common", "price": 0.5 }, "unvollstaendig": false, "foils": false },
+    { "name": "ohne Set-Code", "karte": { "set_code": "Unknown", "rarity": "Common", "price": 0.5 }, "unvollstaendig": true, "foils": false },
+    { "name": "ohne Seltenheit", "karte": { "set_code": "LOB-DE001", "rarity": "", "price": 0.5 }, "unvollstaendig": true, "foils": false },
+    { "name": "ohne Preis", "karte": { "set_code": "LOB-DE001", "rarity": "Common", "price": 0 }, "unvollstaendig": true, "foils": false },
+    { "name": "Secret Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Secret Rare", "price": 12 }, "unvollstaendig": false, "foils": true },
+    { "name": "Ultra Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Ultra Rare", "price": 3 }, "unvollstaendig": false, "foils": true },
+    { "name": "Super Rare ist Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Super Rare", "price": 1 }, "unvollstaendig": false, "foils": true },
+    { "name": "Rare ist kein Foil", "karte": { "set_code": "LOB-DE001", "rarity": "Rare", "price": 1 }, "unvollstaendig": false, "foils": false }
+  ]
+}
