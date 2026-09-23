@@ -31,6 +31,8 @@
   --bad: #c07a7a;
 }
 body { background: var(--bg); color: var(--text); }
+/* Fixrunde 2, Punkt 4 -- Platzhaltertext faellt sonst auf Tailwinds Grau zurueck statt der Rolle. */
+::placeholder { color: var(--text-muted); opacity: 1; }
 
 body {
   margin: 0;

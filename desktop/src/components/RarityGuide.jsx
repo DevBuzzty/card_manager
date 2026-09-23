@@ -93,9 +93,10 @@ export default function RarityGuide({ onClose }) {
             {rarities.map((r, idx) => (
               <div key={idx} className="flex gap-4 p-4 bg-bg/30 rounded-xl border border-line hover:border-accent/50 transition-colors group">
                 {/* Visual Representation (Placeholder) */}
-                <div className={`w-16 h-24 rounded border border-line flex-shrink-0 relative overflow-hidden shadow-lg ${r.color === '#ffffff' ? 'bg-surface-2' : 'bg-bg'}`}>
-                    {/* Simulated Foil Effect */}
-                    <div className="absolute inset-0 opacity-30 mix-blend-screen" style={{ backgroundColor: r.color }}></div>
+                <div className="w-16 h-24 rounded border border-line flex-shrink-0 relative overflow-hidden shadow-lg bg-surface-2">
+                    {/* Simulated Foil Effect -- normale Deckkraft statt mix-blend-screen: auf hellem Grund
+                        machte der Mischmodus die Farbfelder fast weiss und damit ununterscheidbar. */}
+                    <div className="absolute inset-2 rounded-sm border border-line" style={{ backgroundColor: r.color }}></div>
                     <div className="absolute top-2 left-2 right-2 h-2 bg-surface-2 rounded-sm opacity-50"></div> {/* Name Area */}
                     <div className="absolute top-6 left-2 right-2 bottom-8 bg-surface-2 rounded-sm border border-line flex items-center justify-center">
                         <span className="text-[8px] text-muted font-mono">ART</span>
