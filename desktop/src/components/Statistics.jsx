@@ -131,9 +131,9 @@ export default function Statistics() {
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                         <Tile icon={Library} label="Total Cards" value={s.totalCards} color="bg-accent" />
-                        <Tile icon={Layers} label="Unique" value={s.uniqueCards} color="bg-good" />
+                        <Tile icon={Layers} label="Unique" value={s.uniqueCards} color="bg-accent" />
                         <Tile icon={DollarSign} label="Total Value" value={money(s.totalValue)} color="bg-accent" />
-                        <Tile icon={DollarSign} label="Avg / Card" value={money(s.avgValue)} color="bg-warn" />
+                        <Tile icon={DollarSign} label="Avg / Card" value={money(s.avgValue)} color="bg-accent" />
                         <Tile icon={Package} label="Sets" value={s.distinctSets} color="bg-accent" />
                         <Tile icon={Sparkles} label="Rarities" value={s.distinctRarities} color="bg-accent" />
                     </div>
@@ -142,8 +142,8 @@ export default function Statistics() {
                         <BarStat title="Card Types" data={s.byType} accent="bg-accent" />
                         <BarStat title="Attributes" data={s.byAttr} accent="bg-accent" />
                         <BarStat title="Rarities" data={s.byRarity} accent="bg-accent" />
-                        <BarStat title="Monster Types (Top 10)" data={s.byRace} accent="bg-good" />
-                        <BarStat title="Levels / Ranks" data={s.byLevel} accent="bg-warn" />
+                        <BarStat title="Monster Types (Top 10)" data={s.byRace} accent="bg-accent" />
+                        <BarStat title="Levels / Ranks" data={s.byLevel} accent="bg-accent" />
                         <BarStat title="Languages" data={s.byLang} accent="bg-accent" />
                     </div>
 

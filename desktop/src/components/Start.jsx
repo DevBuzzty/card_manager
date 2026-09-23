@@ -208,14 +208,14 @@ export default function Start({ onOpenPalette }) {
             </button>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => navigate(ROUTES.zumVerkauf)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-warn/30 bg-warn/5 hover:bg-warn/10 transition-colors text-xs text-text">
-              <Tag className="w-4 h-4 text-warn shrink-0" />{saleSummary ? startSaleText(saleSummary) : sale.error ? 'Zum Verkauf: —' : `Zum Verkauf: ${LOADING}`}
+            <button onClick={() => navigate(ROUTES.zumVerkauf)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-line bg-surface-2 hover:bg-bg transition-colors text-xs text-text">
+              <Tag className="w-4 h-4 text-muted shrink-0" />{saleSummary ? startSaleText(saleSummary) : sale.error ? 'Zum Verkauf: —' : `Zum Verkauf: ${LOADING}`}
             </button>
             <button onClick={() => navigate(ROUTES.kandidaten)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors text-xs text-text">
               <Copy className="w-4 h-4 text-accent shrink-0" />{duplicateSummary ? startDuplicatesText(duplicateSummary) : sale.error ? 'Duplikate: —' : `Duplikate: ${LOADING}`}
             </button>
-            <button onClick={() => navigate(ROUTES.angebote)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-warn/30 bg-warn/5 hover:bg-warn/10 transition-colors text-xs text-text">
-              <Store className="w-4 h-4 text-warn shrink-0" />{listingsData.data ? startText(listingsSummary(listingsData.data.listings, listingsData.data.items).listings) : listingsData.error ? 'Angebote: —' : `Angebote: ${LOADING}`}
+            <button onClick={() => navigate(ROUTES.angebote)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-line bg-surface-2 hover:bg-bg transition-colors text-xs text-text">
+              <Store className="w-4 h-4 text-muted shrink-0" />{listingsData.data ? startText(listingsSummary(listingsData.data.listings, listingsData.data.items).listings) : listingsData.error ? 'Angebote: —' : `Angebote: ${LOADING}`}
             </button>
           </div>
           <button onClick={() => navigate(ROUTES.scannen)} className="mt-auto flex items-center justify-center gap-2 bg-accent text-accent-fg font-display font-semibold text-sm py-3 rounded-xl">

@@ -479,7 +479,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                       <div className="absolute right-0 top-11 z-30 w-[320px] bg-bg border border-line rounded-xl shadow-2xl p-3 space-y-2"
                            onMouseLeave={() => setPricesOpen(false)}>
                         <button onClick={runBulk} disabled={cmBulkBusy || cmRunning}
-                                className="w-full text-left px-3 py-2 rounded-lg bg-accent/80 hover:bg-accent text-accent-fg text-sm disabled:opacity-50">
+                                className="w-full text-left px-3 py-2 rounded-lg bg-accent hover:underline text-accent-fg text-sm disabled:opacity-50">
                           {cmBulkBusy ? 'Aktualisiere…' : 'Jetzt aktualisieren (Preisdatei)'}
                         </button>
                         <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}

@@ -10,7 +10,7 @@ const BAN_CLASSES = {
   semi: 'bg-warn text-accent-fg',
 };
 
-// Spec E3 §7 — Banlist-Icon an der Kartenzeile: rot "Verboten", orange "1", gelb "2"; uneingeschraenkt kein Icon.
+// Spec E3 §7 — Banlist-Icon an der Kartenzeile: bad "Verboten", bad "1", warn "2"; uneingeschraenkt kein Icon.
 export default function DeckBanIcon({ ban }) {
   if (!ban) return null;
   return (
