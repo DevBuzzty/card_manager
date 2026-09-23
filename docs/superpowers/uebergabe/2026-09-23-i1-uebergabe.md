@@ -28,10 +28,15 @@ Letzter Prüfstand (auf 228d457): Helfer-Tests 355/355, SQLite 480/480, ESLint g
 
 ## Was als Nächstes zu tun ist
 
-1. **Aufgabe 11:** PC-Installer bauen (`cd desktop && npm run dist`, Ergebnis in `desktop/dist-electron/`), im gebauten `app.asar` prüfen, dass der Kanal `nav-counts` enthalten ist, installieren. APK aufs Handy.
-2. **Abnahme** nach Spec §8, Punkte 1, 2, 3, 7, 8, 9, 10 (die Punkte 4–6 gehören zu I2).
-3. Danach Merge in `main` und Push — erst nach bestandener Abnahme.
-4. Anschließend **I2** planen: Exemplarzeile, Exemplar-Dialog, Verkaufsweg mit drei Wegen (Spec §4, §5).
+> **Nachtrag 24.09.2026 (Laptop):** Aufgabe 11 ist gebaut und aufgespielt (PC-Installer, `nav-counts` im `app.asar` geprüft; Release-APK auf dem Xiaomi 14). Vor der Abnahme kam ein Performance-Umbau der Handy-App dazu: Zweig **`perf/handy-ladewege`** (auf I1 aufgesetzt, 3d2a83c). Er enthält Vorladen beim Start, kein Neuladen beim Reiterwechsel, eine Sammlung ohne Hauptthread-Rechnen und die Release-Signatur. Die Abnahme läuft **auf diesem Zweig**, gemergt wird danach beides zusammen.
+>
+> Handy-APK ab jetzt als Release bauen: `cd android && ./gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk` (mit dem Debug-Schlüssel der jeweiligen Maschine signiert). Nach einer Änderung an `local.properties` immer `clean` mitbauen, sonst bleibt der alte Supabase-Key in den Klassen stehen (Login 401).
+
+1. ~~**Aufgabe 11:** PC-Installer bauen, `nav-counts` prüfen, installieren, APK aufs Handy.~~ erledigt am 24.09.
+2. **Abnahme** nach Spec §8, Punkte 1, 2, 3, 7, 8, 9, 10 (die Punkte 4–6 gehören zu I2), auf `perf/handy-ladewege`.
+3. Danach `perf/handy-ladewege` (enthält I1) in `main` mergen und pushen — erst nach bestandener Abnahme.
+4. **Kaltstart-Zwischenspeicher** am Handy: `docs/superpowers/aufgaben/2026-09-24-kaltstart-zwischenspeicher.md`.
+5. Anschließend **I2** planen: Exemplarzeile, Exemplar-Dialog, Verkaufsweg mit drei Wegen (Spec §4, §5).
 
 ### Einrichtung auf einem neuen Rechner
 
