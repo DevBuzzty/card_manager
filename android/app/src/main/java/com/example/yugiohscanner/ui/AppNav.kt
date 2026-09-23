@@ -38,6 +38,7 @@ import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.SupabaseCloud
 import com.example.yugiohscanner.ml.ForegroundTick
 import com.example.yugiohscanner.ml.ModelStore
+import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.SurfaceColor
@@ -244,8 +245,15 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 Routes.INSIGHTS,
                 arguments = listOf(navArgument("tab") { type = NavType.StringType; defaultValue = "bewegungen" }),
             ) { backStackEntry ->
-                if (cloudReady) InsightsScreen(
-                    initialTab = backStackEntry.arguments?.getString("tab") ?: "bewegungen",
+                val tab = backStackEntry.arguments?.getString("tab") ?: "bewegungen"
+                // Spec I Fixrunde 1: Verkäufe leben nur noch unter Verkaufen -- ein alter Verweis auf
+                // den frueheren Insights-Reiter leitet um, statt einen leeren Reiter zu zeigen.
+                if (tab == "verkaeufe") {
+                    LaunchedEffect(Unit) {
+                        nav.navigate(Routes.verkaufen("verkaeufe")) { popUpTo(Routes.INSIGHTS) { inclusive = true } }
+                    }
+                } else if (cloudReady) InsightsScreen(
+                    initialTab = tab,
                     onBack = { nav.popBackStack() },
                 )
                 else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
@@ -273,7 +281,15 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(Routes.DECKS) {
-                if (cloudReady) DecksScreen() else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
+                // Spec I Fixrunde 1: dieselbe Wisch-Aktualisierung, die vorher SammlungScreen fuer den
+                // Decks-Reiter lieferte (RefreshableBox von aussen, wie zuvor -- unveraendert gegenueber
+                // Task 9, nur der Aufrufort zog von SammlungScreen hierher um).
+                if (cloudReady) RefreshableBox(onRefresh = {
+                    SideStores.decks.refreshAndWait()
+                    SideStores.allDeckCards.refreshAndWait()
+                    CollectionStore.awaitSync()
+                }) { DecksScreen() }
+                else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(
                 Routes.BEHAELTER,
