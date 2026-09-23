@@ -24,7 +24,7 @@ export default function DeckCoverageHeader({ deck, decks, coverage, containers, 
         ) : (
           <span className="text-sm text-gray-400">
             Noch keine Deckbox ·{' '}
-            <button type="button" onClick={() => navigate(ROUTES.binder)} className="text-space-violet hover:underline">Zu den Behältern</button>
+            <button type="button" onClick={() => navigate(ROUTES.binder)} className="text-accent hover:underline">Zu den Behältern</button>
           </span>
         )}
         <span className="font-mono text-sm text-gray-300">{coverage ? headerText(coverage) : LOADING}</span>

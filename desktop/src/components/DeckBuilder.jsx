@@ -328,12 +328,12 @@ export default function DeckBuilder() {
                 </div>
 
                 {isCreating && (
-                    <form onSubmit={handleCreateDeck} className="mb-4 bg-black/40 p-3 rounded-lg border border-space-violet/50 animate-in fade-in slide-in-from-top-2">
+                    <form onSubmit={handleCreateDeck} className="mb-4 bg-black/40 p-3 rounded-lg border border-accent/50 animate-in fade-in slide-in-from-top-2">
                         <input
                             autoFocus
                             type="text"
                             placeholder="Deck Name..."
-                            className="w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm mb-2 focus:border-space-violet focus:outline-none"
+                            className="w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm mb-2 focus:border-accent focus:outline-none"
                             value={newDeckName}
                             onChange={e => setNewDeckName(e.target.value)}
                         />
@@ -348,7 +348,7 @@ export default function DeckBuilder() {
                             <button
                                 type="submit"
                                 disabled={!newDeckName.trim()}
-                                className="text-xs bg-space-violet hover:bg-space-violet-dark text-white px-3 py-1 rounded disabled:opacity-50"
+                                className="text-xs bg-accent hover:bg-accent/90 text-accent-fg px-3 py-1 rounded disabled:opacity-50"
                             >
                                 Create
                             </button>
@@ -361,7 +361,7 @@ export default function DeckBuilder() {
                         <div
                             key={deck.id}
                             onClick={() => handleLoadDeck(deck)}
-                            className={`flex justify-between items-center p-2 rounded cursor-pointer ${activeDeck?.id === deck.id ? 'bg-space-violet/20 border border-space-violet/50 text-white' : 'hover:bg-gray-800 text-gray-400'}`}
+                            className={`flex justify-between items-center p-2 rounded cursor-pointer ${activeDeck?.id === deck.id ? 'bg-accent/20 border border-accent/50 text-text' : 'hover:bg-gray-800 text-gray-400'}`}
                         >
                             <div className="min-w-0">
                                 <span className="flex items-center gap-2 min-w-0">
@@ -387,17 +387,17 @@ export default function DeckBuilder() {
                     <span>Ziel:</span>
                     {[['deck', 'Deck'], ['side', 'Side']].map(([value, label]) => (
                         <button key={value} type="button" onClick={() => setAddTarget(value)}
-                            className={`px-2 py-1 rounded ${addTarget === value ? 'bg-space-violet text-white' : 'bg-gray-800 hover:text-white'}`}>
+                            className={`px-2 py-1 rounded ${addTarget === value ? 'bg-accent text-accent-fg' : 'bg-gray-800 hover:text-accent'}`}>
                             {label}
                         </button>
                     ))}
-                    {limitMessage && <span className="text-crit">{limitMessage}</span>}
+                    {limitMessage && <span className="text-bad">{limitMessage}</span>}
                 </div>
                 <div className="mb-4">
                     <input
                         type="text"
                         placeholder="Search Collection..."
-                        className="w-full bg-[#1a1a1a] border border-gray-800 text-white px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-space-violet"
+                        className="w-full bg-[#1a1a1a] border border-gray-800 text-white px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-accent"
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
                     />
@@ -405,7 +405,7 @@ export default function DeckBuilder() {
                 <div className="flex-1 overflow-y-auto custom-scrollbar grid grid-cols-3 gap-2 content-start">
                     {filteredCollection.map(card => (
                         <div key={card.id} onClick={() => addToDeck(card)} className="cursor-pointer group relative aspect-[2/3]">
-                            <img src={card.image_url} alt={card.name} className="w-full h-full object-cover rounded border border-gray-800 group-hover:border-space-violet transition-colors" />
+                            <img src={card.image_url} alt={card.name} className="w-full h-full object-cover rounded border border-gray-800 group-hover:border-accent transition-colors" />
                             {/* Quantity badge */}
                             <div className="absolute bottom-0 right-0 bg-black/80 text-white text-[10px] px-1 font-mono">x{card.quantity}</div>
                         </div>
@@ -426,7 +426,7 @@ export default function DeckBuilder() {
                         </div>
                         <div className="flex gap-2">
                             <DeckExportMenu deckName={activeDeck.name} entries={exportEntries} />
-                            <button onClick={handleSaveDeck} disabled={saving} className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium shadow-lg shadow-space-violet/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button onClick={handleSaveDeck} disabled={saving} className="flex items-center px-4 py-2 bg-accent hover:bg-accent/90 text-accent-fg rounded-lg transition-colors font-medium shadow-lg shadow-accent/20 disabled:opacity-50 disabled:cursor-not-allowed">
                                 <Save className="w-4 h-4 mr-2" />
                                 Save Deck
                             </button>
@@ -444,7 +444,7 @@ export default function DeckBuilder() {
 
                     <textarea
                         value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notizen" rows={notes ? 3 : 1}
-                        className="w-full mb-4 bg-black/30 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 font-mono focus:outline-none focus:border-space-violet"
+                        className="w-full mb-4 bg-black/30 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 font-mono focus:outline-none focus:border-accent"
                     />
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pr-2">
@@ -534,7 +534,7 @@ const DeckCardRow = ({ card, type, numbers, removeFromDeck, onMove, ban, onToggl
                 </div>
                 <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
                 <DeckBanIcon ban={ban} />
-                {forSale && <Tag className="w-3.5 h-3.5 text-gold shrink-0" aria-label="Zum Verkauf markiert" />}
+                {forSale && <Tag className="w-3.5 h-3.5 text-warn shrink-0" aria-label="Zum Verkauf markiert" />}
             </div>
             <div className="flex items-center gap-2">
                 <DeckCardNumbers card={numbers} />

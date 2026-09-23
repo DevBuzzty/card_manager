@@ -1,7 +1,7 @@
 import { BAN_LABELS } from '../utils/deckLegality';
 
 const BAN_CLASSES = {
-  forbidden: 'bg-crit text-white',
+  forbidden: 'bg-bad text-white',
   limited: 'bg-orange-500 text-white',
   semi: 'bg-warn text-black',
 };

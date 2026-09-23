@@ -15,7 +15,7 @@ export default function DeckSidebar({ mainDeck, extraDeck, sideDeck, legality, b
       <div className="flex gap-1 mb-4">
         {TABS.map(([value, label]) => (
           <button key={value} type="button" onClick={() => setTab(value)}
-            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium ${tab === value ? 'bg-space-violet text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
+            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium ${tab === value ? 'bg-accent text-accent-fg' : 'bg-gray-800 text-gray-400 hover:text-accent'}`}>
             {label}
           </button>
         ))}
@@ -73,7 +73,7 @@ function DeckViolations({ legality, builtAt }) {
   return (
     <div className="space-y-2">
       {legality.violations.length === 0 && legality.warnings.length === 0 && <p className="text-sm text-gray-400">Keine Verstöße</p>}
-      {legality.violations.map((v, i) => <p key={`v${i}`} className="text-sm text-crit">{v.text}</p>)}
+      {legality.violations.map((v, i) => <p key={`v${i}`} className="text-sm text-bad">{v.text}</p>)}
       {legality.warnings.map((w, i) => <p key={`w${i}`} className="text-sm text-warn">{w.text}</p>)}
       {date && <p className="pt-2 text-xs text-gray-500">{date}</p>}
     </div>
@@ -124,10 +124,10 @@ const DeckStats = ({ mainDeck, extraDeck, sideDeck }) => {
                 <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Attributes</h4>
                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={attrData}>
-                        <XAxis dataKey="name" stroke="#666" fontSize={10} />
-                        <YAxis stroke="#666" fontSize={10} />
-                        <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
-                        <Bar dataKey="value" fill="#9D00FF" radius={[4, 4, 0, 0]} />
+                        <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={10} />
+                        <YAxis stroke="var(--text-muted)" fontSize={10} />
+                        <RechartsTooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: 'var(--surface)', borderColor: 'var(--line)' }} itemStyle={{ color: 'var(--text)' }} />
+                        <Bar dataKey="value" fill="var(--accent)" radius={[4, 4, 0, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
             </div>

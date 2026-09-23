@@ -53,18 +53,18 @@ export default function DuplicatesList({ list, copies, reload, onOpenCard }) {
     run(() => write(allProposalIds(list, forSaleIds), true));
   };
 
-  if (!list) return <div className="h-full flex items-center justify-center text-ink-faint">{LOADING}</div>;
+  if (!list) return <div className="h-full flex items-center justify-center text-muted">{LOADING}</div>;
 
   return (
     <div className="h-full flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3 bg-obsidian-700 border border-line rounded-xl px-4 py-3 shrink-0">
-        <span className="text-sm text-ink flex-1">{headerText(summary)}</span>
+      <div className="flex flex-wrap items-center gap-3 bg-surface border border-line rounded-xl px-4 py-3 shrink-0">
+        <span className="text-sm text-text flex-1">{headerText(summary)}</span>
         <button type="button" onClick={markAll} disabled={busy || list.length === 0}
-          className="px-3 py-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg text-xs font-medium disabled:opacity-50">
+          className="px-3 py-1.5 bg-accent hover:bg-accent/90 text-accent-fg rounded-lg text-xs font-medium disabled:opacity-50">
           Alle Vorschläge auf die Verkaufsliste
         </button>
       </div>
-      {error && <p className="text-sm text-crit">{error}</p>}
+      {error && <p className="text-sm text-bad">{error}</p>}
       {list.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-gray-600">Keine Duplikate.</div>
       ) : (
@@ -74,17 +74,17 @@ export default function DuplicatesList({ list, copies, reload, onOpenCard }) {
             const on = toggleIsOn(entry, forSaleIds);
             return (
               <div key={entry.main_id} onClick={() => onOpenCard(first)}
-                className="flex items-center gap-3 bg-obsidian-700 hover:bg-obsidian-600 border border-line rounded-xl p-3 cursor-pointer">
-                <div className="w-12 h-16 rounded overflow-hidden bg-obsidian-800 shrink-0">
+                className="flex items-center gap-3 bg-surface hover:bg-surface-2 border border-line rounded-xl p-3 cursor-pointer">
+                <div className="w-12 h-16 rounded overflow-hidden bg-bg shrink-0">
                   {first.image_url && <img src={first.image_url} alt="" className="w-full h-full object-cover" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-ink truncate">{first.name || entry.main_id}</div>
-                  <div className="text-xs text-ink-muted">{rowCountText(entry)}</div>
-                  {proposalTexts(entry, byId).map((t) => <div key={t} className="text-[11px] font-mono text-ink-faint truncate">{t}</div>)}
+                  <div className="text-sm font-bold text-text truncate">{first.name || entry.main_id}</div>
+                  <div className="text-xs text-muted">{rowCountText(entry)}</div>
+                  {proposalTexts(entry, byId).map((t) => <div key={t} className="text-[11px] font-mono text-muted truncate">{t}</div>)}
                 </div>
-                <label onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-xs text-ink-muted shrink-0 cursor-pointer select-none">
-                  <input type="checkbox" role="switch" checked={on} disabled={busy} onChange={() => toggle(entry)} className="accent-space-violet" />
+                <label onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-xs text-muted shrink-0 cursor-pointer select-none">
+                  <input type="checkbox" role="switch" checked={on} disabled={busy} onChange={() => toggle(entry)} className="accent-accent" />
                   Auf die Verkaufsliste
                 </label>
               </div>

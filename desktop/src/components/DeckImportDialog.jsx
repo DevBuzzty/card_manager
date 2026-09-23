@@ -70,47 +70,47 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
   const openRows = resolved ? resolved.rows.map((row, i) => ({ row, i })).filter(({ row }) => row.status === 'suggest' || row.status === 'ambiguous') : [];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-obsidian-700 border border-line rounded-2xl p-6 space-y-4">
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-surface border border-line rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-lg text-ink">{resolved ? 'Import-Vorschau' : 'Einfügen (YDKE/Text)'}</h3>
-          <button type="button" onClick={onClose} disabled={busy} className="text-ink-faint hover:text-ink"><X className="w-4 h-4" /></button>
+          <h3 className="font-display text-lg text-text">{resolved ? 'Import-Vorschau' : 'Einfügen (YDKE/Text)'}</h3>
+          <button type="button" onClick={onClose} disabled={busy} className="text-muted hover:text-text"><X className="w-4 h-4" /></button>
         </div>
 
         {!resolved && source.text == null && (
           <textarea
             autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={10}
             placeholder="ydke://… oder eine Deckliste, z. B. 3 Ash Blossom & Joyous Spring"
-            className="w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm font-mono focus:border-space-violet focus:outline-none"
+            className="w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm font-mono focus:border-accent focus:outline-none"
           />
         )}
-        {!resolved && busy && <p className="text-sm text-ink-muted">{LOADING}</p>}
+        {!resolved && busy && <p className="text-sm text-muted">{LOADING}</p>}
 
         {resolved && plan && (
           <>
-            <label className="block text-xs text-ink-muted">
+            <label className="block text-xs text-muted">
               Deckname
               <input value={name} onChange={(e) => setName(e.target.value)}
-                className="mt-1 w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm focus:border-space-violet focus:outline-none" />
+                className="mt-1 w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm focus:border-accent focus:outline-none" />
             </label>
             {resolved.catalogMissing && <p className="text-sm text-warn">{CATALOG_MISSING}</p>}
-            <p className="font-mono text-sm text-ink">
+            <p className="font-mono text-sm text-text">
               {countsText(plan.counts)}
-              {skippedText(plan.skipped.length) && <span className="text-crit"> · {skippedText(plan.skipped.length)}</span>}
+              {skippedText(plan.skipped.length) && <span className="text-bad"> · {skippedText(plan.skipped.length)}</span>}
             </p>
 
             {openRows.length > 0 && (
               <div className="space-y-2">
                 {openRows.map(({ row, i }) => (
                   <div key={i} className="p-2 rounded-lg border border-gray-800 bg-black/30">
-                    <div className="text-sm text-ink">
+                    <div className="text-sm text-text">
                       {row.source}
                       {!row.candidates.some((c) => c.passcode === choices[i]) && <span className="ml-2 text-xs text-warn">{OPEN}</span>}
                     </div>
-                    {row.status === 'ambiguous' && <div className="text-xs text-ink-muted">{AMBIGUOUS}</div>}
+                    {row.status === 'ambiguous' && <div className="text-xs text-muted">{AMBIGUOUS}</div>}
                     <div className="mt-1 flex flex-wrap gap-2">
                       {row.candidates.map((c) => (
                         <button key={c.passcode} type="button" onClick={() => pick(i, c.passcode)}
-                          className={`px-2 py-1 rounded text-xs ${choices[i] === c.passcode ? 'bg-space-violet text-white' : 'bg-gray-800 text-gray-300 hover:text-white'}`}>
+                          className={`px-2 py-1 rounded text-xs ${choices[i] === c.passcode ? 'bg-accent text-accent-fg' : 'bg-gray-800 text-gray-300 hover:text-accent'}`}>
                           {row.status === 'suggest' ? suggestionText(c.name) : ambiguousOptionText(c)}
                         </button>
                       ))}
@@ -140,18 +140,18 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
           </>
         )}
 
-        {error && <p className="text-sm text-crit">{error}</p>}
+        {error && <p className="text-sm text-bad">{error}</p>}
 
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">Abbrechen</button>
+          <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
           {resolved ? (
             <button type="button" onClick={create} disabled={busy}
-              className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium disabled:opacity-50">
+              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium disabled:opacity-50">
               {busy ? 'Wird angelegt…' : 'Anlegen'}
             </button>
           ) : !source.text && (
             <button type="button" onClick={preview} disabled={busy || !text.trim()}
-              className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium disabled:opacity-50">
+              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/90 text-accent-fg text-sm font-medium disabled:opacity-50">
               Vorschau
             </button>
           )}
