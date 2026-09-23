@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, B
 import { LOADING } from '../utils/deckCoverage';
 import { NO_MAIN, drawHand, oddsTexts } from '../utils/deckOdds';
 import { banlistDateText } from '../utils/deckLegality';
+import { FRAME_COLORS } from '../utils/rarity.js';
 
 const TABS = [['stats', 'Statistik'], ['simulation', 'Simulation'], ['violations', 'Verstöße']];
 
@@ -90,10 +91,11 @@ const DeckStats = ({ mainDeck, extraDeck, sideDeck }) => {
         else if (c.type && c.type.includes('Trap')) traps += c.quantity;
     });
 
+    // Spielfarben (Kartentyp Monster/Zauber/Falle) -- dieselbe Quelle wie der Kartenrahmen.
     const typeData = [
-        { name: 'Monster', value: monsters, color: '#A68349' }, // Orange/Brown
-        { name: 'Spell', value: spells, color: '#1D9E74' },   // Green
-        { name: 'Trap', value: traps, color: '#BC5A84' }     // Pink
+        { name: 'Monster', value: monsters, color: FRAME_COLORS.monster },
+        { name: 'Spell', value: spells, color: FRAME_COLORS.spell },
+        { name: 'Trap', value: traps, color: FRAME_COLORS.trap }
     ].filter(d => d.value > 0);
 
     // Attribute breakdown (All cards)
@@ -116,7 +118,7 @@ const DeckStats = ({ mainDeck, extraDeck, sideDeck }) => {
                                 <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                             ))}
                         </Pie>
-                        <RechartsTooltip contentStyle={{ backgroundColor: '#1E1E1E', borderColor: '#333' }} itemStyle={{ color: '#fff' }} />
+                        <RechartsTooltip contentStyle={{ backgroundColor: 'var(--surface)', borderColor: 'var(--line)' }} itemStyle={{ color: 'var(--text)' }} />
                     </PieChart>
                 </ResponsiveContainer>
             </div>

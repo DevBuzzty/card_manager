@@ -364,7 +364,7 @@ export default function Settings() {
                                     <button
                                         onClick={handleUpdatePrices}
                                         disabled={runningAction === 'prices'}
-                                        className="w-full flex items-center justify-center px-6 py-3 bg-accent hover:bg-accent/90 text-accent-fg rounded-xl font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-accent/20"
+                                        className="w-full flex items-center justify-center px-6 py-3 bg-accent hover:bg-accent/90 text-accent-fg rounded-xl font-bold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <RefreshCw className={`w-5 h-5 mr-2 ${runningAction === 'prices' ? 'animate-spin' : ''}`} />
                                         {runningAction === 'prices' ? 'Preise werden aktualisiert…' : 'Preise jetzt aktualisieren'}
