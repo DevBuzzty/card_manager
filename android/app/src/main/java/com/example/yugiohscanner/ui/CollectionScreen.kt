@@ -36,6 +36,7 @@ import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.cloud.printingKey
+import com.example.yugiohscanner.ml.CardFilterPresets
 import com.example.yugiohscanner.ml.Duplicates
 import com.example.yugiohscanner.ml.Tags
 import com.example.yugiohscanner.ml.TagVocabulary
@@ -100,6 +101,9 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     // am EXEMPLAR, nicht am Printing (siehe groups unten, "GRUPPIERUNGSFALLE").
     val fContainers = remember { mutableStateListOf<String>() }
     val fTags = remember { mutableStateListOf<String>() }
+    // Spec I §3.3 (Task 10): Voreinstellungen "Unvollständige Daten" / "Nur Foils" -- wirken wie
+    // die anderen Filter oben, mehrfach waehlbar.
+    val fPresets = remember { mutableStateListOf<String>() }
     // Spec §5: alles aus dem Speicher; Tag-Vorschlaege aus den Exemplaren im Speicher statt aus einem
     // zweiten Durchlauf durch alle Zeilen. Der Ladebildschirm garantiert Ready -- keine eigene
     // Ladeanzeige und kein eigener Ladefehler mehr.
@@ -126,9 +130,9 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
     val langOptions = remember(cards) { cards.map { it.language }.distinct().sorted() }
 
     val activeFilterCount = listOf(fSet, fRarity, fType, fLang, fCondition, fEdition).count { it != null } +
-        fContainers.size + fTags.size
+        fContainers.size + fTags.size + fPresets.size
 
-    val groups = remember(cards, copies, query, sort, fSet, fRarity, fType, fLang, fCondition, fEdition, fContainers.toList(), fTags.toList(), containers, forSaleByCard) {
+    val groups = remember(cards, copies, query, sort, fSet, fRarity, fType, fLang, fCondition, fEdition, fContainers.toList(), fTags.toList(), fPresets.toList(), containers, forSaleByCard) {
         fun copiesOfGroup(g: CardGroup): List<CopyRow> = g.variants.flatMap { byKey[it.printingKey()] ?: emptyList() }
         fun copyMatchesContainer(cp: CopyRow) = fContainers.isEmpty() || (cp.containerId != null && fContainers.contains(cp.containerId))
         fun copyMatchesTags(cp: CopyRow): Boolean {
@@ -156,6 +160,10 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
             if (fLang != null && g0.variants.none { it.language == fLang }) continue
             if (fCondition != null && g0.variants.none { v -> byKey[v.printingKey()]?.any { !it.deleted && it.condition == fCondition } == true }) continue
             if (fEdition != null && g0.variants.none { v -> byKey[v.printingKey()]?.any { !it.deleted && it.edition == fEdition } == true }) continue
+            if (fPresets.isNotEmpty()) {
+                val drucke = g0.variants.map { CardFilterPresets.Druck(it.setCode, it.rarity, it.price ?: 0.0) }
+                if (fPresets.any { !CardFilterPresets.trifftGruppe(drucke, it) }) continue
+            }
 
             // GRUPPIERUNGSFALLE (Spec B1 §10.4, wie Task 7 am Desktop): diese Liste gruppiert
             // nach Passcode (eine Gruppe kann mehrere Printings buendeln), Behaelter/Tag sitzen
@@ -219,6 +227,10 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                         ActiveFilterChip(containers.find { it.containerId == id }?.name ?: id) { fContainers.remove(id) }
                     }
                     fTags.forEach { t -> ActiveFilterChip(t) { fTags.remove(t) } }
+                    fPresets.forEach { id ->
+                        val label = CardFilterPresets.ALLE.firstOrNull { it.first == id }?.second ?: id
+                        ActiveFilterChip(label) { fPresets.remove(id) }
+                    }
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -258,6 +270,10 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                 Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()),
                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Filter", style = MaterialTheme.typography.titleLarge, color = OnSurface)
+                    // Spec I §3.3 (Task 10): Voreinstellungen wie ein normaler Mehrfachfilter.
+                    MultiFilterGroup("Voreinstellungen", CardFilterPresets.ALLE.map { (id, label) -> label to id }, fPresets) { id ->
+                        if (fPresets.contains(id)) fPresets.remove(id) else fPresets.add(id)
+                    }
                     FilterGroup("Set", setOptions, fSet) { fSet = it }
                     FilterGroup("Rarity", rarityOptions, fRarity) { fRarity = it }
                     FilterGroup("Typ", typeOptions, fType) { fType = it }
@@ -278,7 +294,7 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                     }
                     TextButton(onClick = {
                         fSet = null; fRarity = null; fType = null; fLang = null; fCondition = null; fEdition = null
-                        fContainers.clear(); fTags.clear()
+                        fContainers.clear(); fTags.clear(); fPresets.clear()
                     }) {
                         Text("Alle Filter entfernen")
                     }
