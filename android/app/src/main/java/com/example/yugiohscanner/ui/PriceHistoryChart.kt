@@ -19,9 +19,9 @@ import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.PriceFamily
 import com.example.yugiohscanner.ml.PriceSteps
 import com.example.yugiohscanner.ml.UtcDay
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
+import com.example.yugiohscanner.ui.theme.Warn
 import java.time.LocalDate
 
 /**
@@ -60,6 +60,9 @@ fun PriceHistoryChart(card: CardRow) {
             val pts = steps.points
             val ords = pts.map { LocalDate.parse(it.day).toEpochDay() }
             val markerOrds = steps.markers.map { LocalDate.parse(it.day).toEpochDay() }
+            // Primary/Warn hier lesen -- der Canvas-Zeichenblock unten ist kein @Composable-Kontext.
+            val primaryColor = Primary
+            val warnColor = Warn
             Canvas(Modifier.fillMaxWidth().height(90.dp).padding(vertical = 6.dp)) {
                 val min = pts.minOf { it.price }
                 val max = pts.maxOf { it.price }
@@ -77,10 +80,10 @@ fun PriceHistoryChart(card: CardRow) {
                 val fill = Path().apply {
                     addPath(path); lineTo(size.width, size.height); lineTo(0f, size.height); close()
                 }
-                drawPath(fill, Primary.copy(alpha = 0.12f))
-                drawPath(path, Primary, style = Stroke(width = 3f))
+                drawPath(fill, primaryColor.copy(alpha = 0.12f))
+                drawPath(path, primaryColor, style = Stroke(width = 3f))
                 markerOrds.forEach { o ->
-                    drawLine(Gold, Offset(x(o), 0f), Offset(x(o), size.height), strokeWidth = 2f,
+                    drawLine(warnColor, Offset(x(o), 0f), Offset(x(o), size.height), strokeWidth = 2f,
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f)))
                 }
             }
@@ -88,7 +91,7 @@ fun PriceHistoryChart(card: CardRow) {
                 style = MaterialTheme.typography.labelSmall, color = Muted)
             steps.markers.forEach { m ->
                 Text("Quelle: ${PriceFamily.LABELS[m.family]} ab ${UtcDay.formatDe(m.day)}",
-                    style = MaterialTheme.typography.labelSmall, color = Gold)
+                    style = MaterialTheme.typography.labelSmall, color = Warn)
             }
         }
     }

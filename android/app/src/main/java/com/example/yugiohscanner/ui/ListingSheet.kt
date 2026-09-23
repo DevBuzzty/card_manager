@@ -29,7 +29,7 @@ import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
@@ -364,7 +364,7 @@ fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismi
             ) {
                 Text(
                     "eBay ist noch nicht eingerichtet – das Angebot wartet, bis der Check in den Einstellungen vollständig ist.",
-                    color = Gold, style = MaterialTheme.typography.bodySmall,
+                    color = Warn, style = MaterialTheme.typography.bodySmall,
                 )
             }
             notice?.let { Text(it, color = OnSurface, style = MaterialTheme.typography.bodySmall) }

@@ -27,9 +27,7 @@ import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
 import com.example.yugiohscanner.ml.ScanConfidence
 import com.example.yugiohscanner.ui.components.SpaceCard
-import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Good
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.AppColors
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
@@ -100,12 +98,15 @@ object ScanStagingLogic {
         !showOnlyUnsafe || light != ScanConfidence.Light.GREEN
 
     /** The traffic-light dot's colour -- only the three existing theme colours (the brief:
-     *  "keine neuen Farben"). `null` (still resolving) is Muted, not a fourth ampel colour. */
+     *  "keine neuen Farben"). `null` (still resolving) is Muted, not a fourth ampel colour.
+     *  Diese Funktion ist bewusst NICHT @Composable (ScanStagingLogicTest ruft sie aus einem
+     *  reinen JVM-Test auf) -- deshalb feste Werte aus AppColors.light statt der
+     *  Good/Warn/ErrorColor/Muted-Rollenlesungen, die eine Komposition brauchen (Task-8-Bericht). */
     fun dotColor(light: ScanConfidence.Light?): Color = when (light) {
-        ScanConfidence.Light.GREEN -> Good
-        ScanConfidence.Light.YELLOW -> Gold
-        ScanConfidence.Light.RED -> ErrorColor
-        null -> Muted
+        ScanConfidence.Light.GREEN -> AppColors.light.getValue("good")
+        ScanConfidence.Light.YELLOW -> AppColors.light.getValue("warn")
+        ScanConfidence.Light.RED -> AppColors.light.getValue("bad")
+        null -> AppColors.light.getValue("text-muted")
     }
 
     /**

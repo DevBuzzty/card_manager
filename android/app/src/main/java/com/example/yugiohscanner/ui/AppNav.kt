@@ -89,7 +89,7 @@ private val TOP_LEVEL = listOf(
 )
 
 @Composable
-fun AppNav() {
+fun AppNav(onThemeChange: (String) -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE) }
     val nav = rememberNavController()
@@ -305,7 +305,7 @@ fun AppNav() {
                 if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(Routes.EINSTELLUNGEN) {
-                SettingsScreen(prefs, onBack = { nav.popBackStack() }) {
+                SettingsScreen(prefs, onBack = { nav.popBackStack() }, onTheme = onThemeChange) {
                     SupabaseCloud.signOut(); resetSession(); cloudReady = false; nav.popBackStack()
                 }
             }

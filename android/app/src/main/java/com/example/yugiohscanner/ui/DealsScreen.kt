@@ -35,7 +35,6 @@ import com.example.yugiohscanner.ui.components.RefreshableBox
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Line
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
@@ -241,7 +240,7 @@ private fun DealRow(d: DealAlert, context: android.content.Context, onDismiss: (
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SourceBadge(d.source)
                     Spacer(Modifier.width(8.dp))
-                    Text(d.price?.let { "${euro(it)} €" } ?: "—", color = Gold,
+                    Text(d.price?.let { "${euro(it)} €" } ?: "—", color = OnSurface,
                         style = MaterialTheme.typography.titleMedium.copy(fontFamily = MonoFontFamily))
                 }
             }

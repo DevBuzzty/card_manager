@@ -34,7 +34,6 @@ import com.example.yugiohscanner.ml.SalesOverview
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Line
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
@@ -163,18 +162,22 @@ private fun ChannelRowView(name: String, sales: String, net: String, fees: Strin
 private fun MonthBars(months: List<SalesMath.MonthRow>) {
     val maxAbs = months.maxOfOrNull { Math.abs(it.netCents) } ?: 0L
     val hasNeg = months.any { it.netCents < 0 }
+    // Muted/Primary/ErrorColor hier lesen -- der Canvas-Zeichenblock unten ist kein @Composable-Kontext.
+    val mutedColor = Muted
+    val primaryColor = Primary
+    val badColor = ErrorColor
     Canvas(Modifier.fillMaxWidth().height(120.dp)) {
         val n = months.size.coerceAtLeast(1)
         val slot = size.width / n
         val barW = slot * 0.6f
         val zeroY = if (hasNeg) size.height / 2 else size.height
         val room = if (hasNeg) size.height / 2 else size.height
-        drawLine(Muted.copy(alpha = 0.5f), Offset(0f, zeroY), Offset(size.width, zeroY), strokeWidth = 1.dp.toPx())
+        drawLine(mutedColor.copy(alpha = 0.5f), Offset(0f, zeroY), Offset(size.width, zeroY), strokeWidth = 1.dp.toPx())
         if (maxAbs > 0) months.forEachIndexed { i, m ->
             val h = room * Math.abs(m.netCents) / maxAbs
             val x = i * slot + (slot - barW) / 2
-            if (m.netCents >= 0) drawRect(Primary, Offset(x, zeroY - h), Size(barW, h))
-            else drawRect(ErrorColor, Offset(x, zeroY), Size(barW, h))
+            if (m.netCents >= 0) drawRect(primaryColor, Offset(x, zeroY - h), Size(barW, h))
+            else drawRect(badColor, Offset(x, zeroY), Size(barW, h))
         }
     }
     Row(Modifier.fillMaxWidth()) {
@@ -483,7 +486,7 @@ fun SaleDetailSheet(saleId: String, onDismiss: () -> Unit, onOpenCard: ((String)
                             Text("Marktwert ${SalesMath.euroCentsText(SalesMath.toCents(it.valueAtSale) ?: 0)}", color = Muted,
                                 fontFamily = MonoFontFamily, fontSize = 11.sp)
                             if (gone) Text("zurückgenommen", color = Muted, fontSize = 11.sp)
-                            else Text("Anteil ${SalesMath.euroCentsText(SalesMath.toCents(it.share) ?: 0)}", color = Gold,
+                            else Text("Anteil ${SalesMath.euroCentsText(SalesMath.toCents(it.share) ?: 0)}", color = OnSurface,
                                 fontFamily = MonoFontFamily, fontSize = 11.sp)
                         }
                     }
@@ -564,7 +567,7 @@ fun CardSoldSection(cardId: String) {
                 Text("${r.item.setCode} · ${r.item.rarity} · ${r.item.condition}", fontFamily = MonoFontFamily, fontSize = 11.sp,
                     color = color, textDecoration = deco, maxLines = 1, modifier = Modifier.weight(1f))
                 Text(SalesMath.euroCentsText(SalesMath.toCents(r.item.share) ?: 0), fontFamily = MonoFontFamily, fontSize = 11.sp,
-                    color = if (cancelled) color else Gold, textDecoration = deco)
+                    color = if (cancelled) color else OnSurface, textDecoration = deco)
             }
         }
     }

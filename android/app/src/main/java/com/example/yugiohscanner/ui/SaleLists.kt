@@ -34,7 +34,6 @@ import com.example.yugiohscanner.ml.SaleCopy
 import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
@@ -307,7 +306,7 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
                                         Text(suggestions[id]?.let { "Vorschlag ${SalesMath.euroCentsText(it)}" } ?: "–", color = Muted,
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                     }
-                                    Text(Duplicates.copyValueText(s), color = Gold, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                                    Text(Duplicates.copyValueText(s), color = OnSurface, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                     Spacer(Modifier.width(6.dp))
                                     TextButton(onClick = { mutate { CollectionRepository.setForSale(listOf(id), false) } }, enabled = !busy) {
                                         Text("Zurück in die Sammlung", style = MaterialTheme.typography.labelSmall)

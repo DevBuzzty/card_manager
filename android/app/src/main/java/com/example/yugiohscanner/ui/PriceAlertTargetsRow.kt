@@ -20,7 +20,7 @@ import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.AlertInput
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.Muted
 import kotlinx.coroutines.launch
 
@@ -94,7 +94,7 @@ private fun RowScope.TargetField(sign: String, current: PriceAlertTarget?, card:
             Text("€", style = MaterialTheme.typography.bodyMedium, color = Muted)
         }
         if (current != null && !current.armed) {
-            Text("ausgelöst", style = MaterialTheme.typography.labelSmall, color = Gold)
+            Text("ausgelöst", style = MaterialTheme.typography.labelSmall, color = Warn)
         }
         error?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = ErrorColor) }
     }

@@ -66,7 +66,7 @@ import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
@@ -122,7 +122,7 @@ private fun LegalityBadge(format: String, result: LegalityResult?) {
         Text(DeckLegality.FORMAT_LABELS[format] ?: "TCG", color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
         if (result == null) Text(DeckCoverage.LOADING, color = Muted, style = MaterialTheme.typography.labelSmall)
         else {
-            val color = when (DeckLegality.badgeKind(result, format)) { "legal" -> Good; "warn" -> Gold; "crit" -> ErrorColor; else -> Muted }
+            val color = when (DeckLegality.badgeKind(result, format)) { "legal" -> Good; "warn" -> Warn; "crit" -> ErrorColor; else -> Muted }
             Text(DeckLegality.badgeText(result, format), color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
         }
     }
@@ -132,7 +132,7 @@ private fun LegalityBadge(format: String, result: LegalityResult?) {
 @Composable
 private fun BanIcon(ban: String?) {
     val label = ban?.let { DeckLegality.BAN_LABELS[it] } ?: return
-    val bg = when (ban) { "forbidden" -> ErrorColor; "limited" -> BanOrange; else -> Gold }
+    val bg = when (ban) { "forbidden" -> ErrorColor; "limited" -> BanOrange; else -> Warn }
     Box(Modifier.clip(RoundedCornerShape(4.dp)).background(bg).padding(horizontal = 5.dp)) {
         Text(label, color = Color.Black, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
     }
@@ -620,7 +620,7 @@ private fun DeckLegalityHead(format: String, legality: LegalityResult?, builtAt:
             }
             if (legality == null) Text(DeckCoverage.LOADING, color = Muted, style = MaterialTheme.typography.labelMedium)
             else {
-                val color = when (DeckLegality.badgeKind(legality, format)) { "legal" -> Good; "warn" -> Gold; "crit" -> ErrorColor; else -> Muted }
+                val color = when (DeckLegality.badgeKind(legality, format)) { "legal" -> Good; "warn" -> Warn; "crit" -> ErrorColor; else -> Muted }
                 Text(DeckLegality.badgeText(legality, format), color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
             }
         }
@@ -631,7 +631,7 @@ private fun DeckLegalityHead(format: String, legality: LegalityResult?, builtAt:
             }
             if (issuesOpen) {
                 legality.violations.forEach { Text(it.text, color = ErrorColor, style = MaterialTheme.typography.labelSmall) }
-                legality.warnings.forEach { Text(it.text, color = Gold, style = MaterialTheme.typography.labelSmall) }
+                legality.warnings.forEach { Text(it.text, color = Warn, style = MaterialTheme.typography.labelSmall) }
                 DeckLegality.banlistDateText(builtAt)?.let { Text(it, color = Muted, style = MaterialTheme.typography.labelSmall) }
             }
         }
@@ -725,7 +725,7 @@ private fun FillBoxSheet(
                 }
             }
             FillBoxProposal.shortText(proposal.short)?.let {
-                Text(it, color = Gold, style = MaterialTheme.typography.bodySmall)
+                Text(it, color = Warn, style = MaterialTheme.typography.bodySmall)
                 TextButton(onClick = onOpenWishlist, enabled = !busy) { Text("Fehlende auf die Wunschliste") }
             }
             FillBoxProposal.surplusText(proposal.surplus)?.let { Text(it, color = Muted, style = MaterialTheme.typography.bodySmall) }
@@ -850,7 +850,7 @@ private fun DeckCardRow(
                     // Spec E3 §7: Banlist-Icon nach Format, kein Stern am Handy.
                     BanIcon(ban)
                     // Spec H1 §5.3: markierte Exemplare bleiben verfuegbar, mit Preisschild.
-                    if (forSale) Icon(Icons.Default.Sell, "Zum Verkauf markiert", tint = Gold, modifier = Modifier.size(16.dp))
+                    if (forSale) Icon(Icons.Default.Sell, "Zum Verkauf markiert", tint = Warn, modifier = Modifier.size(16.dp))
                 }
                 // Spec E1 §8: "Box 1 · verfügbar 2 · gebraucht 3" (rot bei Fehlenden) und gelb "1 in Deck Tenpai".
                 Text(
@@ -859,7 +859,7 @@ private fun DeckCardRow(
                     fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall,
                 )
                 numbers?.let { DeckCoverage.reservedTexts(it) }?.forEach {
-                    Text(it, color = Gold, style = MaterialTheme.typography.labelSmall)
+                    Text(it, color = Warn, style = MaterialTheme.typography.labelSmall)
                 }
                 TextButton(onClick = { onMove(card) }, enabled = !busy, contentPadding = PaddingValues(0.dp)) {
                     Text(DeckImport.moveLabel(card.section), style = MaterialTheme.typography.labelSmall)

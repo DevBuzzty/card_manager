@@ -45,11 +45,11 @@ import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.TypeChip
 import com.example.yugiohscanner.ui.components.ValueText
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.Primary
+import com.example.yugiohscanner.ui.theme.Warn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -313,7 +313,7 @@ private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, offered: St
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             // Spec H1 §5.3: Preisschild an markierten Exemplaren.
             if (copy.forSale) {
-                Icon(Icons.Default.Sell, "Zum Verkauf", tint = Gold, modifier = Modifier.size(14.dp))
+                Icon(Icons.Default.Sell, "Zum Verkauf", tint = Warn, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
             }
             Text(
@@ -327,7 +327,7 @@ private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, offered: St
             }
         }
         // Spec H3a §6: zweite Zeile "angeboten auf …".
-        offered?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Gold) }
+        offered?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Warn) }
     }
 }
 

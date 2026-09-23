@@ -22,7 +22,7 @@ import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
@@ -108,7 +108,7 @@ fun DeckImportScreen(sharedText: String?, onBack: () -> Unit, onCreated: (Long) 
                         OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true,
                             label = { Text("Deckname") }, modifier = Modifier.fillMaxWidth())
                     }
-                    if (resolved.catalogMissing) item { Text(DeckImport.CATALOG_MISSING, color = Gold, style = MaterialTheme.typography.bodySmall) }
+                    if (resolved.catalogMissing) item { Text(DeckImport.CATALOG_MISSING, color = Warn, style = MaterialTheme.typography.bodySmall) }
                     item {
                         Text(DeckImport.countsText(plan.counts), color = OnSurface, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelLarge)
                         DeckImport.skippedText(plan.skipped.size)?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.labelMedium) }
@@ -118,7 +118,7 @@ fun DeckImportScreen(sharedText: String?, onBack: () -> Unit, onCreated: (Long) 
                             Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(row.source, color = OnSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                    if (row.candidates.none { it.passcode == choices[i] }) Text(DeckImport.OPEN, color = Gold, style = MaterialTheme.typography.labelSmall)
+                                    if (row.candidates.none { it.passcode == choices[i] }) Text(DeckImport.OPEN, color = Warn, style = MaterialTheme.typography.labelSmall)
                                 }
                                 if (row.status == "ambiguous") Text(DeckImport.AMBIGUOUS, color = Muted, style = MaterialTheme.typography.labelSmall)
                                 row.candidates.forEach { c ->

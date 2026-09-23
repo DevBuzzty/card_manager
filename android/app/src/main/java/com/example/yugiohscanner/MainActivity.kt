@@ -4,6 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.example.yugiohscanner.ui.AppNav
 import com.example.yugiohscanner.ui.DeckImportInbox
 import com.example.yugiohscanner.ui.theme.AppTheme
@@ -19,7 +23,11 @@ class MainActivity : ComponentActivity() {
         com.example.yugiohscanner.cloud.CatalogRepository.init(this)
         // Spec E2 §6: an die App geteilter Text -> Import-Vorschau (nicht erneut nach einer Wiederherstellung).
         if (savedInstanceState == null) offerSharedText(intent)
-        setContent { AppTheme { AppNav() } }
+        setContent {
+            // Spec I §6.4 -- gespeicherter Wert als Zustand, damit ein Wechsel in den Einstellungen sofort wirkt.
+            var theme by remember { mutableStateOf(Prefs.theme(this)) }
+            AppTheme(setting = theme) { AppNav(onThemeChange = { theme = it }) }
+        }
     }
 
     // singleTask (Manifest): ein weiteres Teilen erreicht die laufende App hier.

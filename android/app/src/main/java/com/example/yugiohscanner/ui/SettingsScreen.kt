@@ -45,10 +45,12 @@ private val PRICE_SOURCES = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: () -> Unit) {
+fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onTheme: (String) -> Unit, onLoggedOut: () -> Unit) {
     val email = remember { prefs.getString("supabase_email", "") ?: "" }
     var ip by remember { mutableStateOf(prefs.getString("ip_address", "") ?: "") }
     var priceSource by remember { mutableStateOf(prefs.getString("price_source", "cardmarket") ?: "cardmarket") }
+    val themeCtx = androidx.compose.ui.platform.LocalContext.current
+    var theme by remember { mutableStateOf(com.example.yugiohscanner.Prefs.theme(themeCtx)) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -275,6 +277,17 @@ fun SettingsScreen(prefs: SharedPreferences, onBack: () -> Unit, onLoggedOut: ()
 
         // ---- eBay (Spec H3b1 §4.4) ----------------------------------------------
         EbaySettings()
+
+        // ---- Darstellung (Spec I §6.4) -----------------------------------------
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SectionHeader("Darstellung")
+            Text("Gilt nur auf diesem Gerät.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("light" to "Hell", "dark" to "Dunkel", "system" to "Wie das System").forEach { (id, label) ->
+                    FilterChip(selected = theme == id, onClick = { theme = id; com.example.yugiohscanner.Prefs.setTheme(themeCtx, id); onTheme(id) }, label = { Text(label) })
+                }
+            }
+        }
 
         // ---- Über -------------------------------------------------------------
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

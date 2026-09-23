@@ -60,7 +60,7 @@ import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Line
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
@@ -275,7 +275,7 @@ fun StartScreen(
                     if (dash != null && !sealedLoading) {
                         val total = dash.totalValue + (sealedTotal ?: 0.0)
                         Text("%.2f €".format(total), style = MaterialTheme.typography.displaySmall,
-                            fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
+                            fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = OnSurface)
                         Text("${dash.totalCards} Karten · ${dash.entries} Einträge",
                             style = MaterialTheme.typography.bodySmall, color = Muted)
                         if (sealedTotal == null) {
@@ -348,7 +348,7 @@ fun StartScreen(
             // Spec B1 §10.5: Zähler „Nicht einsortiert", springt in den Binder-Reiter der
             // Sammlung. TypeSpell (bereits Teil der Theme-Palette, u.a. in BindersScreen.kt
             // als Farbvoreinstellung) statt einer neuen Farbe -- hebt sich von Primary (Scannen/
-            // Sammlung) und Gold (Gesamtwert) ab, genau wie "frame-spell" es am Desktop tut.
+            // Sammlung) und Text (Gesamtwert) ab, genau wie "frame-spell" es am Desktop tut.
             SpaceCard(Modifier.fillMaxWidth().clickable { onOpenBinder() }) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Inbox, null, tint = TypeSpell)
@@ -371,7 +371,7 @@ fun StartScreen(
             SpaceCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth().clickable { onOpenForSale() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Sell, null, tint = Gold)
+                        Icon(Icons.Default.Sell, null, tint = Warn)
                         Spacer(Modifier.width(12.dp))
                         Text(saleSummary?.let { Duplicates.startSaleText(it) } ?: "Zum Verkauf: ${Duplicates.LOADING}",
                             style = MaterialTheme.typography.bodyMedium, color = OnSurface)
@@ -383,7 +383,7 @@ fun StartScreen(
                             style = MaterialTheme.typography.bodyMedium, color = OnSurface)
                     }
                     Row(Modifier.fillMaxWidth().clickable { onOpenListings() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Storefront, null, tint = Gold)
+                        Icon(Icons.Default.Storefront, null, tint = Warn)
                         Spacer(Modifier.width(12.dp))
                         Text(listingsText, style = MaterialTheme.typography.bodyMedium, color = OnSurface)
                     }
@@ -408,7 +408,7 @@ fun StartScreen(
                                     style = MaterialTheme.typography.bodySmall, color = OnSurface,
                                 )
                                 Text(
-                                    deal.price?.let { "${it.toInt()} €" } ?: "—", color = Gold,
+                                    deal.price?.let { "${it.toInt()} €" } ?: "—", color = OnSurface,
                                     style = MaterialTheme.typography.bodyMedium.copy(fontFamily = MonoFontFamily),
                                 )
                             }
@@ -433,7 +433,7 @@ fun StartScreen(
                                     style = MaterialTheme.typography.bodySmall, color = OnSurface,
                                 )
                                 Text(
-                                    "${s.owned} / ${s.total}", color = Gold,
+                                    "${s.owned} / ${s.total}", color = OnSurface,
                                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = MonoFontFamily),
                                 )
                             }
@@ -507,6 +507,8 @@ private fun QuickAction(label: String, icon: ImageVector, modifier: Modifier, on
 // Points are (day-ordinal, value) so the x-axis reflects real elapsed time, not just index.
 @Composable
 private fun ValueChart(points: List<Pair<Long, Double>>, modifier: Modifier) {
+    // Primary hier lesen -- der Canvas-Zeichenblock unten ist kein @Composable-Kontext.
+    val primaryColor = Primary
     Canvas(modifier) {
         if (points.size < 2) return@Canvas
         val values = points.map { it.second }
@@ -526,8 +528,8 @@ private fun ValueChart(points: List<Pair<Long, Double>>, modifier: Modifier) {
         val fill = Path().apply {
             addPath(line); lineTo(size.width, size.height); lineTo(0f, size.height); close()
         }
-        drawPath(fill, Primary.copy(alpha = 0.12f))
-        drawPath(line, Primary, style = Stroke(width = 3f))
+        drawPath(fill, primaryColor.copy(alpha = 0.12f))
+        drawPath(line, primaryColor, style = Stroke(width = 3f))
     }
 }
 

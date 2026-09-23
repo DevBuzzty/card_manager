@@ -48,7 +48,7 @@ import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
@@ -237,7 +237,7 @@ private fun SealedRow(
                 Column(horizontalAlignment = Alignment.End) {
                     Text(item.price?.let { "je %.2f €".format(it) } ?: "je —",
                         style = MaterialTheme.typography.labelSmall, color = Muted)
-                    if (stale) Text("Preis veraltet", style = MaterialTheme.typography.labelSmall, color = Gold)
+                    if (stale) Text("Preis veraltet", style = MaterialTheme.typography.labelSmall, color = Warn)
                     ValueText(SealedValue.lineValue(item), style = MaterialTheme.typography.bodyMedium)
                 }
             }

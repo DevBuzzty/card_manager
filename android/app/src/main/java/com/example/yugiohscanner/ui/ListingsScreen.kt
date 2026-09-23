@@ -51,7 +51,7 @@ import com.example.yugiohscanner.ml.SalesOverview
 import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
@@ -85,9 +85,9 @@ private fun overviewOf(ctx: Context, data: ListingsData, ready: StoreState.Ready
 private fun MarksRow(marks: ListingText.Marks?) {
     val m = marks ?: return
     val list = buildList {
-        if (m.alsoOn.isNotEmpty()) add("auch auf ${m.alsoOn.joinToString(", ")}" to Gold)
+        if (m.alsoOn.isNotEmpty()) add("auch auf ${m.alsoOn.joinToString(", ")}" to Warn)
         if (m.missing) add("Karte fehlt" to ErrorColor)
-        if (m.underSuggestion) add("Preis unter Vorschlag" to Gold)
+        if (m.underSuggestion) add("Preis unter Vorschlag" to Warn)
         if (m.saleCancelled) add("Verkauf storniert" to ErrorColor)
     }
     if (list.isEmpty()) return
@@ -116,7 +116,7 @@ private fun EbayMarkRow(mark: EbayMarks.Mark?, onRetry: (() -> Unit)?) {
     val color = when (mark.kind) {
         "online" -> Good
         "fehler" -> ErrorColor
-        else -> Gold
+        else -> Warn
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         MarkChip(mark.text, color)
@@ -234,7 +234,7 @@ private fun ListingRowView(r: ListingOverview.Row, ebayMark: EbayMarks.Mark?, on
         Column(Modifier.fillMaxWidth().clickable { onOpen() }.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(r.head.channelName, color = color, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                Text(SalesMath.euroCentsText(price), color = if (active) Gold else Muted, fontFamily = MonoFontFamily)
+                Text(SalesMath.euroCentsText(price), color = if (active) OnSurface else Muted, fontFamily = MonoFontFamily)
             }
             Text(r.title, color = color, fontWeight = FontWeight.Bold, maxLines = 2)
             Text(
@@ -384,7 +384,7 @@ private fun ListingDetailSheet(
                     ListingText.sinceText(ListingText.daysSince(listing.listedOn, today)),
                     color = if (active) OnSurface else Muted, style = MaterialTheme.typography.bodySmall)
                 Text(overviewRow?.title ?: ListingText.rowTitle(listing.head(), items.map { it.item() }), color = OnSurface, fontWeight = FontWeight.Bold)
-                Text(SalesMath.euroCentsText(listing.priceCents), color = Gold, fontFamily = MonoFontFamily)
+                Text(SalesMath.euroCentsText(listing.priceCents), color = OnSurface, fontFamily = MonoFontFamily)
                 MarksRow(overviewRow?.marks)
                 EbayMarkRow(ebayMark, onRetry = {
                     write(requireActive = true) { _, l ->

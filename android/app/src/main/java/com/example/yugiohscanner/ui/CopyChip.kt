@@ -10,16 +10,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.Valuation
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
+import com.example.yugiohscanner.ui.theme.Warn
 
-// "NM · Unbek." chip; tap opens the two rows (Zustand, Edition). Gold when off the standard.
+// "NM · Unbek." chip; tap opens the two rows (Zustand, Edition). Warn when off the standard.
 @Composable
 fun CopyChip(edition: String, condition: String, onChange: (edition: String, condition: String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val std = edition == "unknown" && condition == "NM"
-    val tint = if (std) Muted else Gold
+    val tint = if (std) Muted else Warn
     Box {
         Text(
             "$condition · ${Valuation.EDITION_LABELS[edition] ?: edition}",

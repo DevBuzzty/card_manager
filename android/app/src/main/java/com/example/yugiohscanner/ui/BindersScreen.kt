@@ -37,13 +37,11 @@ import com.example.yugiohscanner.ml.BinderGrid
 import com.example.yugiohscanner.ml.UnsortedCopies
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
+import com.example.yugiohscanner.ui.theme.AppColors
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Good
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
-import com.example.yugiohscanner.ui.theme.Primary
 import com.example.yugiohscanner.ui.theme.RarityRare
 import com.example.yugiohscanner.ui.theme.RaritySuper
 import com.example.yugiohscanner.ui.theme.TypeMonster
@@ -53,12 +51,20 @@ import java.util.UUID
 
 private val POCKET_OPTIONS = listOf(4, 9, 12)
 // Same hexes as the desktop swatch (Binders.jsx COLOR_PRESETS) -- all already in the theme palette.
-private val COLOR_PRESETS = listOf(Primary, Gold, Good, ErrorColor, RarityRare, RaritySuper, TypeMonster, TypeSpell)
-private val DEFAULT_COLOR_HEX = "#%06X".format(0xFFFFFF and Primary.toArgb())
+// Praesets sind Datenbank-Werte (gespeicherter Hex-String) und liegen ausserhalb jeder @Composable --
+// deshalb feste Werte aus AppColors.light statt der Primary/Good/ErrorColor/Warn-Rollenlesungen
+// (Task-8-Bericht).
+private val COLOR_PRESETS = listOf(
+    AppColors.light.getValue("accent"), AppColors.light.getValue("warn"), AppColors.light.getValue("good"),
+    AppColors.light.getValue("bad"), RarityRare, RaritySuper, TypeMonster, TypeSpell,
+)
+private val DEFAULT_COLOR_HEX = "#%06X".format(0xFFFFFF and AppColors.light.getValue("accent").toArgb())
 
 private fun Color.toHex(): String = "#%06X".format(0xFFFFFF and this.toArgb())
+// Muted ist jetzt @Composable (liest das laufende Schema) -- diese Funktion ist es nicht, deshalb
+// hier ebenfalls ein fester Wert aus AppColors.light statt Muted (Task-8-Bericht).
 private fun hexToColor(hex: String?): Color =
-    try { Color(android.graphics.Color.parseColor(hex ?: DEFAULT_COLOR_HEX)) } catch (e: Exception) { Muted }
+    try { Color(android.graphics.Color.parseColor(hex ?: DEFAULT_COLOR_HEX)) } catch (e: Exception) { AppColors.light.getValue("text-muted") }
 
 private data class BinderForm(
     val containerId: String?,
