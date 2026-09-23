@@ -135,7 +135,7 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
   const field = 'w-full bg-bg border border-line rounded-lg px-3 py-2 text-sm text-text';
   return (
     // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur diesen Dialog, nie den darunterliegenden.
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={(e) => { e.stopPropagation(); dismiss(); }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); dismiss(); }}>
       <div className="w-full max-w-md bg-surface border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-text">Verkauft buchen</h2>
@@ -224,7 +224,7 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
             </label>
             <div className="text-sm">
               <div className="text-text">Netto {euroCentsText(net)}</div>
-              <div className={net >= market ? 'text-emerald-400' : 'text-bad'}>{diffText(net, market)} gegenüber Marktwert</div>
+              <div className={net >= market ? 'text-good' : 'text-bad'}>{diffText(net, market)} gegenüber Marktwert</div>
             </div>
             {error && <p className="text-sm text-bad">{error}</p>}
             <div className="flex justify-end gap-2">

@@ -56,7 +56,7 @@ export default function SealedAddDialog({ onClose, onAdded }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg bg-surface border border-line rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-display text-lg text-text">Sealed hinzufügen</h3>
@@ -89,7 +89,7 @@ export default function SealedAddDialog({ onClose, onAdded }) {
             {search.results.map((p) => (
               <button key={p.cm_product_id} type="button" onClick={() => setSelected(p)}
                       className={clsx('w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
-                        selected?.cm_product_id === p.cm_product_id ? 'bg-accent/15' : 'hover:bg-white/5')}>
+                        selected?.cm_product_id === p.cm_product_id ? 'bg-accent/15' : 'hover:bg-surface/5')}>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm text-text truncate">{p.name}</span>
                   <span className="block text-[11px] text-muted">{p.kindLabel}</span>

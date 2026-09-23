@@ -398,7 +398,7 @@ export default function Settings() {
                     <div className="bg-surface border border-line rounded-2xl p-6">
                         <h3 className="font-display text-lg text-text mb-1">Verbindung zum Handy</h3>
                         <p className="text-sm text-muted mb-4">Die Handy-App verbindet sich mit dieser Adresse (Port 4000). Beide Geräte müssen im selben WLAN sein.</p>
-                        <code className="block bg-bg border border-line rounded-lg px-4 py-3 text-center font-mono text-lg text-text select-all cursor-pointer hover:bg-black/40 transition-colors"
+                        <code className="block bg-bg border border-line rounded-lg px-4 py-3 text-center font-mono text-lg text-text select-all cursor-pointer hover:bg-bg/40 transition-colors"
                               title="Zum Kopieren klicken" onClick={() => navigator.clipboard.writeText(ipAddress)}>{ipAddress}</code>
                     </div>
                 )}
@@ -705,20 +705,20 @@ function SaleChannelSettings() {
         return res;
     });
 
-    const input = 'bg-black/40 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent';
-    const btn = 'px-3 py-2 rounded-lg text-sm bg-black/40 text-gray-300 border border-gray-700 hover:bg-gray-800';
+    const input = 'bg-bg/40 border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent';
+    const btn = 'px-3 py-2 rounded-lg text-sm bg-bg/40 text-text border border-line hover:bg-surface-2';
     return (
-        <div className="mt-6 pt-6 border-t border-gray-800">
-            <label className="block text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Verkaufskanäle</label>
-            {!channels ? <p className="text-sm text-gray-500">…</p> : (
+        <div className="mt-6 pt-6 border-t border-line">
+            <label className="block text-sm font-bold text-muted mb-2 uppercase tracking-wider">Verkaufskanäle</label>
+            {!channels ? <p className="text-sm text-muted">…</p> : (
                 <div className="space-y-2">
                     {channels.map((c) => (
                         <div key={c.channel_id} className="flex flex-wrap items-center gap-2">
                             {c.builtin
-                                ? <span className="w-48 text-sm text-white">{c.name}</span>
+                                ? <span className="w-48 text-sm text-text">{c.name}</span>
                                 : <input className={`w-48 ${input}`} value={drafts[c.channel_id]?.name ?? ''} onChange={(e) => setDraft(c.channel_id, { name: e.target.value })} />}
                             <input inputMode="decimal" className={`w-20 font-mono ${input}`} value={drafts[c.channel_id]?.fee ?? ''} onChange={(e) => setDraft(c.channel_id, { fee: e.target.value })} />
-                            <span className="text-sm text-gray-500">%</span>
+                            <span className="text-sm text-muted">%</span>
                             <button type="button" onClick={() => save(c)} className={btn}>Speichern</button>
                             {!c.builtin && <button type="button" onClick={() => hide(c)} className={btn}>Ausblenden</button>}
                         </div>
@@ -726,13 +726,13 @@ function SaleChannelSettings() {
                     <div className="flex flex-wrap items-center gap-2 pt-2">
                         <input className={`w-48 ${input}`} placeholder="Neuer Kanal" value={fresh.name} onChange={(e) => setFresh((f) => ({ ...f, name: e.target.value }))} />
                         <input inputMode="decimal" className={`w-20 font-mono ${input}`} placeholder="0" value={fresh.fee} onChange={(e) => setFresh((f) => ({ ...f, fee: e.target.value }))} />
-                        <span className="text-sm text-gray-500">%</span>
+                        <span className="text-sm text-muted">%</span>
                         <button type="button" onClick={create} className={btn}>Anlegen</button>
                     </div>
                 </div>
             )}
             {error && <p className="text-sm text-bad mt-2">{error}</p>}
-            <p className="text-xs text-gray-500 mt-2">Gebühren sind vorbelegt – bitte mit deinen eigenen Konditionen abgleichen. Alte Verkäufe behalten den Namen, den der Kanal beim Buchen hatte.</p>
+            <p className="text-xs text-muted mt-2">Gebühren sind vorbelegt – bitte mit deinen eigenen Konditionen abgleichen. Alte Verkäufe behalten den Namen, den der Kanal beim Buchen hatte.</p>
         </div>
     );
 }

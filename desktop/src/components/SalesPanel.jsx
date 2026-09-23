@@ -66,7 +66,7 @@ export default function SalesPanel() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <Tile label="Netto">{euroCentsText(t.netCents)}</Tile>
             <Tile label="Marktwert beim Verkauf">{euroCentsText(t.marketCents)}</Tile>
-            <Tile label="Differenz" className={t.netCents >= t.marketCents ? 'text-emerald-400' : 'text-bad'}>{diffText(t.netCents, t.marketCents)}</Tile>
+            <Tile label="Differenz" className={t.netCents >= t.marketCents ? 'text-good' : 'text-bad'}>{diffText(t.netCents, t.marketCents)}</Tile>
             <Tile label="Verkäufe">{`${t.sales} · ${t.cards} Karten`}</Tile>
           </div>
 
@@ -86,7 +86,7 @@ export default function SalesPanel() {
                       <td className="py-1.5 pr-3 text-right font-mono">{c.sales}</td>
                       <td className="py-1.5 pr-3 text-right font-mono">{euroCentsText(c.netCents)}</td>
                       <td className="py-1.5 pr-3 text-right font-mono">{euroCentsText(c.feesCents)}</td>
-                      <td className={`py-1.5 text-right font-mono ${c.diffCents >= 0 ? 'text-emerald-400' : 'text-bad'}`}>{signed(c.diffCents)}</td>
+                      <td className={`py-1.5 text-right font-mono ${c.diffCents >= 0 ? 'text-good' : 'text-bad'}`}>{signed(c.diffCents)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -125,7 +125,7 @@ export default function SalesPanel() {
                   {s.doubleSold && <span className="inline-block text-xs px-2 py-0.5 rounded bg-bad/20 text-bad">Karte doppelt verkauft</span>}
                   {s.orphaned && <span className="inline-block text-xs px-2 py-0.5 rounded bg-bad/20 text-bad">Position ohne verkauftes Exemplar – bitte prüfen</span>}
                   <span className="ml-auto font-mono">{euroCentsText(s.netCents)}</span>
-                  <span className={`font-mono ${cancelled ? '' : s.netCents >= s.marketCents ? 'text-emerald-400' : 'text-bad'}`}>{diffText(s.netCents, s.marketCents)}</span>
+                  <span className={`font-mono ${cancelled ? '' : s.netCents >= s.marketCents ? 'text-good' : 'text-bad'}`}>{diffText(s.netCents, s.marketCents)}</span>
                 </button>
               );
             })}

@@ -63,9 +63,9 @@ export default function Wishlist() {
 
     return (
         <div className="h-full flex flex-col gap-6">
-            <div className="flex justify-between items-center bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800">
+            <div className="flex justify-between items-center bg-surface p-6 rounded-2xl border border-line">
                 <div>
-                    <p className="text-gray-400">Karten, die du noch suchst.</p>
+                    <p className="text-muted">Karten, die du noch suchst.</p>
                 </div>
                 <button
                     onClick={() => setIsSearching(!isSearching)}
@@ -77,13 +77,13 @@ export default function Wishlist() {
             </div>
 
             {isSearching ? (
-                <div className="bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800 flex-1 flex flex-col">
+                <div className="bg-surface p-6 rounded-2xl border border-line flex-1 flex flex-col">
                     <form onSubmit={handleSearch} className="flex gap-4 mb-6">
                         <input
                             autoFocus
                             type="text"
                             placeholder="Kartenname suchen (mind. 3 Zeichen)…"
-                            className="flex-1 bg-black/40 border border-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-accent"
+                            className="flex-1 bg-bg/40 border border-line text-text px-4 py-3 rounded-lg focus:outline-none focus:border-accent"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                         />
@@ -100,11 +100,11 @@ export default function Wishlist() {
                         {searchResults.map(card => {
                             const inWishlist = wishlist.some(w => w.card_id === String(card.id));
                             return (
-                                <div key={card.id} className="bg-black/40 p-3 rounded-xl border border-gray-800 hover:border-accent transition-colors group relative">
+                                <div key={card.id} className="bg-bg/40 p-3 rounded-xl border border-line hover:border-accent transition-colors group relative">
                                     <div className="aspect-[2/3] mb-3 overflow-hidden rounded-lg">
                                         <img src={card.card_images?.[0]?.image_url_small} alt={card.name} className="w-full h-full object-cover" />
                                     </div>
-                                    <h3 className="font-bold text-sm text-gray-200 truncate mb-1" title={card.name}>{card.name}</h3>
+                                    <h3 className="font-bold text-sm text-text truncate mb-1" title={card.name}>{card.name}</h3>
                                     <div className="flex justify-between items-center">
                                         <span className="text-xs text-accent font-mono">
                                             {fmtEUR(card.card_prices?.[0]?.cardmarket_price)}
@@ -112,7 +112,7 @@ export default function Wishlist() {
                                         <button
                                             onClick={() => addToWishlist(card)}
                                             disabled={inWishlist}
-                                            className={`p-1.5 rounded-lg transition-colors ${inWishlist ? 'bg-green-500/20 text-green-500 cursor-default' : 'bg-gray-800 hover:bg-accent text-gray-400 hover:text-accent-fg'}`}
+                                            className={`p-1.5 rounded-lg transition-colors ${inWishlist ? 'bg-good/20 text-good cursor-default' : 'bg-surface-2 hover:bg-accent text-muted hover:text-accent-fg'}`}
                                             title={inWishlist ? "In der Wunschliste" : "Zur Wunschliste hinzufügen"}
                                         >
                                             {inWishlist ? <Heart className="w-4 h-4 fill-current" /> : <Plus className="w-4 h-4" />}
@@ -122,14 +122,14 @@ export default function Wishlist() {
                             );
                         })}
                         {searchResults.length === 0 && !loading && searchQuery && (
-                            <div className="col-span-full text-center text-gray-500 py-10">Keine Treffer.</div>
+                            <div className="col-span-full text-center text-muted py-10">Keine Treffer.</div>
                         )}
                     </div>
                 </div>
             ) : (
-                <div className="bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800 flex-1 overflow-y-auto custom-scrollbar">
+                <div className="bg-surface p-6 rounded-2xl border border-line flex-1 overflow-y-auto custom-scrollbar">
                     {wishlist.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                        <div className="h-full flex flex-col items-center justify-center text-muted">
                             <Heart className="w-16 h-16 mb-4 opacity-20" />
                             <p className="text-xl font-medium">Deine Wunschliste ist leer</p>
                             <button onClick={() => setIsSearching(true)} className="text-accent hover:underline mt-2">Karten zum Hinzufügen finden</button>
@@ -137,19 +137,19 @@ export default function Wishlist() {
                     ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                             {wishlist.map(item => (
-                                <div key={item.id} className="bg-black/40 p-3 rounded-xl border border-gray-800 hover:border-gray-600 transition-colors group">
+                                <div key={item.id} className="bg-bg/40 p-3 rounded-xl border border-line hover:border-line transition-colors group">
                                     <div className="aspect-[2/3] mb-3 overflow-hidden rounded-lg relative">
                                         <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                                         <button
                                             onClick={() => removeFromWishlist(item.id)}
-                                            className="absolute top-2 right-2 p-1.5 bg-black/60 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white"
+                                            className="absolute top-2 right-2 p-1.5 bg-bg/60 text-bad rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-bad hover:text-text"
                                             title="Entfernen"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
-                                    <h3 className="font-bold text-sm text-gray-200 truncate mb-1" title={item.name}>{item.name}</h3>
-                                    <div className="text-xs text-gray-500 font-mono">Hinzugefügt: {new Date(item.created_at).toLocaleDateString()}</div>
+                                    <h3 className="font-bold text-sm text-text truncate mb-1" title={item.name}>{item.name}</h3>
+                                    <div className="text-xs text-muted font-mono">Hinzugefügt: {new Date(item.created_at).toLocaleDateString()}</div>
                                     <div className="mt-2 text-xs text-accent font-bold">{fmtEUR(item.price)}</div>
                                 </div>
                             ))}

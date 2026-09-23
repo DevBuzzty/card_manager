@@ -84,7 +84,7 @@ export default function SaleDetail({ saleId, doubleSold = false, orphaned = fals
   const field = 'w-full bg-bg border border-line rounded-lg px-3 py-2 text-sm text-text';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={onClose}>
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-surface border border-line rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-text">Verkauf</h2>
@@ -109,7 +109,7 @@ export default function SaleDetail({ saleId, doubleSold = false, orphaned = fals
                   <Row label="Versand">{sale.shipping == null ? 'nicht erfasst' : euroCentsText(toCents(sale.shipping) || 0)}</Row>
                   <Row label="Netto">{euroCentsText(net)}</Row>
                   <Row label="Marktwert">{euroCentsText(market)}</Row>
-                  <Row label="Differenz" className={net >= market ? 'text-emerald-400' : 'text-bad'}>{diffText(net, market)}</Row>
+                  <Row label="Differenz" className={net >= market ? 'text-good' : 'text-bad'}>{diffText(net, market)}</Row>
                 </div>
               </>
             )}
@@ -140,7 +140,7 @@ export default function SaleDetail({ saleId, doubleSold = false, orphaned = fals
                 </label>
                 <div className="text-sm">
                   <div className="text-text">Netto {euroCentsText(formNet)}</div>
-                  <div className={formNet >= formMarket ? 'text-emerald-400' : 'text-bad'}>{diffText(formNet, formMarket)} gegenüber Marktwert</div>
+                  <div className={formNet >= formMarket ? 'text-good' : 'text-bad'}>{diffText(formNet, formMarket)} gegenüber Marktwert</div>
                 </div>
               </div>
             )}
