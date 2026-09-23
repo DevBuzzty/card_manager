@@ -11,11 +11,11 @@ const TABS = [['stats', 'Statistik'], ['simulation', 'Simulation'], ['violations
 export default function DeckSidebar({ mainDeck, extraDeck, sideDeck, legality, builtAt }) {
   const [tab, setTab] = useState('stats');
   return (
-    <div className="w-80 flex-shrink-0 bg-[#1E1E1E] p-4 rounded-2xl border border-gray-800 flex flex-col min-h-0">
+    <div className="w-80 flex-shrink-0 bg-surface p-4 rounded-2xl border border-line flex flex-col min-h-0">
       <div className="flex gap-1 mb-4">
         {TABS.map(([value, label]) => (
           <button key={value} type="button" onClick={() => setTab(value)}
-            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium ${tab === value ? 'bg-accent text-accent-fg' : 'bg-gray-800 text-gray-400 hover:text-accent'}`}>
+            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium ${tab === value ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted hover:text-accent'}`}>
             {label}
           </button>
         ))}
@@ -36,28 +36,28 @@ function DeckSimulation({ mainDeck }) {
   return (
     <div className="space-y-4">
       {odds.message ? (
-        <p className="text-sm text-gray-400">{odds.message}</p>
+        <p className="text-sm text-muted">{odds.message}</p>
       ) : (
         odds.lines.map((line) => (
-          <div key={line.size} className="p-3 bg-black/30 rounded-xl border border-gray-800">
-            <div className="text-sm text-white">{line.atLeastOne}</div>
-            <div className="text-xs font-mono text-gray-400 mt-1">{line.distribution}</div>
+          <div key={line.size} className="p-3 bg-bg/30 rounded-xl border border-line">
+            <div className="text-sm text-text">{line.atLeastOne}</div>
+            <div className="text-xs font-mono text-muted mt-1">{line.distribution}</div>
           </div>
         ))
       )}
       <div className="flex gap-2">
         {[5, 6].map((size) => (
           <button key={size} type="button" onClick={() => draw(size)}
-            className="flex-1 px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs border border-gray-700">
+            className="flex-1 px-2 py-1.5 bg-surface-2 hover:bg-surface-2 text-text rounded-lg text-xs border border-line">
             Testhand ziehen ({size})
           </button>
         ))}
       </div>
-      {hand && hand.length === 0 && <p className="text-sm text-gray-400">{NO_MAIN}</p>}
+      {hand && hand.length === 0 && <p className="text-sm text-muted">{NO_MAIN}</p>}
       {hand && hand.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {hand.map((card, idx) => (
-            <div key={idx} className={`aspect-[2/3] rounded overflow-hidden border-2 ${card.role === 'starter' ? 'border-warn' : 'border-gray-700'}`}>
+            <div key={idx} className={`aspect-[2/3] rounded overflow-hidden border-2 ${card.role === 'starter' ? 'border-warn' : 'border-line'}`}>
               <img src={card.image_url} alt={card.name || ''} className="w-full h-full object-cover" />
             </div>
           ))}
@@ -68,14 +68,14 @@ function DeckSimulation({ mainDeck }) {
 }
 
 function DeckViolations({ legality, builtAt }) {
-  if (!legality) return <p className="text-sm text-gray-400">{LOADING}</p>;
+  if (!legality) return <p className="text-sm text-muted">{LOADING}</p>;
   const date = banlistDateText(builtAt);
   return (
     <div className="space-y-2">
-      {legality.violations.length === 0 && legality.warnings.length === 0 && <p className="text-sm text-gray-400">Keine Verstöße</p>}
+      {legality.violations.length === 0 && legality.warnings.length === 0 && <p className="text-sm text-muted">Keine Verstöße</p>}
       {legality.violations.map((v, i) => <p key={`v${i}`} className="text-sm text-bad">{v.text}</p>)}
       {legality.warnings.map((w, i) => <p key={`w${i}`} className="text-sm text-warn">{w.text}</p>)}
-      {date && <p className="pt-2 text-xs text-gray-500">{date}</p>}
+      {date && <p className="pt-2 text-xs text-muted">{date}</p>}
     </div>
   );
 }
@@ -107,8 +107,8 @@ const DeckStats = ({ mainDeck, extraDeck, sideDeck }) => {
 
     return (
         <div className="grid grid-cols-1 gap-4">
-            <div className="bg-black/30 p-4 rounded-xl border border-gray-800 h-56">
-                <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Card Types (Main)</h4>
+            <div className="bg-bg/30 p-4 rounded-xl border border-line h-56">
+                <h4 className="text-xs font-bold uppercase text-muted mb-2">Card Types (Main)</h4>
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                         <Pie data={typeData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={60}>
@@ -120,8 +120,8 @@ const DeckStats = ({ mainDeck, extraDeck, sideDeck }) => {
                     </PieChart>
                 </ResponsiveContainer>
             </div>
-            <div className="bg-black/30 p-4 rounded-xl border border-gray-800 h-56">
-                <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Attributes</h4>
+            <div className="bg-bg/30 p-4 rounded-xl border border-line h-56">
+                <h4 className="text-xs font-bold uppercase text-muted mb-2">Attributes</h4>
                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={attrData}>
                         <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={10} />

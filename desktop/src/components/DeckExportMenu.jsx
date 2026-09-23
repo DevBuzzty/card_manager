@@ -30,16 +30,16 @@ export default function DeckExportMenu({ deckName, entries }) {
 
   return (
     <div className="relative flex items-center gap-2">
-      {note && <span className="text-xs text-gray-400">{note}</span>}
-      <button onClick={() => setOpen((v) => !v)} className="flex items-center px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors text-sm font-medium border border-gray-700">
+      {note && <span className="text-xs text-muted">{note}</span>}
+      <button onClick={() => setOpen((v) => !v)} className="flex items-center px-3 py-2 bg-surface-2 hover:bg-surface-2 text-text rounded-lg transition-colors text-sm font-medium border border-line">
         <Download className="w-4 h-4 mr-2" />
         Export
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 w-48 bg-[#1a1a1a] border border-gray-700 rounded-lg shadow-lg py-1">
-          <button type="button" onClick={saveYdk} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">YDK-Datei</button>
-          <button type="button" onClick={() => copy(buildYdke(entries), 'YDKE-Link kopiert')} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">YDKE kopieren</button>
-          <button type="button" onClick={() => copy(buildTextList(entries), 'Textliste kopiert')} className="block w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800">Textliste kopieren</button>
+        <div className="absolute right-0 top-full mt-1 z-20 w-48 bg-bg border border-line rounded-lg shadow-lg py-1">
+          <button type="button" onClick={saveYdk} className="block w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-2">YDK-Datei</button>
+          <button type="button" onClick={() => copy(buildYdke(entries), 'YDKE-Link kopiert')} className="block w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-2">YDKE kopieren</button>
+          <button type="button" onClick={() => copy(buildTextList(entries), 'Textliste kopiert')} className="block w-full text-left px-3 py-2 text-sm text-text hover:bg-surface-2">Textliste kopieren</button>
         </div>
       )}
     </div>

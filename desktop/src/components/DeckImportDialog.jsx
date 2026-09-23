@@ -69,7 +69,7 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
 
   const openRows = resolved ? resolved.rows.map((row, i) => ({ row, i })).filter(({ row }) => row.status === 'suggest' || row.status === 'ambiguous') : [];
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-surface border border-line rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-display text-lg text-text">{resolved ? 'Import-Vorschau' : 'Einfügen (YDKE/Text)'}</h3>
@@ -80,7 +80,7 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
           <textarea
             autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={10}
             placeholder="ydke://… oder eine Deckliste, z. B. 3 Ash Blossom & Joyous Spring"
-            className="w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm font-mono focus:border-accent focus:outline-none"
+            className="w-full bg-bg border border-line text-text px-3 py-2 rounded text-sm font-mono focus:border-accent focus:outline-none"
           />
         )}
         {!resolved && busy && <p className="text-sm text-muted">{LOADING}</p>}
@@ -90,7 +90,7 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
             <label className="block text-xs text-muted">
               Deckname
               <input value={name} onChange={(e) => setName(e.target.value)}
-                className="mt-1 w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm focus:border-accent focus:outline-none" />
+                className="mt-1 w-full bg-bg border border-line text-text px-3 py-2 rounded text-sm focus:border-accent focus:outline-none" />
             </label>
             {resolved.catalogMissing && <p className="text-sm text-warn">{CATALOG_MISSING}</p>}
             <p className="font-mono text-sm text-text">
@@ -101,7 +101,7 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
             {openRows.length > 0 && (
               <div className="space-y-2">
                 {openRows.map(({ row, i }) => (
-                  <div key={i} className="p-2 rounded-lg border border-gray-800 bg-black/30">
+                  <div key={i} className="p-2 rounded-lg border border-line bg-bg/30">
                     <div className="text-sm text-text">
                       {row.source}
                       {!row.candidates.some((c) => c.passcode === choices[i]) && <span className="ml-2 text-xs text-warn">{OPEN}</span>}
@@ -110,7 +110,7 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
                     <div className="mt-1 flex flex-wrap gap-2">
                       {row.candidates.map((c) => (
                         <button key={c.passcode} type="button" onClick={() => pick(i, c.passcode)}
-                          className={`px-2 py-1 rounded text-xs ${choices[i] === c.passcode ? 'bg-accent text-accent-fg' : 'bg-gray-800 text-gray-300 hover:text-accent'}`}>
+                          className={`px-2 py-1 rounded text-xs ${choices[i] === c.passcode ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-text hover:text-accent'}`}>
                           {row.status === 'suggest' ? suggestionText(c.name) : ambiguousOptionText(c)}
                         </button>
                       ))}
@@ -125,16 +125,16 @@ export default function DeckImportDialog({ source, onClose, onCreated }) {
               if (cards.length === 0) return null;
               return (
                 <div key={section}>
-                  <h4 className="text-xs font-bold uppercase text-gray-500 mb-1">{title}</h4>
-                  {cards.map((c) => <div key={c.card_id} className="text-sm text-gray-300 font-mono">{c.count} {c.name}</div>)}
+                  <h4 className="text-xs font-bold uppercase text-muted mb-1">{title}</h4>
+                  {cards.map((c) => <div key={c.card_id} className="text-sm text-text font-mono">{c.count} {c.name}</div>)}
                 </div>
               );
             })}
 
             {plan.skippedLabels.length > 0 && (
               <div>
-                <h4 className="text-xs font-bold uppercase text-gray-500 mb-1">Nicht übernommen</h4>
-                {plan.skippedLabels.map((line, k) => <div key={k} className="text-sm text-gray-400 font-mono">{line}</div>)}
+                <h4 className="text-xs font-bold uppercase text-muted mb-1">Nicht übernommen</h4>
+                {plan.skippedLabels.map((line, k) => <div key={k} className="text-sm text-muted font-mono">{line}</div>)}
               </div>
             )}
           </>

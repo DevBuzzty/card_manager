@@ -34,7 +34,7 @@ export default function DeckWishlistDialog({ coverage, cardInfo, onClose }) {
   const text = state.result ? wishlistResultText(state.result) : plan ? wishlistConfirmText(plan) : LOADING;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={state.busy ? undefined : onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm" onClick={state.busy ? undefined : onClose}>
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-surface border border-line rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-display text-lg text-text">Fehlende auf die Wunschliste</h3>
