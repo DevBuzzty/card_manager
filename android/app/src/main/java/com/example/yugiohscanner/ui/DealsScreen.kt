@@ -75,7 +75,7 @@ fun DealsScreen() {
         scope.launch {
             loading = true
             try {
-                if (scrapeFirst) DealsRepository.triggerScrape()
+                if (scrapeFirst) { DealsRepository.triggerScrape(); DealsScrape.done() }
                 reloadFromCloud()
                 writeError = null
             } catch (e: Exception) { writeError = e.message }
@@ -83,7 +83,12 @@ fun DealsScreen() {
         }
     }
 
-    LaunchedEffect(Unit) { refresh() }
+    // Performance (Seitenwechsel): der Cloud-Scrape laeuft beim Betreten hoechstens alle DealsScrape.EVERY_MS;
+    // sonst nur die Listen, und die auch nur, wenn sie nicht frisch sind. Der Knopf "Neu laden" scrapt weiter immer.
+    LaunchedEffect(Unit) {
+        if (DealsScrape.due()) refresh()
+        else { SideStores.dealWatches.refreshIfStale(); SideStores.dealAlerts.refreshIfStale() }
+    }
 
     val addWatch = {
         val p = maxPrice.toDoubleOrNull()
@@ -264,4 +269,14 @@ private fun SourceBadge(source: String) {
     ) {
         Text(label, color = Muted, fontSize = 11.sp)
     }
+}
+
+/** Performance: wann zuletzt ein Deals-Scrape angestossen wurde (prozessweit, ueberlebt Reiterwechsel). */
+internal object DealsScrape {
+    const val EVERY_MS = 10 * 60_000L
+    @Volatile private var lastAt: Long? = null
+
+    fun due(now: Long = System.currentTimeMillis()): Boolean = lastAt?.let { now - it >= EVERY_MS } ?: true
+    fun done(now: Long = System.currentTimeMillis()) { lastAt = now }
+    fun clear() { lastAt = null }
 }

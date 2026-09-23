@@ -80,7 +80,7 @@ fun SealedScreen(onOpenScan: () -> Unit, onOpenSuche: () -> Unit) {
     var confirm by remember { mutableStateOf<Pair<SealedItem, SealedConfirm>?>(null) }
     val snackbar = remember { SnackbarHostState() }
 
-    LaunchedEffect(Unit) { SideStores.sealedItems.refresh() }
+    LaunchedEffect(Unit) { SideStores.sealedItems.refreshIfStale() }
 
     fun write(block: suspend () -> Unit, afterSuccess: () -> Unit = {}) {
         scope.launch {

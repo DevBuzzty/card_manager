@@ -206,7 +206,7 @@ fun DecksScreen(onClose: (() -> Unit)? = null) {
         }
     }
 
-    LaunchedEffect(Unit) { SideStores.decks.refresh(); SideStores.allDeckCards.refresh() }
+    LaunchedEffect(Unit) { SideStores.decks.refreshIfStale(); SideStores.allDeckCards.refreshIfStale() }
 
     val create = {
         val n = name.trim()

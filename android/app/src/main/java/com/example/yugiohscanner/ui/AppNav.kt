@@ -1,6 +1,8 @@
 package com.example.yugiohscanner.ui
 
 import android.content.Context
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -122,12 +124,18 @@ fun AppNav(onThemeChange: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val storeState by CollectionStore.state.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Performance (Vorladen): erst true, wenn nach dem Laden der Sammlung die Anzeigen einmal
+    // vorgerechnet sind -- bis dahin bleibt der Ladebildschirm stehen, danach oeffnet jeder Reiter sofort.
+    var warm by remember { mutableStateOf(false) }
 
     // Jeder Einstieg in ein (anderes) Konto und jedes Abmelden: ALLE Speicher leeren, sonst zeigte
     // z. B. die Wunschliste noch das alte Konto.
     fun resetSession() {
         CollectionStore.clear()
         SideStores.clearAll()
+        SnapshotWrites.clear()
+        DealsScrape.clear()
+        warm = false
     }
 
     suspend fun autoLogin() {
@@ -177,11 +185,25 @@ fun AppNav(onThemeChange: (String) -> Unit) {
     LaunchedEffect(cloudReady, storeState is StoreState.Empty) {
         if (cloudReady && CollectionStore.state.value is StoreState.Empty) CollectionStore.startInitialLoad()
     }
+    // Performance (Vorladen): die kleinen Listen aller Reiter laden parallel zur Sammlung, statt erst
+    // beim ersten Oeffnen des jeweiligen Reiters.
+    LaunchedEffect(cloudReady) {
+        if (cloudReady) Preload.startSideStores()
+    }
+    // Sobald die Sammlung da ist: Anzeigen vorrechnen (abseits des Hauptthreads), kurz auf die
+    // Nebenlisten warten, dann den Ladebildschirm freigeben.
+    LaunchedEffect(cloudReady, storeState is StoreState.Ready) {
+        if (cloudReady && storeState is StoreState.Ready && !warm) {
+            Preload.warmUp(context)
+            warm = true
+        }
+    }
     // Ladebildschirm auch, solange die automatische Anmeldung laeuft oder gescheitert ist.
     val autoLoginPending = !cloudReady && (autoLoginRunning || autoLoginError != null)
-    if (autoLoginPending || (cloudReady && storeState !is StoreState.Ready)) {
+    if (autoLoginPending || (cloudReady && (storeState !is StoreState.Ready || !warm))) {
         StartupLoadingScreen(
-            state = if (cloudReady) storeState else autoLoginError?.let { StoreState.Failed(it) } ?: StoreState.Loading,
+            state = if (cloudReady) (if (storeState is StoreState.Ready) StoreState.Loading else storeState)
+                else autoLoginError?.let { StoreState.Failed(it) } ?: StoreState.Loading,
             onRetry = {
                 if (cloudReady) {
                     CollectionStore.startInitialLoad()
@@ -229,6 +251,12 @@ fun AppNav(onThemeChange: (String) -> Unit) {
             navController = nav,
             startDestination = Routes.START,
             modifier = Modifier.padding(if (showBar) padding else PaddingValues(0.dp)),
+            // Performance: ohne die Standard-Ueberblendung (700 ms), in der beide Seiten zugleich
+            // gezeichnet werden -- ein Reiterwechsel ist sofort da.
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { ExitTransition.None },
         ) {
             composable(Routes.START) {
                 if (cloudReady) StartScreen(

@@ -58,7 +58,7 @@ fun VerkaufenScreen(segment: String, onSegment: (String) -> Unit) {
     val salesState by SideStores.sales.state.collectAsState()
     LaunchedEffect(Unit) { SideStores.listings.ensureLoaded(); SideStores.sales.ensureLoaded() }
     // Abschlussreview C3: beim Oeffnen des Reiters Verkaeufe frisch laden (wie frueher InsightsScreen).
-    LaunchedEffect(segment) { if (segment == "verkaeufe") SideStores.sales.refresh() }
+    LaunchedEffect(segment) { if (segment == "verkaeufe") SideStores.sales.refreshIfStale() }
     val today = remember { java.time.LocalDate.now().toString() }
     val zahlen = VerkaufenZahlen.zahlen(sale?.duplicates?.size, sale?.forSaleIds, listingsState.value, salesState.value?.sales, today)
 

@@ -76,4 +76,50 @@ class ListCacheTest {
         advanceUntilIdle()
         assertNull(cache.state.value.value)
     }
+
+    @Test fun `refreshIfStale laedt beim ersten Mal und dann erst nach Ablauf`() = runTest {
+        var n = 0
+        var now = 1_000L
+        val cache = ListCache(this, clock = { now }) { n++; listOf("v$n") }
+        cache.refreshIfStale(60_000); advanceUntilIdle()
+        assertEquals(1, n)
+        now += 59_999
+        cache.refreshIfStale(60_000); advanceUntilIdle()
+        assertEquals(1, n)
+        now += 1
+        cache.refreshIfStale(60_000); advanceUntilIdle()
+        assertEquals(2, n)
+        assertEquals(listOf("v2"), cache.state.value.value)
+    }
+
+    @Test fun `refreshIfStale versucht es nach einem Fehler beim ersten Laden sofort wieder`() = runTest {
+        var n = 0
+        val cache = ListCache(this, clock = { 0L }) { n++; if (n == 1) throw RuntimeException("offline") else listOf("a") }
+        cache.refreshIfStale(); advanceUntilIdle()
+        assertNull(cache.state.value.value)
+        cache.refreshIfStale(); advanceUntilIdle()
+        assertEquals(2, n)
+        assertEquals(listOf("a"), cache.state.value.value)
+    }
+
+    @Test fun `ein Fehler nach einem Erfolg verlaengert die Frische nicht`() = runTest {
+        var n = 0
+        var now = 0L
+        val cache = ListCache(this, clock = { now }) { n++; if (n == 2) throw RuntimeException("offline") else listOf("v$n") }
+        cache.refreshAndWait()                  // Erfolg bei 0
+        now = 60_000
+        cache.refreshIfStale(60_000); advanceUntilIdle()   // Fehler
+        cache.refreshIfStale(60_000); advanceUntilIdle()   // weiterhin alt -> neuer Versuch
+        assertEquals(3, n)
+        assertEquals(listOf("v3"), cache.state.value.value)
+    }
+
+    @Test fun `nach clear gilt der Stand nicht mehr als frisch`() = runTest {
+        var n = 0
+        val cache = ListCache(this, clock = { 0L }) { n++; listOf("a") }
+        cache.refreshAndWait()
+        cache.clear()
+        cache.refreshIfStale(); advanceUntilIdle()
+        assertEquals(2, n)
+    }
 }

@@ -21,6 +21,8 @@ import coil.compose.AsyncImage
 import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CatalogRepository
+import com.example.yugiohscanner.cloud.CatalogState
+import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.CopyLocation
@@ -61,6 +63,37 @@ private suspend fun computeSaleData(cards: List<CardRow>, copies: List<CopyRow>,
     SaleData(cards, copies, keep, sale, Duplicates.duplicates(sale, keep) { aliases[it] })
 }
 
+/** Katalogstand fuer den Merker: die Artwork-Zuordnung aendert sich nur mit einem neu importierten Katalog. */
+private fun catalogVersion(): Int? = (CatalogSync.state.value as? CatalogState.Ready)?.version
+
+/**
+ * Performance (Seitenwechsel): der letzte berechnete Stand, prozessweit wie DashboardMemo. Start und
+ * Verkaufen zeigen beim Wiederkommen sofort Zahlen statt "…"; neu gerechnet wird nur, wenn sich der
+ * Speicherstand (per Identitaet), keep_per_card oder der Katalog geaendert haben.
+ */
+private object SaleDataMemo {
+    private val lock = Any()
+    private var last: SaleData? = null
+    private var lastCatalog: Int? = null
+
+    fun peek(cards: List<CardRow>, copies: List<CopyRow>, keep: String, catalog: Int?): SaleData? = synchronized(lock) {
+        last?.takeIf { it.cards === cards && it.copies === copies && it.keep == keep && lastCatalog == catalog }
+    }
+
+    suspend fun get(cards: List<CardRow>, copies: List<CopyRow>, keep: String, catalog: Int?): SaleData {
+        peek(cards, copies, keep, catalog)?.let { return it }
+        val d = computeSaleData(cards, copies, keep)
+        synchronized(lock) { last = d; lastCatalog = catalog }
+        return d
+    }
+}
+
+/** Beim Start vorrechnen (AppNav), damit Start und Verkaufen schon beim ersten Oeffnen Zahlen zeigen. */
+suspend fun preloadSaleData(ctx: Context) {
+    val r = CollectionStore.state.value as? StoreState.Ready ?: return
+    SaleDataMemo.get(r.cards, r.copies, keepOf(ctx), catalogVersion())
+}
+
 /** Frischer Stand fuer Mutationen (innerhalb des InFlight-Gatters gelesen, nie der Kompositions-Schnappschuss). */
 suspend fun freshSaleData(ctx: Context): SaleData? {
     val r = CollectionStore.state.value as? StoreState.Ready ?: return null
@@ -79,9 +112,12 @@ fun rememberSaleData(): SaleData? {
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
     val keep = keepOf(ctx)
-    val data by produceState<SaleData?>(null, ready?.cards, ready?.copies, keep) {
+    val catalogState by CatalogSync.state.collectAsState()
+    val catalog = (catalogState as? CatalogState.Ready)?.version
+    val initial = ready?.let { SaleDataMemo.peek(it.cards, it.copies, keep, catalog) }
+    val data by produceState(initial, ready?.cards, ready?.copies, keep, catalog) {
         val r = ready ?: return@produceState
-        value = computeSaleData(r.cards, r.copies, keep)
+        value = SaleDataMemo.get(r.cards, r.copies, keep, catalog)
     }
     return Duplicates.visibleSaleData(ready != null, data)
 }

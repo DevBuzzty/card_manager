@@ -47,6 +47,8 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
+import com.example.yugiohscanner.cloud.CardRow
+import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.Duplicates
 import com.example.yugiohscanner.ml.ListingText
@@ -142,7 +144,12 @@ fun StartScreen(
     var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
     var error by remember { mutableStateOf<String?>(null) }
     // Spec B1 §10.5: Zaehler "Nicht einsortiert", abgeleitet aus den Exemplaren im Speicher.
-    val unsortedCount = remember(ready?.copies) { UnsortedCopies.from(copies).size }
+    // Performance (Seitenwechsel): Zaehler und Druck-Zuordnung einmal je Speicherstand, abseits des
+    // Hauptthreads; beim Wiederkommen sofort aus dem Merker.
+    val derived by produceState(StartMemo.peek(cards, copies), cards, copies) {
+        value = withContext(Dispatchers.Default) { StartMemo.get(cards, copies) }
+    }
+    val unsortedCount = derived?.unsortedCount
     val catalogState by CatalogSync.state.collectAsState()
     // Catalog readiness is a SQLite read, so it is hoisted into state instead of being called
     // from composition: this screen recomposes on every Downloading percent tick, and reading
@@ -160,7 +167,8 @@ fun StartScreen(
     LaunchedEffect(Unit) {
         scope.launch {
             SideStores.sets.ensureLoaded()
-            SideStores.dealAlerts.refresh()
+            // Performance (Seitenwechsel): nur nachladen, wenn der Stand aelter als FRESH_MS ist.
+            SideStores.dealAlerts.refreshIfStale()
 
             // Ohne Ready wird nichts gerechnet und KEIN Tageswert gespeichert -- sonst stuende ein
             // 0-€-Tag im Verlauf (Spec §7.3). Der Ladebildschirm macht das zum Nicht-Fall.
@@ -172,11 +180,18 @@ fun StartScreen(
                 // Spec G3 §8: Tageswert = Karten + Sealed, erst mit an diesem Start geladener Sealed-Liste;
                 // bei Ladefehler kein Tageswert. Den Verlauf fuer das Diagramm trotzdem laden.
                 // Non-fatal if the portfolio_snapshots table isn't set up yet.
-                SideStores.sealedItems.refreshAndWait()
+                // Performance (Seitenwechsel): Sealed nur neu laden, wenn nicht frisch, und den Tageswert
+                // nur schreiben, wenn er sich seit dem letzten Schreiben geaendert hat (statt bei jedem
+                // Betreten von Start ein Netz-Schreibvorgang).
+                if (!SideStores.sealedItems.isFresh()) SideStores.sealedItems.refreshAndWait()
                 val values = SealedSnapshot.decide(dash.totalValue, SideStores.sealedItems.state.value)
                 val snaps = SideStores.snapshots
                 if (values != null) {
-                    SnapshotsRepository.upsertToday(values.total, dash.totalCards, values.sealed)
+                    val today = UtcDay.today()
+                    if (SnapshotWrites.changed(today, values.total, dash.totalCards, values.sealed)) {
+                        SnapshotsRepository.upsertToday(values.total, dash.totalCards, values.sealed)
+                        SnapshotWrites.written(today, values.total, dash.totalCards, values.sealed)
+                    }
                     if (snaps.state.value.value == null) snaps.refreshAndWait()
                     else snaps.update { SnapshotSeries.withToday(it, UtcDay.today(), values.total) }
                 } else if (snaps.state.value.value == null) {
@@ -210,7 +225,7 @@ fun StartScreen(
         val d by produceState<Dashboard?>(DashboardMemo.peek(cards, copies), cards, copies) {
             value = withContext(Dispatchers.Default) { DashboardMemo.get(cards, copies) }
         }
-        val byKey = remember(copies) { copies.groupBy { it.printingKey() } }
+        val byKey = derived?.byKey ?: emptyMap()
 
         // Window the history by the selected timeframe, spacing points by their real date.
         val nowOrd = System.currentTimeMillis() / 86_400_000L
@@ -356,7 +371,7 @@ fun StartScreen(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "$unsortedCount",
+                            unsortedCount?.let { "$it" } ?: "…",
                             style = MaterialTheme.typography.titleLarge, fontFamily = MonoFontFamily,
                             fontWeight = FontWeight.Bold, color = Warn,
                         )
@@ -538,3 +553,35 @@ private val dayFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.U
 private fun dayOrdinal(day: String): Long = try {
     (dayFmt.parse(day)?.time ?: 0L) / 86_400_000L
 } catch (_: Exception) { 0L }
+
+/** Performance: was Start aus dem Speicherstand ableitet, einmal je Stand (Listen per Identitaet). */
+internal class StartDerived(val cards: List<CardRow>, val copies: List<CopyRow>) {
+    val byKey: Map<String, List<CopyRow>> = copies.groupBy { it.printingKey() }
+    val unsortedCount: Int = UnsortedCopies.from(copies).size
+}
+
+internal object StartMemo {
+    private val lock = Any()
+    private var last: StartDerived? = null
+
+    fun peek(cards: List<CardRow>, copies: List<CopyRow>): StartDerived? =
+        synchronized(lock) { last?.takeIf { it.cards === cards && it.copies === copies } }
+
+    fun get(cards: List<CardRow>, copies: List<CopyRow>): StartDerived {
+        peek(cards, copies)?.let { return it }
+        return StartDerived(cards, copies).also { synchronized(lock) { last = it } }
+    }
+}
+
+/**
+ * Performance: der zuletzt geschriebene Tageswert. Start schreibt nur, wenn sich Tag oder Werte
+ * geaendert haben -- vorher ging bei jedem Betreten von Start ein Schreibvorgang ins Netz.
+ */
+internal object SnapshotWrites {
+    private data class Written(val day: String, val total: Double, val cards: Int, val sealed: Double)
+    @Volatile private var last: Written? = null
+
+    fun changed(day: String, total: Double, cards: Int, sealed: Double) = last != Written(day, total, cards, sealed)
+    fun written(day: String, total: Double, cards: Int, sealed: Double) { last = Written(day, total, cards, sealed) }
+    fun clear() { last = null }
+}

@@ -154,12 +154,12 @@ fun ListingsSection(onOpenCard: (String) -> Unit, modifier: Modifier = Modifier)
 
     val state by SideStores.listings.state.collectAsState()
     // Frischer Stand beim Öffnen (H2-Fix I2), nicht nur ensureLoaded.
-    LaunchedEffect(Unit) { SideStores.listings.refresh() }
+    LaunchedEffect(Unit) { SideStores.listings.refreshIfStale() }
     val salesState by SideStores.sales.state.collectAsState()
     LaunchedEffect(Unit) { SideStores.sales.ensureLoaded() }
     val ebayStatusState by SideStores.ebayStatus.state.collectAsState()
     val ebayRowsState by SideStores.ebayRows.state.collectAsState()
-    LaunchedEffect(Unit) { SideStores.ebayStatus.refresh(); SideStores.ebayRows.refresh() }
+    LaunchedEffect(Unit) { SideStores.ebayStatus.refreshIfStale(); SideStores.ebayRows.refreshIfStale() }
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
     var status by rememberSaveable { mutableStateOf("aktiv") }
@@ -283,7 +283,7 @@ private fun ListingDetailSheet(
     val salesState by SideStores.sales.state.collectAsState()
     val ebayStatusState by SideStores.ebayStatus.state.collectAsState()
     val ebayRowsState by SideStores.ebayRows.state.collectAsState()
-    LaunchedEffect(Unit) { SideStores.ebayStatus.refresh(); SideStores.ebayRows.refresh() }
+    LaunchedEffect(Unit) { SideStores.ebayStatus.refreshIfStale(); SideStores.ebayRows.refreshIfStale() }
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
     val offline = state.value == null || state.error != null

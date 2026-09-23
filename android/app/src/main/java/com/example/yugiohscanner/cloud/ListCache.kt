@@ -13,12 +13,18 @@ data class CacheState<T>(val value: T? = null, val loading: Boolean = false, val
  * CollectionStore (Coalescer) -- nach einem eigenen Schreibvorgang kommt `refreshAndWait()`
  * garantiert mit dem neuen Stand zurueck.
  */
-class ListCache<T>(scope: CoroutineScope, private val loader: suspend () -> T) {
+class ListCache<T>(
+    scope: CoroutineScope,
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val loader: suspend () -> T,
+) {
     private val _state = MutableStateFlow(CacheState<T>())
     val state: StateFlow<CacheState<T>> = _state.asStateFlow()
 
     private val lock = Any()
     private var generation = 0L
+    // Zeitpunkt des letzten ERFOLGREICHEN Ladens; null = noch nie (oder nach clear()).
+    @Volatile private var loadedAt: Long? = null
     private val runs = Coalescer(scope) { runOnce() }
 
     fun refresh() = runs.request()
@@ -32,6 +38,24 @@ class ListCache<T>(scope: CoroutineScope, private val loader: suspend () -> T) {
         if (s.value == null && !s.loading) refresh()
     }
 
+    /**
+     * Performance (Seitenwechsel): laedt nur, wenn noch nie ein Wert da war oder der letzte
+     * erfolgreiche Stand aelter als [maxAgeMs] ist -- ein Reiterwechsel stoesst so kein Netz an,
+     * solange der Stand frisch ist. Ziehen zum Aktualisieren nimmt weiter refreshAndWait().
+     */
+    fun refreshIfStale(maxAgeMs: Long = FRESH_MS) {
+        val s = _state.value
+        if (s.loading) return
+        val at = loadedAt
+        if (s.value == null || at == null || clock() - at >= maxAgeMs) refresh()
+    }
+
+    /** Ob ein erfolgreich geladener Stand da ist, der juenger als [maxAgeMs] ist. */
+    fun isFresh(maxAgeMs: Long = FRESH_MS): Boolean {
+        val at = loadedAt ?: return false
+        return _state.value.value != null && clock() - at < maxAgeMs
+    }
+
     /** Aendert den Wert lokal, ohne zu laden (z. B. ein weggetippter Deal-Treffer). */
     fun update(transform: (T) -> T) {
         synchronized(lock) {
@@ -43,6 +67,7 @@ class ListCache<T>(scope: CoroutineScope, private val loader: suspend () -> T) {
     fun clear() {
         synchronized(lock) {
             generation++
+            loadedAt = null
             _state.value = CacheState()
         }
     }
@@ -54,7 +79,9 @@ class ListCache<T>(scope: CoroutineScope, private val loader: suspend () -> T) {
         }
         try {
             val v = loader()
-            synchronized(lock) { if (gen == generation) _state.value = CacheState(value = v) }
+            synchronized(lock) {
+                if (gen == generation) { _state.value = CacheState(value = v); loadedAt = clock() }
+            }
         } catch (e: kotlinx.coroutines.CancellationException) {
             synchronized(lock) { if (gen == generation) _state.value = _state.value.copy(loading = false) }
             throw e
@@ -65,3 +92,6 @@ class ListCache<T>(scope: CoroutineScope, private val loader: suspend () -> T) {
         }
     }
 }
+
+/** Wie lange ein geladener Stand beim Seitenwechsel als frisch gilt (Performance, Seitenwechsel ohne Netz). */
+const val FRESH_MS = 60_000L

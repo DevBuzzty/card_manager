@@ -42,7 +42,7 @@ fun WishlistScreen(onClose: (() -> Unit)? = null) {
     val error = writeError ?: cache.error
 
     // Spec §8: sofort der letzte Stand, im Hintergrund voll neu laden.
-    LaunchedEffect(Unit) { SideStores.wishlist.refresh() }
+    LaunchedEffect(Unit) { SideStores.wishlist.refreshIfStale() }
 
     val add = {
         val n = name.trim()

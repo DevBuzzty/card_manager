@@ -264,7 +264,7 @@ fun SaleDetailSheet(saleId: String, onDismiss: () -> Unit, onOpenCard: ((String)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !busy })
     val state by SideStores.sales.state.collectAsState()
     // Abschluss-Fixwelle I2: beim Oeffnen frisch laden -- ein anderes Geraet kann den Verkauf inzwischen geaendert haben.
-    LaunchedEffect(Unit) { SideStores.sales.refresh() }
+    LaunchedEffect(Unit) { SideStores.sales.refreshIfStale() }
     val data = state.value
     val offline = data == null || state.error != null
 
