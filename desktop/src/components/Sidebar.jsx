@@ -6,7 +6,7 @@ import { NAV_GROUPS } from '../utils/i18n-de';
 
 const ICONS = { start: Home, scannen: ScanLine, sammlung: Library, decks: Layers, verkaufen: Banknote, deals: Tag, insights: BarChart3, einstellungen: SettingsIcon };
 
-const NavItem = ({ to, icon, label, match }) => {
+const NavItem = ({ to, icon, label, match, badge }) => {
   // eslint in this project doesn't see a destructured `icon: Icon` as used — bind it in the body.
   const Icon = icon;
   const location = useLocation();
@@ -29,12 +29,24 @@ const NavItem = ({ to, icon, label, match }) => {
       {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded bg-violet-soft shadow-[0_0_10px_#9D00FF]" />}
       <Icon className="w-[17px] h-[17px] shrink-0" strokeWidth={1.8} />
       <span>{label}</span>
+      {badge > 0 && <span className="ml-auto text-[11px] text-muted">{badge}</span>}
     </NavLink>
   );
 };
 
 export default function Sidebar() {
   const [phoneOnline, setPhoneOnline] = useState(false);
+  // Spec I §3.1: Zaehler an "Scannen" (offene Unbekannte) und "Verkaufen" (vorgemerkte Exemplare +
+  // laufende Angebote), aus dem nav-counts-Kanal (Task 6).
+  const [counts, setCounts] = useState({ unknown: 0, forSale: 0, listingsOpen: 0 });
+  useEffect(() => {
+    let lebt = true;
+    const laden = () => window.api?.navCounts?.().then(c => { if (lebt && c) setCounts(c); }).catch(() => {});
+    laden();
+    const ab = window.api?.onListingsChanged?.(laden);
+    return () => { lebt = false; if (typeof ab === 'function') ab(); };
+  }, []);
+  const badge = (key) => (key === 'scannen' ? counts.unknown : key === 'verkaufen' ? counts.forSale + counts.listingsOpen : 0);
 
   useEffect(() => window.api?.onPhoneStatus?.(setPhoneOnline), []);
 
@@ -54,7 +66,7 @@ export default function Sidebar() {
             <div className="px-3 mb-1 text-[11px] uppercase tracking-wider text-muted">{g.group}</div>
             <div className="space-y-0.5">
               {g.items.map(n => (
-                <NavItem key={n.key} to={n.to} icon={ICONS[n.key]} label={n.label}
+                <NavItem key={n.key} to={n.to} icon={ICONS[n.key]} label={n.label} badge={badge(n.key)}
                   match={n.key === 'sammlung' ? '/sammlung' : n.key === 'verkaufen' ? '/verkaufen' : n.key === 'einstellungen' ? '/einstellungen' : undefined} />
               ))}
             </div>

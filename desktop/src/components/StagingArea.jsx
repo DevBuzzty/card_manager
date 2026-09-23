@@ -75,6 +75,36 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
   useEffect(() => { window.api?.getDefaults?.().then(d => d && setDefaults(d)); }, []);
   useEffect(() => { if (window.api) window.api.getIpAddress().then(setIpAddress); }, []);
 
+  // Task 6 (Umzug von CollectionList.jsx): Unbekannt-Sammelaktionen leben jetzt hier. unknownCount
+  // kommt aus nav-counts (cards.set_code = 'Unknown'), nicht mehr aus der geladenen Kartenliste.
+  const [unknownCount, setUnknownCount] = useState(0);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let lebt = true;
+    const laden = () => window.api?.navCounts?.().then(c => { if (lebt && c) setUnknownCount(c.unknown); }).catch(() => {});
+    laden();
+    const ab = window.api?.onListingsChanged?.(laden);
+    return () => { lebt = false; if (typeof ab === 'function') ab(); };
+  }, []);
+
+  const runUnknownAction = async (kind) => {
+      if (!window.api || busy) return;
+      const msg = kind === 'merge'
+          ? "Alle 'Unbekannt'-Karten in ihre häufigste vorhandene Set-Variante zusammenführen?"
+          : "Alle 'Unbekannt'-Karten auf ihr günstigstes verfügbares Set setzen (online, kann dauern)?";
+      if (!confirm(msg)) return;
+      setBusy(true);
+      try {
+          const res = kind === 'merge' ? await window.api.mergeUnknownCards() : await window.api.convertUnknownsToDefault();
+          if (res.success) {
+              alert(kind === 'merge' ? `${res.merged} Karten zusammengeführt.` : `${res.converted} Karten umgestellt.`);
+              window.api?.navCounts?.().then(c => c && setUnknownCount(c.unknown)).catch(() => {});
+          }
+          else alert('Fehlgeschlagen: ' + res.error);
+      } catch { alert('Aktion fehlgeschlagen.'); }
+      finally { setBusy(false); }
+  };
+
   const fetchCard = useCallback(async (tempId, passcode) => {
     // Set loading immediately to prevent double fetch
     setScannedCards(prev => prev.map(c => c.tempId === tempId ? { ...c, status: 'loading' } : c));
@@ -704,6 +734,21 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                 </div>
             ))}
         </div>
+
+        {unknownCount > 0 && (
+            <section className="mt-8">
+              <h2 className="font-display text-lg text-text mb-1">Unbekannte Karten</h2>
+              <p className="text-sm text-muted mb-3">
+                Karten ohne Set-Code. Ordne sie zu, bevor Preise und Set-Fortschritt stimmen.
+              </p>
+              <div className="flex gap-2">
+                <button type="button" className="px-3 py-2 rounded-lg text-sm bg-surface-2 border border-line text-text"
+                  disabled={busy} onClick={() => runUnknownAction('convert')}>Auf Standard-Set setzen</button>
+                <button type="button" className="px-3 py-2 rounded-lg text-sm bg-surface-2 border border-line text-text"
+                  disabled={busy} onClick={() => runUnknownAction('merge')}>Alle zusammenführen</button>
+              </div>
+            </section>
+        )}
     </div>
   );
 }

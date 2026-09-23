@@ -87,8 +87,6 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   // Spec I §3.3: "Unvollstaendig" und "Foils" sind jetzt gespeicherte Filter statt Chips, siehe cardFilters.js.
   const [presets, setPresets] = useState([]);
   const togglePreset = (id) => setPresets(ps => ps.includes(id) ? ps.filter(x => x !== id) : [...ps, id]);
-  // segmentBusy gehoert zu runUnknownAction (Unbekannt-Sammelaktionen) -- Task 6 zieht diese Zeile nach Scannen.
-  const [segmentBusy, setSegmentBusy] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
   const [cmRunning, setCmRunning] = useState(false);
@@ -290,17 +288,12 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       };
   }, [groupedCards]);
 
-  const hasUnknownVariant = (c) => c.variants && c.variants.some(v => v.set_code === 'Unknown');
-
   // Zusatz "(n zum Verkauf)" je Passcode auf jeder Kachel, unabhaengig vom Segment.
   const forSaleByCard = useMemo(() => {
       const m = new Map();
       for (const c of (sale.data ? sale.data.copies : [])) if (c.for_sale) m.set(String(c.card_id), (m.get(String(c.card_id)) || 0) + 1);
       return m;
   }, [sale.data]);
-
-  // Fuer die Unbekannt-Sammelaktionen unten -- die bleiben bis Task 6 (Umzug nach Scannen) reichbar.
-  const unknownCount = useMemo(() => groupedCards.filter(hasUnknownVariant).length, [groupedCards]);
 
   const filtered = useMemo(() => {
       // card_copies-Zeilen ALLER Printings einer Gruppe (groupedCards buendelt einen Passcode --
@@ -454,21 +447,6 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       );
   };
 
-  const runUnknownAction = async (kind) => {
-      if (!window.api || segmentBusy) return;
-      const msg = kind === 'merge'
-          ? "Alle 'Unbekannt'-Karten in ihre häufigste vorhandene Set-Variante zusammenführen?"
-          : "Alle 'Unbekannt'-Karten auf ihr günstigstes verfügbares Set setzen (online, kann dauern)?";
-      if (!confirm(msg)) return;
-      setSegmentBusy(true);
-      try {
-          const res = kind === 'merge' ? await window.api.mergeUnknownCards() : await window.api.convertUnknownsToDefault();
-          if (res.success) { alert(kind === 'merge' ? `${res.merged} Karten zusammengeführt.` : `${res.converted} Karten umgestellt.`); loadCollection(); }
-          else alert('Fehlgeschlagen: ' + res.error);
-      } catch { alert('Aktion fehlgeschlagen.'); }
-      finally { setSegmentBusy(false); }
-  };
-
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
         <div className="flex flex-col gap-4 mb-4 bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 shrink-0">
@@ -555,16 +533,6 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{copiesLoadError}</span>
-                </div>
-            )}
-
-            {/* Unbekannt-Sammelaktionen: bleiben bis Task 6 (Umzug nach Scannen) erreichbar, unabhaengig
-                von den Voreinstellungen unten -- "Unbekannte Daten" ist bewusst keine Voreinstellung. */}
-            {unknownCount > 0 && (
-                <div className="flex items-center gap-3 bg-gold/5 border border-gold/25 rounded-xl px-4 py-3">
-                    <span className="text-xs text-ink-muted flex-1">Diesen Karten fehlt der Set-Code — auflösen, damit der Wert stimmt.</span>
-                    <button onClick={() => runUnknownAction('convert')} disabled={segmentBusy} className="px-3 py-1.5 bg-obsidian-600 hover:bg-obsidian-700 text-ink rounded-lg text-xs font-medium border border-line disabled:opacity-50">Auf Standard-Set setzen</button>
-                    <button onClick={() => runUnknownAction('merge')} disabled={segmentBusy} className="px-3 py-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg text-xs font-medium disabled:opacity-50">{segmentBusy ? 'Läuft…' : 'Alle zusammenführen'}</button>
                 </div>
             )}
 
