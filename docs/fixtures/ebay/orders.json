@@ -1,0 +1,175 @@
+{
+  "_comment": "Spec H3b §7 / Plan H3b2 Task 3 -- eBay-Bestellung -> H2-Buchung. Fassung: supabase/functions/_shared/ebay-orders.ts (nur Deno). Bestellungen im Format der Sell Fulfillment API (Order, Betraege als {value, currency}). Geld in Cent, ausser p_sale/p_items (Euro wie book_sale).",
+  "env": "production",
+  "cards": {
+    "c1": { "card": { "price": 2.0, "price_first_ed": null }, "copy": { "edition": "unlimited", "condition": "NM" } },
+    "c2": { "card": { "price": 2.0, "price_first_ed": null }, "copy": { "edition": "unlimited", "condition": "NM" } },
+    "c3": { "card": { "price": 2.0, "price_first_ed": null }, "copy": { "edition": "unlimited", "condition": "EX" } },
+    "d1": { "card": { "price": 6.0, "price_first_ed": 9.0 }, "copy": { "edition": "first", "condition": "NM" } }
+  },
+  "orders": [
+    {
+      "name": "Einzelkarte mit Versand und Gebühr",
+      "order": {
+        "orderId": "12-34567-89012", "creationDate": "2026-09-24T10:15:00.000Z", "lastModifiedDate": "2026-09-24T10:16:00.000Z",
+        "orderPaymentStatus": "PAID", "cancelStatus": { "cancelState": "NONE_REQUESTED" },
+        "pricingSummary": { "priceSubtotal": { "value": "5.00", "currency": "EUR" }, "deliveryCost": { "value": "1.60", "currency": "EUR" }, "total": { "value": "6.60", "currency": "EUR" } },
+        "totalMarketplaceFee": { "value": "0.72", "currency": "EUR" },
+        "lineItems": [ { "lineItemId": "li1", "sku": "L-l1", "quantity": 1, "lineItemCost": { "value": "5.00", "currency": "EUR" }, "deliveryCost": { "shippingCost": { "value": "1.60", "currency": "EUR" } } } ]
+      },
+      "parsed": {
+        "orderId": "12-34567-89012", "saleId": "ebay-production-12-34567-89012", "soldOn": "2026-09-24", "kind": "app",
+        "lines": [ { "lineItemId": "li1", "listingId": "l1", "quantity": 1, "itemCents": 500, "shippingCents": 160 } ],
+        "grossCents": 660, "feeCents": 72, "cancelled": false, "refunded": false
+      },
+      "live": { "l1": ["c1"] },
+      "pick": { "copyIds": ["c1"], "byListing": { "l1": ["c1"] }, "missing": 0 },
+      "booking": {
+        "p_sale": { "sale_id": "ebay-production-12-34567-89012", "sold_on": "2026-09-24", "channel_id": "ebay", "channel_name": "eBay", "gross": 6.6, "fees": 0.72, "shipping": null, "note": "eBay-Bestellung 12-34567-89012" },
+        "p_items": [ { "copy_id": "c1", "value_at_sale": 2.0, "share": 5.88 } ],
+        "feesCents": 72
+      }
+    },
+    {
+      "name": "drei gleiche Karten als eine Position, ohne Gebührenfeld -> Kanal-Prozentsatz",
+      "order": {
+        "orderId": "O-2", "creationDate": "2026-09-24T12:00:00.000Z", "lastModifiedDate": "2026-09-24T12:00:00.000Z",
+        "orderPaymentStatus": "PAID", "cancelStatus": { "cancelState": "NONE_REQUESTED" },
+        "pricingSummary": { "priceSubtotal": { "value": "9.00", "currency": "EUR" }, "deliveryCost": { "value": "0.00", "currency": "EUR" } },
+        "lineItems": [ { "lineItemId": "li1", "sku": "L-l2", "quantity": 3, "lineItemCost": { "value": "9.00", "currency": "EUR" } } ]
+      },
+      "parsed": {
+        "orderId": "O-2", "saleId": "ebay-production-O-2", "soldOn": "2026-09-24", "kind": "app",
+        "lines": [ { "lineItemId": "li1", "listingId": "l2", "quantity": 3, "itemCents": 900, "shippingCents": 0 } ],
+        "grossCents": 900, "feeCents": null, "cancelled": false, "refunded": false
+      },
+      "live": { "l2": ["c3", "c1", "c2"] },
+      "pick": { "copyIds": ["c1", "c2", "c3"], "byListing": { "l2": ["c1", "c2", "c3"] }, "missing": 0 },
+      "feePercent": 10,
+      "booking": {
+        "p_sale": { "sale_id": "ebay-production-O-2", "sold_on": "2026-09-24", "channel_id": "ebay", "channel_name": "eBay", "gross": 9, "fees": 0.9, "shipping": null, "note": "eBay-Bestellung O-2" },
+        "p_items": [ { "copy_id": "c1", "value_at_sale": 2.0, "share": 2.84 }, { "copy_id": "c2", "value_at_sale": 2.0, "share": 2.84 }, { "copy_id": "c3", "value_at_sale": 1.7, "share": 2.42 } ],
+        "feesCents": 90
+      }
+    },
+    {
+      "name": "zwei Positionen aus zwei Angeboten, 1. Auflage mit eigenem Preis",
+      "order": {
+        "orderId": "O-3", "creationDate": "2026-09-24T08:00:00.000Z", "lastModifiedDate": "2026-09-24T08:05:00.000Z",
+        "orderPaymentStatus": "PAID", "cancelStatus": { "cancelState": "NONE_REQUESTED" },
+        "pricingSummary": { "priceSubtotal": { "value": "12.00", "currency": "EUR" }, "deliveryCost": { "value": "2.00", "currency": "EUR" } },
+        "totalMarketplaceFee": { "value": "1.40", "currency": "EUR" },
+        "lineItems": [
+          { "lineItemId": "a", "sku": "L-l4", "quantity": 1, "lineItemCost": { "value": "10.00", "currency": "EUR" }, "deliveryCost": { "shippingCost": { "value": "2.00", "currency": "EUR" } } },
+          { "lineItemId": "b", "sku": "L-l1", "quantity": 1, "lineItemCost": { "value": "2.00", "currency": "EUR" }, "deliveryCost": { "shippingCost": { "value": "0.00", "currency": "EUR" } } }
+        ]
+      },
+      "parsed": {
+        "orderId": "O-3", "saleId": "ebay-production-O-3", "soldOn": "2026-09-24", "kind": "app",
+        "lines": [ { "lineItemId": "a", "listingId": "l4", "quantity": 1, "itemCents": 1000, "shippingCents": 200 }, { "lineItemId": "b", "listingId": "l1", "quantity": 1, "itemCents": 200, "shippingCents": 0 } ],
+        "grossCents": 1400, "feeCents": 140, "cancelled": false, "refunded": false
+      },
+      "live": { "l4": ["d1"], "l1": ["c1"] },
+      "pick": { "copyIds": ["c1", "d1"], "byListing": { "l4": ["d1"], "l1": ["c1"] }, "missing": 0 },
+      "booking": {
+        "p_sale": { "sale_id": "ebay-production-O-3", "sold_on": "2026-09-24", "channel_id": "ebay", "channel_name": "eBay", "gross": 14, "fees": 1.4, "shipping": null, "note": "eBay-Bestellung O-3" },
+        "p_items": [ { "copy_id": "c1", "value_at_sale": 2.0, "share": 2.29 }, { "copy_id": "d1", "value_at_sale": 9.0, "share": 10.31 } ],
+        "feesCents": 140
+      }
+    },
+    {
+      "name": "fremde SKU (von Hand auf eBay eingestellt)",
+      "order": {
+        "orderId": "O-4", "creationDate": "2026-09-24T08:00:00.000Z", "lastModifiedDate": "2026-09-24T08:00:00.000Z",
+        "orderPaymentStatus": "PAID", "cancelStatus": { "cancelState": "NONE_REQUESTED" },
+        "pricingSummary": { "priceSubtotal": { "value": "3.00", "currency": "EUR" }, "deliveryCost": { "value": "1.00", "currency": "EUR" } },
+        "lineItems": [ { "lineItemId": "x", "quantity": 1, "lineItemCost": { "value": "3.00", "currency": "EUR" } } ]
+      },
+      "parsed": {
+        "orderId": "O-4", "saleId": "ebay-production-O-4", "soldOn": "2026-09-24", "kind": "fremd",
+        "lines": [ { "lineItemId": "x", "listingId": null, "quantity": 1, "itemCents": 300, "shippingCents": 0 } ],
+        "grossCents": 400, "feeCents": null, "cancelled": false, "refunded": false
+      }
+    },
+    {
+      "name": "gemischt: nur die App-Position zählt, Gebühr anteilig",
+      "order": {
+        "orderId": "O-5", "creationDate": "2026-09-24T08:00:00.000Z", "lastModifiedDate": "2026-09-24T08:00:00.000Z",
+        "orderPaymentStatus": "PAID", "cancelStatus": { "cancelState": "NONE_REQUESTED" },
+        "pricingSummary": { "priceSubtotal": { "value": "8.00", "currency": "EUR" }, "deliveryCost": { "value": "2.00", "currency": "EUR" } },
+        "totalMarketplaceFee": { "value": "1.00", "currency": "EUR" },
+        "lineItems": [
+          { "lineItemId": "a", "sku": "L-l1", "quantity": 1, "lineItemCost": { "value": "2.00", "currency": "EUR" }, "deliveryCost": { "shippingCost": { "value": "1.00", "currency": "EUR" } } },
+          { "lineItemId": "b", "sku": "EIGENE-SKU", "quantity": 1, "lineItemCost": { "value": "6.00", "currency": "EUR" }, "deliveryCost": { "shippingCost": { "value": "1.00", "currency": "EUR" } } }
+        ]
+      },
+      "parsed": {
+        "orderId": "O-5", "saleId": "ebay-production-O-5", "soldOn": "2026-09-24", "kind": "gemischt",
+        "lines": [ { "lineItemId": "a", "listingId": "l1", "quantity": 1, "itemCents": 200, "shippingCents": 100 }, { "lineItemId": "b", "listingId": null, "quantity": 1, "itemCents": 600, "shippingCents": 100 } ],
+        "grossCents": 300, "feeCents": 25, "cancelled": false, "refunded": false
+      }
+    },
+    {
+      "name": "storniert",
+      "order": {
+        "orderId": "O-6", "creationDate": "2026-09-24T08:00:00.000Z", "lastModifiedDate": "2026-09-24T09:00:00.000Z",
+        "orderPaymentStatus": "FULLY_REFUNDED", "cancelStatus": { "cancelState": "CANCELED" },
+        "pricingSummary": { "priceSubtotal": { "value": "5.00", "currency": "EUR" } },
+        "lineItems": [ { "lineItemId": "a", "sku": "L-l1", "quantity": 1, "lineItemCost": { "value": "5.00", "currency": "EUR" } } ]
+      },
+      "parsed": {
+        "orderId": "O-6", "saleId": "ebay-production-O-6", "soldOn": "2026-09-24", "kind": "app",
+        "lines": [ { "lineItemId": "a", "listingId": "l1", "quantity": 1, "itemCents": 500, "shippingCents": 0 } ],
+        "grossCents": 500, "feeCents": null, "cancelled": true, "refunded": true
+      }
+    },
+    {
+      "name": "23:30 UTC im Sommer ist in Berlin schon der Folgetag",
+      "order": {
+        "orderId": "O-7", "creationDate": "2026-09-23T23:30:00.000Z", "lastModifiedDate": "2026-09-23T23:31:00.000Z",
+        "orderPaymentStatus": "PARTIALLY_REFUNDED", "cancelStatus": { "cancelState": "NONE_REQUESTED" },
+        "pricingSummary": { "priceSubtotal": { "value": "4.00", "currency": "EUR" }, "deliveryCost": { "value": "1.00", "currency": "EUR" } },
+        "lineItems": [ { "lineItemId": "a", "sku": "L-l2", "quantity": 3, "lineItemCost": { "value": "4.00", "currency": "EUR" } } ]
+      },
+      "parsed": {
+        "orderId": "O-7", "saleId": "ebay-production-O-7", "soldOn": "2026-09-24", "kind": "app",
+        "lines": [ { "lineItemId": "a", "listingId": "l2", "quantity": 3, "itemCents": 400, "shippingCents": 0 } ],
+        "grossCents": 500, "feeCents": null, "cancelled": false, "refunded": true
+      },
+      "live": { "l2": ["c2"] },
+      "pick": { "copyIds": ["c2"], "byListing": { "l2": ["c2"] }, "missing": 2 }
+    }
+  ],
+  "feeUpdate": [
+    { "name": "Finanzdaten fehlen noch", "saleFeesCents": 72, "provisionalCents": 72, "finalCents": null, "result": "wait" },
+    { "name": "unverändert -> nachtragen", "saleFeesCents": 72, "provisionalCents": 72, "finalCents": 80, "result": "update" },
+    { "name": "gleich geblieben -> trotzdem endgültig", "saleFeesCents": 72, "provisionalCents": 72, "finalCents": 72, "result": "update" },
+    { "name": "Nutzer hat die Gebühr geändert -> bleibt (A2)", "saleFeesCents": 50, "provisionalCents": 72, "finalCents": 80, "result": "keep" },
+    { "name": "Nutzer hat die Gebühr geleert -> bleibt (A2)", "saleFeesCents": null, "provisionalCents": 72, "finalCents": 80, "result": "keep" }
+  ],
+  "finalFee": [
+    { "name": "keine Transaktion", "transactions": [], "cents": null },
+    { "name": "eine Verkaufstransaktion", "transactions": [ { "transactionType": "SALE", "totalFeeAmount": { "value": "0.81", "currency": "EUR" } } ], "cents": 81 },
+    { "name": "zwei Verkaufstransaktionen, Erstattung zählt nicht", "transactions": [
+      { "transactionType": "SALE", "totalFeeAmount": { "value": "0.50", "currency": "EUR" } },
+      { "transactionType": "SALE", "totalFeeAmount": { "value": "0.25", "currency": "EUR" } },
+      { "transactionType": "REFUND", "totalFeeAmount": { "value": "-0.50", "currency": "EUR" } } ], "cents": 75 },
+    { "name": "Gebühr 0 wird mitgeliefert", "transactions": [ { "transactionType": "SALE", "totalFeeAmount": { "value": "0.0", "currency": "EUR" } } ], "cents": 0 }
+  ],
+  "notices": [
+    { "fn": "shipping", "args": ["ebay-production-O-2", "O-2"], "notice": { "notice_id": "ship-ebay-production-O-2", "kind": "shipping", "text": "Versandkosten für eBay-Bestellung O-2 nachtragen", "sale_id": "ebay-production-O-2", "listing_id": null } },
+    { "fn": "missing", "args": ["ebay-production-O-7", "O-7", 2], "notice": { "notice_id": "missing-ebay-production-O-7", "kind": "error", "text": "eBay-Bestellung O-7: 2 Karten schon anderswo verkauft – bitte prüfen", "sale_id": "ebay-production-O-7", "listing_id": null } },
+    { "fn": "noCard", "args": ["ebay-production-O-8", "O-8"], "notice": { "notice_id": "nocard-ebay-production-O-8", "kind": "error", "text": "eBay-Bestellung O-8 ohne lebende Karte – nicht gebucht, bitte prüfen", "sale_id": null, "listing_id": null } },
+    { "fn": "cancelled", "args": ["ebay-production-O-6", "O-6", "l1"], "notice": { "notice_id": "cancel-ebay-production-O-6", "kind": "reminder", "text": "eBay-Bestellung O-6 storniert – die Karten sind zurück. Angebot erneut anbieten?", "sale_id": "ebay-production-O-6", "listing_id": "l1" } },
+    { "fn": "refunded", "args": ["ebay-production-O-7", "O-7"], "notice": { "notice_id": "refund-ebay-production-O-7", "kind": "reminder", "text": "eBay meldet eine Erstattung zu Bestellung O-7 – bitte prüfen", "sale_id": "ebay-production-O-7", "listing_id": null } },
+    { "fn": "mixed", "args": ["ebay-production-O-5", "O-5"], "notice": { "notice_id": "mixed-ebay-production-O-5", "kind": "reminder", "text": "eBay-Bestellung O-5 enthält Artikel ohne App-Angebot – nur die App-Karten sind gebucht", "sale_id": "ebay-production-O-5", "listing_id": null } },
+    { "fn": "remind", "args": ["ebay-production-O-3", { "listing_id": "l9", "channel_name": "Cardmarket", "title": "2× Dunkler Magier LOB-DE005", "external_url": null }], "notice": { "notice_id": "remind-ebay-production-O-3-l9", "kind": "reminder", "text": "eBay-Verkauf: auch dort herausnehmen – Cardmarket – 2× Dunkler Magier LOB-DE005", "sale_id": "ebay-production-O-3", "listing_id": "l9" } },
+    { "fn": "bookError", "args": ["ebay-production-O-9", "O-9", "Karte bereits verkauft oder gelöscht (c1)."], "notice": { "notice_id": "error-ebay-production-O-9", "kind": "error", "text": "eBay-Bestellung O-9 nicht gebucht: Karte bereits verkauft oder gelöscht (c1).", "sale_id": null, "listing_id": null } },
+    { "fn": "token", "args": ["2028-03-23T06:52:49.824+00:00"], "notice": { "notice_id": "token-2028-03-23", "kind": "token", "text": "eBay-Verbindung läuft am 23.03.2028 ab – bitte in den Einstellungen neu verbinden", "sale_id": null, "listing_id": null } }
+  ],
+  "tokenDue": [
+    { "expires": "2028-03-23T06:52:49Z", "now": "2028-02-22T06:52:50Z", "due": true },
+    { "expires": "2028-03-23T06:52:49Z", "now": "2028-02-20T00:00:00Z", "due": false },
+    { "expires": null, "now": "2028-02-22T00:00:00Z", "due": false }
+  ]
+}
