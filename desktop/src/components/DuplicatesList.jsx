@@ -4,6 +4,7 @@ import {
   toggleIsOn, premarkedIds, toggleTargets, allProposalIds,
 } from '../utils/duplicates';
 import { createBusyGate } from '../utils/busyGate';
+import SellFlowDialog from './SellFlowDialog';
 
 // Spec H1 §5.1 -- Sammlung › Karten › Duplikate. list: Ergebnis von duplicates() (null = laedt), copies: Zeilen aus
 // list-sale-copies, reload(): Promise, onOpenCard(copy): Karten-Detail. Jede Schreibaktion laeuft durch das
@@ -14,6 +15,8 @@ export default function DuplicatesList({ list, copies, reload, onOpenCard }) {
   const [error, setError] = useState(null);
   // §5.4: je Haupt-Passcode die Vorschlaege, die beim Einschalten in dieser Ansicht schon markiert waren.
   const history = useRef(new Map());
+  // Spec I §5.1: "Verkaufen…" je Kandidat -- die vorgeschlagenen Exemplare (ueber dem Playset) im Verkaufsweg.
+  const [selling, setSelling] = useState(null); // { title, copies } | null
 
   const byId = useMemo(() => new Map((copies || []).map((c) => [c.copy_id, c])), [copies]);
   const forSaleIds = useMemo(() => new Set((copies || []).filter((c) => c.for_sale).map((c) => c.copy_id)), [copies]);
@@ -85,6 +88,11 @@ export default function DuplicatesList({ list, copies, reload, onOpenCard }) {
                   <div className="text-xs text-muted">{rowCountText(entry)}</div>
                   {proposalTexts(entry, byId).map((t) => <div key={t} className="text-[11px] font-mono text-muted truncate">{t}</div>)}
                 </div>
+                <button type="button" disabled={busy}
+                  onClick={(e) => { e.stopPropagation(); setSelling({ title: first.name || entry.main_id, copies: entry.copy_ids.map((id) => byId.get(id)).filter(Boolean) }); }}
+                  className="px-3 py-1.5 rounded-lg text-xs text-text border border-line hover:border-accent/50 shrink-0 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                  Verkaufen…
+                </button>
                 <label onClick={(e) => e.stopPropagation()} className="flex items-center gap-2 text-xs text-muted shrink-0 cursor-pointer select-none">
                   <input type="checkbox" role="switch" checked={on} disabled={busy} onChange={() => toggle(entry)} className="accent-accent" />
                   Auf die Verkaufsliste
@@ -93,6 +101,9 @@ export default function DuplicatesList({ list, copies, reload, onOpenCard }) {
             );
           })}
         </div>
+      )}
+      {selling && (
+        <SellFlowDialog title={selling.title} copies={selling.copies} onClose={() => { setSelling(null); reload(); }} />
       )}
     </div>
   );
