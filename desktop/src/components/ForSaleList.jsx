@@ -3,6 +3,7 @@ import { Download } from 'lucide-react';
 import ExportDialog from './ExportDialog';
 import SaleDialog from './SaleDialog';
 import ListingDialog from './ListingDialog';
+import { useToast } from './toastContext';
 import { LOADING, forSaleSummary, forSaleGroups, forSaleHeaderText, copyValueText } from '../utils/duplicates';
 import { createBusyGate, createLatestOnly } from '../utils/busyGate';
 import { EDITION_LABELS } from '../utils/valuation';
@@ -21,7 +22,8 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
   const [exportIds, setExportIds] = useState(null);
   const [picked, setPicked] = useState(() => new Set());
   const [selling, setSelling] = useState(null); // copyIds | null
-  const [undo, setUndo] = useState(null); // { saleId, n }
+  // Spec I §5.2 Punkt 4: Rueckgaengig ueber die Hinweisleiste (sechs Sekunden), nicht mehr als Zeile in der Liste.
+  const toast = useToast();
   const [listingFor, setListingFor] = useState(null); // copyIds | null
   // Spec H2 §9 -- Preisvorschlag: Einstellungen einmal laden, Standard wie saleMath.js.
   const [rule, setRule] = useState({ discount: 5, minCents: 10 });
@@ -85,15 +87,14 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
     }
   });
 
-  const undoSale = () => gate.run(async () => {
+  const undoSale = (saleId) => gate.run(async () => {
     setBusy(true);
     setError(null);
     try {
-      const res = await window.api.cancelSale(undo.saleId);
+      const res = await window.api.cancelSale(saleId);
       if (!res?.success) { setError(res?.error || 'Rückgängig fehlgeschlagen.'); return; }
       window.dispatchEvent(new Event('collection-dirty'));
       await reload();
-      setUndo(null);
     } catch (e) {
       setError(e?.message || 'Rückgängig fehlgeschlagen.');
     } finally {
@@ -125,7 +126,11 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
       )}
       {selling && (
         <SaleDialog copyIds={selling} initialGrossCents={sellingInitialGrossCents} onClose={() => setSelling(null)} onBooked={async (saleId) => {
-          setUndo({ saleId, n: selling.length });
+          const n = selling.length;
+          toast.show({
+            text: `${n} ${n === 1 ? 'Karte' : 'Karten'} als verkauft gebucht`,
+            action: { label: 'Rückgängig', run: () => undoSale(saleId) },
+          });
           setSelling(null);
           setPicked(new Set());
           await reload();
@@ -137,12 +142,6 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
           setPicked(new Set());
           await reload();
         }} />
-      )}
-      {undo && (
-        <p className="text-sm text-muted">
-          {undo.n} {undo.n === 1 ? 'Karte' : 'Karten'} als verkauft gebucht ·{' '}
-          <button type="button" onClick={undoSale} disabled={busy} className="text-accent hover:underline disabled:opacity-50">Rückgängig</button>
-        </p>
       )}
       {error && <p className="text-sm text-bad">{error}</p>}
       {groups.length === 0 ? (
