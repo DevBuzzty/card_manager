@@ -8,7 +8,7 @@ import com.example.yugiohscanner.cloud.Valuation
 /**
  * Spec I §4.1 -- eine Zeile je Exemplar: Zustand und Auflage vorn, Standort im Klartext, hoechstens
  * zwei Marken ("zum Verkauf", "angeboten"). Fehlt der Behaelter, steht "noch nicht einsortiert" --
- * nie "ohne Standort".
+ * nie mehr der alte Platzhaltertext.
  * ZWILLING: desktop/src/utils/copyRow.js, Fixture docs/fixtures/copies/copy-row.json.
  */
 object CopyRowText {

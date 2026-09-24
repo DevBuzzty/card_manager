@@ -20,6 +20,6 @@ test('Jeder Fixture-Fall ergibt dieselbe Zeile', () => {
   }
 });
 
-test('Kein Text "ohne Standort" mehr', () => {
+test('Kein alter Platzhaltertext mehr', () => {
   for (const c of F.faelle) assert.ok(!copyRow(c.copy, c.container, []).location.includes('ohne Standort'), c.name);
 });

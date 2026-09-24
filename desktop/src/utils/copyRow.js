@@ -1,6 +1,6 @@
 // Spec I §4.1 -- eine Zeile je Exemplar: Zustand und Auflage vorn, Standort im Klartext, hoechstens
 // zwei Marken ("zum Verkauf", "angeboten"). Fehlt der Behaelter, steht "noch nicht einsortiert" --
-// nie "ohne Standort".
+// nie mehr der alte Platzhaltertext.
 // ZWILLING: android ml/CopyRowText.kt, Fixture docs/fixtures/copies/copy-row.json.
 import { EDITION_LABELS } from './valuation.js';
 import { formatCopyLocation } from './copyLocation.js';

@@ -1,4 +1,4 @@
-import { ChevronUp, ChevronDown, X, Minus, Plus, Trash2, Tag } from 'lucide-react';
+import { ChevronUp, ChevronDown, X, Minus, Plus, Trash2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import CustomSelect from './CustomSelect';
@@ -11,7 +11,7 @@ import { parseTags } from '../utils/tags';
 import { fmtEUR } from '../utils/format';
 import { printingFromParams, cardRoute, ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
-import { formatCopyLocation } from '../utils/copyLocation';
+import { copyRow, MARK_LABELS } from '../utils/copyRow';
 import { formatPasscode } from '../utils/passcode';
 import { euroCentsText, toCents } from '../utils/saleMath';
 import { createLatestOnly } from '../utils/busyGate';
@@ -341,23 +341,30 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                               </div>
                               {/* Spec B1 §7.3: je Exemplar der Gruppe eine Zeile mit Standort- und Tag-Chips; ein Klick oeffnet das Exemplar-Sheet. */}
                               <div className="mt-1 space-y-1">
-                                  {groupRows.map(c => (
+                                  {groupRows.map(c => {
+                                      // Spec I §4.1: Zustand · Auflage · Standort, rechts hoechstens zwei Marken.
+                                      const offerList = offers[c.copy_id] || [];
+                                      const row = copyRow(c, containers.find(ct => ct.container_id === c.container_id), offerList);
+                                      return (
                                       <button key={c.copy_id} type="button" onClick={() => setSheetCopy(c)}
-                                          className="w-full flex items-center gap-2 px-2 py-1 rounded-lg bg-bg/20 hover:bg-bg/40 border border-line text-left transition-colors">
-                                          {/* Spec H1 §5.3: Preisschild an markierten Exemplaren */}
-                                          {!!c.for_sale && <Tag className="w-3 h-3 text-warn shrink-0" aria-label="Zum Verkauf" />}
-                                          <span className="text-[11px] text-muted font-mono truncate">
-                                              {/* Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile. */}
-                                              {c.container_id ? formatCopyLocation(c, containers.find(ct => ct.container_id === c.container_id)) : 'ohne Standort'}
+                                          className="w-full flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 rounded-lg bg-bg/20 hover:bg-bg/40 border border-line text-left transition-colors">
+                                          <span className="text-xs text-text truncate">
+                                              {row.lead} · <span className={row.unsorted ? 'text-muted' : 'text-text'}>{row.location}</span>
                                           </span>
-                                          {offeredText(offers[c.copy_id] || []) && <span className="text-[10px] text-warn font-mono truncate">{offeredText(offers[c.copy_id] || [])}</span>}
-                                          <div className="ml-auto flex gap-1 flex-wrap justify-end">
+                                          <span className="ml-auto flex items-center gap-1 flex-wrap justify-end">
+                                              {row.marks.map(m => (
+                                                  <span key={m} title={m === 'angeboten' ? offeredText(offerList) : undefined}
+                                                      className={`px-1.5 py-0.5 rounded-full text-[10px] text-text border ${m === 'angeboten' ? 'bg-good/15 border-good/40' : 'bg-warn/15 border-warn/40'}`}>
+                                                      {MARK_LABELS[m]}
+                                                  </span>
+                                              ))}
                                               {parseTags(c.tags).map(t => (
                                                   <span key={t} className="px-1.5 py-0.5 rounded-full bg-accent/15 text-text text-[10px] border border-accent/30">{t}</span>
                                               ))}
-                                          </div>
+                                          </span>
                                       </button>
-                                  ))}
+                                      );
+                                  })}
                               </div>
                               </div>
                               );
