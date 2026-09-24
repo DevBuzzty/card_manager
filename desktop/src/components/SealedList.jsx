@@ -105,7 +105,7 @@ export default function SealedList() {
     <div className="h-full overflow-auto">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div>
-          <div className="font-display text-[11px] tracking-[0.14em] uppercase text-muted">Sealed-Wert</div>
+          <div className="font-display text-klein tracking-[0.14em] uppercase text-muted">Sealed-Wert</div>
           <div className="font-display font-bold text-2xl text-text mt-1">{data ? fmtEUR(data.sealedValue) : '—'}</div>
         </div>
         <button type="button" onClick={() => setAdding(true)}
@@ -134,7 +134,7 @@ export default function SealedList() {
             return (
               <div key={item.sealed_id} className="flex flex-wrap items-center gap-4 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-[11px] uppercase tracking-wide text-muted">{item.kindLabel}</div>
+                  <div className="text-klein uppercase tracking-wide text-muted">{item.kindLabel}</div>
                   <div className="text-sm text-text truncate">{item.name}</div>
                   {opened && !opened.deleted && opened.sealed_id === item.sealed_id && scanHint}
                 </div>
@@ -147,7 +147,7 @@ export default function SealedList() {
                 </div>
                 <div className="w-28 text-right">
                   <div className="font-mono text-xs text-muted">je {item.price == null ? '—' : fmtEUR(item.price)}</div>
-                  {item.stale && <div className="text-[11px] text-warn">Preis veraltet</div>}
+                  {item.stale && <div className="text-klein text-warn">Preis veraltet</div>}
                 </div>
                 <div className="w-28 text-right font-mono text-sm text-text">{item.lineValue == null ? '—' : fmtEUR(item.lineValue)}</div>
                 <button type="button" onClick={() => open(item)} disabled={rowBusy}

@@ -439,7 +439,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               <CardTile card={card} onClick={() => openCard(card)} saleNote={forSaleSuffix(forSaleByCard.get(String(card.id)) || 0)} />
               {filterContainers.length > 0 && locationCopy && (
                   <div className="mt-1 px-0.5">
-                      <span className="inline-flex items-center font-mono text-[9.5px] text-muted bg-surface border border-line rounded px-1.5 py-0.5 truncate max-w-full">
+                      <span className="inline-flex items-center font-mono text-klein text-muted bg-surface border border-line rounded px-1.5 py-0.5 truncate max-w-full">
                           {formatCopyLocation(locationCopy, locationContainer)}
                       </span>
                   </div>
@@ -466,7 +466,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                         className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
                           filtersOpen || activeFilters.length ? 'bg-accent/15 border-accent/40 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
                     <SlidersHorizontal className="w-4 h-4" /> Filter
-                    {activeFilters.length > 0 && <span className="font-mono text-[10px] bg-accent text-accent-fg rounded-full px-1.5">{activeFilters.length}</span>}
+                    {activeFilters.length > 0 && <span className="font-mono text-klein bg-accent text-accent-fg rounded-full px-1.5">{activeFilters.length}</span>}
                 </button>
                 <button onClick={openExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface border border-line text-muted hover:text-text">
                     <Download className="w-4 h-4" /> Exportieren…
@@ -492,7 +492,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                           Automatisch im Hintergrund
                         </label>
                         <div className="px-3">
-                          <div className="text-[10px] uppercase tracking-wider text-muted mb-1">Ab Rarity</div>
+                          <div className="text-klein uppercase tracking-wider text-muted mb-1">Ab Rarity</div>
                           <select value={cmMinRank} onChange={(e) => { const v = Number(e.target.value); setCmMinRank(v); if (cmAuto) window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(v) }); }}
                                   className="w-full px-2 py-1.5 rounded bg-bg border border-line text-text text-sm">
                             <option value={1}>Alle Rarities</option>
@@ -509,7 +509,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                           <button onClick={() => handleUpdate('missing')} disabled={updating} className="text-sm text-muted hover:text-text">Fehlende Daten holen</button>
                           <button onClick={() => handleUpdate('all')} disabled={updating} className="block text-sm text-muted hover:text-text">Alle Karten aktualisieren</button>
                           {cmStatus && (
-                            <div className="text-[11px] text-muted pt-1">
+                            <div className="text-klein text-muted pt-1">
                               Letztes Update {relTime(cmStatus.lastRun)} · {cmStatus.resolvedCount} per Datei · {cmStatus.unresolvedCount} offen
                             </div>
                           )}
@@ -541,7 +541,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 keine dauerhaft sichtbare Chip-Zeile. Aktive Voreinstellungen stehen als entfernbare Chips unten. */}
             {filtersOpen && (
             <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wide text-muted mr-1 shrink-0">Voreinstellungen</span>
+                <span className="text-klein uppercase tracking-wide text-muted mr-1 shrink-0">Voreinstellungen</span>
                 {PRESETS.map(p => (
                     <button key={p.id} type="button" onClick={() => togglePreset(p.id)}
                         className={clsx('px-3 py-1.5 rounded-full text-xs border',
@@ -571,7 +571,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 Toggle-Chips statt CustomSelect (das ist Einfachauswahl). */}
             {filtersOpen && containers.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-muted mr-1 shrink-0">Behälter</span>
+                  <span className="text-klein uppercase tracking-wide text-muted mr-1 shrink-0">Behälter</span>
                   {containers.map(ct => (
                       <button key={ct.container_id} type="button" onClick={() => toggleContainerFilter(ct.container_id)}
                               className={clsx('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors',
@@ -584,7 +584,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
             )}
             {filtersOpen && tagOptions.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-muted mr-1 shrink-0">Tags</span>
+                  <span className="text-klein uppercase tracking-wide text-muted mr-1 shrink-0">Tags</span>
                   {tagOptions.map(t => (
                       <button key={t} type="button" onClick={() => toggleTagFilter(t)}
                               className={clsx('px-2.5 py-1 rounded-full text-xs border transition-colors',

@@ -94,7 +94,7 @@ export default function CardSearchModal({ onClose, onSelect }) {
                                 </div>
                                 <h3 className="font-bold text-sm text-text truncate mb-1" title={card.name}>{card.name}</h3>
                                 <div className="flex justify-between items-end mt-auto">
-                                    <span className="text-[10px] text-muted font-mono">{card.type}</span>
+                                    <span className="text-klein text-muted font-mono">{card.type}</span>
                                 </div>
                             </div>
                         ))}

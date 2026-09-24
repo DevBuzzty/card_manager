@@ -136,7 +136,7 @@ export default function Portfolio() {
                     <div className="flex items-center gap-3">
                          <span className="text-muted text-sm uppercase font-bold tracking-widest">Total Portfolio Value</span>
                          {isLive && (
-                             <span className="px-2 py-0.5 rounded-full bg-accent/20 text-text text-[10px] uppercase font-bold tracking-wider animate-pulse border border-accent/50">
+                             <span className="px-2 py-0.5 rounded-full bg-accent/20 text-text text-klein uppercase font-bold tracking-wider animate-pulse border border-accent/50">
                                  Live Update
                              </span>
                          )}
@@ -272,7 +272,7 @@ export default function Portfolio() {
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <div className="text-center">
                                     <span className="block text-2xl font-bold text-text">{stats.totalCards}</span>
-                                    <span className="text-[10px] uppercase text-muted font-bold">Cards</span>
+                                    <span className="text-klein uppercase text-muted font-bold">Cards</span>
                                 </div>
                             </div>
                         </div>

@@ -20,7 +20,7 @@ export default function MoversPanel() {
       </div>
       {!data && loading && <MoversSkeleton rows={6} />}
       {!data && !loading && error && <div className="text-sm text-bad">{error}</div>}
-      {data && error && <div className="text-[11px] text-muted">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
+      {data && error && <div className="text-klein text-muted">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
       {data && message && <div className="text-sm text-muted">{message}</div>}
       {data && !message && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

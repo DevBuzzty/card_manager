@@ -17,12 +17,12 @@ export default function DeckLegalityBadge({ result, format, showFormat = false }
   return (
     <span className="inline-flex items-center gap-1.5">
       {showFormat && (
-        <span className="px-1.5 py-0.5 rounded border border-line text-[10px] font-mono text-muted">{FORMAT_LABELS[f]}</span>
+        <span className="px-1.5 py-0.5 rounded border border-line text-klein font-mono text-muted">{FORMAT_LABELS[f]}</span>
       )}
       {result ? (
-        <span className={`px-1.5 py-0.5 rounded border text-[10px] font-medium ${KIND_CLASSES[badgeKind(result, f)]}`}>{badgeText(result, f)}</span>
+        <span className={`px-1.5 py-0.5 rounded border text-klein font-medium ${KIND_CLASSES[badgeKind(result, f)]}`}>{badgeText(result, f)}</span>
       ) : (
-        <span className="text-[10px] text-muted">{LOADING}</span>
+        <span className="text-klein text-muted">{LOADING}</span>
       )}
     </span>
   );

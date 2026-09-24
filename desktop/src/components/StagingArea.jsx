@@ -554,9 +554,9 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             <div className="flex flex-col items-center justify-center h-64 text-muted border-2 border-dashed border-line rounded-xl bg-bg/50 gap-2">
                 <p className="text-lg font-medium text-text">Bereit zum Scannen</p>
                 <p className="text-sm">Gescannte Karten erscheinen hier.</p>
-                <code className="mt-2 bg-bg border border-line rounded-lg px-3 py-1.5 font-mono text-[13px] text-text select-all cursor-pointer"
+                <code className="mt-2 bg-bg border border-line rounded-lg px-3 py-1.5 font-mono text-xs text-text select-all cursor-pointer"
                       title="Zum Kopieren klicken" onClick={() => navigator.clipboard.writeText(ipAddress)}>{ipAddress}</code>
-                <p className="text-[11px] text-muted">Handy-App mit dieser Adresse verbinden</p>
+                <p className="text-klein text-muted">Handy-App mit dieser Adresse verbinden</p>
             </div>
         )}
 
@@ -594,12 +594,12 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                     )}
                                     <h3 className="font-bold text-lg text-text truncate">{card.data.name}</h3>
                                     {card.quantity > 1 && (
-                                        <span className="px-2 py-0.5 bg-good/20 text-text text-[10px] font-bold uppercase rounded border border-good/30">
+                                        <span className="px-2 py-0.5 bg-good/20 text-text text-klein font-bold uppercase rounded border border-good/30">
                                             x{card.quantity}
                                         </span>
                                     )}
                                     {card.inCollection && (
-                                        <span className="px-2 py-0.5 bg-warn/20 text-text text-[10px] font-bold uppercase rounded border border-warn/30">
+                                        <span className="px-2 py-0.5 bg-warn/20 text-text text-klein font-bold uppercase rounded border border-warn/30">
                                             Vorhanden: x{card.ownedQuantity}
                                         </span>
                                     )}
@@ -674,12 +674,12 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                             onChange={(v) => handleUpdateCard(card.tempId, v)} />
 
                                         {card.setMatchConfidence === 'exact' && !card.isManualEntry && (
-                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-text bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set-Code aus der Karte gelesen">
+                                            <span className="self-center shrink-0 text-klein font-bold uppercase tracking-wide text-text bg-good/10 border border-good/30 rounded px-1.5 py-1" title="Set-Code aus der Karte gelesen">
                                                 Erkannt
                                             </span>
                                         )}
                                         {card.setMatchConfidence === 'fuzzy' && !card.isManualEntry && (
-                                            <span className="self-center shrink-0 text-[9px] font-bold uppercase tracking-wide text-text bg-warn/10 border border-warn/30 rounded px-1.5 py-1" title="Set-Code aus unscharfem Scan wiederhergestellt — bitte überprüfen">
+                                            <span className="self-center shrink-0 text-klein font-bold uppercase tracking-wide text-text bg-warn/10 border border-warn/30 rounded px-1.5 py-1" title="Set-Code aus unscharfem Scan wiederhergestellt — bitte überprüfen">
                                                 Prüfen?
                                             </span>
                                         )}

@@ -60,7 +60,7 @@ export default function VerkaufenLayout() {
                 <>
                   {s.label}
                   {/* Auf der Akzentflaeche des aktiven Reiters waere text-muted unlesbar -- dort accent-fg. */}
-                  {counts[s.id] != null && <span className={clsx('ml-1.5 text-[11px] font-normal', isActive ? 'text-accent-fg' : 'text-muted')}>{counts[s.id]}</span>}
+                  {counts[s.id] != null && <span className={clsx('ml-1.5 text-klein font-normal', isActive ? 'text-accent-fg' : 'text-muted')}>{counts[s.id]}</span>}
                 </>
               )}
             </NavLink>

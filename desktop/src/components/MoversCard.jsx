@@ -20,12 +20,12 @@ export default function MoversCard() {
       </div>
       {!data && loading && <MoversSkeleton />}
       {!data && !loading && error && <div className="text-sm text-bad">{error}</div>}
-      {data && error && <div className="text-[11px] text-muted mb-2">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
+      {data && error && <div className="text-klein text-muted mb-2">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
       {data && message && <div className="text-sm text-muted">{message}</div>}
       {data && !message && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div><div className="text-[11px] uppercase tracking-wide text-muted mb-1">Gewinner</div><MoversList movers={data.winners.slice(0, 3)} /></div>
-          <div><div className="text-[11px] uppercase tracking-wide text-muted mb-1">Verlierer</div><MoversList movers={data.losers.slice(0, 3)} /></div>
+          <div><div className="text-klein uppercase tracking-wide text-muted mb-1">Gewinner</div><MoversList movers={data.winners.slice(0, 3)} /></div>
+          <div><div className="text-klein uppercase tracking-wide text-muted mb-1">Verlierer</div><MoversList movers={data.losers.slice(0, 3)} /></div>
         </div>
       )}
     </div>

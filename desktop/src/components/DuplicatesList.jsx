@@ -86,7 +86,7 @@ export default function DuplicatesList({ list, copies, reload, onOpenCard }) {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-text truncate">{first.name || entry.main_id}</div>
                   <div className="text-xs text-muted">{rowCountText(entry)}</div>
-                  {proposalTexts(entry, byId).map((t) => <div key={t} className="text-[11px] font-mono text-muted truncate">{t}</div>)}
+                  {proposalTexts(entry, byId).map((t) => <div key={t} className="text-klein font-mono text-muted truncate">{t}</div>)}
                 </div>
                 <button type="button" disabled={busy}
                   onClick={(e) => { e.stopPropagation(); setSelling({ title: first.name || entry.main_id, copies: entry.copy_ids.map((id) => byId.get(id)).filter(Boolean) }); }}

@@ -36,7 +36,7 @@ const Tile = ({ icon: Icon, label, value, color = 'bg-surface-2' }) => (
         <div className="flex items-center gap-3 relative z-10">
             <div className={`p-2.5 rounded-xl bg-opacity-20 ${color} text-text`}><Icon className="w-5 h-5" /></div>
             <div>
-                <p className="text-muted text-[10px] font-bold uppercase tracking-wider">{label}</p>
+                <p className="text-muted text-klein font-bold uppercase tracking-wider">{label}</p>
                 <h3 className="text-xl font-bold text-text">{value}</h3>
             </div>
         </div>

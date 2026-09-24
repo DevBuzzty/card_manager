@@ -18,7 +18,7 @@ const dateText = (iso) => String(iso || '').split('-').reverse().join('.');
 // Spec H3a §6 -- Marken einer Angebotszeile (Liste und Detail).
 export function ListingMarks({ marks }) {
   if (!marks) return null;
-  const chip = 'inline-block text-[10px] px-1.5 py-0.5 rounded';
+  const chip = 'inline-block text-klein px-1.5 py-0.5 rounded';
   return (
     <>
       {marks.alsoOn.length > 0 && <span className={`${chip} bg-warn/15 text-text`}>auch auf {marks.alsoOn.join(', ')}</span>}
@@ -32,14 +32,14 @@ export function ListingMarks({ marks }) {
 // Spec H3b §5.4 -- eBay-Marke (Liste und Detail). mark aus ebayMarks.js#ebayMark; onRetry nur im Detail.
 export function EbayMark({ mark, onRetry, busy }) {
   if (!mark) return null;
-  const chip = 'inline-block text-[10px] px-1.5 py-0.5 rounded';
+  const chip = 'inline-block text-klein px-1.5 py-0.5 rounded';
   const color = mark.kind === 'online' ? 'bg-good/15 text-text' : mark.kind === 'fehler' ? 'bg-bad/20 text-text' : 'bg-warn/15 text-text';
   return (
     <>
       <span className={`${chip} ${color}`}>{mark.text}</span>
       {mark.retry && onRetry && (
         <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onRetry(); }}
-          className="text-[10px] px-1.5 py-0.5 rounded border border-bad/40 text-bad disabled:opacity-50">Erneut versuchen</button>
+          className="text-klein px-1.5 py-0.5 rounded border border-bad/40 text-bad disabled:opacity-50">Erneut versuchen</button>
       )}
     </>
   );
@@ -243,17 +243,17 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
                     {it.image_url ? <img src={it.image_url} alt="" className="w-10 h-14 object-cover rounded" /> : <div className="w-10 h-14 rounded bg-bg shrink-0" />}
                     <div className="flex-1 min-w-0 text-sm">
                       <div className="text-text truncate">{it.name || it.card_id}</div>
-                      <div className="text-[11px] font-mono text-muted">{it.set_code} · {it.rarity} · {it.language}</div>
-                      <div className="text-[11px] font-mono text-muted">{it.condition} · {EDITION_LABELS[it.edition] || it.edition}</div>
+                      <div className="text-klein font-mono text-muted">{it.set_code} · {it.rarity} · {it.language}</div>
+                      <div className="text-klein font-mono text-muted">{it.condition} · {EDITION_LABELS[it.edition] || it.edition}</div>
                     </div>
                     {/* Verkauft/beendet: Exemplare sind verkauft (sold_in) -- dort kein "Marktwert –" und kein "Karte fehlt". */}
                     {(active || it.marketCents != null) && (
-                      <div className="text-right text-[11px] font-mono text-muted shrink-0">
+                      <div className="text-right text-klein font-mono text-muted shrink-0">
                         Marktwert {it.marketCents == null ? '–' : euroCentsText(it.marketCents)}
                       </div>
                     )}
                   </button>
-                  {!it.copyLive && active && <span className="text-[10px] px-1.5 py-0.5 rounded bg-bad/20 text-text shrink-0">Karte fehlt</span>}
+                  {!it.copyLive && active && <span className="text-klein px-1.5 py-0.5 rounded bg-bad/20 text-text shrink-0">Karte fehlt</span>}
                   {!it.copyLive && active && !editing && (
                     <button type="button" onClick={() => removeItem(it.copy_id)} disabled={busy} className={btn}>Herausnehmen</button>
                   )}

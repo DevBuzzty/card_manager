@@ -65,9 +65,9 @@ export default function ListingPhotos({ listingId, onChanged }) {
             <div key={p.photo_id} className="relative w-16 h-16 shrink-0">
               <img src={p.url} alt="" className="w-16 h-16 object-cover rounded border border-line" />
               <div className="absolute inset-x-0 bottom-0 flex justify-between px-0.5 pb-0.5">
-                <button type="button" disabled={busy || i === 0} onClick={() => swap(i, i - 1)} className="text-[10px] px-1 rounded bg-bg/60 text-text disabled:opacity-30">←</button>
-                <button type="button" disabled={busy} onClick={() => remove(p.photo_id)} className="text-[10px] px-1 rounded bg-bg/60 text-bad">✕</button>
-                <button type="button" disabled={busy || i === photos.length - 1} onClick={() => swap(i, i + 1)} className="text-[10px] px-1 rounded bg-bg/60 text-text disabled:opacity-30">→</button>
+                <button type="button" disabled={busy || i === 0} onClick={() => swap(i, i - 1)} className="text-klein px-1 rounded bg-bg/60 text-text disabled:opacity-30">←</button>
+                <button type="button" disabled={busy} onClick={() => remove(p.photo_id)} className="text-klein px-1 rounded bg-bg/60 text-bad">✕</button>
+                <button type="button" disabled={busy || i === photos.length - 1} onClick={() => swap(i, i + 1)} className="text-klein px-1 rounded bg-bg/60 text-text disabled:opacity-30">→</button>
               </div>
             </div>
           ))}

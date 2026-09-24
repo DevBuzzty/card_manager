@@ -86,7 +86,7 @@ export default function Deals() {
 
       {/* Add watch */}
       <div className="bg-bg border border-line rounded-xl p-4 mb-6">
-        <div className="text-[11px] uppercase tracking-widest text-muted mb-2">Neuer Watch</div>
+        <div className="text-klein uppercase tracking-widest text-muted mb-2">Neuer Watch</div>
         <div className="flex flex-wrap gap-2">
           <input
             value={query} onChange={(e) => setQuery(e.target.value)}
@@ -138,7 +138,7 @@ export default function Deals() {
       </div>
 
       {/* Alerts feed */}
-      <div className="text-[11px] uppercase tracking-widest text-muted mb-2">
+      <div className="text-klein uppercase tracking-widest text-muted mb-2">
         Gefundene Deals {alerts.length > 0 && <span className="text-accent">({alerts.length})</span>}
       </div>
       {alerts.length === 0 ? (
@@ -154,7 +154,7 @@ export default function Deals() {
                 : <div className="w-14 h-14 rounded-lg bg-bg grid place-items-center text-muted shrink-0"><Tag className="w-5 h-5" /></div>}
               <div className="min-w-0 flex-1">
                 <div className="text-sm text-text truncate">{a.title}</div>
-                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted">
+                <div className="flex items-center gap-2 mt-0.5 text-klein text-muted">
                   <span className="uppercase tracking-wider bg-bg border border-line rounded px-1.5 py-px">{a.source}</span>
                   <span>{fmtTime(a.found_at)}</span>
                 </div>

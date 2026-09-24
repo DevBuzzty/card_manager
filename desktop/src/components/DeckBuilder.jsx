@@ -368,7 +368,7 @@ export default function DeckBuilder() {
                                     <span className="truncate">{deck.name}</span>
                                     <DeckLegalityBadge showFormat format={deck.format} result={listLegality ? listLegality.get(deck.id) : null} />
                                 </span>
-                                <span className="block truncate text-[11px] font-mono text-muted">
+                                <span className="block truncate text-klein font-mono text-muted">
                                     {listCoverage ? `${boxLabel(deck, coverageData.containers)} · ${listText(listCoverage.get(deck.id))}` : LOADING}
                                 </span>
                             </div>
@@ -407,7 +407,7 @@ export default function DeckBuilder() {
                         <div key={card.id} onClick={() => addToDeck(card)} className="cursor-pointer group relative aspect-[2/3]">
                             <img src={card.image_url} alt={card.name} className="w-full h-full object-cover rounded border border-line group-hover:border-accent transition-colors" />
                             {/* Quantity badge */}
-                            <div className="absolute bottom-0 right-0 bg-bg/80 text-text text-[10px] px-1 font-mono">x{card.quantity}</div>
+                            <div className="absolute bottom-0 right-0 bg-bg/80 text-text text-klein px-1 font-mono">x{card.quantity}</div>
                         </div>
                     ))}
                 </div>

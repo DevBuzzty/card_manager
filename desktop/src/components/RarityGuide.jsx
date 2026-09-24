@@ -99,7 +99,7 @@ export default function RarityGuide({ onClose }) {
                     <div className="absolute inset-2 rounded-sm border border-line" style={{ backgroundColor: r.color }}></div>
                     <div className="absolute top-2 left-2 right-2 h-2 bg-surface-2 rounded-sm opacity-50"></div> {/* Name Area */}
                     <div className="absolute top-6 left-2 right-2 bottom-8 bg-surface-2 rounded-sm border border-line flex items-center justify-center">
-                        <span className="text-[8px] text-muted font-mono">ART</span>
+                        <span className="text-klein text-muted font-mono">ART</span>
                     </div>
                 </div>
 

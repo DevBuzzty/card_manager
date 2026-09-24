@@ -297,10 +297,10 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                       <div className="flex items-start justify-between">
                           <div className="flex flex-col">
                               <div className="flex items-center gap-2">
-                                  <span className="font-mono text-sm text-warn font-bold">{variant.set_code}</span>
+                                  <span className="font-mono text-sm text-muted font-bold">{variant.set_code}</span>
                                   <span className="text-xs text-muted border border-line px-1 rounded">{variant.rarity}</span>
                               </div>
-                              <span className="text-xs text-accent">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
+                              <span className="text-xs text-text">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
                           </div>
                           <div className="flex flex-col items-end gap-2">
                               <input type="number" step="0.01" min="0" defaultValue={variant.price ?? 0}
@@ -313,7 +313,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                 className="w-16 bg-bg/40 border border-line rounded px-1 py-0.5 text-xs text-text"
                                 title="Preis manuell setzen (überschreibt Auto-Preis)" />
                               {variant.cm_updated_at && !variant.cm_url && (
-                                <span className="text-[9px] text-warn" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
+                                <span className="text-klein text-warn" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
                               )}
                               <button onClick={() => { if (confirm(`${variant.set_code} (${variant.rarity}) mit allen Exemplaren löschen?`)) handleDeleteVariant(variant); }}
                                   className="p-1.5 bg-bad/10 hover:bg-bad/20 text-text rounded transition-colors" title="Printing löschen">
@@ -363,12 +363,12 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                           <span className="ml-auto flex items-center gap-1 flex-wrap justify-end">
                                               {row.marks.map(m => (
                                                   <span key={m} title={m === 'angeboten' ? offeredText(offerList) : undefined}
-                                                      className={`px-1.5 py-0.5 rounded-full text-[10px] text-text border ${m === 'angeboten' ? 'bg-good/15 border-good/40' : 'bg-warn/15 border-warn/40'}`}>
+                                                      className={`px-1.5 py-0.5 rounded-full text-klein text-text border ${m === 'angeboten' ? 'bg-good/15 border-good/40' : 'bg-warn/15 border-warn/40'}`}>
                                                       {MARK_LABELS[m]}
                                                   </span>
                                               ))}
                                               {parseTags(c.tags).map(t => (
-                                                  <span key={t} className="px-1.5 py-0.5 rounded-full bg-accent/15 text-text text-[10px] border border-accent/30">{t}</span>
+                                                  <span key={t} className="px-1.5 py-0.5 rounded-full bg-accent/15 text-text text-klein border border-accent/30">{t}</span>
                                               ))}
                                           </span>
                                       </button>
@@ -433,7 +433,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           {card.level != null && (
               <div className="bg-bg/50 p-3 rounded-lg border border-line">
                   <span className="text-xs text-muted uppercase tracking-wider block mb-1">{levelLabel}</span>
-                  <span className="text-xl font-bold text-warn">{isLink ? `LINK-${card.level}` : `★ ${card.level}`}</span>
+                  <span className="text-xl font-bold text-text">{isLink ? `LINK-${card.level}` : `★ ${card.level}`}</span>
               </div>
           )}
 
@@ -441,7 +441,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           {card.atk != null && (
               <div className="bg-bg/50 p-3 rounded-lg border border-line">
                   <span className="text-xs text-muted uppercase tracking-wider block mb-1">ATK</span>
-                  <span className="text-xl font-bold text-bad">{card.atk}</span>
+                  <span className="text-xl font-bold text-text">{card.atk}</span>
               </div>
           )}
 
@@ -466,7 +466,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           <h3 className="text-lg font-semibold text-text mb-2">Verkauft</h3>
           <div className="space-y-1">
             {sold.map((s) => (
-              <div key={`${s.sale_id}|${s.copy_id}`} className={`flex items-center gap-2 text-[11px] font-mono ${s.status === 'storniert' ? 'line-through text-muted' : 'text-muted'}`}>
+              <div key={`${s.sale_id}|${s.copy_id}`} className={`flex items-center gap-2 text-klein font-mono ${s.status === 'storniert' ? 'line-through text-muted' : 'text-muted'}`}>
                 <span>{s.sold_on.split('-').reverse().join('.')}</span><span>{s.channel_name}</span>
                 <span>{s.set_code} · {s.rarity} · {s.condition}</span>
                 <span className="ml-auto text-text">{euroCentsText(toCents(s.share))}</span>

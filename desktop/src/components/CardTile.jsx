@@ -39,7 +39,7 @@ export default function CardTile({ card, onClick, saleNote = null }) {
         {anyFoil && <span className={`foil-sheen${rarityInfos.some(r => r.foil === 'secret') ? ' secret' : ''}`} />}
 
         {qty > 1 && (
-          <span className="absolute top-2 right-2 z-10 font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-bg/80 text-text border border-line">
+          <span className="absolute top-2 right-2 z-10 font-mono text-klein font-semibold px-1.5 py-0.5 rounded bg-bg/80 text-text border border-line">
             ×{qty}
           </span>
         )}
@@ -52,14 +52,14 @@ export default function CardTile({ card, onClick, saleNote = null }) {
           {rarityInfos.slice(0, 3).map((r, i) => (
             <span
               key={i}
-              className={`inline-flex items-center gap-1 font-display text-[8.5px] uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-bg/75 text-muted ${r.foil ? 'font-bold' : 'font-semibold'}`}
+              className={`inline-flex items-center gap-1 font-display text-klein uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-bg/75 text-muted ${r.foil ? 'font-bold' : 'font-semibold'}`}
             >
               <span className="w-[6px] h-[6px] rounded-full bg-muted" />
               {r.label}
             </span>
           ))}
           {rarityInfos.length > 3 && (
-            <span className="font-mono text-[8.5px] text-muted bg-bg/75 px-1.5 py-0.5 rounded-full">+{rarityInfos.length - 3}</span>
+            <span className="font-mono text-klein text-muted bg-bg/75 px-1.5 py-0.5 rounded-full">+{rarityInfos.length - 3}</span>
           )}
         </div>
       </div>
@@ -67,15 +67,15 @@ export default function CardTile({ card, onClick, saleNote = null }) {
       {/* Meta */}
       <div className="p-2.5">
         <h4 className="text-xs font-bold text-text leading-tight truncate">{card.name}</h4>
-        {saleNote && <div className="text-[9.5px] text-warn truncate">{saleNote}</div>}
+        {saleNote && <div className="text-klein text-warn truncate">{saleNote}</div>}
         <div className="flex justify-between items-center mt-1 mb-1.5">
-          <span className="text-[9px] uppercase tracking-wide text-muted font-display">Gesamt</span>
-          <span className="font-mono text-[12px] font-bold text-text">{fmtEUR(total)}</span>
+          <span className="text-klein uppercase tracking-wide text-muted font-display">Gesamt</span>
+          <span className="font-mono text-klein font-bold text-text">{fmtEUR(total)}</span>
         </div>
         {/* Per-set breakdown: set code · quantity · unit price */}
         <div className="space-y-0.5">
           {shown.map((v, i) => (
-            <div key={i} className="flex items-center justify-between gap-1.5 text-[9.5px]">
+            <div key={i} className="flex items-center justify-between gap-1.5 text-klein">
               <span className="font-mono text-muted truncate">
                 {v.set_code || '—'}
                 {v.rarity && v.rarity !== 'Unknown' && <span className="text-muted"> · {v.rarity}</span>}
@@ -84,7 +84,7 @@ export default function CardTile({ card, onClick, saleNote = null }) {
               <span className="font-mono text-text shrink-0 w-12 text-right">€{(v.price || 0).toFixed(2)}</span>
             </div>
           ))}
-          {moreCount > 0 && <div className="text-[9px] text-muted pt-0.5">+{moreCount} weitere</div>}
+          {moreCount > 0 && <div className="text-klein text-muted pt-0.5">+{moreCount} weitere</div>}
         </div>
       </div>
     </div>

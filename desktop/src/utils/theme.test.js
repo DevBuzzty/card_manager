@@ -98,3 +98,26 @@ test('Abmelden vor einem erneuten Start haeuft keine Zuhoerer an (Settings.jsx-M
   stop = startTheme(doc, 'system');
   assert.equal(listeners.size, 1, 'genau ein aktiver Zuhoerer, kein Leck');
 });
+
+// Spec I §6.3 (I2 Task 10) -- Schrift und Ecken: tailwind.config.js bildet die Stufen auf die Token-Datei ab.
+// ZWILLING: android DesignTokensTest.kt prueft Type.kt/Theme.kt gegen denselben Block.
+test('Tailwind: Schriftgroessen und Ecken wie in tokens.json', async () => {
+  const tw = (await import('../../tailwind.config.js')).default.theme.extend;
+  const px = (n) => `${n}px`;
+  const size = (k) => tw.fontSize[k][0];
+  assert.equal(size('xl'), px(TOK.typo.sizes.titel));
+  assert.equal(size('2xl'), px(TOK.typo.sizes.titel));
+  assert.equal(size('lg'), px(TOK.typo.sizes.abschnitt));
+  assert.equal(size('sm'), px(TOK.typo.sizes.zeile));
+  assert.equal(size('base'), px(TOK.typo.sizes.zeile));
+  assert.equal(size('xs'), px(TOK.typo.sizes.neben));
+  assert.equal(size('klein'), px(TOK.typo.sizes.nebenKlein));
+  const erlaubt = new Set(Object.values(TOK.typo.sizes).map(px));
+  for (const [k, [v]] of Object.entries(tw.fontSize)) assert.ok(erlaubt.has(v), `text-${k} = ${v} ist keine der vier Groessen`);
+  for (const k of ['DEFAULT', 'sm', 'md', 'lg', 'feld']) assert.equal(tw.borderRadius[k], px(TOK.radius.feld), `rounded-${k}`);
+  for (const k of ['xl', '2xl', '3xl', 'flaeche']) assert.equal(tw.borderRadius[k], px(TOK.radius.flaeche), `rounded-${k}`);
+  const fam = new Set(Object.values(tw.fontFamily).map((f) => f.join(',')));
+  assert.equal(fam.size, 1, 'eine Schriftfamilie fuer alles');
+  assert.equal(tw.fontFamily.sans[0], 'system-ui');
+});
+
