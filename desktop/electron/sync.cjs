@@ -6,9 +6,10 @@ const { toUtcMillis } = require('./sealed-value.cjs');
 const { CONTAINER_COLS, clearContainerLocations } = require('./containers-schema.cjs');
 const { mergeRemotePriceHistory } = require('./price-history.cjs');
 const { nextNotification, openSignature } = require('./alert-notify.cjs');
+const { nextNoticeNotification } = require('./notice-notify.cjs');
 const { CHANNEL_COLS, SALE_COLS, ITEM_COLS } = require('./sales-schema.cjs');
 const { LISTING_COLS, LISTING_ITEM_COLS } = require('./listings-schema.cjs');
-const { EBAY_LISTING_COLS, LISTING_PHOTO_COLS } = require('./ebay-schema.cjs');
+const { EBAY_LISTING_COLS, LISTING_PHOTO_COLS, EBAY_ORDER_COLS, SALE_NOTICE_COLS } = require('./ebay-schema.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
@@ -315,9 +316,19 @@ function salesPushRows(db, table, cursor) {
 // Spec H3b1 §5.1 -- NUR-LESE-Ströme: die Cloud (Funktion ebay-sync) schreibt, der PC zieht und schiebt NIE.
 // Deshalb stehen sie bewusst NICHT in SALES_STREAMS (dort würde pushSalesTable sie hochladen). Die Zeilen werden
 // wörtlich übernommen (auch die Zeitstempel als Cloud-Text) -- kein Push-Zeiger vergleicht sie.
+// H3b2: ebay_orders (Marke „Gebühren vorläufig“) und sale_notices (Hinweise). Wahrheitswerte kommen aus Postgres als
+// true/false -- better-sqlite3 bindet keine booleschen Werte, deshalb `bools` (0/1); `nums` für numeric (Text -> Zahl).
 const READ_ONLY_STREAMS = {
   ebay_listings: { cols: EBAY_LISTING_COLS, key: 'listing_id', cursor: 'sync_ebay_listings_last_pull' },
+  ebay_orders: { cols: EBAY_ORDER_COLS, key: 'order_id', cursor: 'sync_ebay_orders_last_pull',
+    bools: new Set(['fees_final']), nums: new Set(['fees_provisional', 'raw_total']) },
+  sale_notices: { cols: SALE_NOTICE_COLS, key: 'notice_id', cursor: 'sync_sale_notices_last_pull', bools: new Set(['dismissed']) },
 };
+function readOnlyValue(s, k, v) {
+  if (s.bools && s.bools.has(k)) return v ? 1 : 0;
+  if (s.nums && s.nums.has(k)) return v == null || v === '' ? null : Number(v);
+  return v ?? null;
+}
 async function pullReadOnlyTable(c, db, table) {
   const s = READ_ONLY_STREAMS[table];
   const cursor = getSetting(db, s.cursor) || '1970-01-01T00:00:00Z';
@@ -329,7 +340,7 @@ async function pullReadOnlyTable(c, db, table) {
     if (error) throw new Error(`Pull ${table} failed: ` + error.message);
     if (!data || data.length === 0) break;
     db.transaction(() => {
-      for (const r of data) { put.run(Object.fromEntries(s.cols.map((k) => [k, r[k] ?? null]))); applied++; }
+      for (const r of data) { put.run(Object.fromEntries(s.cols.map((k) => [k, readOnlyValue(s, k, r[k])]))); applied++; }
     })();
     lastTs = data[data.length - 1].updated_at;
     if (data.length < PAGE) break;
@@ -495,7 +506,7 @@ async function pushTablesSafe(tables, pushOne) {
   return ok;
 }
 
-function startSync(db, getWindow, { onPriceAlerts } = {}) {
+function startSync(db, getWindow, { onPriceAlerts, onSaleNotices } = {}) {
   let client = null;
   let running = false;
   let lastAlertSignature = null;
@@ -774,8 +785,24 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     let changed = false;
     try { changed = (await pullReadOnlyTable(c, db, 'ebay_listings')) > 0; } catch (e) { console.error('[sync] ebay_listings pull:', e.message); }
     try { changed = (await pullEbayStatus(c, db)) || changed; } catch (e) { console.error('[sync] ebay_status pull:', e.message); }
+    // H3b2: fehlt ebay_orders_schema.sql noch, protokollieren und weiterlaufen wie bei ebay_listings.
+    try { changed = (await pullReadOnlyTable(c, db, 'ebay_orders')) > 0 || changed; } catch (e) { console.error('[sync] ebay_orders pull:', e.message); }
+    try {
+      if ((await pullReadOnlyTable(c, db, 'sale_notices')) > 0) {
+        const w = getWindow(); if (w) w.webContents.send('sale-notices-changed');
+      }
+      notifySaleNotices();
+    } catch (e) { console.error('[sync] sale_notices pull:', e.message); }
     markEbayTried();
     return changed;
+  }
+  // H3b2 §7.6: neue offene Hinweise als Windows-Benachrichtigung (main.cjs), Marke vor dem Melden speichern.
+  function notifySaleNotices() {
+    const open = db.prepare('SELECT * FROM sale_notices WHERE dismissed = 0').all();
+    const before = getSetting(db, 'sale_notices_notified_until');
+    const r = nextNoticeNotification(open, before);
+    if (r.marker !== before) setSetting(db, 'sale_notices_notified_until', r.marker);
+    if (r.notify !== 'none' && onSaleNotices) onSaleNotices(r);
   }
 
   // Spec G1 §4.12 — the daily cloud Edge Function writes source='cloud' rows the desktop would

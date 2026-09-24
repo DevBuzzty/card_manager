@@ -149,3 +149,23 @@ test('ebayStatusReply: noch nie gezogen -> pending; danach Stand bzw. null', () 
   assert.deepEqual(Sync.ebayStatusReply('{"connected":true}', false), { status: { connected: true } });
   assert.deepEqual(Sync.ebayStatusReply('kaputt', true), { status: null });
 });
+
+// Plan H3b2 Task 7 -- Bestellungen und Hinweise als Nur-Lese-Ströme; Wahrheitswerte/Beträge aus Postgres umgewandelt.
+test('ebay_orders und sale_notices: Nur-Lese-Ströme, true/false -> 1/0, numeric-Text -> Zahl, nie geschoben', async () => {
+  const db = freshDb();
+  const O = { order_id: 'O-1', environment: 'production', sale_id: 'ebay-production-O-1', status: 'gebucht', fees_provisional: '0.72',
+    fees_final: false, raw_total: '6.60', error: null, created_at: '2026-09-24T10:00:00+00:00', updated_at: '2026-09-24T10:00:01+00:00' };
+  assert.equal(await Sync._pullReadOnlyTable(fakeClient([[O]]), db, 'ebay_orders'), 1);
+  assert.deepEqual(db.prepare('SELECT sale_id, fees_provisional, fees_final, raw_total FROM ebay_orders').get(),
+    { sale_id: 'ebay-production-O-1', fees_provisional: 0.72, fees_final: 0, raw_total: 6.6 });
+  const N = { notice_id: 'ship-x', kind: 'shipping', text: 'Versandkosten nachtragen', sale_id: 'x', listing_id: null, dismissed: true,
+    created_at: '2026-09-24T10:00:00+00:00', updated_at: '2026-09-24T10:00:01+00:00' };
+  const c = fakeClient([[N]]);
+  assert.equal(await Sync._pullReadOnlyTable(c, db, 'sale_notices'), 1);
+  assert.equal(db.prepare('SELECT dismissed FROM sale_notices').get().dismissed, 1);
+  assert.deepEqual(c.calls.filter((m) => ['upsert', 'insert', 'update', 'delete'].includes(m)), []);
+  for (const t of ['ebay_orders', 'sale_notices']) {
+    assert.ok(Sync._READ_ONLY_TABLES.includes(t), t);
+    assert.ok(!Sync._PUSHED_TABLES.includes(t), t);
+  }
+});
