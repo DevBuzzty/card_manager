@@ -1,61 +1,19 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, LayoutGrid, List as ListIcon, FilterX, SlidersHorizontal, Coins, X, AlertCircle, Download } from 'lucide-react';
-import clsx from 'clsx';
-import { Grid } from 'react-window';
-import CustomSelect from './CustomSelect';
-import CardTile from './CardTile';
+import CollectionToolbar from './CollectionToolbar';
+import CollectionFilters from './CollectionFilters';
+import CollectionGrid from './CollectionGrid';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { cardRoute } from '../utils/routes';
 import { parseTags } from '../utils/tags';
-import { formatCopyLocation } from '../utils/copyLocation';
 // Spec B1 §7.4: card_copies kommt ueber listCopies() je Printing herein -- derselbe vierteilige
 // Schluessel wie ueberall sonst im Projekt (id/set_code/language/rarity). Er wohnt in
 // ../utils/printingKey.js, damit es ihn nur EINMAL gibt (BinderView.jsx liest denselben).
 import { printingKey } from '../utils/printingKey';
 import { passcodeMatches } from '../utils/passcode';
 import { PRESETS, matchesPresetGroup, presetsFromState } from '../utils/cardFilters.js';
-import ExportDialog from './ExportDialog';
 import { filterCopyIds } from '../utils/exportScope';
-import { forSaleSuffix } from '../utils/duplicates';
 import { useSaleData } from '../hooks/useSaleData';
-
-// Simple AutoSizer replacement
-const AutoSizer = ({ children }) => {
-    const ref = useRef(null);
-    const [size, setSize] = useState({ width: 0, height: 0 });
-
-    useEffect(() => {
-        if (!ref.current) return;
-        const resizeObserver = new ResizeObserver(entries => {
-            for (let entry of entries) {
-                setSize({ width: entry.contentRect.width, height: entry.contentRect.height });
-            }
-        });
-        resizeObserver.observe(ref.current);
-        return () => resizeObserver.disconnect();
-    }, []);
-
-    return (
-        <div ref={ref} style={{ width: '100%', height: '100%' }}>
-            {size.width > 0 && size.height > 0 && children(size)}
-        </div>
-    );
-};
-
-// Width of a scrollbar in this build, measured once. index.css styles it (8px today), so
-// reading it off the page beats repeating the number here.
-let sbWidth = null;
-const scrollbarWidth = () => {
-    if (sbWidth == null) {
-        const probe = document.createElement('div');
-        probe.style.cssText = 'position:absolute;top:-9999px;width:100px;height:100px;overflow-y:scroll';
-        document.body.appendChild(probe);
-        sbWidth = probe.offsetWidth - probe.clientWidth;
-        probe.remove();
-    }
-    return sbWidth;
-};
 
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const navigate = useNavigate();
@@ -416,230 +374,19 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       setFilterContainers([]); setFilterTags([]); setPresets([]);
   };
 
-  // Virtualized Grid Cell Renderer
-  const Cell = ({ columnIndex, rowIndex, style, ...props }) => {
-      // In this version of react-window, data is passed via props merged from cellProps?
-      // Wait, .d.ts says: cellComponent receives (props: { ... } & CellProps)
-      // So items and columnCount should be in props directly if I pass them in cellProps.
-
-      const { items, columnCount } = props;
-      // Note: columnIndex and rowIndex are also in props.
-
-      const index = rowIndex * columnCount + columnIndex;
-      if (index >= items.length) return null;
-      const card = items[index];
-      // Spec B1 §7.4: der Chip gehoert zum EXEMPLAR, das den aktiven Behaelterfilter erfuellt hat
-      // (card._locationCopy, siehe filtered oben), nicht zum Printing -- deshalb hier und nicht
-      // in CardTile.jsx (das kennt keine Exemplare, nur aggregierte Printing-Zeilen).
-      const locationCopy = card._locationCopy;
-      const locationContainer = locationCopy ? containers.find(ct => ct.container_id === locationCopy.container_id) : null;
-
-      return (
-          <div style={{ ...style, padding: 8 }}>
-              <CardTile card={card} onClick={() => openCard(card)} saleNote={forSaleSuffix(forSaleByCard.get(String(card.id)) || 0)} />
-              {filterContainers.length > 0 && locationCopy && (
-                  <div className="mt-1 px-0.5">
-                      <span className="inline-flex items-center font-mono text-klein text-muted bg-surface border border-line rounded px-1.5 py-0.5 truncate max-w-full">
-                          {formatCopyLocation(locationCopy, locationContainer)}
-                      </span>
-                  </div>
-              )}
-          </div>
-      );
-  };
-
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
         <div className="flex flex-col gap-4 mb-4 bg-surface p-4 rounded-xl border border-line shrink-0">
-            {/* Row 1: count, search, sort, filter toggle, prices menu */}
-            <div className="flex flex-wrap items-center gap-3">
-                <span className="text-muted text-sm shrink-0">{filtered.length} Karten</span>
-                <div className="relative group flex-1 min-w-[220px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-                    <input type="text" placeholder="Suchen…" className="bg-bg border border-line text-text pl-10 pr-4 py-2 rounded-lg w-full focus:border-accent outline-none"
-                           value={filter} onChange={(e) => setFilter(e.target.value)} />
-                </div>
-                <CustomSelect value={sortType} onChange={setSortType} placeholder="Sortierung" className="w-[170px]" options={[
-                    { value: 'newest', label: 'Neueste' }, { value: 'total', label: 'Wert (gesamt)' }, { value: 'price', label: 'Preis (einzeln)' },
-                    { value: 'name', label: 'Name' }, { value: 'atk', label: 'ATK' }, { value: 'def', label: 'DEF' }, { value: 'level', label: 'Level' }]} />
-                <button onClick={() => setFiltersOpen(o => !o)}
-                        className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
-                          filtersOpen || activeFilters.length ? 'bg-accent/15 border-accent/40 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
-                    <SlidersHorizontal className="w-4 h-4" /> Filter
-                    {activeFilters.length > 0 && <span className="font-mono text-klein bg-accent text-accent-fg rounded-full px-1.5">{activeFilters.length}</span>}
-                </button>
-                <button onClick={openExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface border border-line text-muted hover:text-text">
-                    <Download className="w-4 h-4" /> Exportieren…
-                </button>
-                {exportCopyIds && <ExportDialog filterCopyIds={exportCopyIds} onClose={() => setExportCopyIds(null)} />}
-                <div className="relative">
-                    <button onClick={() => setPricesOpen(o => !o)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface border border-line text-muted hover:text-text">
-                        <Coins className="w-4 h-4" /> Preise
-                    </button>
-                    {pricesOpen && (
-                      <div className="absolute right-0 top-11 z-30 w-[320px] bg-bg border border-line rounded-xl shadow-sm p-3 space-y-2"
-                           onMouseLeave={() => setPricesOpen(false)}>
-                        <button onClick={runBulk} disabled={cmBulkBusy || cmRunning}
-                                className="w-full text-left px-3 py-2 rounded-lg bg-accent hover:underline text-accent-fg text-sm disabled:opacity-50">
-                          {cmBulkBusy ? 'Aktualisiere…' : 'Jetzt aktualisieren (Preisdatei)'}
-                        </button>
-                        <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}
-                                className="w-full text-left px-3 py-2 rounded-lg bg-surface border border-line text-text text-sm hover:border-accent/40">
-                          {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Rest scrapen'}
-                        </button>
-                        <label className="flex items-center gap-2 px-3 py-2 text-sm text-muted cursor-pointer select-none">
-                          <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-accent" />
-                          Automatisch im Hintergrund
-                        </label>
-                        <div className="px-3">
-                          <div className="text-klein uppercase tracking-wider text-muted mb-1">Ab Rarity</div>
-                          <select value={cmMinRank} onChange={(e) => { const v = Number(e.target.value); setCmMinRank(v); if (cmAuto) window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(v) }); }}
-                                  className="w-full px-2 py-1.5 rounded bg-bg border border-line text-text text-sm">
-                            <option value={1}>Alle Rarities</option>
-                            <option value={2}>Ab Rare</option>
-                            <option value={3}>Ab Super Rare</option>
-                            <option value={4}>Ab Ultra Rare</option>
-                            <option value={5}>Ab Secret Rare</option>
-                            <option value={6}>Ab Ultimate Rare</option>
-                            <option value={7}>Ab Ghost / Collector's</option>
-                            <option value={8}>Nur Quarter Century</option>
-                          </select>
-                        </div>
-                        <div className="border-t border-line pt-2 px-3 space-y-1">
-                          <button onClick={() => handleUpdate('missing')} disabled={updating} className="text-sm text-muted hover:text-text">Fehlende Daten holen</button>
-                          <button onClick={() => handleUpdate('all')} disabled={updating} className="block text-sm text-muted hover:text-text">Alle Karten aktualisieren</button>
-                          {cmStatus && (
-                            <div className="text-klein text-muted pt-1">
-                              Letztes Update {relTime(cmStatus.lastRun)} · {cmStatus.resolvedCount} per Datei · {cmStatus.unresolvedCount} offen
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Fix-Durchlauf 1, Befund 1: diese Banner muessen sichtbar sein, egal ob das
-                Filter-Panel offen ist -- sonst sieht der Nutzer bei geschlossenem Panel nicht,
-                dass Behaelter-/Tag-Filter und die Notiz-/Tag-Textsuche gerade still leere
-                Ergebnisse liefern (dieselbe Fehlerklasse wie in Task 5). Gleicher Anzeigebau wie
-                Binders.jsx (roter bad-Kasten mit Symbol). */}
-            {containersTagsError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{containersTagsError}</span>
-                </div>
-            )}
-            {copiesLoadError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{copiesLoadError}</span>
-                </div>
-            )}
-
-            {/* Row 2: gespeicherte Filter (Spec I §3.3) -- Abschlussreview B3: erste Zeile im Filter-Bereich,
-                keine dauerhaft sichtbare Chip-Zeile. Aktive Voreinstellungen stehen als entfernbare Chips unten. */}
-            {filtersOpen && (
-            <div className="flex flex-wrap items-center gap-2">
-                <span className="text-klein uppercase tracking-wide text-muted mr-1 shrink-0">Voreinstellungen</span>
-                {PRESETS.map(p => (
-                    <button key={p.id} type="button" onClick={() => togglePreset(p.id)}
-                        className={clsx('px-3 py-1.5 rounded-full text-xs border',
-                            presets.includes(p.id) ? 'bg-accent text-accent-fg border-transparent' : 'bg-surface-2 text-muted border-line')}>
-                        {p.label}
-                    </button>
-                ))}
-            </div>
-            )}
-
-            {/* Row 3: filter dropdowns, only when open */}
-            {filtersOpen && (
-              <div className="flex flex-wrap items-center gap-3">
-                  <CustomSelect value={filterType} onChange={setFilterType} placeholder="Typ" className="w-[120px]" options={[{ value: "All", label: "Typ" }, { value: "Monster", label: "Monster" }, { value: "Spell", label: "Spell" }, { value: "Trap", label: "Trap" }, { value: "Link", label: "Link" }, { value: "XYZ", label: "XYZ" }, { value: "Synchro", label: "Synchro" }, { value: "Fusion", label: "Fusion" }]} />
-                  <CustomSelect value={filterLang} onChange={setFilterLang} placeholder="Sprache" className="w-[90px]" options={[{ value: "All", label: "Sprache" }, { value: "DE", label: "DE" }, { value: "EN", label: "EN" }, { value: "JP", label: "JP" }]} />
-                  <CustomSelect value={filterAttribute} onChange={setFilterAttribute} placeholder="Attribut" className="w-[120px]" options={[{ value: "All", label: "Attribut" }, ...attributes]} />
-                  <CustomSelect value={filterRace} onChange={setFilterRace} placeholder="Rasse/Typ" className="w-[130px]" options={[{ value: "All", label: "Rasse/Typ" }, ...races]} />
-                  <CustomSelect value={filterRarity} onChange={setFilterRarity} placeholder="Rarity" className="w-[130px]" options={[{ value: "All", label: "Rarity" }, ...rarities]} />
-                  <CustomSelect value={filterCondition} onChange={setFilterCondition} placeholder="Zustand" className="w-[110px]" options={[{ value: 'All', label: 'Zustand' }, ...CONDITIONS.map(c => ({ value: c, label: c }))]} />
-                  <CustomSelect value={filterEdition} onChange={setFilterEdition} placeholder="Edition" className="w-[120px]" options={[{ value: 'All', label: 'Edition' }, ...EDITIONS.map(e => ({ value: e, label: EDITION_LABELS[e] }))]} />
-                  <CustomSelect value={filterSet} onChange={setFilterSet} placeholder="Set" className="w-[120px]" options={[{ value: "All", label: "Set" }, ...sets]} />
-                  <button onClick={clearFilters} title="Filter zurücksetzen" className="p-2 text-muted hover:text-bad"><FilterX className="w-4 h-4" /></button>
-              </div>
-            )}
-
-            {/* Row 3b: Behaelter- und Tag-Filter (Spec B1 §7.4) -- beide mehrfach waehlbar, deshalb
-                Toggle-Chips statt CustomSelect (das ist Einfachauswahl). */}
-            {filtersOpen && containers.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-klein uppercase tracking-wide text-muted mr-1 shrink-0">Behälter</span>
-                  {containers.map(ct => (
-                      <button key={ct.container_id} type="button" onClick={() => toggleContainerFilter(ct.container_id)}
-                              className={clsx('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors',
-                                filterContainers.includes(ct.container_id) ? 'bg-accent/20 border-accent/50 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
-                          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ct.color || '#6b6383' }} />
-                          {ct.name}
-                      </button>
-                  ))}
-              </div>
-            )}
-            {filtersOpen && tagOptions.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-klein uppercase tracking-wide text-muted mr-1 shrink-0">Tags</span>
-                  {tagOptions.map(t => (
-                      <button key={t} type="button" onClick={() => toggleTagFilter(t)}
-                              className={clsx('px-2.5 py-1 rounded-full text-xs border transition-colors',
-                                filterTags.includes(t) ? 'bg-accent/20 border-accent/50 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
-                          {t}
-                      </button>
-                  ))}
-              </div>
-            )}
-
-            {/* Row 4: active-filter chips */}
-            {activeFilters.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                {activeFilters.map(f => (
-                  <button key={f.key} onClick={f.clear}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/15 border border-accent/30 text-text text-xs">
-                    {f.label} <X className="w-3 h-3 opacity-60" />
-                  </button>
-                ))}
-                <button onClick={clearFilters} className="text-xs text-muted hover:text-bad">Alle entfernen</button>
-              </div>
-            )}
+            <CollectionToolbar t={{ filter, setFilter, sortType, setSortType, setFiltersOpen, filtersOpen, activeFilters, openExport, exportCopyIds, setExportCopyIds, setPricesOpen, pricesOpen, runBulk, cmBulkBusy, cmRunning, cmProgress, runCardmarket, cmAuto, toggleCmAuto, cmMinRank, setCmMinRank, handleUpdate, updating, cmStatus, relTime, containersTagsError, copiesLoadError, count: filtered.length }} />
+            <CollectionFilters f={{ filtersOpen, presets, togglePreset, filterType, setFilterType, filterLang, setFilterLang, filterAttribute, setFilterAttribute, attributes, filterRace, setFilterRace, races, filterRarity, setFilterRarity, rarities, filterCondition, setFilterCondition, filterEdition, setFilterEdition, filterSet, setFilterSet, sets, clearFilters, containers, filterContainers, toggleContainerFilter, tagOptions, filterTags, toggleTagFilter, activeFilters }} />
         </div>
 
         <div className="flex-1 overflow-hidden">
             {filtered.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-muted">Keine Karten gefunden.</div>
             ) : (
-                <AutoSizer>
-                    {({ height, width }) => {
-                        // The Grid's own vertical scrollbar sits inside the width AutoSizer
-                        // measured. Columns spread across the full width would push the last one
-                        // underneath it and make the Grid scroll sideways, so lay them out
-                        // across what the scrollbar leaves over.
-                        const inner = Math.max(width - scrollbarWidth(), 0);
-                        // Responsive Column Count
-                        const columnWidth = 180;
-                        const columnCount = Math.floor(inner / columnWidth) || 1;
-                        const rowCount = Math.ceil(filtered.length / columnCount);
-
-                        return (
-                            <Grid
-                                columnCount={columnCount}
-                                columnWidth={inner / columnCount}
-                                defaultHeight={height}
-                                rowCount={rowCount}
-                                rowHeight={300}
-                                width={width}
-                                height={height} // Also pass height for Grid style
-                                cellProps={{ items: filtered, columnCount }}
-                                cellComponent={Cell}
-                            />
-                        );
-                    }}
-                </AutoSizer>
+                <CollectionGrid items={filtered} containers={containers} filterContainers={filterContainers}
+                    forSaleByCard={forSaleByCard} onOpen={openCard} />
             )}
         </div>
     </div>
