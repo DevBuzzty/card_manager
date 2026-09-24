@@ -10,3 +10,6 @@ android/.idea/
 /kaggle_upload/
 .superpowers/
 /colab_upload/
+
+# Supabase-CLI (npx supabase ...)
+supabase/.temp/

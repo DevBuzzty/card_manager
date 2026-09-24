@@ -94,6 +94,7 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     let lastError: string | null = null;
     let api: EbayApi | null = null;
     let connected = !!acc.refresh_token;
+    let authReason: string | null = null;
     const expired = !!acc.refresh_expires_at && Date.parse(acc.refresh_expires_at) <= now.getTime();
     const creds = connected ? credsFor(env, d.env) : null;
     // Schritt 1: Token erneuern. Abgelehnt (invalid_grant) oder abgelaufen -> trennen, Angebote bleiben „wartet“.
@@ -113,6 +114,9 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
       } catch (e) {
         if (!(e instanceof EbayError && e.auth)) throw e;
         connected = false;
+        // eBays eigene Begründung (error_description, nie ein Token) zur Fehlersuche mitschreiben -- H3b2-Befund
+        // 24.09.2026: die erste Token-Erneuerung in Produktion wurde abgelehnt, ohne dass sichtbar war, warum.
+        authReason = e.message;
       }
     } else connected = false;
     if (!connected && acc.refresh_token) {
@@ -123,7 +127,7 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
       // Fixrunde 2 (Task 5) Minor 2: ebenso hier -- die Zeile passt nicht mehr (z.B. inzwischen neu verbunden);
       // dann nicht fälschlich EXPIRED setzen, sondern sauber abbrechen und den nächsten Lauf entscheiden lassen.
       if (!ok) return { ok: true, busy: false, summary: s, text: summaryText(s) };
-      lastError = EXPIRED;
+      lastError = authReason ? `${EXPIRED} (eBay: ${authReason})` : EXPIRED;
     } else if (!connected) {
       // Fixrunde 1 (Task 5) Important 2: ohne (neue) Verbindung bleibt ein zuvor gesetzter Hinweis stehen, statt
       // am Laufende auf null überschrieben zu werden -- sonst verschwindet EXPIRED nach dem ersten Folgelauf.
