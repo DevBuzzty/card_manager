@@ -252,7 +252,10 @@ fun AppNav(onThemeChange: (String) -> Unit) {
         }
     }
 
-    Scaffold(bottomBar = { if (showBar) AppBottomBar(nav) }) { padding ->
+    // Spec I §5.2 Punkt 5: Spruenge aus Blaettern heraus ("Angebot ansehen", "Verkaufsliste ansehen").
+    LaunchedEffect(Unit) { NavRequests.flow.collect { nav.navigateTopFresh(it) } }
+    // Spec I §5.2 Punkt 4: die app-weite Hinweis-/Rueckgaengig-Leiste (AppSnackbar).
+    Scaffold(bottomBar = { if (showBar) AppBottomBar(nav) }, snackbarHost = { SnackbarHost(AppSnackbar.hostState) }) { padding ->
         NavHost(
             navController = nav,
             startDestination = Routes.START,

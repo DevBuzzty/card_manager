@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.ui
 
+import com.example.yugiohscanner.ml.CopyRowText
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -51,9 +53,16 @@ import kotlinx.coroutines.launch
  * diesem Fenster wuerde Seite/Fach eines echten Ordner-Exemplars sonst still loeschen (das war
  * der Desktop-Datenverlust-Bug aus Task 6, Befund B).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
+fun CopySheet(
+    copy: CopyRow,
+    cardName: String? = null,
+    siblings: List<CopyRow> = emptyList(),
+    onOpenCopy: ((CopyRow) -> Unit)? = null,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -82,13 +91,9 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
     // Entfernen waehrend gerade gespeichert wird (oder umgekehrt) wird sofort verworfen.
     var removing by remember { mutableStateOf(false) }
     var pendingRemove by remember { mutableStateOf(false) }
-    // Spec H1 §5.3: Schalter "Zum Verkauf" schreibt sofort -- dieselbe Doppel-Tap-Sperre (savingRef) wie Speichern/Entfernen.
-    var forSale by remember { mutableStateOf(copy.forSale) }
-    var markingSale by remember { mutableStateOf(false) }
-    // Spec H2 §5.1: "Verkauft…" oeffnet das Buchungs-Sheet fuer genau dieses Exemplar (Spontanverkauf).
+    // Spec I §4.2/§5.1: der Schalter "Zum Verkauf" entfaellt; "Verkaufen" wechselt IM SELBEN Blatt in den
+    // Verkaufsweg (SellFlow) -- dort auch "Auf die Verkaufsliste" bzw. "Von der Verkaufsliste nehmen".
     var selling by remember { mutableStateOf(false) }
-    // Spec H3a §5.1: "Anbieten…" oeffnet das Angebots-Sheet fuer genau dieses Exemplar.
-    var listing by remember { mutableStateOf(false) }
     // Plain (non-Compose-state) guard, geprueft SYNCHRON ganz am Anfang von save()/remove() -- ein
     // Doppel-Tap auf "Speichern" bzw. "Entfernen" waehrend eine der beiden Aktionen noch laeuft
     // wird sofort verworfen, nicht erst nach der naechsten Neuzeichnung. Gleiches Muster wie
@@ -151,25 +156,6 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
         }
     }
 
-    fun toggleForSale(next: Boolean) {
-        if (savingRef[0]) return
-        savingRef[0] = true
-        markingSale = true
-        error = null
-        scope.launch {
-            try {
-                CollectionRepository.setForSale(listOf(copy.copyId), next)
-                forSale = next
-                onSaved()
-            } catch (e: Exception) {
-                error = e.message ?: "Speichern fehlgeschlagen."
-            } finally {
-                markingSale = false
-                savingRef[0] = false
-            }
-        }
-    }
-
     // Copy_id-genau ueber CollectionRepository.deleteCopy, NICHT removeCopies: removeCopies waehlt
     // ueber Edition/Zustand/Erstellzeit aus einer ganzen Gruppe aus, ohne Ruecksicht auf Standort/
     // Tags/Notiz des einzelnen Exemplars -- hier ist aber genau EIN Exemplar (copy.copyId)
@@ -196,15 +182,28 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
     ModalBottomSheet(onDismissRequest = { if (!saving && !removing) onDismiss() }, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // Spec I §4.2: Kopf -- Kartenname, darunter leise Druck · Zustand · Auflage.
             Column {
-                Text("Exemplar", style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
+                Text(if (selling) "Verkaufen" else (cardName ?: "Exemplar"), style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
                 Text(
-                    "${copy.setCode} · ${copy.rarity} · ${Valuation.EDITION_LABELS[copy.edition] ?: copy.edition} · ${copy.condition}",
-                    style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = Muted,
+                    (if (selling && cardName != null) "$cardName · " else "") +
+                        "${copy.setCode} · ${copy.rarity} · ${CopyRowText.of(copy, null, 0).lead}",
+                    style = MaterialTheme.typography.labelSmall, color = Muted,
                 )
+            }
+
+            if (selling) {
+                SellFlow(
+                    copies = listOf(copy),
+                    siblings = siblings,
+                    onBack = { selling = false },
+                    onClose = { onSaved(); onDismiss() },
+                    onOpenCopy = { c -> onSaved(); onOpenCopy?.invoke(c) },
+                )
+                return@Column
             }
 
             loadError?.let {
@@ -268,11 +267,6 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
                 }
             }
 
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Zum Verkauf", style = MaterialTheme.typography.labelMedium, color = Muted, modifier = Modifier.weight(1f))
-                Switch(checked = forSale, onCheckedChange = { toggleForSale(it) }, enabled = !saving && !removing && !markingSale)
-            }
-
             Column {
                 Text("Notiz", style = MaterialTheme.typography.labelMedium, color = Muted)
                 Spacer(Modifier.height(4.dp))
@@ -284,40 +278,27 @@ fun CopySheet(copy: CopyRow, onDismiss: () -> Unit, onSaved: () -> Unit) {
 
             error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
 
-            Row(
+            // Spec I §4.2: Fuss -- Entfernen leise links, rechts Verkaufen und Speichern (einzige Hauptaktion); bricht
+            // um statt abzuschneiden, liegt unten in Daumenreichweite.
+            FlowRow(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Row {
-                    TextButton(onClick = { pendingRemove = true }, enabled = !saving && !removing) {
-                        Icon(Icons.Default.Delete, "Entfernen", tint = ErrorColor, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(if (removing) "Wird entfernt…" else "Entfernen", color = ErrorColor)
-                    }
-                    TextButton(onClick = { if (!savingRef[0]) selling = true }, enabled = !saving && !removing && !markingSale) {
-                        Text("Verkauft…")
-                    }
-                    TextButton(onClick = { if (!savingRef[0]) listing = true }, enabled = !saving && !removing && !markingSale) {
-                        Text("Anbieten…")
-                    }
+                TextButton(onClick = { pendingRemove = true }, enabled = !saving && !removing) {
+                    Icon(Icons.Default.Delete, null, tint = Muted, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(if (removing) "Wird entfernt…" else "Entfernen", color = Muted)
                 }
-                Row {
-                    TextButton(onClick = onDismiss, enabled = !saving && !removing) { Text("Abbrechen") }
-                    Spacer(Modifier.width(8.dp))
-                    Button(onClick = { save() }, enabled = !saving && !removing && loadError == null) {
-                        Text(if (saving) "Wird gespeichert…" else "Speichern")
-                    }
+                Spacer(Modifier.weight(1f))
+                OutlinedButton(onClick = { if (!savingRef[0]) selling = true }, enabled = !saving && !removing) {
+                    Text("Verkaufen")
+                }
+                Button(onClick = { save() }, enabled = !saving && !removing && loadError == null) {
+                    Text(if (saving) "Wird gespeichert…" else "Speichern")
                 }
             }
         }
-    }
-
-    if (selling) {
-        SaleSheet(listOf(copy.copyId), onDismiss = { selling = false }, onBooked = { _, _ -> selling = false; onSaved(); onDismiss() })
-    }
-    if (listing) {
-        ListingSheet(listOf(copy.copyId), onDismiss = { listing = false }, onSaved = { listing = false; forSale = true; onSaved() })
     }
 
     if (pendingRemove) {
