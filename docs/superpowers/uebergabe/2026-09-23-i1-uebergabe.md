@@ -36,7 +36,8 @@ Letzter Prüfstand (auf 228d457): Helfer-Tests 355/355, SQLite 480/480, ESLint g
 2. ~~**Abnahme** nach Spec §8~~ bestanden am 24.09., Protokoll: `docs/superpowers/ledgers/2026-09-24-i1-abnahme.md`.
 3. ~~`perf/handy-ladewege` (enthält I1) in `main` mergen und pushen~~ erledigt am 24.09.
 4. **Kaltstart-Zwischenspeicher** am Handy: `docs/superpowers/aufgaben/2026-09-24-kaltstart-zwischenspeicher.md`.
-5. Anschließend **I2** planen: Exemplarzeile, Exemplar-Dialog, Verkaufsweg mit drei Wegen (Spec §4, §5).
+4a. ~~Kaltstart-Zwischenspeicher~~ erledigt und gemergt am 24.09. (`63204d1`).
+5. **I2** ist geplant: `docs/superpowers/plans/2026-09-24-spec-i2-verkaufsweg-und-feinschliff.md` (13 Aufgaben).
 
 ### Einrichtung auf einem neuen Rechner
 
