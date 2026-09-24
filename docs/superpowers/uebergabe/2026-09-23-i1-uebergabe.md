@@ -33,8 +33,8 @@ Letzter Prüfstand (auf 228d457): Helfer-Tests 355/355, SQLite 480/480, ESLint g
 > Handy-APK ab jetzt als Release bauen: `cd android && ./gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk` (mit dem Debug-Schlüssel der jeweiligen Maschine signiert). Nach einer Änderung an `local.properties` immer `clean` mitbauen, sonst bleibt der alte Supabase-Key in den Klassen stehen (Login 401).
 
 1. ~~**Aufgabe 11:** PC-Installer bauen, `nav-counts` prüfen, installieren, APK aufs Handy.~~ erledigt am 24.09.
-2. **Abnahme** nach Spec §8, Punkte 1, 2, 3, 7, 8, 9, 10 (die Punkte 4–6 gehören zu I2), auf `perf/handy-ladewege`.
-3. Danach `perf/handy-ladewege` (enthält I1) in `main` mergen und pushen — erst nach bestandener Abnahme.
+2. ~~**Abnahme** nach Spec §8~~ bestanden am 24.09., Protokoll: `docs/superpowers/ledgers/2026-09-24-i1-abnahme.md`.
+3. ~~`perf/handy-ladewege` (enthält I1) in `main` mergen und pushen~~ erledigt am 24.09.
 4. **Kaltstart-Zwischenspeicher** am Handy: `docs/superpowers/aufgaben/2026-09-24-kaltstart-zwischenspeicher.md`.
 5. Anschließend **I2** planen: Exemplarzeile, Exemplar-Dialog, Verkaufsweg mit drei Wegen (Spec §4, §5).
 
