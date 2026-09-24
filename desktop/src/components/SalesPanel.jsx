@@ -29,7 +29,7 @@ export default function SalesPanel() {
 
   const load = useCallback(() => {
     const token = latest.current.start();
-    return window.api.salesOverview({ period, today })
+    return (window.api?.salesOverview?.({ period, today }) ?? Promise.reject(new Error('ohne App')))
       .then((d) => { if (latest.current.isCurrent(token)) { setData(d); setError(null); } })
       .catch(() => { if (latest.current.isCurrent(token)) setError('Verkäufe konnten nicht geladen werden.'); });
   }, [period, today]);
@@ -38,7 +38,7 @@ export default function SalesPanel() {
     const seq = latest.current;
     load();
     const onDirty = () => { load(); };
-    const offSales = window.api.onSalesChanged?.(onDirty);
+    const offSales = window.api?.onSalesChanged?.(onDirty);
     const offColl = window.api.onCollectionChanged?.(onDirty);
     window.addEventListener('collection-dirty', onDirty);
     return () => {

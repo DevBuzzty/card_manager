@@ -55,7 +55,8 @@ export default function CardTile({ card, onClick, saleNote = null }) {
               className={`inline-flex items-center gap-1 font-display text-klein uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-bg/75 text-muted ${r.foil ? 'font-bold' : 'font-semibold'}`}
             >
               <span className="w-[6px] h-[6px] rounded-full bg-muted" />
-              {r.label}
+              {/* I2: ohne bekannte Seltenheit nicht als "Common" ausweisen */}
+              {rarities[i] && String(rarities[i]).toLowerCase() !== 'unknown' ? r.label : 'Unbekannt'}
             </span>
           ))}
           {rarityInfos.length > 3 && (
@@ -81,7 +82,7 @@ export default function CardTile({ card, onClick, saleNote = null }) {
                 {v.rarity && v.rarity !== 'Unknown' && <span className="text-muted"> · {v.rarity}</span>}
               </span>
               <span className="font-mono text-muted shrink-0">×{v.quantity || 1}</span>
-              <span className="font-mono text-text shrink-0 w-12 text-right">€{(v.price || 0).toFixed(2)}</span>
+              <span className="font-mono text-text shrink-0 w-14 text-right">{fmtEUR(v.price || 0)}</span>
             </div>
           ))}
           {moreCount > 0 && <div className="text-klein text-muted pt-0.5">+{moreCount} weitere</div>}

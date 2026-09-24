@@ -102,7 +102,7 @@ export default function Start({ onOpenPalette }) {
       <span className="text-muted">{label}</span>
       {d ? (
         <span className={d.abs >= 0 ? 'text-good' : 'text-bad'}>
-          {fmtSignedEUR(d.abs)} ({d.pct >= 0 ? '+' : ''}{d.pct.toFixed(1)}%)
+          {fmtSignedEUR(d.abs)} ({d.pct >= 0 ? '+' : ''}{d.pct.toFixed(1).replace('.', ',')} %)
         </span>
       ) : (
         <span className="text-muted">—</span>

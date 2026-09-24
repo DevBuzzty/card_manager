@@ -3,6 +3,14 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { TrendingUp, TrendingDown, ArrowUpRight, DollarSign, Clock, Layers, RefreshCw } from 'lucide-react';
 import { fmtEUR, fmtSignedEUR, fmtNum } from '../utils/format';
 
+// I2 Feinschliff: Zeitraeume deutsch beschriften (interne Schluessel bleiben), wie am Handy (1W/1M/1J/Alles).
+const TF_LABELS = {
+  '1W': { knopf: '1W', seit: 'letzte Woche' },
+  '1M': { knopf: '1M', seit: 'letzter Monat' },
+  '1Y': { knopf: '1J', seit: 'letztes Jahr' },
+  ALL: { knopf: 'Alles', seit: 'seit Beginn' },
+};
+
 export default function Portfolio() {
     const [history, setHistory] = useState([]);
     const [stats, setStats] = useState({ totalValue: 0, totalCards: 0, uniqueCards: 0 });
@@ -134,7 +142,7 @@ export default function Portfolio() {
             <div className="flex flex-col md:flex-row justify-between items-end gap-4">
                 <div>
                     <div className="flex items-center gap-3">
-                         <span className="text-muted text-sm uppercase font-bold tracking-widest">Total Portfolio Value</span>
+                         <span className="text-muted text-sm uppercase font-bold tracking-widest">Gesamtwert</span>
                          {isLive && (
                              <span className="px-2 py-0.5 rounded-full bg-accent/20 text-text text-klein uppercase font-bold tracking-wider animate-pulse border border-accent/50">
                                  Live Update
@@ -157,7 +165,7 @@ export default function Portfolio() {
                         <span className="text-lg font-mono font-medium">
                             {fmtSignedEUR(absoluteChange)} ({fmtNum(percentChange)}%)
                         </span>
-                        <span className="text-muted text-sm ml-2 uppercase font-bold">{timeframe === 'ALL' ? 'All Time' : 'Past ' + timeframe}</span>
+                        <span className="text-muted text-sm ml-2 uppercase font-bold">{TF_LABELS[timeframe].seit}</span>
                     </div>
                 </div>
 
@@ -168,7 +176,7 @@ export default function Portfolio() {
                             onClick={() => setTimeframe(tf)}
                             className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${timeframe === tf ? 'bg-accent text-accent-fg' : 'text-muted hover:text-accent'}`}
                         >
-                            {tf}
+                            {TF_LABELS[tf].knopf}
                         </button>
                     ))}
                 </div>
@@ -209,14 +217,14 @@ export default function Portfolio() {
                         </h3>
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
-                        {topAssets.length === 0 && <div className="p-8 text-center text-muted">No assets found.</div>}
+                        {topAssets.length === 0 && <div className="p-8 text-center text-muted">Keine Karten.</div>}
                         <table className="w-full text-left text-sm">
                             <thead className="text-xs uppercase text-muted font-medium">
                                 <tr>
-                                    <th className="px-4 py-3">Asset</th>
-                                    <th className="px-4 py-3 text-right">Price</th>
-                                    <th className="px-4 py-3 text-right">Qty</th>
-                                    <th className="px-4 py-3 text-right">Equity</th>
+                                    <th className="px-4 py-3">Karte</th>
+                                    <th className="px-4 py-3 text-right">Preis</th>
+                                    <th className="px-4 py-3 text-right">Anzahl</th>
+                                    <th className="px-4 py-3 text-right">Wert</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-line">
@@ -247,7 +255,7 @@ export default function Portfolio() {
                 <div className="flex flex-col gap-6">
                     <div className="bg-surface rounded-2xl border border-line p-6 flex-1 flex flex-col">
                         <h3 className="text-sm font-bold text-muted uppercase tracking-wider mb-4 flex items-center">
-                            <Layers className="w-4 h-4 mr-2" /> Allocation
+                            <Layers className="w-4 h-4 mr-2" /> Aufteilung
                         </h3>
                         <div className="flex-1 min-h-[200px] relative">
                             <ResponsiveContainer width="100%" height="100%">
@@ -272,7 +280,7 @@ export default function Portfolio() {
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <div className="text-center">
                                     <span className="block text-2xl font-bold text-text">{stats.totalCards}</span>
-                                    <span className="text-klein uppercase text-muted font-bold">Cards</span>
+                                    <span className="text-klein uppercase text-muted font-bold">Karten</span>
                                 </div>
                             </div>
                         </div>
