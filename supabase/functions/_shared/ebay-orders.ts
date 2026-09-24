@@ -2,7 +2,7 @@
 // Spec H3b §7 (H3b2) -- reine Regeln: eBay-Bestellung (Sell Fulfillment API) -> H2-Buchung, Gebühren-Regel, Hinweise.
 // Keine Aufrufe. Tests: ebay-orders_test.ts gegen docs/fixtures/ebay/orders.json.
 // Geld in ganzen Cent; nur p_sale/p_items tragen Euro (wie book_sale sie erwartet, siehe SalesRepository.kt#book).
-import { distribute, feeDefaultCents, marketValueCents, type PriceCard, type PriceCopy } from "./sales-math.ts";
+import { distribute, feeDefaultCents, marketValueCents, type PriceCard, type PriceCopy, toCents } from "./sales-math.ts";
 
 export type Amount = { value?: string | null; currency?: string | null } | null | undefined;
 export type EbayLineItem = {
@@ -115,6 +115,28 @@ export function bookingFor(
 export function feeUpdate(x: { saleFeesCents: number | null; provisionalCents: number | null; finalCents: number | null }): "wait" | "update" | "keep" {
   if (x.finalCents == null) return "wait";
   return x.saleFeesCents === x.provisionalCents ? "update" : "keep";
+}
+
+export type SaleHead = {
+  sale_id: string; sold_on: string; channel_id: string; channel_name: string; gross: number | string;
+  fees: number | string | null; shipping: number | string | null; note: string | null; status: string;
+};
+export type SaleForUpdate = { head: SaleHead; items: { copy_id: string; value_at_sale: number | string }[] };
+
+// update_sale-Aufruf für die endgültige Gebühr: Kopf unverändert bis auf fees, Anteile neu verteilt (Netto ändert sich),
+// eingefrorener Marktwert (value_at_sale) als Gewicht -- wie SaleDialog/updateSale am PC.
+export function feesPatch(sale: SaleForUpdate, finalCents: number) {
+  const h = sale.head;
+  const items = [...sale.items].sort((a, b) => cmp(a.copy_id, b.copy_id));
+  const net = (toCents(h.gross) ?? 0) - finalCents - (toCents(h.shipping) ?? 0);
+  const shares = distribute(net, items.map((it) => toCents(it.value_at_sale) ?? 0));
+  return {
+    p_sale: {
+      sale_id: h.sale_id, sold_on: h.sold_on, channel_id: h.channel_id, channel_name: h.channel_name, gross: Number(h.gross),
+      fees: finalCents / 100, shipping: h.shipping == null ? null : Number(h.shipping), note: h.note,
+    },
+    p_shares: items.map((it, i) => ({ copy_id: it.copy_id, share: shares[i] / 100 })),
+  };
 }
 
 // Summe der Verkaufsgebühren aller SALE-Transaktionen der Bestellung (Finances API); keine -> noch nicht da.

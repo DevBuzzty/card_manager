@@ -281,6 +281,7 @@ Deno.test("saveAccountIf: schreibt nur bei passendem Refresh-Token/Umgebung, son
 Deno.test("Sperre nicht zu bekommen (Store-Fehler) -> {ok:false,error}, keine Tokens im Fehlertext, kein Absturz", async () => {
   const boom = () => Promise.reject(new Error("sollte nicht aufgerufen werden"));
   const store: Store = {
+    ...fakeStore({}).store,
     photoBase: "https://proj.supabase.co",
     account: boom, saveAccount: boom, unlock: boom,
     tryLock: () => Promise.reject(new Error("DB nicht erreichbar")),

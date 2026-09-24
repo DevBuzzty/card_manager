@@ -119,6 +119,7 @@ export function fakeEbay(opts: FakeEbayOpts = {}) {
     return reply(599, { errors: [{ message: `keine Route ${method} ${url}` }] });
   };
   const view = (o: FakeOffer) => ({ offerId: o.offerId, sku: o.sku, marketplaceId: o.marketplaceId, status: o.status, listing: o.listing });
-  const ebayCalls = () => calls.filter((c) => c.url.includes("/sell/"));
+  // Nur Angebots-Aufrufe (Inventory/Account); Bestellungen und Finanzdaten (H3b2) liest jeder Lauf zusätzlich.
+  const ebayCalls = () => calls.filter((c) => c.url.includes("/sell/") && !c.url.includes("/sell/fulfillment/") && !c.url.includes("/sell/finances/"));
   return { fetchFn, calls, ebayCalls, items, offers };
 }

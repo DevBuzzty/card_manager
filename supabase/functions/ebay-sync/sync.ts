@@ -1,6 +1,6 @@
 // supabase/functions/ebay-sync/sync.ts
-// Spec H3b §8 -- ein Durchgang des Abgleichers, H3b1: Schritt 1 (Token), 4 (Angebote abgleichen, höchstens 50),
-// 5 (Stand schreiben). Nur ein Durchgang gleichzeitig (Sperre in ebay_account, Abweichung 2). Einzelne Ablehnungen
+// Spec H3b §8 -- ein Durchgang des Abgleichers: Schritt 1 (Token), 2+3 (H3b2: Bestellungen buchen, Gebühren nachtragen --
+// ebay-sync/orders.ts), 4 (Angebote abgleichen, höchstens 50), 5 (Stand schreiben). Nur ein Durchgang gleichzeitig (Sperre in ebay_account, Abweichung 2). Einzelne Ablehnungen
 // betreffen nur ihr Angebot; eBay nicht erreichbar / Verbindung weg bricht den Durchgang ab (Spec §9).
 import {
   appToken, categoryAspects, credsFor, type EbayApi, ebayApi, EbayError, ensureAccess, type Env, type Fetch, type Offer,
@@ -13,6 +13,8 @@ import {
   decide, type EbayRow, emptySummary, ENDED_ON_EBAY, EXPIRED, offerEnded, SOLD_ON_EBAY, type Summary, summaryText,
 } from "../_shared/ebay-plan.ts";
 import type { Store } from "../_shared/ebay-store.ts";
+import { notices, tokenDue } from "../_shared/ebay-orders.ts";
+import { runFees, runOrders } from "./orders.ts";
 
 export const LOCK_SECONDS = 300;
 export const MAX_PER_RUN = 50;
@@ -129,6 +131,15 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     }
     const setupOk = connected && !!(acc.payment_policy_id && acc.fulfillment_policy_id && acc.return_policy_id && acc.location_key);
     const policies: Policies = acc;
+
+    // H3b2 Schritte 2/3: Bestellungen abholen und buchen, danach Gebühren nachtragen -- vor Schritt 4, damit ein gerade
+    // gebuchter Verkauf (Angebot verkauft/Menge gesenkt, sold_seen erhöht) im selben Lauf auf eBay nachgezogen wird.
+    if (connected && api) {
+      if (tokenDue(acc.refresh_expires_at, now.getTime())) await d.store.addNotices([notices.token(acc.refresh_expires_at!)]);
+      const over = () => d.now().getTime() >= deadline;
+      await runOrders(api, d.store, env, acc, now, over, s);
+      await runFees(api, d.store, env, over, s);
+    }
 
     // Schritt 4: Angebote abgleichen.
     const rows = await d.store.openRows(retryId);

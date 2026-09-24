@@ -53,10 +53,18 @@ export const ENDED_ON_EBAY = "auf eBay beendet – in der App beenden oder erneu
 export const SOLD_ON_EBAY = "Auf eBay verkauft – bitte den Verkauf in der App buchen, danach „Erneut versuchen“.";
 export const EXPIRED = "Verbindung abgelaufen – bitte neu verbinden";
 
-export type Summary = { published: number; revised: number; withdrawn: number; waiting: number; checked: number; errors: number; deferred: number };
-export const emptySummary = (): Summary => ({ published: 0, revised: 0, withdrawn: 0, waiting: 0, checked: 0, errors: 0, deferred: 0 });
+// H3b2: booked/cancelled/feesFinal zählen Bestellungen (Schritte 2/3); Fehler beim Buchen zählen in errors.
+export type Summary = {
+  published: number; revised: number; withdrawn: number; waiting: number; checked: number; errors: number; deferred: number;
+  booked: number; cancelled: number; feesFinal: number;
+};
+export const emptySummary = (): Summary =>
+  ({ published: 0, revised: 0, withdrawn: 0, waiting: 0, checked: 0, errors: 0, deferred: 0, booked: 0, cancelled: 0, feesFinal: 0 });
 export function summaryText(s: Summary): string {
-  const parts = [`${s.published} eingestellt`, `${s.revised} geändert`, `${s.withdrawn} beendet`, `${s.errors} Fehler`];
+  const parts: string[] = [];
+  if ((s.booked ?? 0) > 0) parts.push(`${s.booked} gebucht`);
+  if ((s.cancelled ?? 0) > 0) parts.push(`${s.cancelled} storniert`);
+  parts.push(`${s.published} eingestellt`, `${s.revised} geändert`, `${s.withdrawn} beendet`, `${s.errors} Fehler`);
   if (s.waiting > 0) parts.push(`${s.waiting} wartet`);
   if (s.deferred > 0) parts.push(`${s.deferred} im nächsten Lauf`);
   return parts.join(" · ");
