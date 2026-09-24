@@ -51,35 +51,35 @@ export default function PriceAlertTargets({ printing }) {
 
   if (!state.targets) {
     return state.error
-      ? <div className="text-[11px] text-ink-faint py-1">Preis-Alarm: {state.error}</div>
+      ? <div className="text-[11px] text-muted py-1">Preis-Alarm: {state.error}</div>
       : <div className="h-7" aria-hidden="true" />;
   }
 
   const field = (kind, sign) => (
     <span className="flex items-center gap-1">
-      <span className="text-ink-muted">{sign}</span>
+      <span className="text-muted">{sign}</span>
       <input value={text[kind]} inputMode="decimal" aria-label={`Preis-Alarm ${sign}`}
         onChange={(e) => setText((t) => ({ ...t, [kind]: e.target.value }))}
         onBlur={() => save(kind)}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-        className={`w-16 bg-black/40 border rounded px-1 py-0.5 text-xs text-white font-mono ${fieldError[kind] ? 'border-crit' : 'border-gray-700'}`} />
-      <span className="text-ink-muted">€</span>
-      {state.targets[kind] && !state.targets[kind].armed && <span className="text-[10px] text-gold">ausgelöst</span>}
+        className={`w-16 bg-bg/40 border rounded px-1 py-0.5 text-xs text-text font-mono ${fieldError[kind] ? 'border-bad' : 'border-line'}`} />
+      <span className="text-muted">€</span>
+      {state.targets[kind] && !state.targets[kind].armed && <span className="text-[10px] text-warn">ausgelöst</span>}
     </span>
   );
 
   return (
     <div className="py-1 text-xs">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-ink-muted">Preis-Alarm:</span>
+        <span className="text-muted">Preis-Alarm:</span>
         {field('above', '≥')}
-        <span className="text-ink-faint">·</span>
+        <span className="text-muted">·</span>
         {field('below', '≤')}
       </div>
       {(fieldError.above || fieldError.below) && (
-        <div className="text-[11px] text-crit mt-0.5">{fieldError.above || fieldError.below}</div>
+        <div className="text-[11px] text-bad mt-0.5">{fieldError.above || fieldError.below}</div>
       )}
-      {state.error && <div className="text-[11px] text-ink-faint mt-0.5">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
+      {state.error && <div className="text-[11px] text-muted mt-0.5">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
     </div>
   );
 }

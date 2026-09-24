@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StagingArea from './components/StagingArea';
 import SammlungLayout from './components/SammlungLayout';
+import VerkaufenLayout, { KandidatenPanel, ZumVerkaufPanel, AngebotePanel, VerkaeufePanel } from './components/VerkaufenLayout';
 import CollectionList from './components/CollectionList';
 import Binders from './components/Binders';
 import BinderView from './components/BinderView';
@@ -96,11 +97,11 @@ function App() {
   }, [navigate]);
 
   return (
-    <div className="flex h-screen bg-obsidian text-ink overflow-hidden font-sans">
+    <div className="flex h-screen bg-bg text-text overflow-hidden font-sans">
       <Sidebar />
-      <main className="flex-1 overflow-auto bg-obsidian p-6 flex flex-col">
+      <main className="flex-1 overflow-auto bg-bg p-6 flex flex-col">
         {updateProgress && (
-            <div className="bg-gray-900 border-b border-gray-800 px-6 py-2 flex items-center justify-between text-xs text-space-violet animate-pulse">
+            <div className="bg-bg border-b border-line px-6 py-2 flex items-center justify-between text-xs text-accent animate-pulse">
                 <span className="font-bold uppercase tracking-wider">Kartendaten werden aktualisiert…</span>
                 <span>{updateProgress.current} / {updateProgress.total}</span>
             </div>
@@ -108,7 +109,7 @@ function App() {
         <div className="flex-1 overflow-hidden flex gap-6 min-h-0">
             <div className="flex-1 min-w-0 overflow-auto">
               <ErrorBoundary>
-                <Suspense fallback={<div className="flex items-center justify-center h-full text-space-violet"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
+                <Suspense fallback={<div className="flex items-center justify-center h-full text-accent"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
                   <Routes location={background || (panelOpen ? { ...location, pathname: '/sammlung/karten' } : location)}>
                     <Route path="/" element={<Navigate to="/start" replace />} />
                     <Route path="/start" element={<Start onOpenPalette={() => setPaletteOpen(true)} />} />
@@ -122,8 +123,16 @@ function App() {
                       <Route path="binder/:containerId" element={<BinderView panelOpen={panelOpen} />} />
                       <Route path="wunschliste" element={<Wishlist />} />
                       <Route path="sets" element={<SetCompletion />} />
-                      <Route path="decks" element={<DeckBuilder />} />
                       <Route path="sealed" element={<SealedList />} />
+                    </Route>
+                    <Route path="/decks" element={<DeckBuilder />} />
+                    <Route path="/sammlung/decks" element={<Navigate to="/decks" replace />} />
+                    <Route path="/verkaufen" element={<VerkaufenLayout />}>
+                      <Route index element={<Navigate to="/verkaufen/kandidaten" replace />} />
+                      <Route path="kandidaten" element={<KandidatenPanel />} />
+                      <Route path="zum-verkauf" element={<ZumVerkaufPanel />} />
+                      <Route path="angebote" element={<AngebotePanel />} />
+                      <Route path="verkaeufe" element={<VerkaeufePanel />} />
                     </Route>
                     <Route path="/deals" element={<Deals />} />
                     <Route path="/insights" element={<Insights />} />

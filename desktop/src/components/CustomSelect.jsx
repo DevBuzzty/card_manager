@@ -60,23 +60,23 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
       <button
         type="button"
         onClick={() => setIsOpen(o => !o)}
-        className="w-full flex items-center justify-between bg-[#1a1a1a] border border-gray-800 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet hover:bg-[#252525] transition-colors"
+        className="w-full flex items-center justify-between bg-bg border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent hover:bg-surface-2 transition-colors"
       >
-        <span className={clsx("truncate mr-2", !selectedOption && "text-gray-500")}>
+        <span className={clsx("truncate mr-2", !selectedOption && "text-muted")}>
           {selectedOption ? selectedOption.label : placeholder}
         </span>
-        <ChevronDown className={clsx("w-4 h-4 text-gray-500 transition-transform duration-200", isOpen && "rotate-180")} />
+        <ChevronDown className={clsx("w-4 h-4 text-muted transition-transform duration-200", isOpen && "rotate-180")} />
       </button>
 
       {isOpen && rect && createPortal(
         <div
           ref={menuRef}
           style={menuStyle}
-          className="z-[100] bg-[#1E1E1E] border border-gray-700 rounded-xl shadow-2xl overflow-hidden min-w-[150px]"
+          className="z-[100] bg-surface border border-line rounded-xl shadow-sm overflow-hidden min-w-[150px]"
         >
           <ul className="overflow-auto custom-scrollbar p-1" style={{ maxHeight: listMaxH }}>
             {options.map((option) => (
-              <li key={option.value} className={option.divider ? "mt-1 pt-1 border-t border-gray-700/70" : ""}>
+              <li key={option.value} className={option.divider ? "mt-1 pt-1 border-t border-line/70" : ""}>
                 <button
                   type="button"
                   onClick={() => {
@@ -86,8 +86,8 @@ export default function CustomSelect({ value, onChange, options, placeholder = "
                   className={clsx(
                     "w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors",
                     value === option.value
-                      ? "bg-space-violet text-white font-medium"
-                      : "text-gray-300 hover:bg-[#2a2a2a] hover:text-white"
+                      ? "bg-accent text-accent-fg font-medium"
+                      : "text-text hover:bg-surface-2 hover:text-text"
                   )}
                 >
                   <span className="truncate">{option.label}</span>

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Style
@@ -46,6 +47,8 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.SnapshotsRepository
 import com.example.yugiohscanner.cloud.StoreState
+import com.example.yugiohscanner.cloud.CardRow
+import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.Duplicates
 import com.example.yugiohscanner.ml.ListingText
@@ -60,14 +63,13 @@ import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Line
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
-import com.example.yugiohscanner.ui.theme.TypeSpell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -92,6 +94,7 @@ fun StartScreen(
     onOpenForSale: () -> Unit,
     onOpenDuplicates: () -> Unit,
     onOpenListings: () -> Unit,
+    onOpenDecks: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     // Spec H1 §5.3: Zaehler und "davon zum Verkauf"; null = wird gerechnet ("…").
@@ -141,7 +144,12 @@ fun StartScreen(
     var timeframe by remember { mutableStateOf(30) } // days; Int.MAX_VALUE = all
     var error by remember { mutableStateOf<String?>(null) }
     // Spec B1 §10.5: Zaehler "Nicht einsortiert", abgeleitet aus den Exemplaren im Speicher.
-    val unsortedCount = remember(ready?.copies) { UnsortedCopies.from(copies).size }
+    // Performance (Seitenwechsel): Zaehler und Druck-Zuordnung einmal je Speicherstand, abseits des
+    // Hauptthreads; beim Wiederkommen sofort aus dem Merker.
+    val derived by produceState(StartMemo.peek(cards, copies), cards, copies) {
+        value = withContext(Dispatchers.Default) { StartMemo.get(cards, copies) }
+    }
+    val unsortedCount = derived?.unsortedCount
     val catalogState by CatalogSync.state.collectAsState()
     // Catalog readiness is a SQLite read, so it is hoisted into state instead of being called
     // from composition: this screen recomposes on every Downloading percent tick, and reading
@@ -159,7 +167,8 @@ fun StartScreen(
     LaunchedEffect(Unit) {
         scope.launch {
             SideStores.sets.ensureLoaded()
-            SideStores.dealAlerts.refresh()
+            // Performance (Seitenwechsel): nur nachladen, wenn der Stand aelter als FRESH_MS ist.
+            SideStores.dealAlerts.refreshIfStale()
 
             // Ohne Ready wird nichts gerechnet und KEIN Tageswert gespeichert -- sonst stuende ein
             // 0-€-Tag im Verlauf (Spec §7.3). Der Ladebildschirm macht das zum Nicht-Fall.
@@ -171,11 +180,18 @@ fun StartScreen(
                 // Spec G3 §8: Tageswert = Karten + Sealed, erst mit an diesem Start geladener Sealed-Liste;
                 // bei Ladefehler kein Tageswert. Den Verlauf fuer das Diagramm trotzdem laden.
                 // Non-fatal if the portfolio_snapshots table isn't set up yet.
-                SideStores.sealedItems.refreshAndWait()
+                // Performance (Seitenwechsel): Sealed nur neu laden, wenn nicht frisch, und den Tageswert
+                // nur schreiben, wenn er sich seit dem letzten Schreiben geaendert hat (statt bei jedem
+                // Betreten von Start ein Netz-Schreibvorgang).
+                if (!SideStores.sealedItems.isFresh()) SideStores.sealedItems.refreshAndWait()
                 val values = SealedSnapshot.decide(dash.totalValue, SideStores.sealedItems.state.value)
                 val snaps = SideStores.snapshots
                 if (values != null) {
-                    SnapshotsRepository.upsertToday(values.total, dash.totalCards, values.sealed)
+                    val today = UtcDay.today()
+                    if (SnapshotWrites.changed(today, values.total, dash.totalCards, values.sealed)) {
+                        SnapshotsRepository.upsertToday(values.total, dash.totalCards, values.sealed)
+                        SnapshotWrites.written(today, values.total, dash.totalCards, values.sealed)
+                    }
                     if (snaps.state.value.value == null) snaps.refreshAndWait()
                     else snaps.update { SnapshotSeries.withToday(it, UtcDay.today(), values.total) }
                 } else if (snaps.state.value.value == null) {
@@ -209,7 +225,7 @@ fun StartScreen(
         val d by produceState<Dashboard?>(DashboardMemo.peek(cards, copies), cards, copies) {
             value = withContext(Dispatchers.Default) { DashboardMemo.get(cards, copies) }
         }
-        val byKey = remember(copies) { copies.groupBy { it.printingKey() } }
+        val byKey = derived?.byKey ?: emptyMap()
 
         // Window the history by the selected timeframe, spacing points by their real date.
         val nowOrd = System.currentTimeMillis() / 86_400_000L
@@ -275,7 +291,7 @@ fun StartScreen(
                     if (dash != null && !sealedLoading) {
                         val total = dash.totalValue + (sealedTotal ?: 0.0)
                         Text("%.2f €".format(total), style = MaterialTheme.typography.displaySmall,
-                            fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = Gold)
+                            fontFamily = MonoFontFamily, fontWeight = FontWeight.Bold, color = OnSurface)
                         Text("${dash.totalCards} Karten · ${dash.entries} Einträge",
                             style = MaterialTheme.typography.bodySmall, color = Muted)
                         if (sealedTotal == null) {
@@ -342,22 +358,22 @@ fun StartScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 QuickAction("Scannen", Icons.Default.CameraAlt, Modifier.weight(1f), onOpenScan)
                 QuickAction("Sammlung", Icons.Default.Style, Modifier.weight(1f), onOpenSammlung)
+                QuickAction("Decks", Icons.Default.Layers, Modifier.weight(1f), onOpenDecks)
                 QuickAction("Deals", Icons.Default.Sell, Modifier.weight(1f), onOpenDeals)
             }
 
             // Spec B1 §10.5: Zähler „Nicht einsortiert", springt in den Binder-Reiter der
-            // Sammlung. TypeSpell (bereits Teil der Theme-Palette, u.a. in BindersScreen.kt
-            // als Farbvoreinstellung) statt einer neuen Farbe -- hebt sich von Primary (Scannen/
-            // Sammlung) und Gold (Gesamtwert) ab, genau wie "frame-spell" es am Desktop tut.
+            // Sammlung. Warn statt einer Spielfarbe (Fixrunde 1, Punkt 9) -- der Zähler verlangt
+            // eine Handlung (einsortieren), genau wie "Fehlende Daten" an anderer Stelle.
             SpaceCard(Modifier.fillMaxWidth().clickable { onOpenBinder() }) {
                 Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Inbox, null, tint = TypeSpell)
+                    Icon(Icons.Default.Inbox, null, tint = Warn)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "$unsortedCount",
+                            unsortedCount?.let { "$it" } ?: "…",
                             style = MaterialTheme.typography.titleLarge, fontFamily = MonoFontFamily,
-                            fontWeight = FontWeight.Bold, color = TypeSpell,
+                            fontWeight = FontWeight.Bold, color = Warn,
                         )
                         Text(
                             "Nicht einsortiert",
@@ -371,7 +387,7 @@ fun StartScreen(
             SpaceCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth().clickable { onOpenForSale() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Sell, null, tint = Gold)
+                        Icon(Icons.Default.Sell, null, tint = Warn)
                         Spacer(Modifier.width(12.dp))
                         Text(saleSummary?.let { Duplicates.startSaleText(it) } ?: "Zum Verkauf: ${Duplicates.LOADING}",
                             style = MaterialTheme.typography.bodyMedium, color = OnSurface)
@@ -383,7 +399,7 @@ fun StartScreen(
                             style = MaterialTheme.typography.bodyMedium, color = OnSurface)
                     }
                     Row(Modifier.fillMaxWidth().clickable { onOpenListings() }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Storefront, null, tint = Gold)
+                        Icon(Icons.Default.Storefront, null, tint = Warn)
                         Spacer(Modifier.width(12.dp))
                         Text(listingsText, style = MaterialTheme.typography.bodyMedium, color = OnSurface)
                     }
@@ -408,7 +424,7 @@ fun StartScreen(
                                     style = MaterialTheme.typography.bodySmall, color = OnSurface,
                                 )
                                 Text(
-                                    deal.price?.let { "${it.toInt()} €" } ?: "—", color = Gold,
+                                    deal.price?.let { "${it.toInt()} €" } ?: "—", color = OnSurface,
                                     style = MaterialTheme.typography.bodyMedium.copy(fontFamily = MonoFontFamily),
                                 )
                             }
@@ -433,7 +449,7 @@ fun StartScreen(
                                     style = MaterialTheme.typography.bodySmall, color = OnSurface,
                                 )
                                 Text(
-                                    "${s.owned} / ${s.total}", color = Gold,
+                                    "${s.owned} / ${s.total}", color = OnSurface,
                                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = MonoFontFamily),
                                 )
                             }
@@ -507,6 +523,8 @@ private fun QuickAction(label: String, icon: ImageVector, modifier: Modifier, on
 // Points are (day-ordinal, value) so the x-axis reflects real elapsed time, not just index.
 @Composable
 private fun ValueChart(points: List<Pair<Long, Double>>, modifier: Modifier) {
+    // Primary hier lesen -- der Canvas-Zeichenblock unten ist kein @Composable-Kontext.
+    val primaryColor = Primary
     Canvas(modifier) {
         if (points.size < 2) return@Canvas
         val values = points.map { it.second }
@@ -526,8 +544,8 @@ private fun ValueChart(points: List<Pair<Long, Double>>, modifier: Modifier) {
         val fill = Path().apply {
             addPath(line); lineTo(size.width, size.height); lineTo(0f, size.height); close()
         }
-        drawPath(fill, Primary.copy(alpha = 0.12f))
-        drawPath(line, Primary, style = Stroke(width = 3f))
+        drawPath(fill, primaryColor.copy(alpha = 0.12f))
+        drawPath(line, primaryColor, style = Stroke(width = 3f))
     }
 }
 
@@ -535,3 +553,35 @@ private val dayFmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.U
 private fun dayOrdinal(day: String): Long = try {
     (dayFmt.parse(day)?.time ?: 0L) / 86_400_000L
 } catch (_: Exception) { 0L }
+
+/** Performance: was Start aus dem Speicherstand ableitet, einmal je Stand (Listen per Identitaet). */
+internal class StartDerived(val cards: List<CardRow>, val copies: List<CopyRow>) {
+    val byKey: Map<String, List<CopyRow>> = copies.groupBy { it.printingKey() }
+    val unsortedCount: Int = UnsortedCopies.from(copies).size
+}
+
+internal object StartMemo {
+    private val lock = Any()
+    private var last: StartDerived? = null
+
+    fun peek(cards: List<CardRow>, copies: List<CopyRow>): StartDerived? =
+        synchronized(lock) { last?.takeIf { it.cards === cards && it.copies === copies } }
+
+    fun get(cards: List<CardRow>, copies: List<CopyRow>): StartDerived {
+        peek(cards, copies)?.let { return it }
+        return StartDerived(cards, copies).also { synchronized(lock) { last = it } }
+    }
+}
+
+/**
+ * Performance: der zuletzt geschriebene Tageswert. Start schreibt nur, wenn sich Tag oder Werte
+ * geaendert haben -- vorher ging bei jedem Betreten von Start ein Schreibvorgang ins Netz.
+ */
+internal object SnapshotWrites {
+    private data class Written(val day: String, val total: Double, val cards: Int, val sealed: Double)
+    @Volatile private var last: Written? = null
+
+    fun changed(day: String, total: Double, cards: Int, sealed: Double) = last != Written(day, total, cards, sealed)
+    fun written(day: String, total: Double, cards: Int, sealed: Double) { last = Written(day, total, cards, sealed) }
+    fun clear() { last = null }
+}

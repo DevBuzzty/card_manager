@@ -4,7 +4,7 @@ import { parsePct, parseMinEur, toInput } from '../utils/alertInput';
 
 const DEFAULTS = { pct: 20, min_eur: 2, days: 7, active: false };
 const enterBlur = (e) => { if (e.key === 'Enter') e.currentTarget.blur(); };
-const inputCls = (bad) => `w-20 bg-obsidian border rounded-lg px-2 py-1 text-ink font-mono ${bad ? 'border-crit' : 'border-line'}`;
+const inputCls = (bad) => `w-20 bg-bg border rounded-lg px-2 py-1 text-text font-mono ${bad ? 'border-bad' : 'border-line'}`;
 
 // Spec G2 §6.3 — Einstellungen › Preise › Preis-Alarme. Ohne gespeicherte Regel ist der Bewegungsalarm
 // aus; die Felder zeigen dann die Standardwerte, und das erste Speichern legt die Regel an.
@@ -72,19 +72,19 @@ export default function PriceAlertSettings() {
 
   return (
     <div className="border-t border-line pt-6">
-      <div className="text-sm font-bold text-ink-muted mb-2 uppercase tracking-wider flex items-center gap-2">
+      <div className="text-sm font-bold text-muted mb-2 uppercase tracking-wider flex items-center gap-2">
         <BellRing className="w-4 h-4" /> Preis-Alarme
       </div>
-      {status === 'loading' && <div className="h-10 rounded-lg bg-obsidian-800 animate-pulse" />}
-      {status === 'error' && <p className="text-sm text-crit">{loadError}</p>}
+      {status === 'loading' && <div className="h-10 rounded-lg bg-bg animate-pulse" />}
+      {status === 'error' && <p className="text-sm text-bad">{loadError}</p>}
       {status === 'ready' && (
         <div className="space-y-3">
-          <label className="flex items-center gap-3 text-sm text-ink cursor-pointer">
+          <label className="flex items-center gap-3 text-sm text-text cursor-pointer">
             <input type="checkbox" checked={rule.active} onChange={(e) => saveToggle({ active: e.target.checked })}
-              className="accent-space-violet w-4 h-4" />
+              className="accent-accent w-4 h-4" />
             Bewegungsalarm
           </label>
-          <div className="flex items-center gap-2 flex-wrap text-sm text-ink-muted">
+          <div className="flex items-center gap-2 flex-wrap text-sm text-muted">
             <span>ab</span>
             <input value={text.pct} inputMode="decimal" aria-label="ab Prozent"
               onChange={(e) => setText((t) => ({ ...t, pct: e.target.value }))}
@@ -95,15 +95,15 @@ export default function PriceAlertSettings() {
               onBlur={saveMinEur} onKeyDown={enterBlur} className={inputCls(errors.min_eur)} />
             <span>€ in</span>
             <select value={rule.days} onChange={(e) => saveToggle({ days: Number(e.target.value) })}
-              className="bg-obsidian border border-line text-ink rounded-lg px-2 py-1">
+              className="bg-bg border border-line text-text rounded-lg px-2 py-1">
               <option value={7}>7 Tagen</option>
               <option value={30}>30 Tagen</option>
             </select>
           </div>
           {(errors.pct || errors.min_eur || errors.save) && (
-            <p className="text-xs text-crit">{errors.pct || errors.min_eur || errors.save}</p>
+            <p className="text-xs text-bad">{errors.pct || errors.min_eur || errors.save}</p>
           )}
-          <p className="text-xs text-ink-faint">Ausgewertet wird stündlich in der Cloud. Am Handy erscheinen Treffer beim Öffnen.</p>
+          <p className="text-xs text-muted">Ausgewertet wird stündlich in der Cloud. Am Handy erscheinen Treffer beim Öffnen.</p>
         </div>
       )}
     </div>

@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +21,8 @@ import coil.compose.AsyncImage
 import com.example.yugiohscanner.Prefs
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CatalogRepository
+import com.example.yugiohscanner.cloud.CatalogState
+import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionRepository
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.CopyLocation
@@ -34,31 +38,13 @@ import com.example.yugiohscanner.ml.SaleCopy
 import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-/** Spec H1 §5.2: Start oeffnet einen Chip der Sammlung -- einmalige Anfrage, CollectionScreen nimmt sie heraus. */
-object CollectionChip {
-    const val ALLE = "alle"
-    const val DUPLIKATE = "duplikate"
-    const val VERKAUF = "verkauf"
-    // Spec H3a §6: Übersicht „Angebote“.
-    const val ANGEBOTE = "angebote"
-    private val pending = MutableStateFlow<String?>(null)
-    val request: StateFlow<String?> = pending
-
-    fun open(chip: String) { pending.value = chip }
-    fun take(): String? = pending.getAndUpdate { null }
-}
 
 /**
  * Spec H1 §4/§5: Verkaufs-Exemplare und Duplikate zu genau einem Speicherstand ([cards]/[copies] per Identitaet) und keep.
@@ -75,6 +61,37 @@ private suspend fun computeSaleData(cards: List<CardRow>, copies: List<CopyRow>,
     val sale = Duplicates.saleCopies(copies, cards)
     val aliases = withContext(Dispatchers.IO) { runCatching { CatalogRepository.aliases(sale.map { it.copy.cardId }) }.getOrDefault(emptyMap()) }
     SaleData(cards, copies, keep, sale, Duplicates.duplicates(sale, keep) { aliases[it] })
+}
+
+/** Katalogstand fuer den Merker: die Artwork-Zuordnung aendert sich nur mit einem neu importierten Katalog. */
+private fun catalogVersion(): Int? = (CatalogSync.state.value as? CatalogState.Ready)?.version
+
+/**
+ * Performance (Seitenwechsel): der letzte berechnete Stand, prozessweit wie DashboardMemo. Start und
+ * Verkaufen zeigen beim Wiederkommen sofort Zahlen statt "…"; neu gerechnet wird nur, wenn sich der
+ * Speicherstand (per Identitaet), keep_per_card oder der Katalog geaendert haben.
+ */
+private object SaleDataMemo {
+    private val lock = Any()
+    private var last: SaleData? = null
+    private var lastCatalog: Int? = null
+
+    fun peek(cards: List<CardRow>, copies: List<CopyRow>, keep: String, catalog: Int?): SaleData? = synchronized(lock) {
+        last?.takeIf { it.cards === cards && it.copies === copies && it.keep == keep && lastCatalog == catalog }
+    }
+
+    suspend fun get(cards: List<CardRow>, copies: List<CopyRow>, keep: String, catalog: Int?): SaleData {
+        peek(cards, copies, keep, catalog)?.let { return it }
+        val d = computeSaleData(cards, copies, keep)
+        synchronized(lock) { last = d; lastCatalog = catalog }
+        return d
+    }
+}
+
+/** Beim Start vorrechnen (AppNav), damit Start und Verkaufen schon beim ersten Oeffnen Zahlen zeigen. */
+suspend fun preloadSaleData(ctx: Context) {
+    val r = CollectionStore.state.value as? StoreState.Ready ?: return
+    SaleDataMemo.get(r.cards, r.copies, keepOf(ctx), catalogVersion())
 }
 
 /** Frischer Stand fuer Mutationen (innerhalb des InFlight-Gatters gelesen, nie der Kompositions-Schnappschuss). */
@@ -95,9 +112,12 @@ fun rememberSaleData(): SaleData? {
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
     val keep = keepOf(ctx)
-    val data by produceState<SaleData?>(null, ready?.cards, ready?.copies, keep) {
+    val catalogState by CatalogSync.state.collectAsState()
+    val catalog = (catalogState as? CatalogState.Ready)?.version
+    val initial = ready?.let { SaleDataMemo.peek(it.cards, it.copies, keep, catalog) }
+    val data by produceState(initial, ready?.cards, ready?.copies, keep, catalog) {
         val r = ready ?: return@produceState
-        value = computeSaleData(r.cards, r.copies, keep)
+        value = SaleDataMemo.get(r.cards, r.copies, keep, catalog)
     }
     return Duplicates.visibleSaleData(ready != null, data)
 }
@@ -135,7 +155,8 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashM
     var confirmAll by remember { mutableStateOf(false) }
 
     if (data == null) {
-        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
+        // Restrunde 4: scrollbar, damit Herunterziehen (RefreshableBox in VerkaufenScreen) auch hier nachlaedt.
+        Box(modifier.fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
         return
     }
     val summary = remember(data) { Duplicates.summary(data.duplicates) }
@@ -149,7 +170,10 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashM
         }
         error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
         if (data.duplicates.isEmpty()) {
-            Text("Keine Duplikate.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            // Restrunde 4: scrollbarer Leerzustand, damit Herunterziehen nachlaedt.
+            Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                Text("Keine Duplikate.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            }
         } else {
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 88.dp)) {
                 items(data.duplicates, key = { it.mainId }) { e ->
@@ -239,7 +263,8 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     listingFor?.let { ListingSheet(it, onDismiss = { listingFor = null }, onSaved = { listingFor = null; picked = emptySet() }) }
 
     if (data == null) {
-        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
+        // Restrunde 4: scrollbar, damit Herunterziehen (RefreshableBox in VerkaufenScreen) auch hier nachlaedt.
+        Box(modifier.fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) { Text(Duplicates.LOADING, color = Muted) }
         return
     }
     val summary = remember(data) { Duplicates.forSaleSummary(data.sale) }
@@ -282,7 +307,10 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
         }
         error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
         if (groups.isEmpty()) {
-            Text("Keine Exemplare zum Verkauf.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            // Restrunde 4: scrollbarer Leerzustand, damit Herunterziehen nachlaedt.
+            Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                Text("Keine Exemplare zum Verkauf.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            }
         } else {
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
                 items(groups, key = { "${it.cardId}|${it.setCode}|${it.language}|${it.rarity}" }) { g ->
@@ -307,7 +335,7 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
                                         Text(suggestions[id]?.let { "Vorschlag ${SalesMath.euroCentsText(it)}" } ?: "–", color = Muted,
                                             fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                     }
-                                    Text(Duplicates.copyValueText(s), color = Gold, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                                    Text(Duplicates.copyValueText(s), color = OnSurface, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
                                     Spacer(Modifier.width(6.dp))
                                     TextButton(onClick = { mutate { CollectionRepository.setForSale(listOf(id), false) } }, enabled = !busy) {
                                         Text("Zurück in die Sammlung", style = MaterialTheme.typography.labelSmall)

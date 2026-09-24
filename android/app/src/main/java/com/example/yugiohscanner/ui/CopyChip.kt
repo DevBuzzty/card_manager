@@ -10,20 +10,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.cloud.Valuation
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
+import com.example.yugiohscanner.ui.theme.OnSurface
+import com.example.yugiohscanner.ui.theme.Warn
 
-// "NM · Unbek." chip; tap opens the two rows (Zustand, Edition). Gold when off the standard.
+// "NM · Unbek." chip; tap opens the two rows (Zustand, Edition). Warn when off the standard.
 @Composable
 fun CopyChip(edition: String, condition: String, onChange: (edition: String, condition: String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val std = edition == "unknown" && condition == "NM"
-    val tint = if (std) Muted else Gold
+    val tint = if (std) Muted else Warn
     Box {
         Text(
             "$condition · ${Valuation.EDITION_LABELS[edition] ?: edition}",
-            style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = tint,
+            style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily,
+            // Abschlussreview A3: Warn nur als Toenung und Rand, der Text bleibt neutral.
+            color = if (std) Muted else OnSurface,
             modifier = Modifier
                 .border(1.dp, tint.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                 .background(tint.copy(alpha = if (std) 0.08f else 0.15f), RoundedCornerShape(8.dp))

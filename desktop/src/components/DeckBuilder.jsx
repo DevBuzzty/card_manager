@@ -321,19 +321,19 @@ export default function DeckBuilder() {
     <div className="flex h-full gap-6">
         {/* Left: Deck List & Collection */}
         <div className="w-1/3 flex flex-col gap-4">
-            <div className="bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 flex flex-col h-1/3">
+            <div className="bg-surface p-4 rounded-xl border border-line flex flex-col h-1/3">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-white">My Decks</h3>
+                    <h3 className="font-bold text-text">My Decks</h3>
                     <DeckNewMenu onEmpty={() => setIsCreating(true)} onYdkFile={handleImportYdk} onPaste={() => setImportSource({})} />
                 </div>
 
                 {isCreating && (
-                    <form onSubmit={handleCreateDeck} className="mb-4 bg-black/40 p-3 rounded-lg border border-space-violet/50 animate-in fade-in slide-in-from-top-2">
+                    <form onSubmit={handleCreateDeck} className="mb-4 bg-bg p-3 rounded-lg border border-accent/50 animate-in fade-in slide-in-from-top-2">
                         <input
                             autoFocus
                             type="text"
                             placeholder="Deck Name..."
-                            className="w-full bg-[#1a1a1a] border border-gray-700 text-white px-3 py-2 rounded text-sm mb-2 focus:border-space-violet focus:outline-none"
+                            className="w-full bg-bg border border-line text-text px-3 py-2 rounded text-sm mb-2 focus:border-accent focus:outline-none"
                             value={newDeckName}
                             onChange={e => setNewDeckName(e.target.value)}
                         />
@@ -341,14 +341,14 @@ export default function DeckBuilder() {
                             <button
                                 type="button"
                                 onClick={() => setIsCreating(false)}
-                                className="text-xs text-gray-400 hover:text-white px-2 py-1"
+                                className="text-xs text-muted hover:text-text px-2 py-1"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
                                 disabled={!newDeckName.trim()}
-                                className="text-xs bg-space-violet hover:bg-space-violet-dark text-white px-3 py-1 rounded disabled:opacity-50"
+                                className="text-xs bg-surface-2 hover:bg-bg border border-line text-text px-3 py-1 rounded disabled:opacity-50"
                             >
                                 Create
                             </button>
@@ -361,19 +361,19 @@ export default function DeckBuilder() {
                         <div
                             key={deck.id}
                             onClick={() => handleLoadDeck(deck)}
-                            className={`flex justify-between items-center p-2 rounded cursor-pointer ${activeDeck?.id === deck.id ? 'bg-space-violet/20 border border-space-violet/50 text-white' : 'hover:bg-gray-800 text-gray-400'}`}
+                            className={`flex justify-between items-center p-2 rounded cursor-pointer ${activeDeck?.id === deck.id ? 'bg-accent/20 border border-accent/50 text-text' : 'hover:bg-surface-2 text-muted'}`}
                         >
                             <div className="min-w-0">
                                 <span className="flex items-center gap-2 min-w-0">
                                     <span className="truncate">{deck.name}</span>
                                     <DeckLegalityBadge showFormat format={deck.format} result={listLegality ? listLegality.get(deck.id) : null} />
                                 </span>
-                                <span className="block truncate text-[11px] font-mono text-gray-500">
+                                <span className="block truncate text-[11px] font-mono text-muted">
                                     {listCoverage ? `${boxLabel(deck, coverageData.containers)} · ${listText(listCoverage.get(deck.id))}` : LOADING}
                                 </span>
                             </div>
                             {activeDeck?.id === deck.id && (
-                                <button onClick={(e) => { e.stopPropagation(); handleDeleteDeck(deck.id); }} className="text-gray-500 hover:text-red-400">
+                                <button onClick={(e) => { e.stopPropagation(); handleDeleteDeck(deck.id); }} className="text-muted hover:text-bad">
                                     <Trash2 className="w-4 h-4" />
                                 </button>
                             )}
@@ -382,22 +382,22 @@ export default function DeckBuilder() {
                 </div>
             </div>
 
-            <div className="bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 flex flex-col flex-1 h-2/3">
-                <div className="mb-2 flex items-center gap-2 text-xs text-gray-400">
+            <div className="bg-surface p-4 rounded-xl border border-line flex flex-col flex-1 h-2/3">
+                <div className="mb-2 flex items-center gap-2 text-xs text-muted">
                     <span>Ziel:</span>
                     {[['deck', 'Deck'], ['side', 'Side']].map(([value, label]) => (
                         <button key={value} type="button" onClick={() => setAddTarget(value)}
-                            className={`px-2 py-1 rounded ${addTarget === value ? 'bg-space-violet text-white' : 'bg-gray-800 hover:text-white'}`}>
+                            className={`px-2 py-1 rounded ${addTarget === value ? 'bg-accent text-accent-fg' : 'bg-surface-2 hover:text-accent'}`}>
                             {label}
                         </button>
                     ))}
-                    {limitMessage && <span className="text-crit">{limitMessage}</span>}
+                    {limitMessage && <span className="text-bad">{limitMessage}</span>}
                 </div>
                 <div className="mb-4">
                     <input
                         type="text"
                         placeholder="Search Collection..."
-                        className="w-full bg-[#1a1a1a] border border-gray-800 text-white px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-space-violet"
+                        className="w-full bg-bg border border-line text-text px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-accent"
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
                     />
@@ -405,9 +405,9 @@ export default function DeckBuilder() {
                 <div className="flex-1 overflow-y-auto custom-scrollbar grid grid-cols-3 gap-2 content-start">
                     {filteredCollection.map(card => (
                         <div key={card.id} onClick={() => addToDeck(card)} className="cursor-pointer group relative aspect-[2/3]">
-                            <img src={card.image_url} alt={card.name} className="w-full h-full object-cover rounded border border-gray-800 group-hover:border-space-violet transition-colors" />
+                            <img src={card.image_url} alt={card.name} className="w-full h-full object-cover rounded border border-line group-hover:border-accent transition-colors" />
                             {/* Quantity badge */}
-                            <div className="absolute bottom-0 right-0 bg-black/80 text-white text-[10px] px-1 font-mono">x{card.quantity}</div>
+                            <div className="absolute bottom-0 right-0 bg-bg/80 text-text text-[10px] px-1 font-mono">x{card.quantity}</div>
                         </div>
                     ))}
                 </div>
@@ -415,18 +415,18 @@ export default function DeckBuilder() {
         </div>
 
         {/* Right: Active Deck Editor */}
-        <div className="flex-1 bg-[#1E1E1E] p-6 rounded-2xl border border-gray-800 flex flex-col">
+        <div className="flex-1 bg-surface p-6 rounded-2xl border border-line flex flex-col">
             {activeDeck ? (
                 <>
                     <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-3">
-                            <h2 className="text-2xl font-bold text-white">{activeDeck.name}</h2>
+                            <h2 className="text-2xl font-bold text-text">{activeDeck.name}</h2>
                             <CustomSelect className="w-24" value={format} onChange={(f) => { setFormat(normalizeFormat(f)); setLimitMessage(null); }} options={FORMAT_OPTIONS} />
                             <DeckLegalityBadge format={format} result={activeLegality} />
                         </div>
                         <div className="flex gap-2">
                             <DeckExportMenu deckName={activeDeck.name} entries={exportEntries} />
-                            <button onClick={handleSaveDeck} disabled={saving} className="flex items-center px-4 py-2 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg transition-colors font-medium shadow-lg shadow-space-violet/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button onClick={handleSaveDeck} disabled={saving} className="flex items-center px-4 py-2 bg-accent hover:brightness-110 text-accent-fg rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
                                 <Save className="w-4 h-4 mr-2" />
                                 Save Deck
                             </button>
@@ -444,27 +444,27 @@ export default function DeckBuilder() {
 
                     <textarea
                         value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notizen" rows={notes ? 3 : 1}
-                        className="w-full mb-4 bg-black/30 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 font-mono focus:outline-none focus:border-space-violet"
+                        className="w-full mb-4 bg-bg border border-line rounded-lg px-3 py-2 text-sm text-text font-mono focus:outline-none focus:border-accent"
                     />
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pr-2">
                         {/* Main Deck */}
                         <div>
-                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1 sticky top-0 bg-[#1E1E1E] z-10">
-                                <h3 className="text-sm font-bold uppercase text-gray-400">Main Deck</h3>
-                                <span className="text-xs text-gray-500">{mainDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
+                            <div className="flex justify-between items-center mb-2 border-b border-line pb-1 sticky top-0 bg-surface z-10">
+                                <h3 className="text-sm font-bold uppercase text-muted">Main Deck</h3>
+                                <span className="text-xs text-muted">{mainDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
-                                {mainDeck.length === 0 && <p className="text-gray-600 text-sm italic">Drag or click cards to add.</p>}
+                                {mainDeck.length === 0 && <p className="text-muted text-sm italic">Drag or click cards to add.</p>}
                                 {mainDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="main" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} onToggleStarter={toggleStarter} forSale={forSaleCards.has(String(c.card_id))} />)}
                             </div>
                         </div>
 
                         {/* Extra Deck */}
                         <div>
-                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1 sticky top-0 bg-[#1E1E1E] z-10">
-                                <h3 className="text-sm font-bold uppercase text-gray-400">Extra Deck</h3>
-                                <span className="text-xs text-gray-500">{extraDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
+                            <div className="flex justify-between items-center mb-2 border-b border-line pb-1 sticky top-0 bg-surface z-10">
+                                <h3 className="text-sm font-bold uppercase text-muted">Extra Deck</h3>
+                                <span className="text-xs text-muted">{extraDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
                                 {extraDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="extra" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} forSale={forSaleCards.has(String(c.card_id))} />)}
@@ -473,9 +473,9 @@ export default function DeckBuilder() {
 
                         {/* Side Deck */}
                         <div>
-                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-1 sticky top-0 bg-[#1E1E1E] z-10">
-                                <h3 className="text-sm font-bold uppercase text-gray-400">Side Deck</h3>
-                                <span className="text-xs text-gray-500">{sideDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
+                            <div className="flex justify-between items-center mb-2 border-b border-line pb-1 sticky top-0 bg-surface z-10">
+                                <h3 className="text-sm font-bold uppercase text-muted">Side Deck</h3>
+                                <span className="text-xs text-muted">{sideDeck.reduce((a,c) => a+c.quantity, 0)} cards</span>
                             </div>
                             <div className="space-y-1">
                                 {sideDeck.map(c => <DeckCardRow key={c.card_id} card={c} type="side" numbers={numbersFor(c.card_id)} removeFromDeck={removeFromDeck} onMove={moveOne} ban={banFor(c.card_id)} forSale={forSaleCards.has(String(c.card_id))} />)}
@@ -484,7 +484,7 @@ export default function DeckBuilder() {
                     </div>
                 </>
             ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                <div className="h-full flex flex-col items-center justify-center text-muted">
                     <FileUp className="w-16 h-16 mb-4 opacity-50" />
                     <p className="text-lg">Select or Create a Deck</p>
                 </div>
@@ -525,27 +525,27 @@ const DeckCardRow = ({ card, type, numbers, removeFromDeck, onMove, ban, onToggl
     return (
         <div
           onClick={() => removeFromDeck(card.card_id, type)}
-          className="flex items-center justify-between p-2 hover:bg-red-500/10 rounded cursor-pointer group border-b border-gray-800"
+          className="flex items-center justify-between p-2 hover:bg-bad/10 rounded cursor-pointer group border-b border-line"
         >
             <div className="flex items-center gap-2 overflow-hidden">
-                <span className="font-bold text-gray-400 w-4">{card.quantity}</span>
-                <div className="w-8 h-8 bg-black rounded overflow-hidden flex-shrink-0">
+                <span className="font-bold text-muted w-4">{card.quantity}</span>
+                <div className="w-8 h-8 bg-bg rounded overflow-hidden flex-shrink-0">
                     <img src={card.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
-                <span className={`text-sm truncate ${missing ? 'text-red-400' : 'text-gray-300'}`}>{card.name}</span>
+                <span className={`text-sm truncate ${missing ? 'text-bad' : 'text-text'}`}>{card.name}</span>
                 <DeckBanIcon ban={ban} />
-                {forSale && <Tag className="w-3.5 h-3.5 text-gold shrink-0" aria-label="Zum Verkauf markiert" />}
+                {forSale && <Tag className="w-3.5 h-3.5 text-warn shrink-0" aria-label="Zum Verkauf markiert" />}
             </div>
             <div className="flex items-center gap-2">
                 <DeckCardNumbers card={numbers} />
                 {onToggleStarter && (
                     <button type="button" title="Starter" onClick={(e) => { e.stopPropagation(); onToggleStarter(card.card_id); }}
-                        className={card.role === 'starter' ? 'text-warn' : 'text-gray-600 hover:text-gray-300'}>
+                        className={card.role === 'starter' ? 'text-warn' : 'text-muted hover:text-text'}>
                         <Star className="w-4 h-4" fill={card.role === 'starter' ? 'currentColor' : 'none'} />
                     </button>
                 )}
                 <button type="button" onClick={(e) => { e.stopPropagation(); onMove(card, type); }}
-                    className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 hover:text-white">
+                    className="px-2 py-0.5 rounded text-xs bg-surface-2 text-muted hover:text-text">
                     {moveLabel(type)}
                 </button>
             </div>

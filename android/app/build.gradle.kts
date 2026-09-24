@@ -32,6 +32,10 @@ android {
 
     buildTypes {
         release {
+            // Performance: die Release-Variante ist am Geraet ein Vielfaches fluessiger als Debug (Compose).
+            // Mit dem Debug-Schluessel signiert, damit assembleRelease direkt eine installierbare APK liefert
+            // (persoenliche App, kein Play-Store) und ueber einen Debug-Build derselben Maschine passt.
+            signingConfig = signingConfigs.getByName("debug")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -56,6 +60,9 @@ android {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
+    // Performance: installiert die Baseline-Profile der Compose-Bibliotheken auch bei per Kabel/Datei
+    // installierten APKs (der Play Store macht das sonst selbst) -- weniger Ruckeln in den ersten Sekunden.
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.navigation:navigation-compose:2.7.7")

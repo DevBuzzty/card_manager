@@ -22,12 +22,14 @@ export function getFrameColor(cardType) {
   return FRAME_COLORS[getFrameType(cardType)];
 }
 
+// Spec I §6.2 Regel 3: Seltenheit wird nicht mehr eingefaerbt (nur ueber Schriftschnitt
+// hervorgehoben), darum tragen die Stufen hier keine Farbwerte mehr -- nur noch label/foil.
 const RARITY_TIERS = {
-  common: { label: 'Common', color: '#8a8594', foil: false },
-  rare: { label: 'Rare', color: '#6db4e8', foil: false },
-  super: { label: 'Super', color: '#e8c76d', foil: 'holo' },
-  ultra: { label: 'Ultra', color: '#f5c542', foil: 'holo' },
-  secret: { label: 'Secret', color: '#ff5db1', foil: 'secret' },
+  common: { label: 'Common', foil: false },
+  rare: { label: 'Rare', foil: false },
+  super: { label: 'Super', foil: 'holo' },
+  ultra: { label: 'Ultra', foil: 'holo' },
+  secret: { label: 'Secret', foil: 'secret' },
 };
 
 // Normalise the many printed rarity strings to one of five tiers.

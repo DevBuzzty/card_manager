@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, Layers, Library, TrendingUp, BookOpen, Heart, CornerDownLeft } from 'lucide-react';
+import { Search, Layers, Library, TrendingUp, BookOpen, Heart, CornerDownLeft, Banknote, Copy, Tag, Store, Receipt } from 'lucide-react';
 import { ROUTES, cardRoute } from '../utils/routes';
 import { formatPasscode, passcodeMatches } from '../utils/passcode';
+import { T } from '../utils/i18n-de';
 
 export default function CommandPalette({ open, onClose }) {
   const [query, setQuery] = useState('');
@@ -42,6 +43,12 @@ export default function CommandPalette({ open, onClose }) {
     { id: 'a-insights', label: 'Insights öffnen', icon: TrendingUp, run: () => go(ROUTES.insights) },
     { id: 'a-decks', label: 'Decks öffnen', icon: BookOpen, run: () => go(ROUTES.decks) },
     { id: 'a-wishlist', label: 'Wunschliste öffnen', icon: Heart, run: () => go(ROUTES.wunschliste) },
+    // Abschlussreview B9: Bereich Verkaufen und seine vier Stationen (Spec I §5.3).
+    { id: 'a-verkaufen', label: `${T.verkaufen} öffnen`, icon: Banknote, run: () => go(ROUTES.verkaufen) },
+    { id: 'a-kandidaten', label: `${T.kandidaten} öffnen`, icon: Copy, run: () => go(ROUTES.kandidaten) },
+    { id: 'a-zum-verkauf', label: `${T.zumVerkauf} öffnen`, icon: Tag, run: () => go(ROUTES.zumVerkauf) },
+    { id: 'a-angebote', label: `${T.angebote} öffnen`, icon: Store, run: () => go(ROUTES.angebote) },
+    { id: 'a-verkaeufe', label: `${T.verkaeufe} öffnen`, icon: Receipt, run: () => go(ROUTES.verkaeufe) },
   ];
 
   const q = query.trim().toLowerCase();
@@ -76,29 +83,29 @@ export default function CommandPalette({ open, onClose }) {
   if (!open) return null;
 
   const rowClass = (active) =>
-    `w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${active ? 'bg-space-violet/15 text-white' : 'text-ink-muted'}`;
+    `w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors ${active ? 'bg-accent/15 text-text' : 'text-muted'}`;
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-start justify-center pt-[12vh] px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-40 flex items-start justify-center pt-[12vh] px-4 bg-bg/70 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={onClose}
     >
-      <div className="w-full max-w-xl bg-obsidian-800 border border-line rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-xl bg-bg border border-line rounded-2xl shadow-sm overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 py-4 border-b border-line">
-          <Search className="w-5 h-5 text-violet-soft" strokeWidth={1.8} />
+          <Search className="w-5 h-5 text-accent" strokeWidth={1.8} />
           <input
             ref={inputRef}
             value={query}
             onChange={e => { setQuery(e.target.value); setSel(0); }}
             placeholder="Karte, Set oder Aktion suchen…"
-            className="flex-1 bg-transparent outline-none text-ink text-base"
+            className="flex-1 bg-transparent outline-none text-text text-base"
           />
-          <span className="font-mono text-[10px] text-ink-faint border border-line rounded px-1.5 py-0.5">ESC</span>
+          <span className="font-mono text-[10px] text-muted border border-line rounded px-1.5 py-0.5">ESC</span>
         </div>
 
         <div className="max-h-[52vh] overflow-y-auto custom-scrollbar py-2">
           {actionResults.length > 0 && (
-            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-2 pb-1">Aktionen</div>
+            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-muted px-4 pt-2 pb-1">Aktionen</div>
           )}
           {actionResults.map((a, i) => (
             <button key={a.id} onMouseEnter={() => setSel(i)} onClick={() => runItem({ type: 'action', ...a })} className={rowClass(i === sel)}>
@@ -108,18 +115,18 @@ export default function CommandPalette({ open, onClose }) {
           ))}
 
           {cardResults.length > 0 && (
-            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-ink-faint px-4 pt-3 pb-1">Karten</div>
+            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-muted px-4 pt-3 pb-1">Karten</div>
           )}
           {cardResults.map((c, ci) => {
             const i = actionResults.length + ci;
             return (
               <button key={c.id} onMouseEnter={() => setSel(i)} onClick={() => runItem({ type: 'card', card: c })} className={rowClass(i === sel)}>
-                <div className="w-7 h-10 rounded overflow-hidden bg-obsidian-600 shrink-0">
+                <div className="w-7 h-10 rounded overflow-hidden bg-surface-2 shrink-0">
                   {c.image_url && <img src={c.image_url} alt="" className="w-full h-full object-cover" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-ink truncate">{c.name}</div>
-                  <div className="font-mono text-[10px] text-ink-faint">{formatPasscode(c.id)} · ×{c.quantity}</div>
+                  <div className="text-text truncate">{c.name}</div>
+                  <div className="font-mono text-[10px] text-muted">{formatPasscode(c.id)} · ×{c.quantity}</div>
                 </div>
                 <CornerDownLeft className="w-3.5 h-3.5 opacity-40" />
               </button>
@@ -127,10 +134,10 @@ export default function CommandPalette({ open, onClose }) {
           })}
 
           {q && flat.length === 0 && (
-            <div className="px-4 py-8 text-center text-sm text-ink-faint">Keine Treffer.</div>
+            <div className="px-4 py-8 text-center text-sm text-muted">Keine Treffer.</div>
           )}
           {!q && (
-            <div className="px-4 py-2 text-[11px] text-ink-faint">Tippen, um die Sammlung zu durchsuchen…</div>
+            <div className="px-4 py-2 text-[11px] text-muted">Tippen, um die Sammlung zu durchsuchen…</div>
           )}
         </div>
       </div>

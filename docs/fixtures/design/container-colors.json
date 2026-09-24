@@ -1,0 +1,5 @@
+{
+  "_": "ZWILLING: desktop/src/utils/containerColors.test.js (gegen utils/containerColors.js, genutzt von Binders.jsx) und android ContainerColorsTest.kt (gegen BindersScreen.kt) pruefen beide Seiten gegen diese Datei. Behaelter-Farben sind Nutzerdaten, keine Farbrollen.",
+  "presets": ["#7C3AED", "#F5C542", "#39D98A", "#FF5D6C", "#6DB4E8", "#E8C76D", "#E8944A", "#1DA891"],
+  "default": "#7C3AED"
+}

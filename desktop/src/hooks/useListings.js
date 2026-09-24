@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createLatestOnly } from './busyGate.js';
-import { todayLocal } from './today.js';
+import { createLatestOnly } from '../utils/busyGate.js';
+import { todayLocal } from '../utils/today.js';
 
 const LOAD_ERROR = 'Angebote konnten nicht geladen werden.';
 

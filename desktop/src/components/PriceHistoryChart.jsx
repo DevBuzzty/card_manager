@@ -28,12 +28,12 @@ export default function PriceHistoryChart({ printing }) {
   const steps = useMemo(() => (rows ? computeSteps(rows, todayUtc(), windowDays) : null), [rows, windowDays]);
 
   if (!rows) {
-    return <div className="text-[11px] text-ink-faint py-1">{error ? 'Verlauf nicht verfügbar' : 'Verlauf lädt …'}</div>;
+    return <div className="text-[11px] text-muted py-1">{error ? 'Verlauf nicht verfügbar' : 'Verlauf lädt …'}</div>;
   }
-  if (steps.kind === 'none') return <div className="text-[11px] text-ink-faint py-1">Noch kein Verlauf</div>;
-  if (steps.kind === 'series' && steps.points.length < 2) return <div className="text-[11px] text-ink-faint py-1">Noch kein Verlauf</div>;
+  if (steps.kind === 'none') return <div className="text-[11px] text-muted py-1">Noch kein Verlauf</div>;
+  if (steps.kind === 'series' && steps.points.length < 2) return <div className="text-[11px] text-muted py-1">Noch kein Verlauf</div>;
   if (steps.kind === 'flat') {
-    return <div className="text-[11px] text-ink-faint py-1">Seit {fmtDayDE(steps.flatDay)} unverändert {fmtEUR(steps.flatPrice)}</div>;
+    return <div className="text-[11px] text-muted py-1">Seit {fmtDayDE(steps.flatDay)} unverändert {fmtEUR(steps.flatPrice)}</div>;
   }
   const data = steps.points.map((p) => ({ t: ts(p.day), price: p.price }));
   return (
@@ -41,20 +41,20 @@ export default function PriceHistoryChart({ printing }) {
       <div className="flex gap-1 mb-1">
         {WINDOWS.map((w) => (
           <button key={w} onClick={() => setWindowDays(w)}
-            className={`px-2 py-0.5 rounded text-[10px] ${windowDays === w ? 'bg-space-violet text-white' : 'text-ink-faint hover:text-ink border border-line'}`}>{w} T</button>
+            className={`px-2 py-0.5 rounded text-[10px] ${windowDays === w ? 'bg-accent text-accent-fg' : 'text-muted hover:text-text border border-line'}`}>{w} T</button>
         ))}
       </div>
       <div className="h-28">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 14, right: 6, bottom: 0, left: 0 }}>
-            <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tick={{ fontSize: 9, fill: '#888' }} tickFormatter={(t) => fmtDayDE(dayOf(t))} />
-            <YAxis width={48} tick={{ fontSize: 9, fill: '#888' }} domain={['auto', 'auto']} tickFormatter={(v) => fmtEUR(v)} />
-            <Tooltip contentStyle={{ backgroundColor: '#121212', borderRadius: '8px', border: '1px solid #333', fontSize: 11 }}
+            <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={(t) => fmtDayDE(dayOf(t))} />
+            <YAxis width={48} tick={{ fontSize: 9, fill: 'var(--text-muted)' }} domain={['auto', 'auto']} tickFormatter={(v) => fmtEUR(v)} />
+            <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', borderRadius: '8px', border: '1px solid var(--line)', fontSize: 11 }}
               labelFormatter={(t) => fmtDayDE(dayOf(t))} formatter={(v) => [fmtEUR(v), 'Preis']} />
-            <Line type="stepAfter" dataKey="price" stroke="#9D00FF" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line type="stepAfter" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={false} isAnimationActive={false} />
             {steps.markers.map((m) => (
-              <ReferenceLine key={m.day} x={ts(m.day)} stroke="#F5C542" strokeDasharray="4 3"
-                label={{ value: `Quelle: ${FAMILY_LABELS[m.family]}`, position: 'insideTopLeft', fill: '#F5C542', fontSize: 9 }} />
+              <ReferenceLine key={m.day} x={ts(m.day)} stroke="var(--warn)" strokeDasharray="4 3"
+                label={{ value: `Quelle: ${FAMILY_LABELS[m.family]}`, position: 'insideTopLeft', fill: 'var(--warn)', fontSize: 9 }} />
             ))}
           </LineChart>
         </ResponsiveContainer>

@@ -430,19 +430,21 @@ private fun Pocket(
         val dashes = remember(density) {
             with(density) { PathEffect.dashPathEffect(floatArrayOf(POCKET_DASH_ON.toPx(), POCKET_DASH_OFF.toPx()), 0f) }
         }
+        // Muted hier ausserhalb von drawBehind lesen -- drawBehind ist kein @Composable-Kontext.
+        val muted = Muted
         Box(
             modifier.aspectRatio(0.68f).clickable { onFill() }
                 .drawBehind {
                     val r = POCKET_CORNER.toPx()
                     drawRoundRect(
-                        color = Muted.copy(alpha = 0.5f),
+                        color = muted.copy(alpha = 0.5f),
                         style = Stroke(width = POCKET_STROKE.toPx(), pathEffect = dashes),
                         cornerRadius = CornerRadius(r, r),
                     )
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.Inbox, "Leeres Fach füllen", tint = Muted.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+            Icon(Icons.Default.Inbox, "Leeres Fach füllen", tint = muted.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
         }
         return
     }

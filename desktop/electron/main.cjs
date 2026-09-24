@@ -31,6 +31,7 @@ const { catalogPrices, catalogCards, readCatalogCards, catalogSearchNames, catal
 const { createImportSessions, importOpen, importResolve, importRun } = require('./carddex-import.cjs');
 const { onlineSearch } = require('./online-search.cjs');
 const { buildExport, exportCount, exportResultText } = require('./collection-export.cjs');
+const { navCounts } = require('./nav-counts.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -1497,6 +1498,9 @@ ipcMain.handle('merge-unknown-cards', async () => {
         return { success: true, merged: mergedCount };
     } catch (e) { return { success: false, error: e.message }; }
 });
+
+// Spec I §3.1 -- Zaehler der Seitenleiste: offene Unbekannte, vorgemerkte Exemplare, laufende Angebote.
+ipcMain.handle('nav-counts', () => navCounts(db));
 
 // "Update All": force-refresh details + prices for every card. Bypasses the API cache
 // (prices change) by batching unique passcodes directly against YGOPRODeck.

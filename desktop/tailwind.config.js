@@ -7,21 +7,23 @@ export default {
   theme: {
     extend: {
       colors: {
-        'space-black': '#121212',
-        'space-charcoal': '#1E1E1E',
-        'space-white': '#E0E0E0',
-        'space-violet': '#9D00FF',
-        'space-violet-dark': '#7A00C7',
-        'violet-soft': '#b957ff',
-        obsidian: { DEFAULT: '#0c0a11', 800: '#16121e', 700: '#1e1829', 600: '#261e34' },
-        line: '#2c2440',
-        ink: { DEFAULT: '#ece8f4', muted: '#9a90b0', faint: '#6b6383' },
-        gold: { DEFAULT: '#F5C542', deep: '#d1a02a' },
+        // color-mix statt reinem var(...): Tailwind 3.4 kann den <alpha-value>-Platzhalter
+        // (fuer bg-accent/15, hover:bg-accent/90 usw.) nur in eine Funktion einsetzen, nicht in
+        // ein rohes var() -- sonst fehlt die Utility im gebauten CSS komplett (Fixrunde 1, Punkt 1).
+        // Die Hex-Werte selbst bleiben unveraendert in index.css.
+        bg: 'color-mix(in srgb, var(--bg) calc(<alpha-value> * 100%), transparent)',
+        surface: 'color-mix(in srgb, var(--surface) calc(<alpha-value> * 100%), transparent)',
+        'surface-2': 'color-mix(in srgb, var(--surface-2) calc(<alpha-value> * 100%), transparent)',
+        line: 'color-mix(in srgb, var(--line) calc(<alpha-value> * 100%), transparent)',
+        text: 'color-mix(in srgb, var(--text) calc(<alpha-value> * 100%), transparent)',
+        muted: 'color-mix(in srgb, var(--text-muted) calc(<alpha-value> * 100%), transparent)',
+        accent: 'color-mix(in srgb, var(--accent) calc(<alpha-value> * 100%), transparent)',
+        'accent-fg': 'color-mix(in srgb, var(--accent-fg) calc(<alpha-value> * 100%), transparent)',
+        good: 'color-mix(in srgb, var(--good) calc(<alpha-value> * 100%), transparent)',
+        warn: 'color-mix(in srgb, var(--warn) calc(<alpha-value> * 100%), transparent)',
+        bad: 'color-mix(in srgb, var(--bad) calc(<alpha-value> * 100%), transparent)',
+        // Spielfarben (Kartenrahmen Monster/Zauber/Falle) -- keine Oberflaechenfarbe, bleibt.
         frame: { monster: '#E8944A', spell: '#1DA891', trap: '#C4568A', normal: '#CBB07A' },
-        rarity: { common: '#8a8594', rare: '#6db4e8', super: '#e8c76d', ultra: '#f5c542', secret: '#ff5db1' },
-        good: '#39d98a',
-        warn: '#f5c542',
-        crit: '#ff5d6c',
       },
       fontFamily: {
         display: ['"Chakra Petch"', 'system-ui', 'sans-serif'],

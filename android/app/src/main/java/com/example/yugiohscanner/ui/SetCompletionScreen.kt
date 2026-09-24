@@ -35,7 +35,6 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.ui.components.SpaceCard
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Line
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
@@ -157,7 +156,7 @@ private fun SetRow(row: SetProgress) {
             Spacer(Modifier.height(6.dp))
             Text(
                 "${row.owned} / ${row.total}",
-                color = Gold,
+                color = OnSurface,
                 style = MaterialTheme.typography.bodySmall.copy(fontFamily = MonoFontFamily),
             )
         }

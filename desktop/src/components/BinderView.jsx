@@ -242,8 +242,8 @@ export default function BinderView({ panelOpen = false }) {
   const renderPage = (page, pageSlots) => (
     <section className="flex-1 min-w-[220px]">
       <div className="flex items-baseline justify-between gap-2 mb-2">
-        <span className="font-mono text-xs text-ink-muted">Seite {page}</span>
-        <span className="font-mono text-xs text-space-violet">{fmtEUR(valueOf(pageSlots.flat()))}</span>
+        <span className="font-mono text-xs text-muted">Seite {page}</span>
+        <span className="font-mono text-xs text-accent">{fmtEUR(valueOf(pageSlots.flat()))}</span>
       </div>
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {pageSlots.map((inSlot, i) => {
@@ -256,7 +256,7 @@ export default function BinderView({ panelOpen = false }) {
                 type="button"
                 title={`Seite ${page} · Fach ${slot} füllen`}
                 onClick={() => { setQuery(''); setFill({ page, slot }); }}
-                className="aspect-[0.68] rounded-md border-[1.5px] border-dashed border-ink-faint/50 flex items-center justify-center text-ink-faint/60 hover:border-space-violet hover:text-space-violet transition-colors"
+                className="aspect-[0.68] rounded-md border-[1.5px] border-dashed border-line flex items-center justify-center text-muted hover:border-accent hover:text-accent transition-colors"
               >
                 <Inbox className="w-5 h-5" />
               </button>
@@ -268,13 +268,13 @@ export default function BinderView({ panelOpen = false }) {
               onClick={() => openCard(first)}
               onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, page, slot }); }}
               title={`${nameOf(first) || first.card_id} — Seite ${page} · Fach ${slot}`}
-              className="relative aspect-[0.68] rounded-md overflow-hidden bg-black cursor-pointer ring-1 ring-transparent hover:ring-space-violet transition-shadow"
+              className="relative aspect-[0.68] rounded-md overflow-hidden bg-bg cursor-pointer ring-1 ring-transparent hover:ring-accent transition-shadow"
             >
               {imageOf(first)
                 ? <img src={imageOf(first)} alt={nameOf(first) || first.card_id} className="w-full h-full object-cover" />
-                : <span className="absolute inset-0 flex items-center justify-center p-1 text-[10px] text-center text-ink-muted">{nameOf(first) || first.card_id}</span>}
+                : <span className="absolute inset-0 flex items-center justify-center p-1 text-[10px] text-center text-muted">{nameOf(first) || first.card_id}</span>}
               {inSlot.length > 1 && (
-                <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full bg-obsidian-800/90 text-[10px] font-mono text-ink">
+                <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full bg-bg/90 text-[10px] font-mono text-text">
                   ×{inSlot.length}
                 </span>
               )}
@@ -291,14 +291,14 @@ export default function BinderView({ panelOpen = false }) {
       type="button"
       onClick={() => openCard(cp)}
       onContextMenu={(e) => { e.preventDefault(); setSheetCopy(cp); }}
-      className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-obsidian text-left transition-colors"
+      className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-bg text-left transition-colors"
     >
-      <div className="w-8 h-11 bg-black rounded overflow-hidden shrink-0">
+      <div className="w-8 h-11 bg-bg rounded overflow-hidden shrink-0">
         {imageOf(cp) && <img src={imageOf(cp)} alt="" className="w-full h-full object-cover" />}
       </div>
-      <span className="flex-1 truncate text-sm text-ink">{nameOf(cp) || cp.card_id}</span>
-      <span className="text-xs text-ink-faint font-mono shrink-0">{cp.set_code} · {cp.rarity} · {cp.condition}</span>
-      <span className="text-xs text-ink-muted font-mono shrink-0">
+      <span className="flex-1 truncate text-sm text-text">{nameOf(cp) || cp.card_id}</span>
+      <span className="text-xs text-muted font-mono shrink-0">{cp.set_code} · {cp.rarity} · {cp.condition}</span>
+      <span className="text-xs text-muted font-mono shrink-0">
         {formatCopyLocation(cp, containers.find(c => c.container_id === cp.container_id))}
       </span>
     </button>
@@ -309,7 +309,7 @@ export default function BinderView({ panelOpen = false }) {
       {/* Ganz oben und in keinem zuklappbaren Bereich -- eine Fehlermeldung, die man erst
           aufklappen muss, ist keine. */}
       {error && (
-        <div className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+        <div className="shrink-0 flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -319,13 +319,13 @@ export default function BinderView({ panelOpen = false }) {
         <button
           type="button"
           onClick={() => navigate(ROUTES.binder)}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-obsidian-700 border border-line text-sm text-ink-muted hover:text-ink transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface border border-line text-sm text-muted hover:text-text transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Behälter
         </button>
         <div className="min-w-0">
-          <h2 className="font-display text-lg text-ink truncate">{container?.name || 'Behälter'}</h2>
-          <span className="text-xs text-ink-muted">
+          <h2 className="font-display text-lg text-text truncate">{container?.name || 'Behälter'}</h2>
+          <span className="text-xs text-muted">
             {container ? (KIND_LABELS[container.kind] || container.kind) : ''}
             {isBinder && container?.pockets_per_page ? ` · ${container.pockets_per_page} Fächer pro Seite` : ''}
           </span>
@@ -333,12 +333,12 @@ export default function BinderView({ panelOpen = false }) {
       </div>
 
       {loading ? (
-        <p className="text-sm text-ink-faint">Wird geladen…</p>
+        <p className="text-sm text-muted">Wird geladen…</p>
       ) : !container ? (
         // Nur erreichbar, wenn der Behaelter geloescht wurde oder das Laden schiefging -- im
         // zweiten Fall sagt das Banner oben bereits, was war.
         !error && (
-          <div className="flex-1 flex flex-col items-center justify-center text-ink-faint">
+          <div className="flex-1 flex flex-col items-center justify-center text-muted">
             <PackageOpen className="w-16 h-16 mb-4 opacity-40" />
             <p>Diesen Behälter gibt es nicht (mehr).</p>
           </div>
@@ -349,21 +349,21 @@ export default function BinderView({ panelOpen = false }) {
             <button
               type="button" onClick={() => flip(-2)} disabled={leftPage <= 1}
               title="Vorherige Doppelseite (←)"
-              className="p-2 rounded-lg bg-obsidian-700 border border-line text-ink-muted hover:text-ink disabled:opacity-30 disabled:cursor-default"
+              className="p-2 rounded-lg bg-surface border border-line text-muted hover:text-text disabled:opacity-30 disabled:cursor-default"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <span className="font-mono text-sm text-ink">
+            <span className="font-mono text-sm text-text">
               {rightPage ? `Seite ${leftPage}–${rightPage} von ${pages}` : `Seite ${leftPage} von ${pages}`}
             </span>
             <button
               type="button" onClick={() => flip(2)} disabled={leftPage >= lastLeft}
               title="Nächste Doppelseite (→)"
-              className="p-2 rounded-lg bg-obsidian-700 border border-line text-ink-muted hover:text-ink disabled:opacity-30 disabled:cursor-default"
+              className="p-2 rounded-lg bg-surface border border-line text-muted hover:text-text disabled:opacity-30 disabled:cursor-default"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
-            <span className="font-mono text-sm text-space-violet ml-auto">{fmtEUR(openValue)}</span>
+            <span className="font-mono text-sm text-accent ml-auto">{fmtEUR(openValue)}</span>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
@@ -383,8 +383,8 @@ export default function BinderView({ panelOpen = false }) {
                 {/* Exemplare, die diesem Ordner zugeordnet sind, aber in keinem darstellbaren Fach
                     liegen (kein Fach vergeben, oder ein Fach aus einer frueheren, groesseren
                     Ordnergroesse). Ohne diese Liste waeren sie auf keiner Seite zu sehen. */}
-                <h3 className="text-xs font-bold text-ink-muted uppercase tracking-wider mb-2">Ohne Fach</h3>
-                <div className="bg-obsidian-700 border border-line rounded-xl p-2 space-y-1">
+                <h3 className="text-xs font-bold text-muted uppercase tracking-wider mb-2">Ohne Fach</h3>
+                <div className="bg-surface border border-line rounded-xl p-2 space-y-1">
                   {looseCopies.map(copyRow)}
                 </div>
               </div>
@@ -395,19 +395,19 @@ export default function BinderView({ panelOpen = false }) {
         // Box und Deckbox haben kein Raster: eine Liste aller Exemplare mit Standort-Chip.
         <>
           <div className="flex items-center gap-3 shrink-0">
-            <span className="text-sm text-ink-muted">
+            <span className="text-sm text-muted">
               {myCopies.length} {myCopies.length === 1 ? 'Exemplar' : 'Exemplare'}
             </span>
-            <span className="font-mono text-sm text-space-violet ml-auto">{fmtEUR(valueOf(myCopies))}</span>
+            <span className="font-mono text-sm text-accent ml-auto">{fmtEUR(valueOf(myCopies))}</span>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
             {myCopies.length === 0 && !error ? (
-              <div className="h-full flex flex-col items-center justify-center text-ink-faint">
+              <div className="h-full flex flex-col items-center justify-center text-muted">
                 <PackageOpen className="w-16 h-16 mb-4 opacity-40" />
                 <p>Noch nichts in diesem Behälter.</p>
               </div>
             ) : (
-              <div className="bg-obsidian-700 border border-line rounded-xl p-2 space-y-1">
+              <div className="bg-surface border border-line rounded-xl p-2 space-y-1">
                 {myCopies.map(copyRow)}
               </div>
             )}
@@ -419,26 +419,26 @@ export default function BinderView({ panelOpen = false }) {
         <div
           ref={menuRef}
           style={{ position: 'fixed', left: menu.x, top: menu.y }}
-          className="z-[100] bg-obsidian-800 border border-line rounded-xl shadow-2xl p-2 min-w-[220px] max-w-[320px]"
+          className="z-[100] bg-bg border border-line rounded-xl shadow-sm p-2 min-w-[220px] max-w-[320px]"
           onClick={(e) => e.stopPropagation()}
         >
-          <p className="px-1 pb-1 text-xs font-mono text-ink-faint">Seite {menu.page} · Fach {menu.slot}</p>
+          <p className="px-1 pb-1 text-xs font-mono text-muted">Seite {menu.page} · Fach {menu.slot}</p>
           {/* Auch bei einem einzelnen Exemplar je Zeile aufgefuehrt: liegen zwei im selben Fach,
               muss die Aktion sagen, welches gemeint ist -- ein Menue ohne Auswahl traefe eines von
               beiden auf gut Glueck. */}
           {menuCopies.map(cp => (
             <div key={cp.copy_id} className="pt-1 border-t border-line first:border-t-0">
-              <p className="px-1 text-sm text-ink truncate">{nameOf(cp) || cp.card_id}</p>
-              <p className="px-1 text-[11px] font-mono text-ink-faint truncate">
+              <p className="px-1 text-sm text-text truncate">{nameOf(cp) || cp.card_id}</p>
+              <p className="px-1 text-[11px] font-mono text-muted truncate">
                 {cp.set_code} · {cp.rarity} · {EDITION_LABELS[cp.edition] || cp.edition} · {cp.condition}
               </p>
               <div className="flex flex-col mt-1">
                 <button type="button" disabled={busy} onClick={() => { setSheetCopy(cp); setMenu(null); }}
-                        className="px-2 py-1.5 rounded-lg text-sm text-ink hover:bg-obsidian-700 text-left disabled:opacity-40">
+                        className="px-2 py-1.5 rounded-lg text-sm text-text hover:bg-surface text-left disabled:opacity-40">
                   Verschieben nach…
                 </button>
                 <button type="button" disabled={busy} onClick={() => takeOut(cp)}
-                        className="px-2 py-1.5 rounded-lg text-sm text-crit hover:bg-crit/10 text-left disabled:opacity-40">
+                        className="px-2 py-1.5 rounded-lg text-sm text-bad hover:bg-bad/10 text-left disabled:opacity-40">
                   Aus Fach nehmen
                 </button>
               </div>
@@ -448,13 +448,13 @@ export default function BinderView({ panelOpen = false }) {
       )}
 
       {fill && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm"
              onClick={() => { if (!busy) { setFill(null); setQuery(''); } }}>
           <div onClick={(e) => e.stopPropagation()}
-               className="w-full max-w-md max-h-[85vh] bg-obsidian-700 border border-line rounded-2xl flex flex-col overflow-hidden">
+               className="w-full max-w-md max-h-[85vh] bg-surface border border-line rounded-2xl flex flex-col overflow-hidden">
             <div className="p-4 border-b border-line flex items-center justify-between gap-2">
-              <h3 className="font-display text-base text-ink">In Seite {fill.page} · Fach {fill.slot} legen</h3>
-              <button type="button" onClick={() => { setFill(null); setQuery(''); }} className="text-ink-faint hover:text-ink">
+              <h3 className="font-display text-base text-text">In Seite {fill.page} · Fach {fill.slot} legen</h3>
+              <button type="button" onClick={() => { setFill(null); setQuery(''); }} className="text-muted hover:text-text">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -462,12 +462,12 @@ export default function BinderView({ panelOpen = false }) {
               <input
                 autoFocus type="text" value={query} onChange={(e) => setQuery(e.target.value)}
                 placeholder="Exemplare durchsuchen"
-                className="w-full bg-obsidian border border-line text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet"
+                className="w-full bg-bg border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
               />
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar px-2 pb-4">
               {candidatesEmpty(groups) ? (
-                <p className="px-2 py-2 text-sm text-ink-faint">
+                <p className="px-2 py-2 text-sm text-muted">
                   {looseCopies.length === 0 && unsorted.length === 0
                     ? 'Es ist nichts übrig, das hier hinein könnte.'
                     : 'Kein Exemplar passt zur Suche.'}
@@ -480,7 +480,7 @@ export default function BinderView({ panelOpen = false }) {
                       binderGrid#candidateGroups aus. */}
                   {groups.inContainer.length > 0 && (
                     <>
-                      <p className="px-2 pt-2 pb-1 text-xs font-bold text-ink-muted uppercase tracking-wider">In diesem Ordner, ohne Fach</p>
+                      <p className="px-2 pt-2 pb-1 text-xs font-bold text-muted uppercase tracking-wider">In diesem Ordner, ohne Fach</p>
                       {groups.inContainer.map(cp => (
                         <CandidateRow key={cp.copy_id} copy={cp} name={nameOf(cp)} busy={busy}
                                       onPick={() => putIn(cp, fill.page, fill.slot)} />
@@ -489,7 +489,7 @@ export default function BinderView({ panelOpen = false }) {
                   )}
                   {groups.unsorted.length > 0 && (
                     <>
-                      <p className="px-2 pt-2 pb-1 text-xs font-bold text-ink-muted uppercase tracking-wider">Nicht einsortiert</p>
+                      <p className="px-2 pt-2 pb-1 text-xs font-bold text-muted uppercase tracking-wider">Nicht einsortiert</p>
                       {groups.unsorted.map(cp => (
                         <CandidateRow key={cp.copy_id} copy={cp} name={nameOf(cp)} busy={busy}
                                       onPick={() => putIn(cp, fill.page, fill.slot)} />
@@ -510,7 +510,7 @@ export default function BinderView({ panelOpen = false }) {
         <CopySheet
           copy={sheetCopy}
           onClose={() => setSheetCopy(null)}
-          onSaved={() => { load(); }}
+          onSaved={() => { load(); window.dispatchEvent(new Event('collection-dirty')); }}
         />
       )}
     </div>
@@ -523,11 +523,11 @@ function CandidateRow({ copy, name, busy, onPick }) {
       type="button" disabled={busy} onClick={onPick}
       className={clsx(
         'w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left transition-colors',
-        busy ? 'opacity-40 cursor-default' : 'hover:bg-obsidian',
+        busy ? 'opacity-40 cursor-default' : 'hover:bg-bg',
       )}
     >
-      <span className="flex-1 truncate text-sm text-ink">{name || copy.card_id}</span>
-      <span className="text-xs text-ink-faint font-mono shrink-0">{copy.set_code} · {copy.rarity} · {copy.condition}</span>
+      <span className="flex-1 truncate text-sm text-text">{name || copy.card_id}</span>
+      <span className="text-xs text-muted font-mono shrink-0">{copy.set_code} · {copy.rarity} · {copy.condition}</span>
     </button>
   );
 }

@@ -50,28 +50,28 @@ export default function SetCompletion() {
         }
     };
 
-    if (loading) return <div className="p-4 text-center text-gray-500">Statistiken werden geladen…</div>;
+    if (loading) return <div className="p-4 text-center text-muted">Statistiken werden geladen…</div>;
 
     return (
-        <div className="bg-[#1E1E1E] rounded-2xl border border-gray-800 p-6 h-full flex flex-col">
+        <div className="bg-surface rounded-2xl border border-line p-6 h-full flex flex-col">
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
                 {sets.length === 0 && (
-                    <div className="text-center text-gray-600 py-8">Keine Set-Daten vorhanden.</div>
+                    <div className="text-center text-muted py-8">Keine Set-Daten vorhanden.</div>
                 )}
                 {sets.map(set => (
-                    <div key={set.name} className="bg-black/40 rounded-xl p-3 flex items-center justify-between border border-gray-800/50">
+                    <div key={set.name} className="bg-bg/40 rounded-xl p-3 flex items-center justify-between border border-line/50">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center font-bold text-gray-400">
+                            <div className="w-10 h-10 bg-surface-2 rounded-lg flex items-center justify-center font-bold text-muted">
                                 {set.name.substring(0, 3)}
                             </div>
                             <div>
-                                <h4 className="font-bold text-white">{set.name}</h4>
-                                <p className="text-xs text-gray-500">{set.count} Karten gesamt</p>
+                                <h4 className="font-bold text-text">{set.name}</h4>
+                                <p className="text-xs text-muted">{set.count} Karten gesamt</p>
                             </div>
                         </div>
                         <div className="text-right">
-                            <span className="text-xl font-bold text-space-violet">{set.uniqueCount}</span>
-                            <span className="text-xs text-gray-500 block">Verschiedene</span>
+                            <span className="text-xl font-bold text-accent">{set.uniqueCount}</span>
+                            <span className="text-xs text-muted block">Verschiedene</span>
                         </div>
                     </div>
                 ))}

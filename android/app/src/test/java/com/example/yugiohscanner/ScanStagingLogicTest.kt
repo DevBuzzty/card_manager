@@ -2,10 +2,7 @@ package com.example.yugiohscanner
 
 import com.example.yugiohscanner.ml.ScanConfidence
 import com.example.yugiohscanner.ui.ScanStagingLogic
-import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Good
-import com.example.yugiohscanner.ui.theme.Gold
-import com.example.yugiohscanner.ui.theme.Muted
+import com.example.yugiohscanner.ui.theme.AppColors
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -41,22 +38,24 @@ class ScanStagingLogicTest {
 
     // --- dotColor ------------------------------------------------------------------------------
     // "keine neuen Farben" (the brief): only the three existing theme colours, plus Muted for
-    // "still resolving" -- never a fourth ampel colour.
+    // "still resolving" -- never a fourth ampel colour. dotColor ist bewusst nicht @Composable
+    // (dieser Test laeuft als reiner JVM-Test ohne Komposition) -- es vergleicht deshalb gegen
+    // AppColors.light statt gegen die (jetzt @Composable) Good/Warn/ErrorColor/Muted-Rollenlesungen.
 
     @Test fun `dot colour -- green maps to the existing Good colour`() {
-        assertEquals(Good, ScanStagingLogic.dotColor(ScanConfidence.Light.GREEN))
+        assertEquals(AppColors.light.getValue("good"), ScanStagingLogic.dotColor(ScanConfidence.Light.GREEN))
     }
 
-    @Test fun `dot colour -- yellow maps to the existing Gold colour`() {
-        assertEquals(Gold, ScanStagingLogic.dotColor(ScanConfidence.Light.YELLOW))
+    @Test fun `dot colour -- yellow maps to the existing warn colour`() {
+        assertEquals(AppColors.light.getValue("warn"), ScanStagingLogic.dotColor(ScanConfidence.Light.YELLOW))
     }
 
     @Test fun `dot colour -- red maps to the existing ErrorColor`() {
-        assertEquals(ErrorColor, ScanStagingLogic.dotColor(ScanConfidence.Light.RED))
+        assertEquals(AppColors.light.getValue("bad"), ScanStagingLogic.dotColor(ScanConfidence.Light.RED))
     }
 
     @Test fun `dot colour -- still resolving (no confidence yet) is Muted, not a fourth colour`() {
-        assertEquals(Muted, ScanStagingLogic.dotColor(null))
+        assertEquals(AppColors.light.getValue("text-muted"), ScanStagingLogic.dotColor(null))
     }
 
     // --- firstCopyForReservation ---------------------------------------------------------------

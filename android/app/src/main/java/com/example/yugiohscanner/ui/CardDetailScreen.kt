@@ -45,11 +45,12 @@ import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.TypeChip
 import com.example.yugiohscanner.ui.components.ValueText
-import com.example.yugiohscanner.ui.theme.Gold
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
+import com.example.yugiohscanner.ui.theme.OnSurface
 import com.example.yugiohscanner.ui.theme.Primary
+import com.example.yugiohscanner.ui.theme.Warn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -163,14 +164,14 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                 }
             }
 
-            // Hero image with a soft violet glow.
+            // Kartenbild mit kleiner neutraler Erhebung (Spec I §6.2 Regel 1: kein Leuchtschatten).
             Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
                 AsyncImage(
                     model = base.imageUrl,
                     contentDescription = base.name,
                     modifier = Modifier
                         .height(320.dp)
-                        .shadow(28.dp, RoundedCornerShape(12.dp), ambientColor = Primary, spotColor = Primary)
+                        .shadow(2.dp, RoundedCornerShape(12.dp))
                         .clip(RoundedCornerShape(12.dp)),
                 )
             }
@@ -313,7 +314,7 @@ private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, offered: St
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             // Spec H1 §5.3: Preisschild an markierten Exemplaren.
             if (copy.forSale) {
-                Icon(Icons.Default.Sell, "Zum Verkauf", tint = Gold, modifier = Modifier.size(14.dp))
+                Icon(Icons.Default.Sell, "Zum Verkauf", tint = Warn, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
             }
             Text(
@@ -327,7 +328,7 @@ private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, offered: St
             }
         }
         // Spec H3a §6: zweite Zeile "angeboten auf …".
-        offered?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Gold) }
+        offered?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Warn) }
     }
 }
 
@@ -339,7 +340,8 @@ private fun TagChipSmall(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelSmall,
-        color = Primary,
+        // Abschlussreview A3: Text neutral, die Rolle steckt nur in Toenung und Rand.
+        color = OnSurface,
         modifier = Modifier
             .background(Primary.copy(alpha = 0.15f), shape)
             .border(1.dp, Primary.copy(alpha = 0.3f), shape)

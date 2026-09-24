@@ -20,7 +20,7 @@ import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.components.SectionHeader
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Muted
 import kotlinx.coroutines.CancellationException
@@ -164,7 +164,7 @@ fun EbaySettings() {
                         } else {
                             Button(onClick = { connect() }, enabled = !busy) { Text("Verbinden") }
                         }
-                        EbayMarks.expiryText(status, today)?.let { Text(it, color = Gold, style = MaterialTheme.typography.bodySmall) }
+                        EbayMarks.expiryText(status, today)?.let { Text(it, color = Warn, style = MaterialTheme.typography.bodySmall) }
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

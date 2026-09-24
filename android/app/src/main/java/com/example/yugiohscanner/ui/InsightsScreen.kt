@@ -30,8 +30,6 @@ fun InsightsScreen(initialTab: String = "bewegungen", onBack: () -> Unit) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
     var byValue by rememberSaveable { mutableStateOf(false) }
     BackHandler(detailId != null) { detailId = null }
-    // Abschluss-Fixwelle I2: beim Oeffnen des Reiters frisch laden, nicht nur den ersten Stand.
-    LaunchedEffect(tab) { if (tab == "verkaeufe") SideStores.sales.refresh() }
     detailId?.let { id ->
         CardDetailScreen(cardId = id, onClose = { detailId = null })
         return
@@ -42,7 +40,6 @@ fun InsightsScreen(initialTab: String = "bewegungen", onBack: () -> Unit) {
             SideStores.reference(days).refreshAndWait()
             SideStores.priceAlertEvents.refreshAndWait()
             SideStores.priceAlertTargets.refreshAndWait()
-            SideStores.sales.refreshAndWait()
         }) {
             Column(Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -50,11 +47,11 @@ fun InsightsScreen(initialTab: String = "bewegungen", onBack: () -> Unit) {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Zurück") }
                     Text("Insights", style = MaterialTheme.typography.headlineSmall, color = OnSurface)
                 }
-                TabRow(selectedTabIndex = when (tab) { "aufteilung" -> 1; "alarme" -> 2; "verkaeufe" -> 3; else -> 0 }) {
+                // Spec I Fixrunde 1: Verkäufe leben nur noch unter Verkaufen (verkaufen/verkaeufe), kein Reiter mehr hier.
+                TabRow(selectedTabIndex = when (tab) { "aufteilung" -> 1; "alarme" -> 2; else -> 0 }) {
                     Tab(selected = tab == "bewegungen", onClick = { tab = "bewegungen" }, text = { Text("Bewegungen") })
                     Tab(selected = tab == "aufteilung", onClick = { tab = "aufteilung" }, text = { Text("Aufteilung") })
                     Tab(selected = tab == "alarme", onClick = { tab = "alarme" }, text = { Text("Alarme") })
-                    Tab(selected = tab == "verkaeufe", onClick = { tab = "verkaeufe" }, text = { Text("Verkäufe") })
                 }
                 if (tab == "bewegungen") {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -95,7 +92,6 @@ fun InsightsScreen(initialTab: String = "bewegungen", onBack: () -> Unit) {
                 if (tab == "alarme") {
                     PriceAlertsSection(full = true, onOpenCard = { detailId = it }, onOpenAll = null)
                 }
-                if (tab == "verkaeufe") SalesSection(onOpenCard = { detailId = it })
             }
         }
     }

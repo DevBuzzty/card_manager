@@ -9,9 +9,11 @@ import { fmtEUR, fmtSignedEUR } from '../utils/format';
 import { ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
 import { LOADING, duplicates, duplicatesSummary, forSaleSummary, startSaleText, startDuplicatesText, saleShareText } from '../utils/duplicates';
-import { useSaleData } from '../utils/useSaleData';
-import { useListingsData } from '../utils/useListingsData';
+import { useSaleData } from '../hooks/useSaleData';
+import { useListingsData } from '../hooks/useListings';
 import { listingsSummary, startText } from '../utils/listingText';
+import { countPresetGroups } from '../utils/cardFilters';
+import { useNavCounts } from '../hooks/useNavCounts';
 
 export default function Start({ onOpenPalette }) {
   const navigate = useNavigate();
@@ -55,22 +57,12 @@ export default function Start({ onOpenPalette }) {
     [cards]
   );
 
-  const unknownCount = useMemo(
-    () => cards.filter(c => c.set_code === 'Unknown').reduce((n, c) => n + (c.quantity || 1), 0),
-    [cards]
-  );
+  // Abschlussreview B6: Unbekannte als Karten (nicht Exemplare), dieselbe Zahl wie Seitenleiste und Scannen.
+  const nav = useNavCounts();
+  const unknownCount = nav ? nav.unknown : 0;
 
-  const incompleteCount = useMemo(() => cards.filter(c => {
-    const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');
-    const isLink = c.type && c.type.includes('Link');
-    if (isMonster) {
-      if (c.atk == null) return true;
-      if (!isLink && c.def == null) return true;
-      if (c.level == null) return true;
-      return false;
-    }
-    return !c.image_url;
-  }).length, [cards]);
+  // Abschlussreview B5: dieselbe Regel wie die Voreinstellung "Unvollständige Daten" der Kartenliste.
+  const incompleteCount = useMemo(() => countPresetGroups(cards, 'unvollstaendig'), [cards]);
 
   const spark = useMemo(() => {
     const vals = history.map(h => h.total_value).filter(v => typeof v === 'number');
@@ -107,13 +99,13 @@ export default function Start({ onOpenPalette }) {
 
   const renderDelta = (d, label) => (
     <div className="flex items-center gap-1.5 text-xs">
-      <span className="text-ink-faint">{label}</span>
+      <span className="text-muted">{label}</span>
       {d ? (
-        <span className={d.abs >= 0 ? 'text-good' : 'text-crit'}>
+        <span className={d.abs >= 0 ? 'text-good' : 'text-bad'}>
           {fmtSignedEUR(d.abs)} ({d.pct >= 0 ? '+' : ''}{d.pct.toFixed(1)}%)
         </span>
       ) : (
-        <span className="text-ink-faint">—</span>
+        <span className="text-muted">—</span>
       )}
     </div>
   );
@@ -123,26 +115,26 @@ export default function Start({ onOpenPalette }) {
       {/* Header */}
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="font-display font-semibold text-3xl text-ink">{T.start}</h1>
+          <h1 className="font-display font-semibold text-3xl text-text">{T.start}</h1>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => onOpenPalette && onOpenPalette()}
-            className="flex items-center gap-2 bg-obsidian-700 border border-line rounded-xl px-3.5 py-2.5 text-sm text-ink-faint hover:text-ink transition-colors min-w-[260px]"
+            className="flex items-center gap-2 bg-surface border border-line rounded-xl px-3.5 py-2.5 text-sm text-muted hover:text-text transition-colors min-w-[260px]"
           >
             <Search className="w-4 h-4" strokeWidth={1.8} />
             Karte, Set oder Aktion suchen…
-            <span className="ml-auto font-mono text-[10px] text-ink-muted border border-line rounded px-1.5 py-0.5">Strg K</span>
+            <span className="ml-auto font-mono text-[10px] text-muted border border-line rounded px-1.5 py-0.5">Strg K</span>
           </button>
-          <form onSubmit={handleQuickAdd} className="flex bg-obsidian-700 border border-line rounded-xl overflow-hidden focus-within:border-space-violet transition-colors">
+          <form onSubmit={handleQuickAdd} className="flex bg-surface border border-line rounded-xl overflow-hidden focus-within:border-accent transition-colors">
             <input
               type="text"
               placeholder="Passcode…"
-              className="bg-transparent text-ink px-3 py-2.5 outline-none w-32 font-mono text-sm"
+              className="bg-transparent text-text px-3 py-2.5 outline-none w-32 font-mono text-sm"
               value={quickAddCode}
               onChange={(e) => { if (e.target.value.length <= 8 && /^\d*$/.test(e.target.value)) setQuickAddCode(e.target.value); }}
             />
-            <button type="submit" disabled={quickAddCode.length < 4} className="bg-obsidian-600 hover:bg-space-violet text-ink px-3 transition-colors disabled:opacity-40"><Plus className="w-4 h-4" /></button>
+            <button type="submit" disabled={quickAddCode.length < 4} className="bg-surface-2 hover:bg-accent text-text hover:text-accent-fg px-3 transition-colors disabled:opacity-40"><Plus className="w-4 h-4" /></button>
           </form>
         </div>
       </div>
@@ -150,19 +142,18 @@ export default function Start({ onOpenPalette }) {
       {/* Hero row */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-5">
         {/* Value panel */}
-        <div className="relative overflow-hidden bg-obsidian-700 border border-line rounded-2xl p-6"
-          style={{ backgroundImage: 'linear-gradient(150deg, rgba(245,197,66,.10), transparent 45%), linear-gradient(210deg, rgba(157,0,255,.12), transparent 50%)' }}>
-          <div className="font-display text-[11px] tracking-[0.14em] uppercase text-ink-muted">Sammlungswert</div>
-          <div className="font-display font-bold text-4xl text-ink mt-2">
-            {statsLoaded ? money(stats.totalValue) : <span className="inline-block h-9 w-40 rounded-lg bg-obsidian-800 animate-pulse align-middle" />}
+        <div className="relative overflow-hidden bg-surface border border-line rounded-2xl p-6">
+          <div className="font-display text-[11px] tracking-[0.14em] uppercase text-muted">Sammlungswert</div>
+          <div className="font-display font-bold text-4xl text-text mt-2">
+            {statsLoaded ? money(stats.totalValue) : <span className="inline-block h-9 w-40 rounded-lg bg-bg animate-pulse align-middle" />}
           </div>
           {/* Spec G3 §7.3: Aufteilung nur bei Sealed-Bestand */}
           {stats.hasSealed && (
-            <div className="text-xs text-ink-muted mt-1">Karten {money(stats.cardValue)} · Sealed {money(stats.sealedValue)}</div>
+            <div className="text-xs text-muted mt-1">Karten {money(stats.cardValue)} · Sealed {money(stats.sealedValue)}</div>
           )}
           {/* Spec H1 §5.3: markierte Exemplare zaehlen weiter zum Wert */}
           {saleSummary && saleSummary.copies > 0 && (
-            <div className="text-xs text-ink-muted mt-1">{saleShareText(saleSummary)}</div>
+            <div className="text-xs text-muted mt-1">{saleShareText(saleSummary)}</div>
           )}
           <div className="flex gap-4 mt-1.5">
             {renderDelta(delta.d7, '7T')}
@@ -170,57 +161,56 @@ export default function Start({ onOpenPalette }) {
           </div>
           {spark ? (
             <svg className="mt-4 w-full h-[52px]" viewBox="0 0 400 52" preserveAspectRatio="none">
-              <defs><linearGradient id="dashSpark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#9D00FF" stopOpacity=".35" /><stop offset="1" stopColor="#9D00FF" stopOpacity="0" /></linearGradient></defs>
-              <path d={spark.area} fill="url(#dashSpark)" />
-              <path d={spark.line} fill="none" stroke="#b957ff" strokeWidth="2" />
-              <circle cx={spark.last[0]} cy={spark.last[1]} r="3.5" fill="#F5C542" />
+              <path d={spark.area} fill="var(--accent)" fillOpacity="0.15" />
+              <path d={spark.line} fill="none" stroke="var(--accent)" strokeWidth="2" />
+              <circle cx={spark.last[0]} cy={spark.last[1]} r="3.5" fill="var(--accent)" />
             </svg>
           ) : (
-            <div className="mt-4 h-[52px] flex items-center text-xs text-ink-faint">Preisverlauf erscheint, sobald sich Werte ändern.</div>
+            <div className="mt-4 h-[52px] flex items-center text-xs text-muted">Preisverlauf erscheint, sobald sich Werte ändern.</div>
           )}
           <div className="flex gap-3 mt-4">
             {[{ l: 'Karten', v: stats.totalCards || 0 }, { l: 'Einzigartig', v: stats.uniqueCards || 0 }, { l: 'Sets', v: new Set(cards.filter(c => c.set_code && c.set_code !== 'Unknown').map(c => c.set_code.split('-')[0])).size }].map(m => (
-              <div key={m.l} className="flex-1 bg-obsidian-800 border border-line rounded-xl px-3.5 py-2.5">
-                <div className="font-display text-[10px] uppercase tracking-wide text-ink-faint">{m.l}</div>
-                <div className="font-display font-bold text-xl text-ink mt-0.5">{m.v}</div>
+              <div key={m.l} className="flex-1 bg-bg border border-line rounded-xl px-3.5 py-2.5">
+                <div className="font-display text-[10px] uppercase tracking-wide text-muted">{m.l}</div>
+                <div className="font-display font-bold text-xl text-text mt-0.5">{m.v}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Scan + attention */}
-        <div className="bg-obsidian-700 border border-line rounded-2xl p-6 flex flex-col gap-4">
-          <div className="font-display text-[11px] tracking-[0.14em] uppercase text-ink-muted">Scan-Status</div>
-          <div className="flex items-center gap-3 bg-obsidian-800 border border-line rounded-xl px-4 py-3">
+        <div className="bg-surface border border-line rounded-2xl p-6 flex flex-col gap-4">
+          <div className="font-display text-[11px] tracking-[0.14em] uppercase text-muted">Scan-Status</div>
+          <div className="flex items-center gap-3 bg-bg border border-line rounded-xl px-4 py-3">
             <div className="w-9 h-9 rounded-lg grid place-items-center bg-good/10 border border-good/30"><ScanLine className="w-5 h-5 text-good" strokeWidth={1.8} /></div>
-            <div><div className="text-sm font-bold text-ink">Bereit zum Scannen</div><div className="text-xs text-ink-muted">Handy-Kamera auf eine Karte richten</div></div>
+            <div><div className="text-sm font-bold text-text">Bereit zum Scannen</div><div className="text-xs text-muted">Handy-Kamera auf eine Karte richten</div></div>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => navigate(ROUTES.karten)} className="flex-1 text-left rounded-xl p-3 border border-space-violet/30 bg-space-violet/5 hover:bg-space-violet/10 transition-colors">
-              <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-violet-soft"><TriangleAlert className="w-4 h-4" />{unknownCount}</div>
-              <div className="text-[11px] text-ink-muted mt-0.5">Unbekanntes Set</div>
+            <button onClick={() => navigate(ROUTES.scannen)} className="flex-1 text-left rounded-xl p-3 border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors">
+              <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-accent"><TriangleAlert className="w-4 h-4" />{unknownCount}</div>
+              <div className="text-[11px] text-muted mt-0.5">Unbekanntes Set</div>
             </button>
-            <button onClick={() => navigate(ROUTES.karten)} className="flex-1 text-left rounded-xl p-3 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors">
-              <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-gold"><FileWarning className="w-4 h-4" />{incompleteCount}</div>
-              <div className="text-[11px] text-ink-muted mt-0.5">Fehlende Daten</div>
+            <button onClick={() => navigate(ROUTES.karten, { state: { preset: 'unvollstaendig' } })} className="flex-1 text-left rounded-xl p-3 border border-warn/30 bg-warn/5 hover:bg-warn/10 transition-colors">
+              <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-warn"><FileWarning className="w-4 h-4" />{incompleteCount}</div>
+              <div className="text-[11px] text-muted mt-0.5">Fehlende Daten</div>
             </button>
-            <button onClick={() => navigate(ROUTES.binder)} className="flex-1 text-left rounded-xl p-3 border border-frame-spell/30 bg-frame-spell/5 hover:bg-frame-spell/10 transition-colors">
-              <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-frame-spell"><PackageOpen className="w-4 h-4" />{unsortedError ? '—' : unsortedCount}</div>
-              <div className="text-[11px] text-ink-muted mt-0.5">Nicht einsortiert{unsortedError ? ' (Ladefehler)' : ''}</div>
+            <button onClick={() => navigate(ROUTES.binder)} className="flex-1 text-left rounded-xl p-3 border border-warn/30 bg-warn/5 hover:bg-warn/10 transition-colors">
+              <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-warn"><PackageOpen className="w-4 h-4" />{unsortedError ? '—' : unsortedCount}</div>
+              <div className="text-[11px] text-muted mt-0.5">Nicht einsortiert{unsortedError ? ' (Ladefehler)' : ''}</div>
             </button>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'forsale' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors text-xs text-ink">
-              <Tag className="w-4 h-4 text-gold shrink-0" />{saleSummary ? startSaleText(saleSummary) : sale.error ? 'Zum Verkauf: —' : `Zum Verkauf: ${LOADING}`}
+            <button onClick={() => navigate(ROUTES.zumVerkauf)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-line bg-surface-2 hover:bg-bg transition-colors text-xs text-text">
+              <Tag className="w-4 h-4 text-muted shrink-0" />{saleSummary ? startSaleText(saleSummary) : sale.error ? 'Zum Verkauf: —' : `Zum Verkauf: ${LOADING}`}
             </button>
-            <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'duplicates' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-space-violet/30 bg-space-violet/5 hover:bg-space-violet/10 transition-colors text-xs text-ink">
-              <Copy className="w-4 h-4 text-violet-soft shrink-0" />{duplicateSummary ? startDuplicatesText(duplicateSummary) : sale.error ? 'Duplikate: —' : `Duplikate: ${LOADING}`}
+            <button onClick={() => navigate(ROUTES.kandidaten)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors text-xs text-text">
+              <Copy className="w-4 h-4 text-accent shrink-0" />{duplicateSummary ? startDuplicatesText(duplicateSummary) : sale.error ? 'Duplikate: —' : `Duplikate: ${LOADING}`}
             </button>
-            <button onClick={() => navigate(ROUTES.karten, { state: { segment: 'listings' } })} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-gold/30 bg-gold/5 hover:bg-gold/10 transition-colors text-xs text-ink">
-              <Store className="w-4 h-4 text-gold shrink-0" />{listingsData.data ? startText(listingsSummary(listingsData.data.listings, listingsData.data.items).listings) : listingsData.error ? 'Angebote: —' : `Angebote: ${LOADING}`}
+            <button onClick={() => navigate(ROUTES.angebote)} className="flex-1 flex items-center gap-2 text-left rounded-xl px-3 py-2.5 border border-line bg-surface-2 hover:bg-bg transition-colors text-xs text-text">
+              <Store className="w-4 h-4 text-muted shrink-0" />{listingsData.data ? startText(listingsSummary(listingsData.data.listings, listingsData.data.items).listings) : listingsData.error ? 'Angebote: —' : `Angebote: ${LOADING}`}
             </button>
           </div>
-          <button onClick={() => navigate(ROUTES.scannen)} className="mt-auto flex items-center justify-center gap-2 bg-gradient-to-br from-space-violet to-space-violet-dark text-white font-display font-semibold text-sm py-3 rounded-xl shadow-[0_10px_24px_-10px_#9D00FF]">
+          <button onClick={() => navigate(ROUTES.scannen)} className="mt-auto flex items-center justify-center gap-2 bg-accent text-accent-fg font-display font-semibold text-sm py-3 rounded-xl">
             <Plus className="w-4 h-4" strokeWidth={2} /> {T.scannen}
           </button>
         </div>
@@ -233,13 +223,13 @@ export default function Start({ onOpenPalette }) {
       <MoversCard />
 
       {/* Recently added */}
-      <div className="bg-obsidian-700 border border-line rounded-2xl p-6">
+      <div className="bg-surface border border-line rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display text-sm tracking-[0.12em] uppercase text-ink-muted flex items-center gap-2"><Clock className="w-4 h-4" strokeWidth={1.8} /> Zuletzt hinzugefügt</h3>
-          <button onClick={() => navigate(ROUTES.karten)} className="text-xs text-violet-soft hover:underline flex items-center gap-1">Alle ansehen <ArrowRight className="w-3 h-3" /></button>
+          <h3 className="font-display text-sm tracking-[0.12em] uppercase text-muted flex items-center gap-2"><Clock className="w-4 h-4" strokeWidth={1.8} /> Zuletzt hinzugefügt</h3>
+          <button onClick={() => navigate(ROUTES.karten)} className="text-xs text-accent hover:underline flex items-center gap-1">Alle ansehen <ArrowRight className="w-3 h-3" /></button>
         </div>
         {recent.length === 0 ? (
-          <div className="text-center text-ink-faint py-8">Noch keine Karten — scanne welche, um zu starten.</div>
+          <div className="text-center text-muted py-8">Noch keine Karten — scanne welche, um zu starten.</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {recent.map((card, idx) => (
@@ -250,9 +240,9 @@ export default function Start({ onOpenPalette }) {
       </div>
 
       {/* Set completion */}
-      <div className="bg-obsidian-700 border border-line rounded-2xl p-6 flex flex-col">
+      <div className="bg-surface border border-line rounded-2xl p-6 flex flex-col">
         <div className="mb-4">
-          <h3 className="font-display text-sm tracking-[0.12em] uppercase text-ink-muted flex items-center gap-2"><Award className="w-4 h-4" strokeWidth={1.8} /> Set-Fortschritt</h3>
+          <h3 className="font-display text-sm tracking-[0.12em] uppercase text-muted flex items-center gap-2"><Award className="w-4 h-4" strokeWidth={1.8} /> Set-Fortschritt</h3>
         </div>
         <div className="h-[380px]"><SetCompletion /></div>
       </div>

@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { List } from 'react-window';
 import { PREVIEW_FILTERS, IMPORT_RULES, visibleRows, canApply, nothingToApply, NOTHING_TO_APPLY, omitAllUnknown, rowLabel } from '../utils/importPreview';
 
-const DOT = { green: 'bg-good', yellow: 'bg-gold', red: 'bg-crit' };
+const DOT = { green: 'bg-good', yellow: 'bg-warn', red: 'bg-bad' };
 
 // Eine Zeile der virtualisierten Vorschau (react-window 2: Props kommen über rowProps).
 function PreviewRow({ index, style, rows, omitted, toggleOmit }) {
@@ -12,13 +12,13 @@ function PreviewRow({ index, style, rows, omitted, toggleOmit }) {
   return (
     <div style={style} className="flex items-center gap-2 px-2 border-b border-line/50 text-xs">
       <span className={clsx('w-2 h-2 rounded-full shrink-0', DOT[r.status])} />
-      <span className="font-mono text-ink-faint w-10 shrink-0">Z. {r.line}</span>
+      <span className="font-mono text-muted w-10 shrink-0">Z. {r.line}</span>
       <div className="min-w-0 flex-1">
-        <div className={clsx('truncate', omitted.has(r.line) ? 'text-ink-faint line-through' : 'text-ink')}>{rowLabel(r)}</div>
-        {r.reasons.length > 0 && <div className="truncate text-ink-muted">{r.reasons.join(' · ')}</div>}
+        <div className={clsx('truncate', omitted.has(r.line) ? 'text-muted line-through' : 'text-text')}>{rowLabel(r)}</div>
+        {r.reasons.length > 0 && <div className="truncate text-muted">{r.reasons.join(' · ')}</div>}
       </div>
       {r.status === 'red' && (
-        <button type="button" onClick={() => toggleOmit(r.line)} className="px-2 py-1 rounded bg-obsidian border border-line text-ink-muted hover:text-ink shrink-0">
+        <button type="button" onClick={() => toggleOmit(r.line)} className="px-2 py-1 rounded bg-bg border border-line text-muted hover:text-text shrink-0">
           {omitted.has(r.line) ? 'Zurücknehmen' : 'Auslassen'}
         </button>
       )}
@@ -73,36 +73,36 @@ export default function ImportDialog({ opened, onClose }) {
 
   const busy = phase === 'running';
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-3xl max-h-[90vh] flex flex-col bg-obsidian-700 border border-line rounded-2xl p-6 gap-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm" onClick={busy ? undefined : onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-3xl max-h-[90vh] flex flex-col bg-surface border border-line rounded-2xl p-6 gap-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-lg text-ink">Importieren{fileName && ` – ${fileName}`}</h3>
-          <button type="button" onClick={onClose} disabled={busy} className="text-ink-faint hover:text-ink"><X className="w-4 h-4" /></button>
+          <h3 className="font-display text-lg text-text">Importieren{fileName && ` – ${fileName}`}</h3>
+          <button type="button" onClick={onClose} disabled={busy} className="text-muted hover:text-text"><X className="w-4 h-4" /></button>
         </div>
 
         {preview && phase !== 'done' && (
           <>
-            <p className="font-mono text-sm text-ink">{preview.headerText}</p>
-            {preview.catalogText && <p className="text-sm text-gold">{preview.catalogText}</p>}
+            <p className="font-mono text-sm text-text">{preview.headerText}</p>
+            {preview.catalogText && <p className="text-sm text-warn">{preview.catalogText}</p>}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-ink-faint uppercase tracking-wide">Bestehendes</span>
+              <span className="text-xs text-muted uppercase tracking-wide">Bestehendes</span>
               {IMPORT_RULES.map((o) => (
                 <button key={o.value} type="button" onClick={() => changeRule(o.value)} disabled={busy}
-                  className={clsx('px-3 py-1 rounded-lg text-xs border', rule === o.value ? 'bg-space-violet text-white border-space-violet' : 'bg-obsidian border-line text-ink-muted hover:text-ink')}>
+                  className={clsx('px-3 py-1 rounded-lg text-xs border', rule === o.value ? 'bg-accent text-accent-fg border-accent' : 'bg-bg border-line text-muted hover:text-text')}>
                   {o.label}
                 </button>
               ))}
             </div>
-            {preview.warningText && <p className="text-sm text-crit">{preview.warningText}</p>}
+            {preview.warningText && <p className="text-sm text-bad">{preview.warningText}</p>}
             <div className="flex flex-wrap items-center gap-2">
               {PREVIEW_FILTERS.map((o) => (
                 <button key={o.value} type="button" onClick={() => setFilter(o.value)}
-                  className={clsx('px-3 py-1 rounded-full text-xs border', filter === o.value ? 'bg-space-violet/20 border-space-violet/50 text-ink' : 'bg-obsidian border-line text-ink-muted hover:text-ink')}>
+                  className={clsx('px-3 py-1 rounded-full text-xs border', filter === o.value ? 'bg-accent/20 border-accent/50 text-text' : 'bg-bg border-line text-muted hover:text-text')}>
                   {o.label}
                 </button>
               ))}
               {preview.summary.red > 0 && (
-                <button type="button" onClick={() => setOmitted(omitAllUnknown(preview.rows))} className="ml-auto text-xs text-ink-muted hover:text-ink">
+                <button type="button" onClick={() => setOmitted(omitAllUnknown(preview.rows))} className="ml-auto text-xs text-muted hover:text-text">
                   Alle unbekannten auslassen
                 </button>
               )}
@@ -114,16 +114,16 @@ export default function ImportDialog({ opened, onClose }) {
         )}
 
         {result && <p className="text-sm text-good">{result}</p>}
-        {error && <p className="text-sm text-crit">{error}</p>}
+        {error && <p className="text-sm text-bad">{error}</p>}
 
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">
+          <button type="button" onClick={onClose} disabled={busy} className="px-3 py-2 text-sm text-muted hover:text-text">
             {phase === 'done' ? 'Schließen' : 'Abbrechen'}
           </button>
-          {phase !== 'done' && nothingToImport && <span className="text-sm text-ink-muted">{NOTHING_TO_APPLY}</span>}
+          {phase !== 'done' && nothingToImport && <span className="text-sm text-muted">{NOTHING_TO_APPLY}</span>}
           {phase !== 'done' && (
             <button type="button" onClick={apply} disabled={busy || !ready}
-              className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium disabled:opacity-50">
+              className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium disabled:opacity-50">
               {phase === 'running' ? 'Wird importiert…' : 'Übernehmen'}
             </button>
           )}

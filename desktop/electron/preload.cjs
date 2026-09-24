@@ -157,6 +157,7 @@ contextBridge.exposeInMainWorld('api', {
   cleanupDatabase: () => ipcRenderer.invoke('cleanup-database'),
   mergeUnknownCards: () => ipcRenderer.invoke('merge-unknown-cards'),
   convertUnknownsToDefault: () => ipcRenderer.invoke('convert-unknowns-to-default'),
+  navCounts: () => ipcRenderer.invoke('nav-counts'),
   downgradeToLowestRarity: () => ipcRenderer.invoke('downgrade-to-lowest-rarity'),
   fetchYugipediaSets: (passcode) => ipcRenderer.invoke('fetch-yugipedia-sets', passcode),
   fetchJapaneseSets: (passcode) => ipcRenderer.invoke('fetch-japanese-sets', passcode),

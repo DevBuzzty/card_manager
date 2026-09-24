@@ -78,4 +78,8 @@ object Prefs {
 
     fun saleSuggestion(ctx: Context, valueCents: Long?): Long? =
         SalesMath.suggestionCents(valueCents, saleDiscount(ctx), saleMinCents(ctx))
+
+    /** Spec I §6.4 -- Darstellung, nur auf diesem Geraet, kein Sync. */
+    fun theme(ctx: Context): String = p(ctx).getString("theme", null)?.takeIf { it in setOf("light", "dark", "system") } ?: "light"
+    fun setTheme(ctx: Context, v: String) = p(ctx).edit().putString("theme", v).apply()
 }

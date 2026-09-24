@@ -43,23 +43,27 @@ val MonoFontFamily = FontFamily(
     Font(googleFont = JetBrainsMonoGoogle, fontProvider = provider, weight = FontWeight.Bold),
 )
 
+// Spec I §6.3 -- Zahlen mit gleicher Ziffernbreite (wie tabular-nums am PC), damit Preisspalten
+// nicht zappeln. Gilt fuer jeden Textstil des Themes.
+internal const val TNUM = "tnum"
+
 // Material3 typography: Chakra Petch for display/headline/title, Manrope for body/label.
 val AppTypography: Typography = Typography().run {
     copy(
-        displayLarge = displayLarge.copy(fontFamily = ChakraPetch),
-        displayMedium = displayMedium.copy(fontFamily = ChakraPetch),
-        displaySmall = displaySmall.copy(fontFamily = ChakraPetch),
-        headlineLarge = headlineLarge.copy(fontFamily = ChakraPetch),
-        headlineMedium = headlineMedium.copy(fontFamily = ChakraPetch),
-        headlineSmall = headlineSmall.copy(fontFamily = ChakraPetch),
-        titleLarge = titleLarge.copy(fontFamily = ChakraPetch),
-        titleMedium = titleMedium.copy(fontFamily = ChakraPetch),
-        titleSmall = titleSmall.copy(fontFamily = ChakraPetch),
-        bodyLarge = bodyLarge.copy(fontFamily = Manrope),
-        bodyMedium = bodyMedium.copy(fontFamily = Manrope),
-        bodySmall = bodySmall.copy(fontFamily = Manrope),
-        labelLarge = labelLarge.copy(fontFamily = Manrope),
-        labelMedium = labelMedium.copy(fontFamily = Manrope),
-        labelSmall = labelSmall.copy(fontFamily = Manrope),
+        displayLarge = displayLarge.copy(fontFamily = ChakraPetch, fontFeatureSettings = TNUM),
+        displayMedium = displayMedium.copy(fontFamily = ChakraPetch, fontFeatureSettings = TNUM),
+        displaySmall = displaySmall.copy(fontFamily = ChakraPetch, fontFeatureSettings = TNUM),
+        headlineLarge = headlineLarge.copy(fontFamily = ChakraPetch, fontFeatureSettings = TNUM),
+        headlineMedium = headlineMedium.copy(fontFamily = ChakraPetch, fontFeatureSettings = TNUM),
+        headlineSmall = headlineSmall.copy(fontFamily = ChakraPetch, fontFeatureSettings = TNUM),
+        titleLarge = titleLarge.copy(fontFamily = ChakraPetch, fontFeatureSettings = TNUM),
+        titleMedium = titleMedium.copy(fontFamily = ChakraPetch, fontFeatureSettings = TNUM),
+        titleSmall = titleSmall.copy(fontFamily = ChakraPetch, fontFeatureSettings = TNUM),
+        bodyLarge = bodyLarge.copy(fontFamily = Manrope, fontFeatureSettings = TNUM),
+        bodyMedium = bodyMedium.copy(fontFamily = Manrope, fontFeatureSettings = TNUM),
+        bodySmall = bodySmall.copy(fontFamily = Manrope, fontFeatureSettings = TNUM),
+        labelLarge = labelLarge.copy(fontFamily = Manrope, fontFeatureSettings = TNUM),
+        labelMedium = labelMedium.copy(fontFamily = Manrope, fontFeatureSettings = TNUM),
+        labelSmall = labelSmall.copy(fontFamily = Manrope, fontFeatureSettings = TNUM),
     )
 }

@@ -172,10 +172,10 @@ Werte (Katalog):
 | `line` | `#e0dbd1` | `#2e3134` |
 | `text` | `#1b1a17` | `#e9eaec` |
 | `text-muted` | `#6c675e` | `#9ba0a6` |
-| `accent` | `#4b3f8f` | `#8b6ad6` |
-| `accent-fg` | `#ffffff` | `#14151a` |
-| `good` | `#3f7d54` | `#7fa88a` |
-| `warn` | `#9a6b1f` | `#c9a36b` |
+| `accent` | `#4b3f8f` | `#a48be3` |
+| `accent-fg` | `#ffffff` | `#0f1013` |
+| `good` | `#37704a` | `#7fa88a` |
+| `warn` | `#8a5f18` | `#c9a36b` |
 | `bad` | `#a23b3b` | `#c07a7a` |
 
 Alle Paare Text-auf-Fläche erreichen mindestens Kontrast 4,5:1, große Schrift und Rahmen mindestens 3:1.

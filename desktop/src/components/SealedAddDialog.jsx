@@ -56,14 +56,14 @@ export default function SealedAddDialog({ onClose, onAdded }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg bg-obsidian-700 border border-line rounded-2xl p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg bg-surface border border-line rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-lg text-ink">Sealed hinzufügen</h3>
-          <button type="button" onClick={onClose} className="text-ink-faint hover:text-ink"><X className="w-4 h-4" /></button>
+          <h3 className="font-display text-lg text-text">Sealed hinzufügen</h3>
+          <button type="button" onClick={onClose} className="text-muted hover:text-text"><X className="w-4 h-4" /></button>
         </div>
 
-        {available === false && <p className="text-sm text-crit">{NO_PRODUCTS}</p>}
+        {available === false && <p className="text-sm text-bad">{NO_PRODUCTS}</p>}
 
         <form onSubmit={runSearch} className="flex gap-2">
           <input
@@ -72,29 +72,29 @@ export default function SealedAddDialog({ onClose, onAdded }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Produktname, z. B. Booster Box"
-            className="flex-1 bg-obsidian border border-line text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet"
+            className="flex-1 bg-bg border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
           />
           <button type="submit" disabled={search.busy || !query.trim() || available === false}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line text-sm text-ink-muted hover:text-ink disabled:opacity-50">
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-line text-sm text-muted hover:text-text disabled:opacity-50">
             {search.busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />} {T.suchen}
           </button>
         </form>
 
-        {search.error && <p className="text-sm text-crit">{search.error}</p>}
+        {search.error && <p className="text-sm text-bad">{search.error}</p>}
         {search.results && search.results.length === 0 && available !== false && (
-          <p className="text-sm text-ink-faint">{T.keineTreffer}</p>
+          <p className="text-sm text-muted">{T.keineTreffer}</p>
         )}
         {search.results && search.results.length > 0 && (
           <div className="max-h-72 overflow-auto divide-y divide-line border border-line rounded-xl">
             {search.results.map((p) => (
               <button key={p.cm_product_id} type="button" onClick={() => setSelected(p)}
                       className={clsx('w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
-                        selected?.cm_product_id === p.cm_product_id ? 'bg-space-violet/15' : 'hover:bg-white/5')}>
+                        selected?.cm_product_id === p.cm_product_id ? 'bg-accent/15' : 'hover:bg-surface/5')}>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm text-ink truncate">{p.name}</span>
-                  <span className="block text-[11px] text-ink-faint">{p.kindLabel}</span>
+                  <span className="block text-sm text-text truncate">{p.name}</span>
+                  <span className="block text-[11px] text-muted">{p.kindLabel}</span>
                 </span>
-                <span className="font-mono text-sm text-ink-muted">{p.trend == null ? '—' : fmtEUR(p.trend)}</span>
+                <span className="font-mono text-sm text-muted">{p.trend == null ? '—' : fmtEUR(p.trend)}</span>
               </button>
             ))}
           </div>
@@ -102,26 +102,26 @@ export default function SealedAddDialog({ onClose, onAdded }) {
 
         <div className="flex items-end gap-3">
           <div>
-            <label className="block text-xs font-bold text-ink-muted mb-1 uppercase tracking-wider">Menge</label>
+            <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Menge</label>
             <input
               type="number"
               min="1"
               step="1"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              className="w-24 bg-obsidian border border-line text-ink rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-space-violet"
+              className="w-24 bg-bg border border-line text-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
             />
           </div>
-          <div className="flex-1 min-w-0 text-sm text-ink-muted truncate pb-2">{selected ? selected.name : 'Kein Produkt gewählt'}</div>
+          <div className="flex-1 min-w-0 text-sm text-muted truncate pb-2">{selected ? selected.name : 'Kein Produkt gewählt'}</div>
         </div>
 
-        {!qtyValid && <p className="text-sm text-crit">Die Menge muss mindestens 1 sein.</p>}
-        {save.error && <p className="text-sm text-crit">{save.error}</p>}
+        {!qtyValid && <p className="text-sm text-bad">Die Menge muss mindestens 1 sein.</p>}
+        {save.error && <p className="text-sm text-bad">{save.error}</p>}
 
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">{T.abbrechen}</button>
+          <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text">{T.abbrechen}</button>
           <button type="button" onClick={add} disabled={!selected || !qtyValid || save.busy}
-                  className="px-4 py-2 rounded-lg bg-space-violet hover:bg-space-violet-dark text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             {save.busy ? 'Wird gespeichert…' : 'Hinzufügen'}
           </button>
         </div>

@@ -14,37 +14,37 @@ export default function DeckCoverageHeader({ deck, decks, coverage, containers, 
     : [];
 
   return (
-    <div className="mb-4 p-3 bg-black/30 rounded-xl border border-gray-800 space-y-2">
+    <div className="mb-4 p-3 bg-bg/30 rounded-xl border border-line space-y-2">
       <div className="flex items-center gap-3 flex-wrap">
-        <span className="text-xs font-bold uppercase text-gray-500">Deckbox</span>
+        <span className="text-xs font-bold uppercase text-muted">Deckbox</span>
         {!containers ? (
-          <span className="text-sm text-gray-400">{LOADING}</span>
+          <span className="text-sm text-muted">{LOADING}</span>
         ) : hasDeckboxes ? (
           <CustomSelect className="w-56" value={deckBoxId(deck, containers) || ''} onChange={onChangeBox} options={options} />
         ) : (
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-muted">
             Noch keine Deckbox ·{' '}
-            <button type="button" onClick={() => navigate(ROUTES.binder)} className="text-space-violet hover:underline">Zu den Behältern</button>
+            <button type="button" onClick={() => navigate(ROUTES.binder)} className="text-accent hover:underline">Zu den Behältern</button>
           </span>
         )}
-        <span className="font-mono text-sm text-gray-300">{coverage ? headerText(coverage) : LOADING}</span>
+        <span className="font-mono text-sm text-text">{coverage ? headerText(coverage) : LOADING}</span>
       </div>
       <div className="flex gap-2">
         <button
           type="button" onClick={onOpenWishlist} disabled={!coverage || coverage.totals.missing === 0}
-          className="flex items-center px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm border border-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center px-3 py-1.5 bg-surface-2 hover:bg-surface-2 text-text rounded-lg text-sm border border-line disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Heart className="w-4 h-4 mr-2" /> Fehlende auf die Wunschliste
         </button>
         <button
           type="button" onClick={onOpenFillBox} disabled={!coverage || !coverage.boxId}
-          className="flex items-center px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm border border-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center px-3 py-1.5 bg-surface-2 hover:bg-surface-2 text-text rounded-lg text-sm border border-line disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <PackageOpen className="w-4 h-4 mr-2" /> Box befüllen
         </button>
       </div>
-      {boxError && <p className="text-sm text-red-400">{boxError}</p>}
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {boxError && <p className="text-sm text-bad">{boxError}</p>}
+      {error && <p className="text-sm text-bad">{error}</p>}
     </div>
   );
 }

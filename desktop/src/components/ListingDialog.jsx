@@ -112,47 +112,47 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
     finally { setBusy(false); }
   });
 
-  const field = 'w-full bg-obsidian-800 border border-line rounded-lg px-3 py-2 text-sm text-ink';
-  const btn = 'px-3 py-1.5 rounded-lg text-xs bg-obsidian-600 border border-line text-ink hover:border-space-violet/40 disabled:opacity-50';
+  const field = 'w-full bg-bg border border-line rounded-lg px-3 py-2 text-sm text-text';
+  const btn = 'px-3 py-1.5 rounded-lg text-xs bg-surface-2 border border-line text-text hover:border-accent/40 disabled:opacity-50';
   const marketCents = items.reduce((a, it) => a + (it.valueCents || 0), 0);
 
   return (
     // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur diesen Dialog, nie den darunterliegenden (wie SaleDialog).
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={(e) => { e.stopPropagation(); onClose(); }}>
-      <div className="w-full max-w-lg bg-obsidian-700 border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+      <div className="w-full max-w-lg bg-surface border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-ink">{prefill ? 'Erneut anbieten' : 'Angebot erstellen'}</h2>
-          <button type="button" onClick={onClose} className="p-1 text-ink-muted hover:text-ink" aria-label="Schließen"><X className="w-4 h-4" /></button>
+          <h2 className="text-lg font-bold text-text">{prefill ? 'Erneut anbieten' : 'Angebot erstellen'}</h2>
+          <button type="button" onClick={onClose} className="p-1 text-muted hover:text-text" aria-label="Schließen"><X className="w-4 h-4" /></button>
         </div>
-        {!preview || !channels ? <p className="text-ink-faint">…</p> : (
+        {!preview || !channels ? <p className="text-muted">…</p> : (
           <>
-            <p className="text-sm text-ink-muted">{items.length} {items.length === 1 ? 'Karte' : 'Karten'} · Marktwert {euroCentsText(marketCents)}</p>
+            <p className="text-sm text-muted">{items.length} {items.length === 1 ? 'Karte' : 'Karten'} · Marktwert {euroCentsText(marketCents)}</p>
             {preview.missing.length > 0 && (
-              <p className="text-sm text-crit">{preview.missing.length} {preview.missing.length === 1 ? 'Karte' : 'Karten'} nicht mehr verfügbar – werden nicht angeboten.</p>
+              <p className="text-sm text-bad">{preview.missing.length} {preview.missing.length === 1 ? 'Karte' : 'Karten'} nicht mehr verfügbar – werden nicht angeboten.</p>
             )}
             {items.filter((it) => it.alsoOn.length > 0).map((it) => (
-              <p key={it.copy_id} className="text-sm text-gold">{it.name} – auch auf {it.alsoOn.join(', ')} eingestellt</p>
+              <p key={it.copy_id} className="text-sm text-warn">{it.name} – auch auf {it.alsoOn.join(', ')} eingestellt</p>
             ))}
-            <label className="block text-xs text-ink-muted">Kanal
+            <label className="block text-xs text-muted">Kanal
               <select className={field} value={form.channel_id} onChange={(e) => setForm((f) => ({ ...f, channel_id: e.target.value }))}>
                 {channels.map((c) => <option key={c.channel_id} value={c.channel_id}>{c.name}</option>)}
               </select>
             </label>
-            <label className="block text-xs text-ink-muted">Datum
+            <label className="block text-xs text-muted">Datum
               <input type="date" className={field} value={form.listed_on} onChange={(e) => setForm((f) => ({ ...f, listed_on: e.target.value }))} />
             </label>
             {!cm && (
               <>
-                <label className="block text-xs text-ink-muted">Preis (€)
+                <label className="block text-xs text-muted">Preis (€)
                   <input inputMode="decimal" className={field} value={form.price}
                     onChange={(e) => setForm((f) => ({ ...f, price: e.target.value, priceTouched: true }))} />
                 </label>
-                <label className="block text-xs text-ink-muted">Titel
+                <label className="block text-xs text-muted">Titel
                   <input className={field} value={title}
                     onChange={(e) => setForm((f) => ({ ...f, title: e.target.value, titleTouched: true }))} />
                 </label>
-                <p className={title.length > TITLE_MAX ? 'text-xs text-crit' : 'text-xs text-ink-faint'}>{title.length}/{TITLE_MAX}</p>
-                <label className="block text-xs text-ink-muted">Beschreibung
+                <p className={title.length > TITLE_MAX ? 'text-xs text-bad' : 'text-xs text-muted'}>{title.length}/{TITLE_MAX}</p>
+                <label className="block text-xs text-muted">Beschreibung
                   <textarea rows={6} className={field} value={description}
                     onChange={(e) => setForm((f) => ({ ...f, description: e.target.value, descTouched: true }))} />
                 </label>
@@ -168,7 +168,7 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
             )}
             {cm && (
               <div className="space-y-3">
-                {groups.length > 1 && <p className="text-sm text-ink-muted">wird zu {groups.length} Cardmarket-Angeboten</p>}
+                {groups.length > 1 && <p className="text-sm text-muted">wird zu {groups.length} Cardmarket-Angeboten</p>}
                 {groups.map((g) => {
                   const gk = groupKey(g);
                   const priceInput = cmPriceInput(g);
@@ -176,11 +176,11 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
                   const first = itemsOf(g)[0];
                   const link = listingLink('cardmarket', { cmUrl: first?.cm_url, nameEn: first?.name_en, setCode: g.set_code });
                   return (
-                    <div key={gk} className="p-3 rounded-lg border border-line bg-obsidian-800 space-y-2">
-                      <div className="text-sm text-ink">{entry.product}</div>
-                      <div className="text-xs text-ink-muted">Menge {entry.quantity} · {entry.language} · {entry.condition} · 1. Auflage: {entry.firstEdition ? 'ja' : 'nein'}</div>
-                      <div className="text-xs text-ink-muted">Preis je Stück: {entry.pieceCents == null ? '–' : euroCentsText(entry.pieceCents)}</div>
-                      <label className="block text-xs text-ink-muted">Preis (€)
+                    <div key={gk} className="p-3 rounded-lg border border-line bg-bg space-y-2">
+                      <div className="text-sm text-text">{entry.product}</div>
+                      <div className="text-xs text-muted">Menge {entry.quantity} · {entry.language} · {entry.condition} · 1. Auflage: {entry.firstEdition ? 'ja' : 'nein'}</div>
+                      <div className="text-xs text-muted">Preis je Stück: {entry.pieceCents == null ? '–' : euroCentsText(entry.pieceCents)}</div>
+                      <label className="block text-xs text-muted">Preis (€)
                         <input inputMode="decimal" className={field} value={priceInput}
                           onChange={(e) => setCmPrices((p) => ({ ...p, [gk]: e.target.value }))} />
                       </label>
@@ -193,22 +193,22 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
                 })}
               </div>
             )}
-            <label className="block text-xs text-ink-muted">Link der Anzeige (optional)
+            <label className="block text-xs text-muted">Link der Anzeige (optional)
               <input className={field} value={form.external_url} onChange={(e) => setForm((f) => ({ ...f, external_url: e.target.value }))} />
             </label>
-            <label className="block text-xs text-ink-muted">Notiz
+            <label className="block text-xs text-muted">Notiz
               <input className={field} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
             </label>
-            <p className="text-ink-faint text-xs">Eigene Fotos fügst du nach dem Speichern im Angebot hinzu.</p>
+            <p className="text-muted text-xs">Eigene Fotos fügst du nach dem Speichern im Angebot hinzu.</p>
             {form.channel_id === 'ebay' && ebay.status !== undefined && !setupOk(ebay.status) && (
-              <p className="text-sm text-gold">eBay ist noch nicht eingerichtet – das Angebot wartet, bis der Check in den Einstellungen vollständig ist.</p>
+              <p className="text-sm text-warn">eBay ist noch nicht eingerichtet – das Angebot wartet, bis der Check in den Einstellungen vollständig ist.</p>
             )}
-            {notice && <p className="text-sm text-emerald-400">{notice}</p>}
-            {error && <p className="text-sm text-crit">{error}</p>}
+            {notice && <p className="text-sm text-good">{notice}</p>}
+            {error && <p className="text-sm text-bad">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">Abbrechen</button>
+              <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
               <button type="button" onClick={save} disabled={!canSave}
-                className="px-4 py-2 rounded-lg text-sm bg-space-violet text-white disabled:opacity-50">{busy ? 'Wird gespeichert…' : 'Angebot speichern'}</button>
+                className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50">{busy ? 'Wird gespeichert…' : 'Angebot speichern'}</button>
             </div>
           </>
         )}

@@ -2,14 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Spec I §6.1 -- Farbrollen. Werte gespiegelt aus docs/fixtures/design/tokens.json
+   (desktop/src/utils/theme.test.js prueft die Gleichheit). Hell ist die Vorgabe. */
+:root {
+  color-scheme: light;
+  --bg: #f6f4ef;
+  --surface: #fffdf8;
+  --surface-2: #f1eee7;
+  --line: #e0dbd1;
+  --text: #1b1a17;
+  --text-muted: #6c675e;
+  --accent: #4b3f8f;
+  --accent-fg: #ffffff;
+  --good: #37704a;
+  --warn: #8a5f18;
+  --bad: #a23b3b;
+}
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #17181a;
+  --surface: #1d1f21;
+  --surface-2: #232528;
+  --line: #2e3134;
+  --text: #e9eaec;
+  --text-muted: #9ba0a6;
+  --accent: #a48be3;
+  --accent-fg: #0f1013;
+  --good: #7fa88a;
+  --warn: #c9a36b;
+  --bad: #c07a7a;
+}
+/* Spec I §6.3 -- Zahlen mit gleicher Ziffernbreite, damit Preisspalten nicht zappeln. */
+body { background: var(--bg); color: var(--text); font-variant-numeric: tabular-nums; }
+/* Fixrunde 2, Punkt 4 -- Platzhaltertext faellt sonst auf Tailwinds Grau zurueck statt der Rolle. */
+::placeholder { color: var(--text-muted); opacity: 1; }
+
 body {
-  @apply bg-obsidian text-ink;
   margin: 0;
   font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  background-image:
-    radial-gradient(900px 500px at 82% -8%, rgba(157, 0, 255, 0.13), transparent 60%),
-    radial-gradient(700px 500px at 6% 108%, rgba(245, 197, 66, 0.05), transparent 55%);
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -26,17 +56,17 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: #121212;
-  border-left: 1px solid #2a2a2a;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #4a4a4a;
+  background: var(--line);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9D00FF;
+  background: var(--accent);
 }
 
 /* Custom utility class if needed for specific containers */

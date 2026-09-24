@@ -21,10 +21,10 @@ export function ListingMarks({ marks }) {
   const chip = 'inline-block text-[10px] px-1.5 py-0.5 rounded';
   return (
     <>
-      {marks.alsoOn.length > 0 && <span className={`${chip} bg-gold/15 text-gold`}>auch auf {marks.alsoOn.join(', ')}</span>}
-      {marks.missing && <span className={`${chip} bg-crit/20 text-crit`}>Karte fehlt</span>}
-      {marks.underSuggestion && <span className={`${chip} bg-gold/15 text-gold`}>Preis unter Vorschlag</span>}
-      {marks.saleCancelled && <span className={`${chip} bg-crit/20 text-crit`}>Verkauf storniert</span>}
+      {marks.alsoOn.length > 0 && <span className={`${chip} bg-warn/15 text-text`}>auch auf {marks.alsoOn.join(', ')}</span>}
+      {marks.missing && <span className={`${chip} bg-bad/20 text-text`}>Karte fehlt</span>}
+      {marks.underSuggestion && <span className={`${chip} bg-warn/15 text-text`}>Preis unter Vorschlag</span>}
+      {marks.saleCancelled && <span className={`${chip} bg-bad/20 text-text`}>Verkauf storniert</span>}
     </>
   );
 }
@@ -33,13 +33,13 @@ export function ListingMarks({ marks }) {
 export function EbayMark({ mark, onRetry, busy }) {
   if (!mark) return null;
   const chip = 'inline-block text-[10px] px-1.5 py-0.5 rounded';
-  const color = mark.kind === 'online' ? 'bg-emerald-500/15 text-emerald-400' : mark.kind === 'fehler' ? 'bg-crit/20 text-crit' : 'bg-gold/15 text-gold';
+  const color = mark.kind === 'online' ? 'bg-good/15 text-text' : mark.kind === 'fehler' ? 'bg-bad/20 text-text' : 'bg-warn/15 text-text';
   return (
     <>
       <span className={`${chip} ${color}`}>{mark.text}</span>
       {mark.retry && onRetry && (
         <button type="button" disabled={busy} onClick={(e) => { e.stopPropagation(); onRetry(); }}
-          className="text-[10px] px-1.5 py-0.5 rounded border border-crit/40 text-crit disabled:opacity-50">Erneut versuchen</button>
+          className="text-[10px] px-1.5 py-0.5 rounded border border-bad/40 text-bad disabled:opacity-50">Erneut versuchen</button>
       )}
     </>
   );
@@ -181,84 +181,84 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
     setRelist(prefill);
   }, 'Erneut anbieten fehlgeschlagen.');
 
-  const field = 'w-full bg-obsidian-800 border border-line rounded-lg px-3 py-2 text-sm text-ink';
-  const btn = 'px-3 py-1.5 rounded-lg text-xs bg-obsidian-600 border border-line text-ink hover:border-space-violet/40 disabled:opacity-50';
+  const field = 'w-full bg-bg border border-line rounded-lg px-3 py-2 text-sm text-text';
+  const btn = 'px-3 py-1.5 rounded-lg text-xs bg-surface-2 border border-line text-text hover:border-accent/40 disabled:opacity-50';
 
   return (
     // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur dieses Detail.
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={(e) => { e.stopPropagation(); onClose?.(); }}>
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-obsidian-700 border border-line rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); onClose?.(); }}>
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-surface border border-line rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-ink">Angebot</h2>
-          <button type="button" onClick={onClose} className="p-1 text-ink-muted hover:text-ink" aria-label="Schließen"><X className="w-4 h-4" /></button>
+          <h2 className="text-lg font-bold text-text">Angebot</h2>
+          <button type="button" onClick={onClose} className="p-1 text-muted hover:text-text" aria-label="Schließen"><X className="w-4 h-4" /></button>
         </div>
 
-        {!listing ? <p className="text-ink-faint">{error || '…'}</p> : (
+        {!listing ? <p className="text-muted">{error || '…'}</p> : (
           <>
             {!editing && (
               <div className="text-sm space-y-1">
-                <div className={active ? 'text-ink' : 'text-ink-faint'}>
+                <div className={active ? 'text-text' : 'text-muted'}>
                   {listing.channel_name} · {listing.status} · <span className="font-mono">{dateText(listing.listed_on)}</span> · {sinceText(listing.days)}
                 </div>
-                <div className="text-ink font-bold">{listing.rowTitle}</div>
-                <div className="font-mono text-gold">{euroCentsText(toCents(listing.price) || 0)}</div>
+                <div className="text-text font-bold">{listing.rowTitle}</div>
+                <div className="font-mono text-text">{euroCentsText(toCents(listing.price) || 0)}</div>
                 <div className="flex flex-wrap items-center gap-1">
                   <ListingMarks marks={listing.marks} />
                   <EbayMark mark={mark} busy={busy} onRetry={retryEbay} />
                 </div>
-                {listing.note && <div className="text-ink-muted">{listing.note}</div>}
+                {listing.note && <div className="text-muted">{listing.note}</div>}
               </div>
             )}
 
             {editing && (
               <div className="space-y-3">
-                <label className="block text-xs text-ink-muted">Preis (€)
+                <label className="block text-xs text-muted">Preis (€)
                   <input inputMode="decimal" className={field} value={form.price} onChange={(e) => set({ price: e.target.value })} />
                 </label>
                 {!cm && (
                   <>
-                    <label className="block text-xs text-ink-muted">Titel
+                    <label className="block text-xs text-muted">Titel
                       <input className={field} value={form.title} onChange={(e) => set({ title: e.target.value })} />
                     </label>
-                    <p className={form.title.length > TITLE_MAX ? 'text-xs text-crit' : 'text-xs text-ink-faint'}>{form.title.length}/{TITLE_MAX}</p>
-                    <label className="block text-xs text-ink-muted">Beschreibung
+                    <p className={form.title.length > TITLE_MAX ? 'text-xs text-bad' : 'text-xs text-muted'}>{form.title.length}/{TITLE_MAX}</p>
+                    <label className="block text-xs text-muted">Beschreibung
                       <textarea rows={6} className={field} value={form.description} onChange={(e) => set({ description: e.target.value })} />
                     </label>
                   </>
                 )}
-                <label className="block text-xs text-ink-muted">Link der Anzeige (optional)
+                <label className="block text-xs text-muted">Link der Anzeige (optional)
                   <input className={field} value={form.external_url} onChange={(e) => set({ external_url: e.target.value })} />
                 </label>
-                <label className="block text-xs text-ink-muted">Notiz
+                <label className="block text-xs text-muted">Notiz
                   <input className={field} value={form.note} onChange={(e) => set({ note: e.target.value })} />
                 </label>
               </div>
             )}
 
             <div className="space-y-2">
-              {items.length === 0 && <p className="text-sm text-ink-faint">Keine Karten.</p>}
+              {items.length === 0 && <p className="text-sm text-muted">Keine Karten.</p>}
               {items.map((it) => (
                 <div key={it.copy_id} className="flex items-center gap-3 p-2 rounded-lg border border-line">
                   <button type="button" onClick={() => { onClose?.(); onOpenCard?.(it); }} className="flex-1 min-w-0 flex items-center gap-3 text-left">
-                    {it.image_url ? <img src={it.image_url} alt="" className="w-10 h-14 object-cover rounded" /> : <div className="w-10 h-14 rounded bg-obsidian-800 shrink-0" />}
+                    {it.image_url ? <img src={it.image_url} alt="" className="w-10 h-14 object-cover rounded" /> : <div className="w-10 h-14 rounded bg-bg shrink-0" />}
                     <div className="flex-1 min-w-0 text-sm">
-                      <div className="text-ink truncate">{it.name || it.card_id}</div>
-                      <div className="text-[11px] font-mono text-ink-muted">{it.set_code} · {it.rarity} · {it.language}</div>
-                      <div className="text-[11px] font-mono text-ink-muted">{it.condition} · {EDITION_LABELS[it.edition] || it.edition}</div>
+                      <div className="text-text truncate">{it.name || it.card_id}</div>
+                      <div className="text-[11px] font-mono text-muted">{it.set_code} · {it.rarity} · {it.language}</div>
+                      <div className="text-[11px] font-mono text-muted">{it.condition} · {EDITION_LABELS[it.edition] || it.edition}</div>
                     </div>
                     {/* Verkauft/beendet: Exemplare sind verkauft (sold_in) -- dort kein "Marktwert –" und kein "Karte fehlt". */}
                     {(active || it.marketCents != null) && (
-                      <div className="text-right text-[11px] font-mono text-ink-muted shrink-0">
+                      <div className="text-right text-[11px] font-mono text-muted shrink-0">
                         Marktwert {it.marketCents == null ? '–' : euroCentsText(it.marketCents)}
                       </div>
                     )}
                   </button>
-                  {!it.copyLive && active && <span className="text-[10px] px-1.5 py-0.5 rounded bg-crit/20 text-crit shrink-0">Karte fehlt</span>}
+                  {!it.copyLive && active && <span className="text-[10px] px-1.5 py-0.5 rounded bg-bad/20 text-text shrink-0">Karte fehlt</span>}
                   {!it.copyLive && active && !editing && (
                     <button type="button" onClick={() => removeItem(it.copy_id)} disabled={busy} className={btn}>Herausnehmen</button>
                   )}
                   {editing && (
-                    <label className="flex items-center gap-1 text-xs text-ink-muted shrink-0">
+                    <label className="flex items-center gap-1 text-xs text-muted shrink-0">
                       <input type="checkbox" checked={form.remove.includes(it.copy_id)} onChange={() => toggleRemove(it.copy_id)} /> herausnehmen
                     </label>
                   )}
@@ -281,7 +281,7 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
                   {listing.external_url && <button type="button" onClick={() => openUrl(listing.external_url)} className={btn}>Anzeige öffnen</button>}
                   {mark?.url && <button type="button" onClick={() => openUrl(mark.url)} className={btn}>Auf eBay ansehen</button>}
                 </div>
-                <p className="text-ink-faint text-xs">Eigene Fotos gehen vor dem Katalogbild zu eBay und in „Bilder“.</p>
+                <p className="text-muted text-xs">Eigene Fotos gehen vor dem Katalogbild zu eBay und in „Bilder“.</p>
                 {!listing.external_url && active && (
                   <div className="flex gap-2">
                     <input className={field} placeholder="Link der Anzeige" value={linkInput} onChange={(e) => setLinkInput(e.target.value)} />
@@ -292,32 +292,32 @@ export default function ListingDetail({ listingId, onClose, onChanged, onOpenCar
             )}
 
             {active && !editing && liveItems.length === 0 && (
-              <p className="text-sm text-crit">Keine verkaufbare Karte – bitte herausnehmen oder beenden.</p>
+              <p className="text-sm text-bad">Keine verkaufbare Karte – bitte herausnehmen oder beenden.</p>
             )}
-            {notice && <p className="text-sm text-emerald-400">{notice}</p>}
-            {error && <p className="text-sm text-crit">{error}</p>}
+            {notice && <p className="text-sm text-good">{notice}</p>}
+            {error && <p className="text-sm text-bad">{error}</p>}
 
             <div className="flex flex-wrap justify-end gap-2">
               {active && editing && (
                 <>
-                  <button type="button" onClick={() => { setForm(null); setError(null); }} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">Abbrechen</button>
+                  <button type="button" onClick={() => { setForm(null); setError(null); }} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
                   <button type="button" onClick={saveEdit} disabled={busy}
-                    className="px-4 py-2 rounded-lg text-sm bg-space-violet text-white disabled:opacity-50">{busy ? 'Wird gespeichert…' : 'Speichern'}</button>
+                    className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50">{busy ? 'Wird gespeichert…' : 'Speichern'}</button>
                 </>
               )}
               {active && !editing && (
                 <>
                   <button type="button" onClick={end} disabled={busy}
-                    className="px-3 py-2 rounded-lg text-sm border border-crit/40 text-crit hover:bg-crit/10 disabled:opacity-50">Beenden</button>
+                    className="px-3 py-2 rounded-lg text-sm border border-bad/40 text-bad hover:bg-bad/10 disabled:opacity-50">Beenden</button>
                   <button type="button" onClick={startEdit} disabled={busy}
-                    className="px-3 py-2 rounded-lg text-sm bg-obsidian-600 border border-line text-ink disabled:opacity-50">Bearbeiten</button>
+                    className="px-3 py-2 rounded-lg text-sm bg-surface-2 border border-line text-text disabled:opacity-50">Bearbeiten</button>
                   <button type="button" onClick={() => setSelling(true)} disabled={busy || liveItems.length === 0}
-                    className="px-4 py-2 rounded-lg text-sm bg-space-violet text-white disabled:opacity-50">Verkauft</button>
+                    className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50">Verkauft</button>
                 </>
               )}
               {!active && (
                 <button type="button" onClick={startRelist} disabled={busy}
-                  className="px-4 py-2 rounded-lg text-sm bg-space-violet text-white disabled:opacity-50">Erneut anbieten</button>
+                  className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50">Erneut anbieten</button>
               )}
             </div>
           </>

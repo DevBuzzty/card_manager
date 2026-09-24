@@ -9,22 +9,23 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.yugiohscanner.ui.theme.rarityColor
-import com.example.yugiohscanner.ui.theme.typeColor
 
-// Small colored pill: tinted background + border, label in the accent color.
+// Neutral pill: keine Rarity-/Typ-Farbe mehr (Fixrunde 1, Punkt 1 -- Spec §6.2 Regel 3: Seltenheit
+// und Typ sind Spielfarben nur am Kartenbild, nicht als Text-/Flaechenfarbe). Seltenheit darf fett
+// gesetzt sein, das ist die einzige erlaubte Unterscheidung.
 @Composable
-private fun ChipPill(label: String, accent: Color) {
+private fun ChipPill(label: String, bold: Boolean = false) {
     val shape = RoundedCornerShape(50)
     Text(
         text = label,
         style = MaterialTheme.typography.labelSmall,
-        color = accent,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = if (bold) FontWeight.Bold else null,
         modifier = Modifier
-            .background(accent.copy(alpha = 0.16f), shape)
-            .border(BorderStroke(1.dp, accent.copy(alpha = 0.5f)), shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant, shape)
+            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), shape)
             .padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
@@ -32,11 +33,11 @@ private fun ChipPill(label: String, accent: Color) {
 @Composable
 fun RarityChip(rarity: String?) {
     if (rarity.isNullOrBlank()) return
-    ChipPill(rarity, rarityColor(rarity))
+    ChipPill(rarity, bold = true)
 }
 
 @Composable
 fun TypeChip(type: String?) {
     if (type.isNullOrBlank()) return
-    ChipPill(type, typeColor(type))
+    ChipPill(type)
 }

@@ -51,7 +51,7 @@ import com.example.yugiohscanner.ml.SalesOverview
 import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.theme.ErrorColor
-import com.example.yugiohscanner.ui.theme.Gold
+import com.example.yugiohscanner.ui.theme.Warn
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
@@ -85,9 +85,9 @@ private fun overviewOf(ctx: Context, data: ListingsData, ready: StoreState.Ready
 private fun MarksRow(marks: ListingText.Marks?) {
     val m = marks ?: return
     val list = buildList {
-        if (m.alsoOn.isNotEmpty()) add("auch auf ${m.alsoOn.joinToString(", ")}" to Gold)
+        if (m.alsoOn.isNotEmpty()) add("auch auf ${m.alsoOn.joinToString(", ")}" to Warn)
         if (m.missing) add("Karte fehlt" to ErrorColor)
-        if (m.underSuggestion) add("Preis unter Vorschlag" to Gold)
+        if (m.underSuggestion) add("Preis unter Vorschlag" to Warn)
         if (m.saleCancelled) add("Verkauf storniert" to ErrorColor)
     }
     if (list.isEmpty()) return
@@ -98,7 +98,8 @@ private fun MarksRow(marks: ListingText.Marks?) {
 
 @Composable
 private fun MarkChip(text: String, color: Color) {
-    Text(text, color = color, style = MaterialTheme.typography.labelSmall,
+    // Abschlussreview A3: Text neutral, die Rolle nur als Toenung (Farbtext auf eigener Toenung < 4,5:1).
+    Text(text, color = OnSurface, style = MaterialTheme.typography.labelSmall,
         modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(color.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp))
 }
 
@@ -116,7 +117,7 @@ private fun EbayMarkRow(mark: EbayMarks.Mark?, onRetry: (() -> Unit)?) {
     val color = when (mark.kind) {
         "online" -> Good
         "fehler" -> ErrorColor
-        else -> Gold
+        else -> Warn
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         MarkChip(mark.text, color)
@@ -153,12 +154,12 @@ fun ListingsSection(onOpenCard: (String) -> Unit, modifier: Modifier = Modifier)
 
     val state by SideStores.listings.state.collectAsState()
     // Frischer Stand beim Öffnen (H2-Fix I2), nicht nur ensureLoaded.
-    LaunchedEffect(Unit) { SideStores.listings.refresh() }
+    LaunchedEffect(Unit) { SideStores.listings.refreshIfStale() }
     val salesState by SideStores.sales.state.collectAsState()
     LaunchedEffect(Unit) { SideStores.sales.ensureLoaded() }
     val ebayStatusState by SideStores.ebayStatus.state.collectAsState()
     val ebayRowsState by SideStores.ebayRows.state.collectAsState()
-    LaunchedEffect(Unit) { SideStores.ebayStatus.refresh(); SideStores.ebayRows.refresh() }
+    LaunchedEffect(Unit) { SideStores.ebayStatus.refreshIfStale(); SideStores.ebayRows.refreshIfStale() }
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
     var status by rememberSaveable { mutableStateOf("aktiv") }
@@ -168,7 +169,8 @@ fun ListingsSection(onOpenCard: (String) -> Unit, modifier: Modifier = Modifier)
 
     val data = state.value
     if (data == null || ready == null) {
-        Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        // Restrunde 4: scrollbar, damit Herunterziehen (RefreshableBox in VerkaufenScreen) auch hier nachlaedt.
+        Box(modifier.fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
             if (data == null && state.error != null) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(OFFLINE, color = ErrorColor, style = MaterialTheme.typography.bodyMedium)
@@ -209,7 +211,10 @@ fun ListingsSection(onOpenCard: (String) -> Unit, modifier: Modifier = Modifier)
                 color = OnSurface, style = MaterialTheme.typography.bodyMedium)
         }
         if (rows.isEmpty()) {
-            Text("Keine Angebote.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            // Restrunde 4: scrollbarer Leerzustand, damit Herunterziehen nachlaedt.
+            Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
+                Text("Keine Angebote.", color = Muted, modifier = Modifier.padding(top = 16.dp))
+            }
         } else {
             val ebayStat = ebayState(ebayStatusState)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)) {
@@ -234,7 +239,7 @@ private fun ListingRowView(r: ListingOverview.Row, ebayMark: EbayMarks.Mark?, on
         Column(Modifier.fillMaxWidth().clickable { onOpen() }.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(r.head.channelName, color = color, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                Text(SalesMath.euroCentsText(price), color = if (active) Gold else Muted, fontFamily = MonoFontFamily)
+                Text(SalesMath.euroCentsText(price), color = if (active) OnSurface else Muted, fontFamily = MonoFontFamily)
             }
             Text(r.title, color = color, fontWeight = FontWeight.Bold, maxLines = 2)
             Text(
@@ -278,7 +283,7 @@ private fun ListingDetailSheet(
     val salesState by SideStores.sales.state.collectAsState()
     val ebayStatusState by SideStores.ebayStatus.state.collectAsState()
     val ebayRowsState by SideStores.ebayRows.state.collectAsState()
-    LaunchedEffect(Unit) { SideStores.ebayStatus.refresh(); SideStores.ebayRows.refresh() }
+    LaunchedEffect(Unit) { SideStores.ebayStatus.refreshIfStale(); SideStores.ebayRows.refreshIfStale() }
     val store by CollectionStore.state.collectAsState()
     val ready = store as? StoreState.Ready
     val offline = state.value == null || state.error != null
@@ -384,7 +389,7 @@ private fun ListingDetailSheet(
                     ListingText.sinceText(ListingText.daysSince(listing.listedOn, today)),
                     color = if (active) OnSurface else Muted, style = MaterialTheme.typography.bodySmall)
                 Text(overviewRow?.title ?: ListingText.rowTitle(listing.head(), items.map { it.item() }), color = OnSurface, fontWeight = FontWeight.Bold)
-                Text(SalesMath.euroCentsText(listing.priceCents), color = Gold, fontFamily = MonoFontFamily)
+                Text(SalesMath.euroCentsText(listing.priceCents), color = OnSurface, fontFamily = MonoFontFamily)
                 MarksRow(overviewRow?.marks)
                 EbayMarkRow(ebayMark, onRetry = {
                     write(requireActive = true) { _, l ->

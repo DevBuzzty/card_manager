@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import androidx.compose.ui.semantics.Role
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -72,6 +73,7 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.PrintingRepository
 import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
+import com.example.yugiohscanner.ui.theme.AppColors
 import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
@@ -797,12 +799,20 @@ fun ScanScreen(onClose: () -> Unit) {
 
         // Karten-Info der zuletzt fotografierten Karte -- rechts unten, auf Hoehe des Auslösers.
         if (scanMode != "stapel" && letzteFotoKarte != null) {
-            FilledTonalIconButton(
-                onClick = { zeigeKartenInfo = true },
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
-                    .padding(end = 24.dp, bottom = 146.dp).size(48.dp),
+            // Ruhig statt voller Akzentflaeche neben dem Ausloeser (Spec §6.2 Regel 5: eine
+            // Hauptaktion je Bildschirm); gefuellt statt outlined, damit die Flaeche auf dem
+            // wechselnd hellen Kamerabild sichtbar bleibt. Eigene runde Flaeche statt
+            // FilledTonalIconButton: dessen Inhalt sitzt in einer festen 40-dp-Box, bei 48 dp
+            // stand das Symbol deshalb nicht mittig (Abnahme I1).
+            Box(
+                Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
+                    .padding(end = 24.dp, bottom = 146.dp).size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(role = Role.Button, onClickLabel = "Karten-Info und Preise") { zeigeKartenInfo = true },
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.Euro, contentDescription = "Karten-Info und Preise")
+                Icon(Icons.Default.Euro, contentDescription = "Karten-Info und Preise", tint = MaterialTheme.colorScheme.onSurface)
             }
         }
         if (zeigeKartenInfo) {
@@ -924,7 +934,9 @@ fun ScanScreen(onClose: () -> Unit) {
                     ) {
                         Text("${capture.sentCount} an den PC gesendet", color = Color.White, modifier = Modifier.weight(1f))
                         // Dieselben drei Ampelfarben wie im Staging-Sheet -- keine neuen Farben.
-                        Box(Modifier.size(10.dp).clip(CircleShape).background(ScanStagingLogic.dotColor(capture.lastLight)))
+                        // Liegt auf dem immer dunklen Kamera-Scrim (Fixrunde 2, Punkt B) -- fest
+                        // AppColors.dark statt der laufenden Rollen.
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(ScanStagingLogic.dotColor(capture.lastLight, AppColors.dark)))
                     }
                 }
                 if (capture.stagingCards.isNotEmpty()) {
@@ -986,7 +998,7 @@ fun ScanScreen(onClose: () -> Unit) {
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Passcode", style = MaterialTheme.typography.headlineSmall, color = Color.White)
+                    Text("Passcode", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
                     Spacer(modifier = Modifier.height(16.dp))
 
                     OutlinedTextField(
@@ -1013,7 +1025,10 @@ fun ScanScreen(onClose: () -> Unit) {
                                 manualCode = ""
                             },
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
+                            )
                         ) {
                             Text("Abbrechen")
                         }

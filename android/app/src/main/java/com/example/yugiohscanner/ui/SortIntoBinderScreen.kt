@@ -66,6 +66,7 @@ import com.example.yugiohscanner.ml.SlotMath
 import com.example.yugiohscanner.ml.SortSession
 import com.example.yugiohscanner.ml.SortState
 import com.example.yugiohscanner.ui.components.SpaceCard
+import com.example.yugiohscanner.ui.theme.AppColors
 import com.example.yugiohscanner.ui.theme.Background
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
@@ -986,7 +987,10 @@ private fun SortRunning(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     "$queueSize ${if (queueSize == 1) "Zuweisung" else "Zuweisungen"} noch nicht gespeichert",
-                    color = ErrorColor, style = MaterialTheme.typography.labelSmall,
+                    // Fixrunde 1, Punkt 8: liegt immer auf dem dunklen Kamera-Scrim (in beiden
+                    // Modi dunkel) -- fest der dunkle warn-Wert statt der Rollenlesung, warn statt
+                    // bad, es ist ein Hinweis, kein Fehler.
+                    color = AppColors.dark.getValue("warn"), style = MaterialTheme.typography.labelSmall,
                 )
             }
             // Nur wenn es sie gibt: der Modus hat weiterhin keinen Staging-Zaehler im Normalfall

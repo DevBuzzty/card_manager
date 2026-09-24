@@ -132,52 +132,52 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
     } catch (e) { setError(e?.message || 'Link konnte nicht geöffnet werden.'); }
   };
 
-  const field = 'w-full bg-obsidian-800 border border-line rounded-lg px-3 py-2 text-sm text-ink';
+  const field = 'w-full bg-bg border border-line rounded-lg px-3 py-2 text-sm text-text';
   return (
     // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur diesen Dialog, nie den darunterliegenden.
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={(e) => { e.stopPropagation(); dismiss(); }}>
-      <div className="w-full max-w-md bg-obsidian-700 border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); dismiss(); }}>
+      <div className="w-full max-w-md bg-surface border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-ink">Verkauft buchen</h2>
-          <button type="button" onClick={dismiss} className="p-1 text-ink-muted hover:text-ink" aria-label="Schließen"><X className="w-4 h-4" /></button>
+          <h2 className="text-lg font-bold text-text">Verkauft buchen</h2>
+          <button type="button" onClick={dismiss} className="p-1 text-muted hover:text-text" aria-label="Schließen"><X className="w-4 h-4" /></button>
         </div>
         {done ? (
           <>
-            <p className="text-sm text-ink">Gebucht.</p>
-            {done.listingSkipped && <p className="text-sm text-gold">Angebot war nicht mehr aktiv – nur der Verkauf wurde gebucht.</p>}
+            <p className="text-sm text-text">Gebucht.</p>
+            {done.listingSkipped && <p className="text-sm text-warn">Angebot war nicht mehr aktiv – nur der Verkauf wurde gebucht.</p>}
             {done.reminders.length > 0 && (
               <div className="space-y-1">
-                <p className="text-sm text-ink">Auch dort herausnehmen:</p>
+                <p className="text-sm text-text">Auch dort herausnehmen:</p>
                 {done.reminders.map((r) => (
-                  <div key={r.listing_id} className="flex items-center gap-2 text-xs text-ink-muted">
+                  <div key={r.listing_id} className="flex items-center gap-2 text-xs text-muted">
                     <span className="flex-1 truncate">{r.channel_name} – {r.title}</span>
-                    {r.external_url && <button type="button" onClick={() => openReminder(r.external_url)} className="text-space-violet hover:underline">Anzeige öffnen</button>}
+                    {r.external_url && <button type="button" onClick={() => openReminder(r.external_url)} className="text-accent hover:underline">Anzeige öffnen</button>}
                   </div>
                 ))}
               </div>
             )}
             {done.askAdjust && (
-              <p className="text-sm text-ink">Preis für die übrigen Karten anpassen?{' '}
-                <button type="button" onClick={() => { finish(); onAdjustListing?.(); }} className="text-space-violet hover:underline">Bearbeiten</button>
+              <p className="text-sm text-text">Preis für die übrigen Karten anpassen?{' '}
+                <button type="button" onClick={() => { finish(); onAdjustListing?.(); }} className="text-accent hover:underline">Bearbeiten</button>
               </p>
             )}
-            {error && <p className="text-sm text-crit">{error}</p>}
-            <div className="flex justify-end"><button type="button" onClick={finish} className="px-4 py-2 rounded-lg text-sm bg-space-violet text-white">Fertig</button></div>
+            {error && <p className="text-sm text-bad">{error}</p>}
+            <div className="flex justify-end"><button type="button" onClick={finish} className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg">Fertig</button></div>
           </>
-        ) : !preview || !channels ? <p className="text-ink-faint">…</p> : (
+        ) : !preview || !channels ? <p className="text-muted">…</p> : (
           <>
-            <p className="text-sm text-ink-muted">{shownItems.length} {shownItems.length === 1 ? 'Karte' : 'Karten'} · Marktwert {euroCentsText(market)}</p>
+            <p className="text-sm text-muted">{shownItems.length} {shownItems.length === 1 ? 'Karte' : 'Karten'} · Marktwert {euroCentsText(market)}</p>
             {listing && (
               <div className="space-y-1">
                 {preview.items.map((i) => (
-                  <label key={i.copy_id} className="flex items-center gap-2 text-xs text-ink-muted">
+                  <label key={i.copy_id} className="flex items-center gap-2 text-xs text-muted">
                     <input type="checkbox" checked={picked.has(i.copy_id)} onChange={() => togglePicked(i.copy_id)} />
                     <span className="truncate">{i.name || i.card_id} · {i.set_code} · {i.rarity} · {i.condition}</span>
                   </label>
                 ))}
               </div>
             )}
-            <label className="block text-xs text-ink-muted">Kanal
+            <label className="block text-xs text-muted">Kanal
               <select className={field} value={form.channel_id} onChange={(e) => {
                 // Der Pseudo-Wert oeffnet nur das Mini-Formular und bleibt nie ausgewaehlt:
                 // form.channel_id aendert sich hier nicht, also rendert die Auswahl sofort wieder
@@ -190,7 +190,7 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
               </select>
             </label>
             {addingChannel && (
-              <div className="p-3 rounded-lg border border-line bg-obsidian-800 space-y-2">
+              <div className="p-3 rounded-lg border border-line bg-bg space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <input className={field} placeholder="Name" value={newChannel.name}
                     onChange={(e) => setNewChannel((n) => ({ ...n, name: e.target.value }))} />
@@ -199,38 +199,38 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
                 </div>
                 <div className="flex justify-end gap-2">
                   <button type="button" disabled={busy} onClick={() => { setAddingChannel(false); setNewChannel({ name: '', fee: '' }); }}
-                    className="px-3 py-1.5 text-sm text-ink-muted hover:text-ink disabled:opacity-50">Abbrechen</button>
+                    className="px-3 py-1.5 text-sm text-muted hover:text-text disabled:opacity-50">Abbrechen</button>
                   <button type="button" disabled={busy} onClick={createChannel}
-                    className="px-3 py-1.5 rounded-lg text-sm bg-space-violet text-white disabled:opacity-50">{busy ? 'Wird angelegt…' : 'Anlegen'}</button>
+                    className="px-3 py-1.5 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50">{busy ? 'Wird angelegt…' : 'Anlegen'}</button>
                 </div>
               </div>
             )}
-            <label className="block text-xs text-ink-muted">Datum
+            <label className="block text-xs text-muted">Datum
               <input type="date" className={field} value={form.sold_on} onChange={(e) => set({ sold_on: e.target.value })} />
             </label>
-            <label className="block text-xs text-ink-muted">Gesamtpreis (€)
+            <label className="block text-xs text-muted">Gesamtpreis (€)
               <input inputMode="decimal" className={field} value={form.gross} onChange={(e) => set({ gross: e.target.value, grossTouched: true })} />
             </label>
             <div className="grid grid-cols-2 gap-2">
-              <label className="block text-xs text-ink-muted">Gebühren (€)
+              <label className="block text-xs text-muted">Gebühren (€)
                 <input inputMode="decimal" className={field} value={form.fees} onChange={(e) => set({ fees: e.target.value, feesTouched: true })} />
               </label>
-              <label className="block text-xs text-ink-muted">Versand (€)
+              <label className="block text-xs text-muted">Versand (€)
                 <input inputMode="decimal" className={field} placeholder="nicht erfasst" value={form.shipping} onChange={(e) => set({ shipping: e.target.value })} />
               </label>
             </div>
-            <label className="block text-xs text-ink-muted">Notiz
+            <label className="block text-xs text-muted">Notiz
               <input className={field} value={form.note} onChange={(e) => set({ note: e.target.value })} />
             </label>
             <div className="text-sm">
-              <div className="text-ink">Netto {euroCentsText(net)}</div>
-              <div className={net >= market ? 'text-emerald-400' : 'text-crit'}>{diffText(net, market)} gegenüber Marktwert</div>
+              <div className="text-text">Netto {euroCentsText(net)}</div>
+              <div className={net >= market ? 'text-good' : 'text-bad'}>{diffText(net, market)} gegenüber Marktwert</div>
             </div>
-            {error && <p className="text-sm text-crit">{error}</p>}
+            {error && <p className="text-sm text-bad">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-ink-muted hover:text-ink">Abbrechen</button>
+              <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
               <button type="button" onClick={book} disabled={busy || shownItems.length === 0}
-                className="px-4 py-2 rounded-lg text-sm bg-space-violet text-white disabled:opacity-50">{busy ? 'Wird gebucht…' : 'Buchen'}</button>
+                className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50">{busy ? 'Wird gebucht…' : 'Buchen'}</button>
             </div>
           </>
         )}

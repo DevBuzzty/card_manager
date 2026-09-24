@@ -5,7 +5,6 @@ import clsx from 'clsx';
 import { Grid } from 'react-window';
 import CustomSelect from './CustomSelect';
 import CardTile from './CardTile';
-import { getRarityInfo } from '../utils/rarity.js';
 import { CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { cardRoute } from '../utils/routes';
 import { parseTags } from '../utils/tags';
@@ -15,15 +14,11 @@ import { formatCopyLocation } from '../utils/copyLocation';
 // ../utils/printingKey.js, damit es ihn nur EINMAL gibt (BinderView.jsx liest denselben).
 import { printingKey } from '../utils/printingKey';
 import { passcodeMatches } from '../utils/passcode';
+import { PRESETS, matchesPresetGroup, presetsFromState } from '../utils/cardFilters.js';
 import ExportDialog from './ExportDialog';
 import { filterCopyIds } from '../utils/exportScope';
-import DuplicatesList from './DuplicatesList';
-import ForSaleList from './ForSaleList';
-import { LOADING, duplicates, forSaleSummary, forSaleSuffix } from '../utils/duplicates';
-import { useSaleData } from '../utils/useSaleData';
-import { useListingsData } from '../utils/useListingsData';
-import ListingsList from './ListingsList';
-import { listingsSummary } from '../utils/listingText';
+import { forSaleSuffix } from '../utils/duplicates';
+import { useSaleData } from '../hooks/useSaleData';
 
 // Simple AutoSizer replacement
 const AutoSizer = ({ children }) => {
@@ -88,11 +83,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [copiesByPrinting, setCopiesByPrinting] = useState({}); // printingKey() -> card_copies-Zeilen dieses Printings
   const [containersTagsError, setContainersTagsError] = useState(null);
   const [copiesLoadError, setCopiesLoadError] = useState(null);
-  // all | unknown | duplicates | forsale | listings | incomplete | foils; Start oeffnet Duplikate/Zum Verkauf ueber location.state.
-  const [segment, setSegment] = useState(() => location.state?.segment || 'all');
-  const sale = useSaleData(); // Spec H1: Exemplare fuer Duplikate/Verkaufsliste, data null = laedt
-  const listingsData = useListingsData(); // Spec H3a §6: Angebote, data null = laedt
-  const [segmentBusy, setSegmentBusy] = useState(false);
+  const sale = useSaleData(); // fuer den "davon zum Verkauf"-Zusatz an jeder Kachel (forSaleByCard unten)
+  // Spec I §3.3: "Unvollstaendig" und "Foils" sind jetzt gespeicherte Filter statt Chips, siehe cardFilters.js.
+  // Abschlussreview B5: eine Start-Kachel kann eine Voreinstellung mitgeben (location.state.preset).
+  const [presets, setPresets] = useState(() => presetsFromState(location.state));
+  const togglePreset = (id) => setPresets(ps => ps.includes(id) ? ps.filter(x => x !== id) : [...ps, id]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [pricesOpen, setPricesOpen] = useState(false);
   const [cmRunning, setCmRunning] = useState(false);
@@ -294,42 +289,12 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       };
   }, [groupedCards]);
 
-  // A grouped card is "incomplete" if a monster is missing atk/def/level, or anything lacks an image.
-  const isIncomplete = (c) => {
-      const isMonster = c.type && !c.type.includes('Spell') && !c.type.includes('Trap');
-      const isLink = c.type && c.type.includes('Link');
-      if (isMonster) {
-          if (c.atk == null) return true;
-          if (!isLink && c.def == null) return true;
-          if (c.level == null) return true;
-          return false;
-      }
-      return !c.image_url;
-  };
-  const hasUnknownVariant = (c) => c.variants && c.variants.some(v => v.set_code === 'Unknown');
-  const hasFoilVariant = (c) => Array.from(c.rarities).some(r => !!getRarityInfo(r).foil);
-
-  // Spec H1 §4: Duplikate je Haupt-Passcode (main_id kommt aus list-sale-copies), Zusatz "(n zum Verkauf)" je Passcode.
-  const saleDuplicates = useMemo(() => {
-      if (!sale.data) return null;
-      const mainIds = new Map(sale.data.copies.map(c => [String(c.card_id), c.main_id]));
-      return duplicates(sale.data.copies, sale.data.keep, (id) => mainIds.get(id));
-  }, [sale.data]);
+  // Zusatz "(n zum Verkauf)" je Passcode auf jeder Kachel, unabhaengig vom Segment.
   const forSaleByCard = useMemo(() => {
       const m = new Map();
       for (const c of (sale.data ? sale.data.copies : [])) if (c.for_sale) m.set(String(c.card_id), (m.get(String(c.card_id)) || 0) + 1);
       return m;
   }, [sale.data]);
-
-  const segmentCounts = useMemo(() => ({
-      all: groupedCards.length,
-      unknown: groupedCards.filter(hasUnknownVariant).length,
-      duplicates: saleDuplicates ? saleDuplicates.length : LOADING,
-      forsale: sale.data ? forSaleSummary(sale.data.copies).copies : LOADING,
-      listings: listingsData.data ? listingsSummary(listingsData.data.listings, listingsData.data.items).listings : LOADING,
-      incomplete: groupedCards.filter(isIncomplete).length,
-      foils: groupedCards.filter(hasFoilVariant).length,
-  }), [groupedCards, saleDuplicates, sale.data, listingsData.data]);
 
   const filtered = useMemo(() => {
       // card_copies-Zeilen ALLER Printings einer Gruppe (groupedCards buendelt einen Passcode --
@@ -345,9 +310,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
       const matches = [];
       for (const c of groupedCards) {
-        if (segment === 'unknown' && !hasUnknownVariant(c)) continue;
-        if (segment === 'incomplete' && !isIncomplete(c)) continue;
-        if (segment === 'foils' && !hasFoilVariant(c)) continue;
+        // Fixrunde 1: c ist die gruppierte Kachel (mehrere Drucke desselben Passcodes) -- eine
+        // Voreinstellung trifft, wenn IRGENDEIN Druck sie trifft (c.variants), nicht nur der zuerst
+        // angetroffene Druck (der auf c selbst durchgereicht waere).
+        if (presets.some(p => !matchesPresetGroup(c.variants, p))) continue;
 
         // ACHTUNG, ECHTE FALLE (Spec B1 §7.4): Diese Liste gruppiert nach Printing (genauer nach
         // Passcode -- eine Gruppe kann mehrere Printings buendeln), Behaelter und Tag sitzen aber
@@ -403,7 +369,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               default: return 0;
           }
       });
-  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, segment, filterContainers, filterTags, copiesByPrinting]);
+  }, [groupedCards, filter, filterType, filterAttribute, filterRace, filterSet, filterLang, filterRarity, filterCondition, filterEdition, sortType, presets, filterContainers, filterTags, copiesByPrinting]);
 
   // Spec F1 §4: der Export-Dialog bekommt den aktuellen Filter als Exemplar-IDs (Stand beim Öffnen).
   const openExport = () => setExportCopyIds(filterCopyIds(filtered, copiesByPrinting, {
@@ -431,15 +397,14 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       clear: () => toggleContainerFilter(id),
     })),
     filterTags.map(t => ({ key: `tag-${t}`, label: t, clear: () => toggleTagFilter(t) })),
+    presets.map(id => ({
+      key: `preset-${id}`,
+      label: PRESETS.find(p => p.id === id)?.label || id,
+      clear: () => togglePreset(id),
+    })),
   );
 
   // The panel walks the list with the arrow buttons, so it gets the current order handed over.
-  // Spec H1: aus Duplikate/Zum Verkauf ins Karten-Detail des Printings dieses Exemplars.
-  const openSaleCopy = (copy) => {
-    if (!copy || copy.card_id == null) return;
-    navigate(cardRoute({ id: copy.card_id, set_code: copy.set_code, language: copy.language, rarity: copy.rarity }), { state: { background: location, list: [] } });
-  };
-
   const openCard = (card) => {
     const first = (card.variants && card.variants[0]) || card;
     const list = filtered.map(c => cardRoute((c.variants && c.variants[0]) || c));
@@ -448,7 +413,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
   const clearFilters = () => {
       setFilter(''); setFilterType('All'); setFilterAttribute('All'); setFilterRace('All'); setFilterSet('All'); setFilterLang('All'); setFilterRarity('All'); setFilterCondition('All'); setFilterEdition('All');
-      setFilterContainers([]); setFilterTags([]);
+      setFilterContainers([]); setFilterTags([]); setPresets([]);
   };
 
   // Virtualized Grid Cell Renderer
@@ -474,7 +439,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               <CardTile card={card} onClick={() => openCard(card)} saleNote={forSaleSuffix(forSaleByCard.get(String(card.id)) || 0)} />
               {filterContainers.length > 0 && locationCopy && (
                   <div className="mt-1 px-0.5">
-                      <span className="inline-flex items-center font-mono text-[9.5px] text-ink-faint bg-obsidian-700 border border-line rounded px-1.5 py-0.5 truncate max-w-full">
+                      <span className="inline-flex items-center font-mono text-[9.5px] text-muted bg-surface border border-line rounded px-1.5 py-0.5 truncate max-w-full">
                           {formatCopyLocation(locationCopy, locationContainer)}
                       </span>
                   </div>
@@ -483,30 +448,15 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       );
   };
 
-  const runUnknownAction = async (kind) => {
-      if (!window.api || segmentBusy) return;
-      const msg = kind === 'merge'
-          ? "Alle 'Unbekannt'-Karten in ihre häufigste vorhandene Set-Variante zusammenführen?"
-          : "Alle 'Unbekannt'-Karten auf ihr günstigstes verfügbares Set setzen (online, kann dauern)?";
-      if (!confirm(msg)) return;
-      setSegmentBusy(true);
-      try {
-          const res = kind === 'merge' ? await window.api.mergeUnknownCards() : await window.api.convertUnknownsToDefault();
-          if (res.success) { alert(kind === 'merge' ? `${res.merged} Karten zusammengeführt.` : `${res.converted} Karten umgestellt.`); loadCollection(); }
-          else alert('Fehlgeschlagen: ' + res.error);
-      } catch { alert('Aktion fehlgeschlagen.'); }
-      finally { setSegmentBusy(false); }
-  };
-
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
-        <div className="flex flex-col gap-4 mb-4 bg-[#1E1E1E] p-4 rounded-xl border border-gray-800 shrink-0">
+        <div className="flex flex-col gap-4 mb-4 bg-surface p-4 rounded-xl border border-line shrink-0">
             {/* Row 1: count, search, sort, filter toggle, prices menu */}
             <div className="flex flex-wrap items-center gap-3">
-                <span className="text-ink-muted text-sm shrink-0">{filtered.length} Karten</span>
+                <span className="text-muted text-sm shrink-0">{filtered.length} Karten</span>
                 <div className="relative group flex-1 min-w-[220px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-                    <input type="text" placeholder="Suchen…" className="bg-obsidian border border-line text-ink pl-10 pr-4 py-2 rounded-lg w-full focus:border-space-violet outline-none"
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                    <input type="text" placeholder="Suchen…" className="bg-bg border border-line text-text pl-10 pr-4 py-2 rounded-lg w-full focus:border-accent outline-none"
                            value={filter} onChange={(e) => setFilter(e.target.value)} />
                 </div>
                 <CustomSelect value={sortType} onChange={setSortType} placeholder="Sortierung" className="w-[170px]" options={[
@@ -514,37 +464,37 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                     { value: 'name', label: 'Name' }, { value: 'atk', label: 'ATK' }, { value: 'def', label: 'DEF' }, { value: 'level', label: 'Level' }]} />
                 <button onClick={() => setFiltersOpen(o => !o)}
                         className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
-                          filtersOpen || activeFilters.length ? 'bg-space-violet/15 border-space-violet/40 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink')}>
+                          filtersOpen || activeFilters.length ? 'bg-accent/15 border-accent/40 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
                     <SlidersHorizontal className="w-4 h-4" /> Filter
-                    {activeFilters.length > 0 && <span className="font-mono text-[10px] bg-space-violet text-white rounded-full px-1.5">{activeFilters.length}</span>}
+                    {activeFilters.length > 0 && <span className="font-mono text-[10px] bg-accent text-accent-fg rounded-full px-1.5">{activeFilters.length}</span>}
                 </button>
-                <button onClick={openExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-obsidian-700 border border-line text-ink-muted hover:text-ink">
+                <button onClick={openExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface border border-line text-muted hover:text-text">
                     <Download className="w-4 h-4" /> Exportieren…
                 </button>
                 {exportCopyIds && <ExportDialog filterCopyIds={exportCopyIds} onClose={() => setExportCopyIds(null)} />}
                 <div className="relative">
-                    <button onClick={() => setPricesOpen(o => !o)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-obsidian-700 border border-line text-ink-muted hover:text-ink">
+                    <button onClick={() => setPricesOpen(o => !o)} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface border border-line text-muted hover:text-text">
                         <Coins className="w-4 h-4" /> Preise
                     </button>
                     {pricesOpen && (
-                      <div className="absolute right-0 top-11 z-30 w-[320px] bg-obsidian-800 border border-line rounded-xl shadow-2xl p-3 space-y-2"
+                      <div className="absolute right-0 top-11 z-30 w-[320px] bg-bg border border-line rounded-xl shadow-sm p-3 space-y-2"
                            onMouseLeave={() => setPricesOpen(false)}>
                         <button onClick={runBulk} disabled={cmBulkBusy || cmRunning}
-                                className="w-full text-left px-3 py-2 rounded-lg bg-space-violet/80 hover:bg-space-violet text-white text-sm disabled:opacity-50">
+                                className="w-full text-left px-3 py-2 rounded-lg bg-accent hover:underline text-accent-fg text-sm disabled:opacity-50">
                           {cmBulkBusy ? 'Aktualisiere…' : 'Jetzt aktualisieren (Preisdatei)'}
                         </button>
                         <button onClick={cmRunning ? () => window.api.abortCardmarketScrape() : runCardmarket}
-                                className="w-full text-left px-3 py-2 rounded-lg bg-obsidian-700 border border-line text-ink text-sm hover:border-space-violet/40">
+                                className="w-full text-left px-3 py-2 rounded-lg bg-surface border border-line text-text text-sm hover:border-accent/40">
                           {cmRunning ? `Abbrechen${cmProgress ? ` (${cmProgress.current}/${cmProgress.total})` : ''}` : 'Rest scrapen'}
                         </button>
-                        <label className="flex items-center gap-2 px-3 py-2 text-sm text-ink-muted cursor-pointer select-none">
-                          <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-space-violet" />
+                        <label className="flex items-center gap-2 px-3 py-2 text-sm text-muted cursor-pointer select-none">
+                          <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-accent" />
                           Automatisch im Hintergrund
                         </label>
                         <div className="px-3">
-                          <div className="text-[10px] uppercase tracking-wider text-ink-faint mb-1">Ab Rarity</div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted mb-1">Ab Rarity</div>
                           <select value={cmMinRank} onChange={(e) => { const v = Number(e.target.value); setCmMinRank(v); if (cmAuto) window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(v) }); }}
-                                  className="w-full px-2 py-1.5 rounded bg-obsidian border border-line text-ink text-sm">
+                                  className="w-full px-2 py-1.5 rounded bg-bg border border-line text-text text-sm">
                             <option value={1}>Alle Rarities</option>
                             <option value={2}>Ab Rare</option>
                             <option value={3}>Ab Super Rare</option>
@@ -556,10 +506,10 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                           </select>
                         </div>
                         <div className="border-t border-line pt-2 px-3 space-y-1">
-                          <button onClick={() => handleUpdate('missing')} disabled={updating} className="text-sm text-ink-muted hover:text-ink">Fehlende Daten holen</button>
-                          <button onClick={() => handleUpdate('all')} disabled={updating} className="block text-sm text-ink-muted hover:text-ink">Alle Karten aktualisieren</button>
+                          <button onClick={() => handleUpdate('missing')} disabled={updating} className="text-sm text-muted hover:text-text">Fehlende Daten holen</button>
+                          <button onClick={() => handleUpdate('all')} disabled={updating} className="block text-sm text-muted hover:text-text">Alle Karten aktualisieren</button>
                           {cmStatus && (
-                            <div className="text-[11px] text-ink-faint pt-1">
+                            <div className="text-[11px] text-muted pt-1">
                               Letztes Update {relTime(cmStatus.lastRun)} · {cmStatus.resolvedCount} per Datei · {cmStatus.unresolvedCount} offen
                             </div>
                           )}
@@ -573,51 +523,33 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 Filter-Panel offen ist -- sonst sieht der Nutzer bei geschlossenem Panel nicht,
                 dass Behaelter-/Tag-Filter und die Notiz-/Tag-Textsuche gerade still leere
                 Ergebnisse liefern (dieselbe Fehlerklasse wie in Task 5). Gleicher Anzeigebau wie
-                Binders.jsx (roter crit-Kasten mit Symbol). */}
+                Binders.jsx (roter bad-Kasten mit Symbol). */}
             {containersTagsError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{containersTagsError}</span>
                 </div>
             )}
             {copiesLoadError && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-bad/40 bg-bad/10 text-sm text-text">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     <span>{copiesLoadError}</span>
                 </div>
             )}
 
-            {/* Row 2: segment control */}
+            {/* Row 2: gespeicherte Filter (Spec I §3.3) -- Abschlussreview B3: erste Zeile im Filter-Bereich,
+                keine dauerhaft sichtbare Chip-Zeile. Aktive Voreinstellungen stehen als entfernbare Chips unten. */}
+            {filtersOpen && (
             <div className="flex flex-wrap items-center gap-2">
-                {[
-                    { id: 'all', label: 'Alle' },
-                    { id: 'unknown', label: 'Unbekannt' },
-                    { id: 'duplicates', label: 'Duplikate' },
-                    { id: 'forsale', label: 'Zum Verkauf' },
-                    { id: 'listings', label: 'Angebote' },
-                    { id: 'incomplete', label: 'Unvollständig' },
-                    { id: 'foils', label: 'Foils' },
-                ].map(s => (
-                    <button
-                        key={s.id}
-                        onClick={() => setSegment(s.id)}
-                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg font-display text-xs font-medium transition-colors ${
-                            segment === s.id ? 'bg-space-violet text-white shadow-[0_6px_16px_-8px_#9D00FF]' : 'bg-obsidian-700 text-ink-muted hover:text-ink border border-line'
-                        }`}
-                    >
-                        {s.label}
-                        <span className={`font-mono text-[9.5px] px-1.5 rounded-full ${segment === s.id ? 'bg-black/25' : 'bg-black/30'}`}>{segmentCounts[s.id]}</span>
+                <span className="text-[10px] uppercase tracking-wide text-muted mr-1 shrink-0">Voreinstellungen</span>
+                {PRESETS.map(p => (
+                    <button key={p.id} type="button" onClick={() => togglePreset(p.id)}
+                        className={clsx('px-3 py-1.5 rounded-full text-xs border',
+                            presets.includes(p.id) ? 'bg-accent text-accent-fg border-transparent' : 'bg-surface-2 text-muted border-line')}>
+                        {p.label}
                     </button>
                 ))}
             </div>
-
-            {/* Unknown batch actions */}
-            {segment === 'unknown' && segmentCounts.unknown > 0 && (
-                <div className="flex items-center gap-3 bg-gold/5 border border-gold/25 rounded-xl px-4 py-3">
-                    <span className="text-xs text-ink-muted flex-1">Diesen Karten fehlt der Set-Code — auflösen, damit der Wert stimmt.</span>
-                    <button onClick={() => runUnknownAction('convert')} disabled={segmentBusy} className="px-3 py-1.5 bg-obsidian-600 hover:bg-obsidian-700 text-ink rounded-lg text-xs font-medium border border-line disabled:opacity-50">Auf Standard-Set setzen</button>
-                    <button onClick={() => runUnknownAction('merge')} disabled={segmentBusy} className="px-3 py-1.5 bg-space-violet hover:bg-space-violet-dark text-white rounded-lg text-xs font-medium disabled:opacity-50">{segmentBusy ? 'Läuft…' : 'Alle zusammenführen'}</button>
-                </div>
             )}
 
             {/* Row 3: filter dropdowns, only when open */}
@@ -631,7 +563,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                   <CustomSelect value={filterCondition} onChange={setFilterCondition} placeholder="Zustand" className="w-[110px]" options={[{ value: 'All', label: 'Zustand' }, ...CONDITIONS.map(c => ({ value: c, label: c }))]} />
                   <CustomSelect value={filterEdition} onChange={setFilterEdition} placeholder="Edition" className="w-[120px]" options={[{ value: 'All', label: 'Edition' }, ...EDITIONS.map(e => ({ value: e, label: EDITION_LABELS[e] }))]} />
                   <CustomSelect value={filterSet} onChange={setFilterSet} placeholder="Set" className="w-[120px]" options={[{ value: "All", label: "Set" }, ...sets]} />
-                  <button onClick={clearFilters} title="Filter zurücksetzen" className="p-2 text-gray-500 hover:text-red-400"><FilterX className="w-4 h-4" /></button>
+                  <button onClick={clearFilters} title="Filter zurücksetzen" className="p-2 text-muted hover:text-bad"><FilterX className="w-4 h-4" /></button>
               </div>
             )}
 
@@ -639,11 +571,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 Toggle-Chips statt CustomSelect (das ist Einfachauswahl). */}
             {filtersOpen && containers.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-ink-faint mr-1 shrink-0">Behälter</span>
+                  <span className="text-[10px] uppercase tracking-wide text-muted mr-1 shrink-0">Behälter</span>
                   {containers.map(ct => (
                       <button key={ct.container_id} type="button" onClick={() => toggleContainerFilter(ct.container_id)}
                               className={clsx('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs border transition-colors',
-                                filterContainers.includes(ct.container_id) ? 'bg-space-violet/20 border-space-violet/50 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink')}>
+                                filterContainers.includes(ct.container_id) ? 'bg-accent/20 border-accent/50 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
                           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: ct.color || '#6b6383' }} />
                           {ct.name}
                       </button>
@@ -652,11 +584,11 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
             )}
             {filtersOpen && tagOptions.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-ink-faint mr-1 shrink-0">Tags</span>
+                  <span className="text-[10px] uppercase tracking-wide text-muted mr-1 shrink-0">Tags</span>
                   {tagOptions.map(t => (
                       <button key={t} type="button" onClick={() => toggleTagFilter(t)}
                               className={clsx('px-2.5 py-1 rounded-full text-xs border transition-colors',
-                                filterTags.includes(t) ? 'bg-space-violet/20 border-space-violet/50 text-ink' : 'bg-obsidian-700 border-line text-ink-muted hover:text-ink')}>
+                                filterTags.includes(t) ? 'bg-accent/20 border-accent/50 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
                           {t}
                       </button>
                   ))}
@@ -668,30 +600,18 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
               <div className="flex flex-wrap items-center gap-2">
                 {activeFilters.map(f => (
                   <button key={f.key} onClick={f.clear}
-                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-space-violet/15 border border-space-violet/30 text-ink text-xs">
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/15 border border-accent/30 text-text text-xs">
                     {f.label} <X className="w-3 h-3 opacity-60" />
                   </button>
                 ))}
-                <button onClick={clearFilters} className="text-xs text-ink-faint hover:text-crit">Alle entfernen</button>
+                <button onClick={clearFilters} className="text-xs text-muted hover:text-bad">Alle entfernen</button>
               </div>
             )}
         </div>
 
         <div className="flex-1 overflow-hidden">
-            {sale.error && (segment === 'duplicates' || segment === 'forsale') && (
-                <div className="flex items-center gap-2 px-4 py-3 mb-3 rounded-xl border border-crit/40 bg-crit/10 text-sm text-crit">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{sale.error}</span>
-                </div>
-            )}
-            {segment === 'duplicates' ? (
-                <DuplicatesList list={saleDuplicates} copies={sale.data ? sale.data.copies : null} reload={sale.reload} onOpenCard={openSaleCopy} />
-            ) : segment === 'forsale' ? (
-                <ForSaleList copies={sale.data ? sale.data.copies : null} containers={containers} reload={sale.reload} onOpenCard={openSaleCopy} />
-            ) : segment === 'listings' ? (
-                <ListingsList data={listingsData.data} error={listingsData.error} reload={listingsData.reload} onOpenCard={openSaleCopy} />
-            ) : filtered.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-gray-600">Keine Karten gefunden.</div>
+            {filtered.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-muted">Keine Karten gefunden.</div>
             ) : (
                 <AutoSizer>
                     {({ height, width }) => {
