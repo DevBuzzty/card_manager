@@ -449,7 +449,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
            {!isLink && card.def != null && (
               <div className="bg-bg/50 p-3 rounded-lg border border-line">
                   <span className="text-xs text-muted uppercase tracking-wider block mb-1">DEF</span>
-                  <span className="text-xl font-bold text-accent">{card.def}</span>
+                  <span className="text-xl font-bold text-text">{card.def}</span>
               </div>
           )}
 

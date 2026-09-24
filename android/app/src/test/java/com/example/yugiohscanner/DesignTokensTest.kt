@@ -2,8 +2,11 @@ package com.example.yugiohscanner
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import com.example.yugiohscanner.ui.theme.AppColors
 import com.example.yugiohscanner.ui.theme.AppTypography
+import com.example.yugiohscanner.ui.theme.Radius
+import com.example.yugiohscanner.ui.theme.TypeScale
 import com.example.yugiohscanner.ui.theme.schema
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -101,5 +104,28 @@ class DesignTokensTest {
             // geprueften Hex-Wert.
             assertEquals("$modus/$name alpha", 1f, rollen.getValue(name).alpha)
         }
+    }
+
+    // Spec I §6.3 (I2 Task 11) -- Schrift und Ecken gegen tokens.json#typo/#radius (Zwilling: theme.test.js, Tailwind).
+    @Test
+    fun schriftgroessenUndEckenStimmenMitDerTokenDateiUeberein() {
+        val tok = JSONObject(Fixtures.text("docs/fixtures/design/tokens.json"))
+        val sizes = tok.getJSONObject("typo").getJSONObject("sizes")
+        assertEquals(sizes.getInt("titel"), TypeScale.TITEL)
+        assertEquals(sizes.getInt("abschnitt"), TypeScale.ABSCHNITT)
+        assertEquals(sizes.getInt("zeile"), TypeScale.ZEILE)
+        assertEquals(sizes.getInt("neben"), TypeScale.NEBEN)
+        assertEquals(sizes.getInt("nebenKlein"), TypeScale.NEBEN_KLEIN)
+        val erlaubt = sizes.keys().asSequence().map { sizes.getInt(it).toFloat() }.toSet()
+        val t = AppTypography
+        listOf(t.displayLarge, t.displayMedium, t.displaySmall, t.headlineLarge, t.headlineMedium, t.headlineSmall,
+            t.titleLarge, t.titleMedium, t.titleSmall, t.bodyLarge, t.bodyMedium, t.bodySmall,
+            t.labelLarge, t.labelMedium, t.labelSmall).forEach { st ->
+            assertTrue("${st.fontSize} ist keine der vier Groessen", st.fontSize.value in erlaubt)
+            assertEquals(FontFamily.Default, st.fontFamily)
+        }
+        val radius = tok.getJSONObject("radius")
+        assertEquals(radius.getInt("feld"), Radius.FELD)
+        assertEquals(radius.getInt("flaeche"), Radius.FLAECHE)
     }
 }

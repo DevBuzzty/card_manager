@@ -773,7 +773,7 @@ fun ScanScreen(onClose: () -> Unit) {
                 color = Color.Yellow,
                 style = MaterialTheme.typography.displayMedium,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 96.dp)
-                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
                     .padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
@@ -994,7 +994,7 @@ fun ScanScreen(onClose: () -> Unit) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background, RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.background, RoundedCornerShape(10.dp))
                         .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {

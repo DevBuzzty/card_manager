@@ -179,8 +179,8 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                     contentDescription = base.name,
                     modifier = Modifier
                         .height(320.dp)
-                        .shadow(2.dp, RoundedCornerShape(12.dp))
-                        .clip(RoundedCornerShape(12.dp)),
+                        .shadow(2.dp, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp)),
                 )
             }
 
