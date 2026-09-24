@@ -64,10 +64,36 @@ test('cards-Push: Block 1 bleibt in der Echo-Sperre, auch wenn Block 2 scheitert
 // Quelltext-Zaun: push() benutzt den Blockweg und rueckt den Cursor erst danach vor.
 test('push() schiebt über upsertCardsInChunks, Cursor danach', () => {
   const src = fs.readFileSync(path.join(__dirname, 'sync.cjs'), 'utf8');
-  const start = src.indexOf('async function push(c)');
+  const start = src.indexOf('async function push(c, cutoff)');
   const end = src.indexOf('async function pullCopies(', start);
   const body = src.slice(start, end);
   assert.ok(body.includes('await upsertCardsInChunks(c, changed)'), 'push() muss in Blöcken schieben');
   assert.ok(!body.includes(".from('cards')"), 'kein ungeteilter Upsert mehr in push()');
   assert.ok(body.indexOf('upsertCardsInChunks') < body.indexOf("setSetting(db, 'sync_last_push'"));
+});
+
+// Fehler 24.09.2026 (Handy 30 Karten weniger): Drucke, Behaelter und Exemplare teilen sich in einem Zyklus
+// EINE Zeitgrenze -- ein Exemplar kann nicht vor seinem in derselben Sekunde entstandenen Druck hinausgehen.
+test('Push-Grenze: Druck und Exemplar derselben Sekunde gehen gemeinsam oder gar nicht', () => {
+  const Database = require('better-sqlite3');
+  const { _pushCutoff, _pushRowsBefore } = require('./sync.cjs');
+  const db = new Database(':memory:');
+  db.exec(`CREATE TABLE cards (id TEXT, updated_at TEXT); CREATE TABLE card_copies (copy_id TEXT, updated_at TEXT);
+    INSERT INTO cards VALUES ('1', '2026-09-23 22:50:56'); INSERT INTO card_copies VALUES ('a', '2026-09-23 22:50:56');`);
+  const cursor = '2026-09-23 22:50:00';
+  for (const [cutoff, n] of [['2026-09-23 22:50:56', 0], ['2026-09-23 22:50:57', 1]]) {
+    assert.equal(_pushRowsBefore(db, 'cards', cursor, cutoff).length, n);
+    assert.equal(_pushRowsBefore(db, 'card_copies', cursor, cutoff).length, n);
+  }
+  assert.match(_pushCutoff(db), /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/, 'Grenze im sekundengenauen SQLite-Format');
+});
+
+test('cycle(): eine Grenze für push, pushContainers und pushCopies', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'sync.cjs'), 'utf8');
+  const body = src.slice(src.indexOf('async function cycle('), src.indexOf('setInterval(cycle'));
+  assert.equal((body.match(/pushCutoff\(db\)/g) || []).length, 1, 'genau eine Grenze je Zyklus');
+  for (const call of ['await push(c, cutoff)', 'await pushContainers(c, cutoff)', 'await pushCopies(c, cutoff)'])
+    assert.ok(body.includes(call), `fehlt: ${call}`);
+  const fns = src.slice(src.indexOf('async function push(c, cutoff)'), src.indexOf('async function pullSealed('));
+  assert.ok(!fns.includes("strftime('%Y-%m-%d %H:%M:%S','now')"), 'kein eigenes "jetzt" mehr in den drei Push-Funktionen');
 });
