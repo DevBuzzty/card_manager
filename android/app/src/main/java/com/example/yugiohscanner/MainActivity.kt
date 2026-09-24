@@ -21,6 +21,10 @@ class MainActivity : ComponentActivity() {
         // initialized before those screens can read it. Cheap: opens the SQLiteOpenHelper only,
         // no disk I/O yet.
         com.example.yugiohscanner.cloud.CatalogRepository.init(this)
+        // Kaltstart-Zwischenspeicher: gespeicherter Sammlungsstand, sofort sichtbar nach der Anmeldung.
+        com.example.yugiohscanner.cloud.CollectionStore.useDeviceCache(
+            com.example.yugiohscanner.cloud.FileSnapshotStore(java.io.File(filesDir, "sammlung.bin")),
+        )
         // Spec E2 §6: an die App geteilter Text -> Import-Vorschau (nicht erneut nach einer Wiederherstellung).
         if (savedInstanceState == null) offerSharedText(intent)
         setContent {

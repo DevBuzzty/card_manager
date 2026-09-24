@@ -68,6 +68,18 @@ object SupabaseCloud {
         password = ""
     }
 
+    /**
+     * Nutzer-ID des angemeldeten Kontos (JWT `sub`), `null` ohne Anmeldung. Schluessel des
+     * Kaltstart-Zwischenspeichers -- ein gespeicherter Stand eines anderen Kontos wird nie gezeigt.
+     */
+    fun userId(): String? = accessToken?.let(::jwtSubject)
+
+    internal fun jwtSubject(token: String): String? = runCatching {
+        val payload = token.split('.')[1]
+        val json = String(java.util.Base64.getUrlDecoder().decode(payload.padEnd((payload.length + 3) / 4 * 4, '=')))
+        JSONObject(json).optString("sub").takeIf { it.isNotBlank() }
+    }.getOrNull()
+
     internal fun http(): OkHttpClient = client
     internal fun base(): String = baseUrl
     internal fun key(): String = apiKey

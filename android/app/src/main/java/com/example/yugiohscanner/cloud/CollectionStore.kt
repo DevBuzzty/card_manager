@@ -17,7 +17,16 @@ object CloudStoreSource : StoreSource {
  * Prozess. Bildschirme lesen `state`; nach eigenen Schreibvorgaengen `awaitSync()`.
  */
 object CollectionStore {
-    private val core = CollectionStoreCore(CloudStoreSource, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+    // Kaltstart-Zwischenspeicher: die Datei setzt MainActivity (braucht den Context), das Konto kommt aus dem Token.
+    @Volatile private var deviceCache: StoreSnapshotStore? = null
+    private val core = CollectionStoreCore(
+        CloudStoreSource, CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        snapshots = { deviceCache },
+        account = { SupabaseCloud.userId() },
+    )
+
+    /** Einmal beim App-Start, vor dem ersten Laden. */
+    fun useDeviceCache(store: StoreSnapshotStore) { deviceCache = store }
 
     val state: StateFlow<StoreState> get() = core.state
     val sync: StateFlow<SyncStatus> get() = core.sync

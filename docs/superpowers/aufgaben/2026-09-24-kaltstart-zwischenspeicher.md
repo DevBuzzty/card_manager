@@ -1,6 +1,6 @@
 # Aufgabe: Kaltstart-Zwischenspeicher am Handy
 
-**Stand:** 24.09.2026 · **Wann:** nach der I1-Abnahme (vor oder neben I2) · **Vorarbeit:** Zweig `perf/handy-ladewege` (3d2a83c)
+**Stand:** 24.09.2026 · **Umgesetzt** im Zweig `feat/handy-kaltstart` · **Vorarbeit:** `perf/handy-ladewege` (3d2a83c)
 
 ## Warum
 
@@ -22,7 +22,7 @@ Beim Kaltstart zeigt die App den **zuletzt gespeicherten Stand sofort** und holt
 
 ## Prüfbar
 
-1. Zweiter Kaltstart: Start-Bildschirm mit Zahlen in unter 1 s ab dem Ende der Anmeldung (Flugmodus: ebenso, mit Hinweis „nicht abgeglichen“).
+1. Zweiter Kaltstart: Start-Bildschirm mit Zahlen in unter 1 s ab dem Ende der Anmeldung. **Flugmodus bewusst nicht enthalten:** Die Anmeldung beim Start bleibt Pflicht (viele Bildschirme hängen an `cloudReady`); ein Offline-Start wäre eine eigene Aufgabe.
 2. Eine Änderung am PC erscheint nach dem Kaltstart am Handy (Delta nach gespeichertem Stichtag).
 3. Abmelden und mit einem anderen Konto anmelden: kein Datensatz des alten Kontos sichtbar.
 4. Tests nach dem Muster von `CollectionStoreCoreTest`: Speicher lesen/schreiben mit nachgebauter Quelle, Konto-Wechsel, Generation, beschädigte Datei → vollständiges Laden.
@@ -30,3 +30,17 @@ Beim Kaltstart zeigt die App den **zuletzt gespeicherten Stand sofort** und holt
 ## Nicht enthalten
 
 R8/Code-Verkleinerung (eigene Aufgabe, braucht einen Gerätetest von Scanner und OCR) und ein eigenes Baseline-Profil der App (Macrobenchmark-Modul).
+
+## Ergebnis (24.09.2026, Xiaomi 14, Release-Build)
+
+Gemessen wurde vom Prozessstart bis zum Ende des Ladebildschirms (`adb logcat -s Startzeit`):
+
+| Kaltstart | Zeit |
+|---|---|
+| ohne gespeicherten Stand (lädt alles aus der Cloud) | 3,1 s |
+| mit gespeichertem Stand, 1. Mal | 1,1 s |
+| mit gespeichertem Stand, 2. Mal | 0,7 s |
+
+Der Rest ist im Wesentlichen die Anmeldung beim Server. Stimmigkeit: Nach dem Schnellstart holte der Delta-Abgleich eine in der Zwischenzeit geänderte Charge (+10 Karten) nach; das Handy stimmte danach mit dem PC überein (3194 Karten).
+
+Umsetzung: `cloud/StoreSnapshot.kt` (Datei, Binärformat, Wächter-Test gegen vergessene Felder), `CollectionStoreCore` (Wiederherstellen, Schreiben nur bei geänderten Daten, Löschen beim Abmelden), `SupabaseCloud.userId()` (JWT `sub`). Tests: `StoreSnapshotCodecTest`, `CollectionStoreSnapshotTest` (14 neu, 782/782 grün).
