@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import androidx.compose.ui.semantics.Role
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -798,19 +799,20 @@ fun ScanScreen(onClose: () -> Unit) {
 
         // Karten-Info der zuletzt fotografierten Karte -- rechts unten, auf Hoehe des Auslösers.
         if (scanMode != "stapel" && letzteFotoKarte != null) {
-            FilledTonalIconButton(
-                onClick = { zeigeKartenInfo = true },
-                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
-                    .padding(end = 24.dp, bottom = 146.dp).size(48.dp),
-                // Ruhig statt voller Akzentflaeche neben dem Ausloeser (Spec §6.2 Regel 5: eine
-                // Hauptaktion je Bildschirm); gefuellt statt outlined, damit die Flaeche auf dem
-                // wechselnd hellen Kamerabild sichtbar bleibt.
-                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                ),
+            // Ruhig statt voller Akzentflaeche neben dem Ausloeser (Spec §6.2 Regel 5: eine
+            // Hauptaktion je Bildschirm); gefuellt statt outlined, damit die Flaeche auf dem
+            // wechselnd hellen Kamerabild sichtbar bleibt. Eigene runde Flaeche statt
+            // FilledTonalIconButton: dessen Inhalt sitzt in einer festen 40-dp-Box, bei 48 dp
+            // stand das Symbol deshalb nicht mittig (Abnahme I1).
+            Box(
+                Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
+                    .padding(end = 24.dp, bottom = 146.dp).size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(role = Role.Button, onClickLabel = "Karten-Info und Preise") { zeigeKartenInfo = true },
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.Euro, contentDescription = "Karten-Info und Preise")
+                Icon(Icons.Default.Euro, contentDescription = "Karten-Info und Preise", tint = MaterialTheme.colorScheme.onSurface)
             }
         }
         if (zeigeKartenInfo) {
