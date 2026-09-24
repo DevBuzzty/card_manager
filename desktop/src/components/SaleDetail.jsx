@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { createBusyGate } from '../utils/busyGate';
 import { toCents, netCents, diffText, euroCentsText } from '../utils/saleMath';
+import { feesMark } from '../utils/saleNotices';
+import { useEbayOrders } from '../utils/useSaleNotices';
 
 const toInput = (v) => { const c = toCents(v); return c == null ? '' : (c / 100).toFixed(2).replace('.', ','); };
 const parse = (s) => (String(s ?? '').trim() === '' ? null : Number(String(s).replace(',', '.')));
@@ -19,6 +21,7 @@ export default function SaleDetail({ saleId, doubleSold = false, orphaned = fals
   const [detail, setDetail] = useState(null);
   const [channels, setChannels] = useState([]);
   const [form, setForm] = useState(null); // null = nicht im Bearbeiten
+  const ebayOrders = useEbayOrders();
   const alive = useRef(true);
 
   const load = useCallback(() => Promise.all([window.api.saleDetail(saleId), window.api.listSaleChannels()])
@@ -105,7 +108,8 @@ export default function SaleDetail({ saleId, doubleSold = false, orphaned = fals
                 {orphaned && <p className="text-sm text-bad">Position ohne verkauftes Exemplar – bitte prüfen. Sie zählt in der Übersicht nicht mit.</p>}
                 <div className="text-sm space-y-0.5 bg-bg border border-line rounded-lg p-3">
                   <Row label="Preis">{euroCentsText(toCents(sale.gross) || 0)}</Row>
-                  <Row label="Gebühren">{euroCentsText(toCents(sale.fees) || 0)}</Row>
+                  <Row label="Gebühren">{euroCentsText(toCents(sale.fees) || 0)}
+                    {feesMark(ebayOrders, saleId) && <span className="ml-2 inline-block text-xs px-2 py-0.5 rounded bg-warn/15 text-text">{feesMark(ebayOrders, saleId)}</span>}</Row>
                   <Row label="Versand">{sale.shipping == null ? 'nicht erfasst' : euroCentsText(toCents(sale.shipping) || 0)}</Row>
                   <Row label="Netto">{euroCentsText(net)}</Row>
                   <Row label="Marktwert">{euroCentsText(market)}</Row>

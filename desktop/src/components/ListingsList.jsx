@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import ListingDetail, { ListingMarks, EbayMark } from './ListingDetail';
+import { SaleNoticesBanner } from './SaleNotices';
 import { LOADING } from '../utils/duplicates';
 import { toCents, euroCentsText, diffText } from '../utils/saleMath';
 import { listingsSummary, summaryText, sinceText } from '../utils/listingText';
@@ -49,6 +50,7 @@ export default function ListingsList({ data, error, reload, onOpenCard }) {
         <div className="flex-1 flex items-center justify-center text-muted">{LOADING}</div>
       ) : (
         <>
+          <SaleNoticesBanner />
           {(status === 'aktiv' || status === 'alle') && (
             <div className="bg-surface border border-line rounded-xl px-4 py-3 text-sm text-text shrink-0">
               {summaryText(listingsSummary(rows, data.items))}

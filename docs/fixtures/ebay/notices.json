@@ -1,0 +1,34 @@
+{
+  "_comment": "Spec H3b §7.6 (H3b2) -- eBay-Hinweise und Marke 'Gebuehren vorlaeufig'. ZWILLING: desktop/src/utils/saleNotices.js und android ml/SaleNotices.kt. Sortierung per Codeeinheiten.",
+  "sort": [
+    {
+      "name": "weggetippte fallen raus, neueste zuerst, gleiche Zeit nach notice_id",
+      "notices": [
+        { "notice_id": "ship-b", "kind": "shipping", "text": "B", "dismissed": false, "created_at": "2026-09-24T10:00:00+00:00" },
+        { "notice_id": "ship-a", "kind": "shipping", "text": "A", "dismissed": 0, "created_at": "2026-09-24T10:00:00+00:00" },
+        { "notice_id": "error-c", "kind": "error", "text": "C", "dismissed": false, "created_at": "2026-09-24T11:00:00+00:00" },
+        { "notice_id": "old", "kind": "reminder", "text": "D", "dismissed": true, "created_at": "2026-09-24T12:00:00+00:00" },
+        { "notice_id": "old2", "kind": "reminder", "text": "E", "dismissed": 1, "created_at": "2026-09-24T12:00:00+00:00" }
+      ],
+      "ids": ["error-c", "ship-a", "ship-b"]
+    },
+    { "name": "leer", "notices": [], "ids": [] }
+  ],
+  "labels": [
+    { "kind": "shipping", "label": "Versand", "tone": "warn" },
+    { "kind": "error", "label": "Problem", "tone": "bad" },
+    { "kind": "reminder", "label": "Erinnerung", "tone": "neutral" },
+    { "kind": "token", "label": "eBay-Verbindung", "tone": "bad" },
+    { "kind": "unbekannt", "label": "Hinweis", "tone": "neutral" }
+  ],
+  "feesMark": [
+    { "name": "gebucht, Gebühren noch vorläufig", "orders": { "s1": { "status": "gebucht", "fees_final": false } }, "saleId": "s1", "mark": "Gebühren vorläufig" },
+    { "name": "Gebühren endgültig", "orders": { "s1": { "status": "gebucht", "fees_final": true } }, "saleId": "s1", "mark": null },
+    { "name": "storniert: keine Marke", "orders": { "s1": { "status": "storniert", "fees_final": false } }, "saleId": "s1", "mark": null },
+    { "name": "kein eBay-Verkauf", "orders": {}, "saleId": "s2", "mark": null }
+  ],
+  "startTitle": [
+    { "count": 1, "text": "eBay-Hinweise (1)" },
+    { "count": 4, "text": "eBay-Hinweise (4)" }
+  ]
+}
