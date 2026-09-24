@@ -131,6 +131,7 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     }
     const setupOk = connected && !!(acc.payment_policy_id && acc.fulfillment_policy_id && acc.return_policy_id && acc.location_key);
     const policies: Policies = acc;
+    let feesError: string | null = null;
 
     // H3b2 Schritte 2/3: Bestellungen abholen und buchen, danach Gebühren nachtragen -- vor Schritt 4, damit ein gerade
     // gebuchter Verkauf (Angebot verkauft/Menge gesenkt, sold_seen erhöht) im selben Lauf auf eBay nachgezogen wird.
@@ -138,7 +139,13 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
       if (tokenDue(acc.refresh_expires_at, now.getTime())) await d.store.addNotices([notices.token(acc.refresh_expires_at!)]);
       const over = () => d.now().getTime() >= deadline;
       await runOrders(api, d.store, env, acc, now, over, s);
-      await runFees(api, d.store, env, over, s);
+      // Schritt 3 ist nie fatal: fehlen Finanzdaten (oder ist der apiz-Host der Sandbox anders), sollen Buchen und
+      // Angebots-Abgleich trotzdem laufen. Nur eine abgelaufene Verbindung bricht ab (wie überall).
+      try { await runFees(api, d.store, env, over, s); }
+      catch (e) {
+        if (e instanceof EbayError && e.auth) throw e;
+        feesError = `Gebühren nicht lesbar: ${(e as Error).message}`;
+      }
     }
 
     // Schritt 4: Angebote abgleichen.
@@ -235,7 +242,7 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     }
     // Schritt 5: Stand schreiben.
     const text = summaryText(s);
-    await d.store.saveAccount({ last_run_at: nowIso, last_run_summary: text, last_error: lastError });
+    await d.store.saveAccount({ last_run_at: nowIso, last_run_summary: text, last_error: lastError ?? feesError });
     return { ok: true, busy: false, summary: s, text };
   } catch (e) {
     const msg = e instanceof EbayError && e.auth ? EXPIRED : (e as Error).message;

@@ -18,7 +18,7 @@ export type FakeEbayOpts = {
   programs?: string[]; payment?: { id: string; name: string }[]; fulfillment?: { id: string; name: string }[];
   returns?: { id: string; name: string }[]; locations?: { key: string; name: string }[];
   // H3b2: Bestellungen (Fulfillment) und Transaktionen je orderId (Finances); beides änderbar zwischen zwei Läufen.
-  orders?: any[]; transactions?: Record<string, any[]>; ordersDown?: boolean; ordersAuthError?: boolean;
+  orders?: any[]; transactions?: Record<string, any[]>; ordersDown?: boolean; ordersAuthError?: boolean; transactionsDown?: boolean;
 };
 
 export function fakeEbay(opts: FakeEbayOpts = {}) {
@@ -55,6 +55,7 @@ export function fakeEbay(opts: FakeEbayOpts = {}) {
       return reply(200, { orders: all.slice(offset, offset + limit), total: all.length, offset, limit });
     }
     if (p === "/sell/finances/v1/transaction" && method === "GET") {
+      if (opts.transactionsDown) return reply(503, { errors: [{ message: "Service Unavailable" }] });
       const f = u.searchParams.getAll("filter");
       const id = f.map((x) => /^orderId:\{(.+)\}$/.exec(x)?.[1]).find((x) => x) ?? "";
       const type = f.map((x) => /^transactionType:\{(.+)\}$/.exec(x)?.[1]).find((x) => x);

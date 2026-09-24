@@ -190,3 +190,12 @@ Deno.test("Token läuft in 30 Tagen ab -> ein Hinweis, auch über mehrere Läufe
   await w.run();
   assertEquals([...w.state.notices.values()].map((n) => [n.notice_id, n.kind]), [["token-2026-10-10", "token"]]);
 });
+
+Deno.test("Finanzdaten nicht erreichbar -> Buchung und Angebots-Abgleich laufen trotzdem, Hinweis im letzten Fehler", async () => {
+  const w = world({ items: [I("l1", "c1"), I("l1", "c2")], live: ["c1", "c2"] }, { orders: [ORDER("O-1", "L-l1", 1)], transactionsDown: true });
+  const r = await w.run();
+  assertEquals(r.ok && !r.busy && [r.summary.booked, r.summary.published], [1, 1]);
+  assertEquals(w.state.rows.get("l1")!.state, "online");
+  assertEquals(w.state.orders.get("O-1")!.fees_final, false);
+  assertEquals(w.state.account.last_error!.startsWith("Gebühren nicht lesbar:"), true);
+});
