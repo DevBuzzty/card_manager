@@ -421,6 +421,22 @@ function applyPulledSealed(db, rows) {
 // Aenderung. Ein Fehler bricht ab, bevor der Cursor weiterrueckt -- der naechste Zyklus schiebt
 // alles erneut (Upsert, also ohne Doppel).
 const CARDS_PUSH_CHUNK = 500;
+
+// Gemeinsame Zeitgrenze fuer den Push von Drucken, Behaeltern und Exemplaren in EINEM Zyklus.
+// Fehler vom 24.09.2026 (Handy zaehlte 30 Karten weniger): jede Abfrage rechnete ihr eigenes "jetzt".
+// Lief push() noch in der Sekunde S, in der ein neuer Druck samt Exemplaren entstand, blieb der Druck
+// liegen -- pushCopies() eine Sekunde spaeter schob die Exemplare aber schon. In der Cloud fand der
+// Nachzaehl-Trigger dann keinen Druck, und der eine Runde spaeter eingefuegte Druck behielt die
+// Standardmenge 1. Mit einer Grenze fuer alle drei geht ein Exemplar nie vor seinem Druck hinaus.
+// (Die Cloud faengt den Fall inzwischen auch selbst ab: supabase/cards_quantity_on_insert.sql.)
+function pushCutoff(db) {
+  return db.prepare("SELECT strftime('%Y-%m-%d %H:%M:%S','now') AS t").get().t;
+}
+
+// Lokale Zeilen seit dem Push-Cursor und vor der Grenze (Zeilen der Grenz-Sekunde erst im naechsten Zyklus).
+function pushRowsBefore(db, table, cursor, cutoff) {
+  return db.prepare(`SELECT * FROM ${table} WHERE updated_at > ? AND updated_at < ?`).all(cursor, cutoff);
+}
 async function upsertCardsInChunks(c, rows) {
   const pushed = [];
   for (let i = 0; i < rows.length; i += CARDS_PUSH_CHUNK) {
@@ -569,13 +585,13 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     return appliedCount;
   }
 
-  async function push(c) {
+  async function push(c, cutoff) {
     const cursor = getSetting(db, 'sync_last_push') || '1970-01-01T00:00:00Z';
     // Exclude rows stamped in the current second: a row's updated_at only has second
     // precision, so a write landing after this SELECT but still within the same second
     // as `cursor` would advance past it unpushed once the cursor moves to today's max.
     // Deferring same-second rows to the next cycle keeps every row eventually pushed.
-    const changed = db.prepare("SELECT * FROM cards WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
+    const changed = pushRowsBefore(db, 'cards', cursor, cutoff);
     if (changed.length > 0) {
       // upsertCardsInChunks sets the echo lock itself, per successful block --
       // so an echo of an already-pushed earlier block still gets skipped on the next pull even
@@ -608,9 +624,9 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     return applied;
   }
 
-  async function pushCopies(c) {
+  async function pushCopies(c, cutoff) {
     const cursor = getSetting(db, 'sync_copies_last_push') || '1970-01-01T00:00:00Z';
-    const changed = db.prepare("SELECT * FROM card_copies WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
+    const changed = pushRowsBefore(db, 'card_copies', cursor, cutoff);
     if (changed.length === 0) return;
     for (let i = 0; i < changed.length; i += 500) {
       const { data, error } = await c.from('card_copies')
@@ -638,9 +654,9 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
     return applied;
   }
 
-  async function pushContainers(c) {
+  async function pushContainers(c, cutoff) {
     const cursor = getSetting(db, 'sync_containers_last_push') || '1970-01-01T00:00:00Z';
-    const changed = db.prepare("SELECT * FROM containers WHERE updated_at > ? AND updated_at < strftime('%Y-%m-%d %H:%M:%S','now')").all(cursor);
+    const changed = pushRowsBefore(db, 'containers', cursor, cutoff);
     if (changed.length === 0) return;
     for (let i = 0; i < changed.length; i += 500) {
       const { data, error } = await c.from('containers')
@@ -867,9 +883,10 @@ function startSync(db, getWindow, { onPriceAlerts } = {}) {
       const pulledSealed = await pullSealedSafe(c);
       const pulledSales = await pullSalesSafe(c);
       const pulledListings = await pullListingsSafe(c);
-      await push(c);
-      await pushContainers(c);
-      await pushCopies(c);
+      const cutoff = pushCutoff(db);
+      await push(c, cutoff);
+      await pushContainers(c, cutoff);
+      await pushCopies(c, cutoff);
       await pushSealedSafe(c);
       await pushSalesSafe(c);
       const listingsPushed = await pushListingsSafe(c);
@@ -965,7 +982,7 @@ module.exports = {
   _applyPulledSealed: applyPulledSealed,
   _sealedPushRows: sealedPushRows,
   // Test-only hook (sync-push-chunks.test.cjs): the chunked cards upsert that push() uses.
-  _upsertCardsInChunks: upsertCardsInChunks,
+  _upsertCardsInChunks: upsertCardsInChunks, _pushCutoff: pushCutoff, _pushRowsBefore: pushRowsBefore,
   // Test-only hook (sync-push-chunks.test.cjs): the cards echo-lock map, to verify
   // upsertCardsInChunks populates it per successful block even when a later block fails.
   _recentlyPushed: recentlyPushed,

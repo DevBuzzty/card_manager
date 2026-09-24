@@ -163,8 +163,8 @@ test('Zyklus: Sealed nach den Exemplaren gezogen und geschoben, vor Preishistori
   const body = src.slice(start, end).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   const at = (s) => { const i = body.indexOf(s); assert.ok(i >= 0, `fehlt in cycle(): ${s}`); return i; };
   assert.ok(at('pullCopies(c)') < at('pullSealedSafe(c)'));
-  assert.ok(at('pullSealedSafe(c)') < at('await push(c)'));
-  assert.ok(at('pushCopies(c)') < at('pushSealedSafe(c)'));
+  assert.ok(at('pullSealedSafe(c)') < at('await push(c, cutoff)'));
+  assert.ok(at('pushCopies(c, cutoff)') < at('pushSealedSafe(c)'));
   assert.ok(at('pushSealedSafe(c)') < at('pullPriceHistory(c)'));
   assert.ok(at('syncSnapshot(c)') < at('syncPriceAlerts(c)'));
   assert.ok(body.includes("'sealed-changed'"), 'nach gezogenen Sealed-Aenderungen muss sealed-changed gesendet werden');
