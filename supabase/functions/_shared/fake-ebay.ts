@@ -17,19 +17,22 @@ export type FakeEbayOpts = {
   withdrawEndsAnyway?: boolean;
   programs?: string[]; payment?: { id: string; name: string }[]; fulfillment?: { id: string; name: string }[];
   returns?: { id: string; name: string }[]; locations?: { key: string; name: string }[];
+  // H3b2: Bestellungen (Fulfillment) und Transaktionen je orderId (Finances); beides änderbar zwischen zwei Läufen.
+  orders?: any[]; transactions?: Record<string, any[]>; ordersDown?: boolean; ordersAuthError?: boolean;
 };
 
 export function fakeEbay(opts: FakeEbayOpts = {}) {
   const items = new Map<string, any>();
   const offers = new Map<string, FakeOffer>();
-  const calls: { method: string; url: string; body: string | null; auth: string | null }[] = [];
+  const calls: { method: string; url: string; body: string | null; auth: string | null; marketplace: string | null }[] = [];
   let n = 0;
   const reply = (status: number, body?: unknown) =>
     Promise.resolve(new Response(status === 204 || body === undefined ? null : JSON.stringify(body), { status }));
   const fetchFn = (url: string, init: RequestInit = {}) => {
     const method = (init.method ?? "GET").toUpperCase();
     const body = typeof init.body === "string" ? init.body : null;
-    calls.push({ method, url, body, auth: new Headers(init.headers).get("authorization") });
+    const h = new Headers(init.headers);
+    calls.push({ method, url, body, auth: h.get("authorization"), marketplace: h.get("x-ebay-c-marketplace-id") });
     if (opts.down) return reply(503, { errors: [{ message: "Service Unavailable" }] });
     const u = new URL(url);
     const p = u.pathname;
@@ -42,6 +45,21 @@ export function fakeEbay(opts: FakeEbayOpts = {}) {
       }
       if (opts.refreshInvalid) return reply(400, { error: "invalid_grant", error_description: "refresh token is invalid" });
       return reply(200, { access_token: "AT2", expires_in: 7200 });
+    }
+    if (p === "/sell/fulfillment/v1/order" && method === "GET") {
+      if (opts.ordersDown) return reply(503, { errors: [{ message: "Service Unavailable" }] });
+      if (opts.ordersAuthError) return reply(401, { errors: [{ message: "Invalid access token" }] });
+      const since = /lastmodifieddate:\[([^\].]+(?:\.\d+)?Z?)\.\.\]/.exec(u.searchParams.get("filter") ?? "")?.[1] ?? "";
+      const all = (opts.orders ?? []).filter((o) => o.lastModifiedDate >= since);
+      const limit = Number(u.searchParams.get("limit") ?? 50), offset = Number(u.searchParams.get("offset") ?? 0);
+      return reply(200, { orders: all.slice(offset, offset + limit), total: all.length, offset, limit });
+    }
+    if (p === "/sell/finances/v1/transaction" && method === "GET") {
+      const f = u.searchParams.getAll("filter");
+      const id = f.map((x) => /^orderId:\{(.+)\}$/.exec(x)?.[1]).find((x) => x) ?? "";
+      const type = f.map((x) => /^transactionType:\{(.+)\}$/.exec(x)?.[1]).find((x) => x);
+      const list = (opts.transactions?.[id] ?? []).filter((t) => !type || t.transactionType === type);
+      return reply(200, { transactions: list, total: list.length });
     }
     if (p === "/commerce/taxonomy/v1/get_default_category_tree_id") return reply(200, { categoryTreeId: "77" });
     if (p === "/commerce/taxonomy/v1/category_tree/77/get_item_aspects_for_category") {
