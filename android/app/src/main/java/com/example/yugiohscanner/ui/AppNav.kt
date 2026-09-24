@@ -55,7 +55,9 @@ object Routes {
     fun insights(tab: String = "bewegungen") = "start/insights?tab=$tab"
     const val SCAN = "scan"
     const val DEALS = "deals"
-    const val EINSTELLUNGEN = "einstellungen"
+    // Abnahme I1: Einstellungen und Decks erreicht man ueber Start (Spec I §3.2) -- erstes Segment "start"
+    // wie bei INSIGHTS, damit die untere Leiste dort Start markiert und ein Tipp darauf zurueckfuehrt.
+    const val EINSTELLUNGEN = "start/einstellungen"
     const val SUCHE = "suche"
     // Spec G3 §8: Suche in der Sealed-Produktliste. Unter "sammlung/", damit die untere Leiste Sammlung
     // markiert; drei Segmente mit "sealed" als zweitem kollidieren weder mit "sammlung/{segment}" noch mit
@@ -82,7 +84,7 @@ object Routes {
     const val VERKAUFEN = "verkaufen/{segment}"
     fun verkaufen(segment: String = "kandidaten") = "verkaufen/$segment"
     // Spec I §7: Decks ueber eine Start-Kachel statt eines Sammlung-Reiters.
-    const val DECKS = "decks"
+    const val DECKS = "start/decks"
 }
 
 // Spec I §3 -- die Tabellen stehen in docs/fixtures/design/nav.json; NavTabellenTest haelt beide Seiten gleich.
@@ -98,15 +100,17 @@ object NavTabellen {
 // `route` is the navigation target, `match` the first path segment of the registered pattern —
 // Sammlung navigates to "sammlung/karten" but is registered as "sammlung/{segment}", so the
 // selected state has to compare prefixes, not whole routes.
-private data class TopLevel(val route: String, val match: String, val label: String, val icon: ImageVector)
+// `root` ist das registrierte Muster der Wurzel des Bereichs -- ein erneuter Tipp auf das gewaehlte Ziel
+// kehrt dorthin zurueck (Abnahme I1: aus den Einstellungen fuehrte "Start" sonst wieder in die Einstellungen).
+private data class TopLevel(val route: String, val match: String, val label: String, val icon: ImageVector, val root: String)
 // Abschlussreview C5: Reihenfolge und Beschriftung kommen aus NavTabellen.LEISTE (nav.json-Zwilling),
 // hier stehen nur Ziel und Symbol je Schluessel -- keine zweite Beschriftungsliste.
 private val TOP_LEVEL = NavTabellen.LEISTE.map { (key, label) ->
     when (key) {
-        "start" -> TopLevel(Routes.START, key, label, Icons.Default.Home)
-        "sammlung" -> TopLevel(Routes.sammlung(), key, label, Icons.Default.Style)
-        "verkaufen" -> TopLevel(Routes.verkaufen(), key, label, Icons.Default.Payments)
-        "deals" -> TopLevel(Routes.DEALS, key, label, Icons.Default.Sell)
+        "start" -> TopLevel(Routes.START, key, label, Icons.Default.Home, Routes.START)
+        "sammlung" -> TopLevel(Routes.sammlung(), key, label, Icons.Default.Style, Routes.SAMMLUNG)
+        "verkaufen" -> TopLevel(Routes.verkaufen(), key, label, Icons.Default.Payments, Routes.VERKAUFEN)
+        "deals" -> TopLevel(Routes.DEALS, key, label, Icons.Default.Sell, Routes.DEALS)
         else -> error("Unbekanntes Ziel der unteren Leiste: $key")
     }
 }
@@ -434,7 +438,10 @@ private fun NavItem(modifier: Modifier, item: TopLevel, current: androidx.naviga
     val selected = current?.hierarchy?.any { it.route?.substringBefore('/') == item.match } == true
     val tint = if (selected) Primary else Muted
     Column(
-        modifier.fillMaxHeight().clickable { nav.navigateTop(item.route) },
+        modifier.fillMaxHeight().clickable {
+            // Gewaehlt: zurueck an die Wurzel des Bereichs (Unterseiten schliessen, Reiter bleibt).
+            if (selected) nav.popBackStack(item.root, inclusive = false) else nav.navigateTop(item.route)
+        },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
