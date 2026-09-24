@@ -200,6 +200,8 @@ fun AppNav(onThemeChange: (String) -> Unit) {
         if (cloudReady && storeState is StoreState.Ready && !warm) {
             Preload.warmUp(context)
             warm = true
+            // Messpunkt fuer den Kaltstart (adb logcat -s Startzeit): Prozessstart bis Ende des Ladebildschirms.
+            android.util.Log.i("Startzeit", "bereit nach ${android.os.SystemClock.uptimeMillis() - android.os.Process.getStartUptimeMillis()} ms")
         }
     }
     // Ladebildschirm auch, solange die automatische Anmeldung laeuft oder gescheitert ist.

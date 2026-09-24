@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.Instant
 
 /** Datenzustand des Speichers (Spec §3.1). */
@@ -55,6 +56,11 @@ data class Fetched<T>(val rows: List<T>, val serverTime: String?)
 class CollectionStoreCore(
     private val source: StoreSource,
     private val scope: CoroutineScope,
+    // Kaltstart-Zwischenspeicher: wo der Stand auf dem Geraet liegt (null = keiner) und fuer welches
+    // Konto gerade geladen wird (JWT `sub`; null = unbekannt, dann weder lesen noch schreiben).
+    private val snapshots: () -> StoreSnapshotStore? = { null },
+    private val account: () -> String? = { null },
+    private val maxSnapshotAge: Duration = Duration.ofDays(14),
     private val clock: () -> Instant = Instant::now,
 ) {
     private val _state = MutableStateFlow<StoreState>(StoreState.Empty)
@@ -76,13 +82,28 @@ class CollectionStoreCore(
         val cards: TableCursor = TableCursor(),
         val copies: TableCursor = TableCursor(),
         val containers: TableCursor = TableCursor(),
-    )
+    ) {
+        fun toSnapshot() = SnapshotCursors(
+            cards.stamp, cards.serverStart, copies.stamp, copies.serverStart, containers.stamp, containers.serverStart,
+        )
+
+        companion object {
+            fun of(s: SnapshotCursors) = Cursors(
+                TableCursor(s.cardsStamp, s.cardsServer),
+                TableCursor(s.copiesStamp, s.copiesServer),
+                TableCursor(s.containersStamp, s.containersServer),
+            )
+        }
+    }
 
     private val lock = Any()
     private var generation = 0L
     private var cursors = Cursors()
 
     private val deltas = Coalescer(scope) { runDelta() }
+    // Schreiben verschmilzt wie der Abgleich: kommen waehrend eines Schreibens neue Staende, wird
+    // danach genau einmal der neueste geschrieben.
+    private val writes = Coalescer(scope) { writeSnapshot() }
 
     fun startInitialLoad() {
         scope.launch { loadInitial() }
@@ -95,6 +116,12 @@ class CollectionStoreCore(
             if (s is StoreState.Loading || s is StoreState.Ready) return
             _state.value = StoreState.Loading
             generation
+        }
+        // Kaltstart-Zwischenspeicher: passt ein gespeicherter Stand zu diesem Konto, gilt er sofort als
+        // Ready; der Delta-Abgleich holt danach nur, was sich seit seinen Stichtagen geaendert hat.
+        if (restoreSnapshot(gen)) {
+            requestSync()
+            return
         }
         try {
             val (cards, copies, containers) = coroutineScope {
@@ -117,6 +144,7 @@ class CollectionStoreCore(
                 )
                 _sync.value = SyncStatus(lastSuccess = clock(), failing = false)
             }
+            writes.request()
         } catch (e: CancellationException) {
             synchronized(lock) {
                 if (gen == generation && _state.value is StoreState.Loading) _state.value = StoreState.Empty
@@ -141,6 +169,41 @@ class CollectionStoreCore(
             _state.value = StoreState.Empty
             _sync.value = SyncStatus()
         }
+        // Abmelden/Kontowechsel: der gespeicherte Stand gehoert zum alten Konto.
+        snapshots()?.let { store -> scope.launch { runCatching { store.delete() } } }
+    }
+
+    /** Laedt den gespeicherten Stand, wenn er zu Konto, Alter und Generation passt. Wirft nie. */
+    private fun restoreSnapshot(gen: Long): Boolean {
+        val store = snapshots() ?: return false
+        val acc = account() ?: return false
+        val snap = runCatching { store.read() }.getOrNull() ?: return false
+        if (snap.account != acc) return false
+        val age = Duration.between(snap.savedAt, clock())
+        if (age.isNegative || age > maxSnapshotAge) return false
+        synchronized(lock) {
+            if (gen != generation) return false
+            cursors = Cursors.of(snap.cursors)
+            _state.value = StoreState.Ready(snap.cards, snap.copies, snap.containers)
+            // "Zuletzt abgeglichen" ist der Zeitpunkt des gespeicherten Stands -- SyncHint nennt ihn,
+            // falls der folgende Abgleich scheitert.
+            _sync.value = SyncStatus(lastSuccess = snap.savedAt, failing = false)
+        }
+        return true
+    }
+
+    /** Schreibt den aktuellen Stand samt Stichtagen; nichts, solange nicht Ready oder ohne Konto. Wirft nie. */
+    private fun writeSnapshot() {
+        val store = snapshots() ?: return
+        val acc = account() ?: return
+        val (gen, snap) = synchronized(lock) {
+            val r = _state.value as? StoreState.Ready ?: return
+            generation to StoreSnapshot(acc, clock(), r.cards, r.copies, r.containers, cursors.toSnapshot())
+        }
+        runCatching {
+            // Nach dem Abmelden (neue Generation) nichts mehr schreiben.
+            if (synchronized(lock) { gen == generation }) store.write(snap)
+        }
     }
 
     private suspend fun runDelta() {
@@ -155,7 +218,7 @@ class CollectionStoreCore(
                 val ct = async { source.loadContainers(cur.containers.lowerBound()) }
                 Triple(c.await(), cp.await(), ct.await())
             }
-            synchronized(lock) {
+            val changed = synchronized(lock) {
                 if (gen != generation) return
                 val now = _state.value as? StoreState.Ready ?: return
                 // Gleiche Listen -> gleiches Ready -> StateFlow gibt nichts aus.
@@ -170,7 +233,12 @@ class CollectionStoreCore(
                     containers = cur.containers.advance(containers, containers.rows.map { it.updatedAt }),
                 )
                 _sync.value = SyncStatus(lastSuccess = clock(), failing = false)
+                _state.value !== now
             }
+            // Nur bei geaenderten Daten schreiben: die gespeicherten Stichtage gehoeren dann zu genau
+            // diesem Stand. Ohne Aenderung fragt ein Kaltstart ab dem aelteren Stichtag -- das liefert
+            // hoechstens schon bekannte Zeilen, die DeltaMerge wirkungslos einarbeitet.
+            if (changed) writes.request()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
