@@ -30,7 +30,7 @@
       "expected": [{ "main_id": "46986414", "count": 4, "surplus": 1, "copy_ids": ["b4"], "value": 2 }],
       "texts": {
         "header": "1 Karte · 1 Exemplar über Playset · ca. 2 €", "confirm": "1 Exemplar von 1 Karte markieren?", "startDuplicates": "Duplikate: 1 Karte",
-        "rows": ["4 Exemplare · 1 über Playset"], "proposals": [["1× LOB-DE005 Common · NM · Unlimited"]]
+        "rows": ["4 Exemplare · 1 über Playset"], "proposals": [["1× LOB-DE005 Common · NM · Unlimitiert"]]
       }
     },
     {
@@ -43,7 +43,7 @@
       "expected": [{ "main_id": "46986414", "count": 2, "surplus": 1, "copy_ids": ["c1a"], "value": 12 }],
       "texts": {
         "header": "1 Karte · 1 Exemplar über Playset · ca. 12 €", "confirm": "1 Exemplar von 1 Karte markieren?", "startDuplicates": "Duplikate: 1 Karte",
-        "rows": ["2 Exemplare · 1 über Playset"], "proposals": [["1× LOB-DE005 Ultra Rare · MT · 1st Ed"]]
+        "rows": ["2 Exemplare · 1 über Playset"], "proposals": [["1× LOB-DE005 Ultra Rare · MT · 1. Auflage"]]
       }
     },
     {
@@ -117,8 +117,8 @@
         "header": "1 Karte · 6 Exemplare über Playset · ca. 7 €", "confirm": "6 Exemplare von 1 Karte markieren?", "startDuplicates": "Duplikate: 1 Karte",
         "rows": ["7 Exemplare · 6 über Playset"],
         "proposals": [[
-          "1× LOB-DE005 Common · PO · Unlimited", "1× LOB-DE005 Common · PL · Unlimited", "1× LOB-DE005 Common · LP · Unlimited",
-          "1× LOB-DE005 Common · GD · Unlimited", "1× LOB-DE005 Common · EX · Unlimited", "1× LOB-DE005 Common · NM · Unlimited"
+          "1× LOB-DE005 Common · PO · Unlimitiert", "1× LOB-DE005 Common · PL · Unlimitiert", "1× LOB-DE005 Common · LP · Unlimitiert",
+          "1× LOB-DE005 Common · GD · Unlimitiert", "1× LOB-DE005 Common · EX · Unlimitiert", "1× LOB-DE005 Common · NM · Unlimitiert"
         ]]
       }
     },
@@ -171,7 +171,7 @@
       "expected": [{ "main_id": "46986414", "count": 5, "surplus": 2, "copy_ids": ["d3", "d2"], "value": 4 }],
       "texts": {
         "header": "1 Karte · 2 Exemplare über Playset · ca. 4 €", "confirm": "2 Exemplare von 1 Karte markieren?", "startDuplicates": "Duplikate: 1 Karte",
-        "rows": ["5 Exemplare · 2 über Playset"], "proposals": [["2× LOB-DE005 Common · NM · Unlimited"]]
+        "rows": ["5 Exemplare · 2 über Playset"], "proposals": [["2× LOB-DE005 Common · NM · Unlimitiert"]]
       }
     },
     {
@@ -234,9 +234,9 @@
         "header": "3 Karten · 4 Exemplare über Playset · ca. 10 €", "confirm": "4 Exemplare von 3 Karten markieren?", "startDuplicates": "Duplikate: 3 Karten",
         "rows": ["5 Exemplare · 2 über Playset", "4 Exemplare · 1 über Playset", "4 Exemplare · 1 über Playset"],
         "proposals": [
-          ["1× Unknown Unknown · NM · Unbek.", "1× LOB-DE005 Common · NM · Unlimited"],
-          ["1× SDK-DE001 Ultra Rare · EX · Unlimited"],
-          ["1× LOB-DE046 Common · NM · Unlimited"]
+          ["1× Unknown Unknown · NM · Auflage unbekannt", "1× LOB-DE005 Common · NM · Unlimitiert"],
+          ["1× SDK-DE001 Ultra Rare · EX · Unlimitiert"],
+          ["1× LOB-DE046 Common · NM · Unlimitiert"]
         ]
       },
       "allProposalIds": { "forSale": ["x5"], "ids": ["x4", "y1", "z4"] }

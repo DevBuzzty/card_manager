@@ -1,0 +1,22 @@
+{
+  "_": "ZWILLING: desktop/src/utils/copyRow.test.js und android CopyRowTextTest.kt. Spec I §4.1 -- eine Zeile je Exemplar: Zustand und Auflage vorn, Standort im Klartext (Formatierung wie formatCopyLocation/CopyLocation.format), hoechstens zwei Marken.",
+  "editionen": { "first": "1. Auflage", "unlimited": "Unlimitiert", "limited": "Limitiert", "unknown": "Auflage unbekannt" },
+  "ohneBehaelter": "noch nicht einsortiert",
+  "faelle": [
+    { "name": "Binder mit Seite und Fach", "copy": { "condition": "NM", "edition": "first", "container_id": "a", "page": 3, "slot": 5, "for_sale": 0 },
+      "container": { "container_id": "a", "name": "Ordner A", "kind": "binder" }, "angebote": 0,
+      "lead": "NM · 1. Auflage", "location": "Ordner A · S3 · F5", "unsorted": false, "marks": [] },
+    { "name": "Box ohne Seite, zum Verkauf", "copy": { "condition": "EX", "edition": "unlimited", "container_id": "b", "page": null, "slot": null, "for_sale": 1 },
+      "container": { "container_id": "b", "name": "Box Doppelte", "kind": "box" }, "angebote": 0,
+      "lead": "EX · Unlimitiert", "location": "Box Doppelte", "unsorted": false, "marks": ["zum-verkauf"] },
+    { "name": "ohne Behaelter, vorgemerkt und angeboten", "copy": { "condition": "NM", "edition": "unknown", "container_id": null, "page": null, "slot": null, "for_sale": 1 },
+      "container": null, "angebote": 1,
+      "lead": "NM · Auflage unbekannt", "location": "noch nicht einsortiert", "unsorted": true, "marks": ["zum-verkauf", "angeboten"] },
+    { "name": "Behaelter nicht (mehr) gefunden", "copy": { "condition": "GD", "edition": "limited", "container_id": "weg", "page": 1, "slot": 1, "for_sale": 0 },
+      "container": null, "angebote": 0,
+      "lead": "GD · Limitiert", "location": "noch nicht einsortiert", "unsorted": true, "marks": [] },
+    { "name": "angeboten ohne Vormerkung, fehlende Werte", "copy": { "condition": null, "edition": null, "container_id": "b", "page": null, "slot": null, "for_sale": 0 },
+      "container": { "container_id": "b", "name": "Box Doppelte", "kind": "box" }, "angebote": 2,
+      "lead": "NM · Auflage unbekannt", "location": "Box Doppelte", "unsorted": false, "marks": ["angeboten"] }
+  ]
+}

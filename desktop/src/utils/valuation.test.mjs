@@ -7,8 +7,8 @@ const FIX = JSON.parse(fs.readFileSync(new URL('../../../docs/fixtures/valuation
 
 assert.deepStrictEqual(CONDITIONS, ['MT', 'NM', 'EX', 'GD', 'LP', 'PL', 'PO']);
 assert.deepStrictEqual(EDITIONS, ['first', 'unlimited', 'limited', 'unknown']);
-assert.equal(EDITION_LABELS.first, '1st Ed');
-assert.equal(EDITION_LABELS.unknown, 'Unbek.');
+assert.equal(EDITION_LABELS.first, '1. Auflage');
+assert.equal(EDITION_LABELS.unknown, 'Auflage unbekannt');
 assert.equal(conditionFactor('LP'), 0.5);
 assert.equal(valueOf({ price: 4 }, [{ condition: 'NM' }, { condition: 'EX' }]), 7.4);
 

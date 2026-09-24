@@ -217,7 +217,7 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                         PriceHistoryChart(v)
                         PriceAlertTargetsRow(v)
                         if (!migrated) {
-                            Text("${v.quantity}× NM · Unbek. (nicht migriert – Desktop einmal starten)", style = MaterialTheme.typography.bodySmall, color = Muted)
+                            Text("${v.quantity}× NM · Auflage unbekannt (nicht migriert – Desktop einmal starten)", style = MaterialTheme.typography.bodySmall, color = Muted)
                         }
                         Valuation.group(mine).forEach { g ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
