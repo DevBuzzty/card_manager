@@ -89,7 +89,8 @@ export function afterListingSale(listing, liveCopyIds, soldCopyIds) {
   const price = toCents(listing.price);
   if (hit.length === 0) return { status: listing.status, removeCopyIds: [], priceCents: price, askAdjust: false };
   if (hit.length === live.length) return { status: 'verkauft', removeCopyIds: [], priceCents: price, askAdjust: false };
-  if (listing.channel_id === 'cardmarket') {
+  // A6 H3b2: eBay rechnet wie Cardmarket mit Stueckpreis -- der Rest kostet Stueckpreis x Restmenge.
+  if (listing.channel_id === 'cardmarket' || listing.channel_id === 'ebay') {
     // Nie 0 € (Spec §5.5): ein Stueckpreis, der auf 0 Cent faellt, ergaebe ein ungueltiges Angebot.
     const rest = Math.max(1, pieceCents(price, live.length) * (live.length - hit.length));
     return { status: 'aktiv', removeCopyIds: hit, priceCents: rest, askAdjust: false };

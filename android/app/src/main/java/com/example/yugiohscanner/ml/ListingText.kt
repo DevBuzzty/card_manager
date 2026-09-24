@@ -135,7 +135,8 @@ object ListingText {
         val hit = live.filter { it in sold }.sorted()
         if (hit.isEmpty()) return AfterSale(status, emptyList(), priceCents, false)
         if (hit.size == live.size) return AfterSale("verkauft", emptyList(), priceCents, false)
-        if (channelId == "cardmarket") {
+        // A6 H3b2: eBay rechnet wie Cardmarket mit Stückpreis -- der Rest kostet Stückpreis x Restmenge.
+        if (channelId == "cardmarket" || channelId == "ebay") {
             // Nie 0 € (Spec §5.5): ein Stückpreis, der auf 0 Cent fällt, ergäbe ein ungültiges Angebot.
             val rest = maxOf(1L, pieceCents(priceCents, live.size) * (live.size - hit.size))
             return AfterSale("aktiv", hit, rest, false)
