@@ -67,8 +67,17 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   useEffect(() => { loadCard(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [params.id]);
   // Verkauf/Storno/Abgleich an anderer Stelle: „Verkauft" frisch halten.
   // Spec H3a §6: dazu Angebote (Abgleich, 'listings-dirty') fuer "angeboten auf …".
+  // Spec I §5.2 Punkt 3/4: auch die Exemplare selbst -- ein Storno ueber die Rueckgaengig-Leiste (oder ein
+  // Verkauf aus einem anderen Fenster) aendert sie, ohne dass dieses Panel davon weiss. Verschmolzen, weil
+  // ein eigener Schreibvorgang mehrere Ereignisse ausloest; loadCard feuert selbst keins (keine Schleife).
+  const reloadTimer = useRef(null);
+  useEffect(() => () => clearTimeout(reloadTimer.current), []);
   useEffect(() => {
-    const onChange = () => { loadSold(printing.id); loadOffers(); };
+    const onChange = () => {
+      loadSold(printing.id); loadOffers();
+      clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => { loadCard(); }, 150);
+    };
     const off = window.api?.onSalesChanged?.(onChange);
     const offListings = window.api?.onListingsChanged?.(onChange);
     window.addEventListener('collection-dirty', onChange);
@@ -78,7 +87,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
       window.removeEventListener('collection-dirty', onChange);
       window.removeEventListener('listings-dirty', onChange);
     };
-  }, [printing.id]);
+  }, [printing.id]); // eslint-disable-line react-hooks/exhaustive-deps -- loadCard liest nur printing/params, wie der Effekt oben
 
   // Going back is right when we opened over a page; when /karte/… is the first history entry
   // there is nothing behind it, so fall back to the collection instead of doing nothing.
@@ -477,7 +486,12 @@ export default function CardDetailPanel({ paletteOpen = false }) {
 
     {sheetCopy && (
         <CopySheet
+            key={sheetCopy.copy_id}
             copy={sheetCopy}
+            cardName={card.name}
+            // Spec I §5.2 Punkt 5: "Naechstes Exemplar" -- weitere vorgemerkte Exemplare derselben Karte.
+            siblings={Object.values(copiesByKey).flat().filter(c => c.for_sale && c.copy_id !== sheetCopy.copy_id)}
+            onOpenCopy={(c) => setSheetCopy(c)}
             onClose={() => setSheetCopy(null)}
             onSaved={() => { refreshVariant({ set_code: sheetCopy.set_code, rarity: sheetCopy.rarity, language: sheetCopy.language }); loadSold(printing.id); loadOffers(); }}
         />

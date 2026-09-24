@@ -94,6 +94,13 @@ code {
   background-size: 260% 260%;
   animation-duration: 3.6s;
 }
+/* Spec I §5.2 Punkt 1: Schrittwechsel im selben Fenster (Verkaufsweg), 150 ms, ohne die Liste darunter zu verschieben. */
+@keyframes step-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.step-in { animation: step-in 150ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .foil-sheen { animation: none; }
+  .step-in { animation: none; }
 }

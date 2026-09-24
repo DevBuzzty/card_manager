@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { createBusyGate } from '../utils/busyGate';
 import { toCents, suggestionCents, euroCentsText } from '../utils/saleMath';
+import { validateListing } from '../utils/saleFlow';
+import FieldErrors from './FieldErrors';
 import { todayLocal } from '../utils/today';
 import {
   TITLE_MAX, groupItems, listingTitle, listingDescription, cardmarketProduct, cardmarketEntry, listingLink,
@@ -16,11 +18,13 @@ const groupKey = (g) => g.copy_ids.join(',');
 
 // Spec H3a §5.2–§5.7 -- Angebot erstellen, auch "Erneut anbieten" (prefill). Geprueft und gespeichert wird im
 // Hauptprozess (listings.cjs); hier nur Vorschau, Texte (Zwilling listingText.js), Kopieren, Link, Bilder.
-export default function ListingDialog({ copyIds, prefill = null, onClose, onSaved }) {
+// Spec I §5.2 -- `embedded`: ohne eigenes Overlay, als Inhalt des Exemplar-Fensters (kein Fensterstapel).
+export default function ListingDialog({ copyIds, prefill = null, onClose, onSaved, embedded = false }) {
   const [gate] = useState(createBusyGate);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState([]); // Spec I §5.2 Punkt 6
   const [channels, setChannels] = useState(null);
   const [preview, setPreview] = useState(null); // { items, missing, rule }
   const [form, setForm] = useState(() => ({
@@ -73,9 +77,18 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
   const priceCents = toCents(parse(form.price));
   const title = form.titleTouched ? form.title : listingTitle(items);
   const description = form.descTouched ? form.description : listingDescription(items, priceCents);
+  // Ohne Cardmarket prueft saleFlow.validateListing beim Speichern (Meldung am Feld mit Abhilfe, Spec I §5.2
+  // Punkt 6) -- der Knopf bleibt deshalb bedienbar. Cardmarket-Gruppen haben je eigene Preise und bleiben wie bisher.
   const canSave = !busy && items.length > 0 && (cm
     ? groups.every((g) => (toCents(parse(cmPriceInput(g))) ?? 0) > 0)
-    : (priceCents ?? 0) > 0);
+    : true);
+  const suggestionTotal = preview ? suggestionSum(items.map(suggestionOf)) : null;
+  const errorsOf = (field) => fieldErrors.filter((e) => e.field === field);
+  const applyFix = (fix) => {
+    if (fix.field === 'price') setForm((f) => ({ ...f, price: toInput(fix.cents), priceTouched: true }));
+    if (fix.field === 'url') setForm((f) => ({ ...f, external_url: fix.value }));
+    setFieldErrors((list) => list.filter((e) => e.field !== fix.field));
+  };
 
   const copyText = async (text) => {
     try { await navigator.clipboard.writeText(text); setNotice('Kopiert.'); }
@@ -96,6 +109,9 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
   });
 
   const save = () => gate.run(async () => {
+    const errs = validateListing({ price: cm ? '1' : form.price, url: form.external_url }, { suggestionCents: suggestionTotal });
+    setFieldErrors(errs);
+    if (errs.length > 0) return;
     setBusy(true); setError(null);
     try {
       const head = { channel_id: form.channel_id, listed_on: form.listed_on, external_url: form.external_url, note: form.note };
@@ -116,14 +132,14 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
   const btn = 'px-3 py-1.5 rounded-lg text-xs bg-surface-2 border border-line text-text hover:border-accent/40 disabled:opacity-50';
   const marketCents = items.reduce((a, it) => a + (it.valueCents || 0), 0);
 
-  return (
-    // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur diesen Dialog, nie den darunterliegenden (wie SaleDialog).
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); onClose(); }}>
-      <div className="w-full max-w-lg bg-surface border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+  const body = (
+    <>
+        {!embedded && (
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-text">{prefill ? 'Erneut anbieten' : 'Angebot erstellen'}</h2>
           <button type="button" onClick={onClose} className="p-1 text-muted hover:text-text" aria-label="Schließen"><X className="w-4 h-4" /></button>
         </div>
+        )}
         {!preview || !channels ? <p className="text-muted">…</p> : (
           <>
             <p className="text-sm text-muted">{items.length} {items.length === 1 ? 'Karte' : 'Karten'} · Marktwert {euroCentsText(marketCents)}</p>
@@ -144,9 +160,10 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
             {!cm && (
               <>
                 <label className="block text-xs text-muted">Preis (€)
-                  <input inputMode="decimal" className={field} value={form.price}
+                  <input inputMode="decimal" autoFocus={embedded} className={field} value={form.price}
                     onChange={(e) => setForm((f) => ({ ...f, price: e.target.value, priceTouched: true }))} />
                 </label>
+                <FieldErrors errors={errorsOf('price')} onFix={applyFix} />
                 <label className="block text-xs text-muted">Titel
                   <input className={field} value={title}
                     onChange={(e) => setForm((f) => ({ ...f, title: e.target.value, titleTouched: true }))} />
@@ -196,6 +213,7 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
             <label className="block text-xs text-muted">Link der Anzeige (optional)
               <input className={field} value={form.external_url} onChange={(e) => setForm((f) => ({ ...f, external_url: e.target.value }))} />
             </label>
+            <FieldErrors errors={errorsOf('url')} onFix={applyFix} />
             <label className="block text-xs text-muted">Notiz
               <input className={field} value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} />
             </label>
@@ -205,13 +223,21 @@ export default function ListingDialog({ copyIds, prefill = null, onClose, onSave
             )}
             {notice && <p className="text-sm text-good">{notice}</p>}
             {error && <p className="text-sm text-bad">{error}</p>}
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{embedded ? 'Zurück' : 'Abbrechen'}</button>
               <button type="button" onClick={save} disabled={!canSave}
-                className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50">{busy ? 'Wird gespeichert…' : 'Angebot speichern'}</button>
+                className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface">{busy ? 'Wird gespeichert…' : 'Angebot speichern'}</button>
             </div>
           </>
         )}
+    </>
+  );
+  if (embedded) return <div className="space-y-3">{body}</div>;
+  return (
+    // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur diesen Dialog, nie den darunterliegenden (wie SaleDialog).
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); onClose(); }}>
+      <div className="w-full max-w-lg bg-surface border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+        {body}
       </div>
     </div>
   );
