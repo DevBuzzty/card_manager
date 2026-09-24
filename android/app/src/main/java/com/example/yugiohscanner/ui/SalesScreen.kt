@@ -28,6 +28,7 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SaleHeadInput
 import com.example.yugiohscanner.cloud.SalesRepository
 import com.example.yugiohscanner.cloud.SideStores
+import com.example.yugiohscanner.ml.SaleNotices
 import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ml.SalesOverview
@@ -120,9 +121,12 @@ fun SalesSection(onOpenCard: (String) -> Unit) {
                     Text("Keine Verkäufe im Zeitraum.", color = Muted, style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(12.dp))
                 }
+                val ordersState by SideStores.ebayOrders.state.collectAsState()
+                LaunchedEffect(Unit) { SideStores.ebayOrders.refreshIfStale() }
+                val orders = ordersState.value ?: emptyMap()
                 o.rows.forEachIndexed { i, r ->
                     if (i > 0) HorizontalDivider(color = Line)
-                    SaleRowView(r) { openId = r.sale.saleId }
+                    SaleRowView(r, SaleNotices.feesMark(orders, r.sale.saleId)) { openId = r.sale.saleId }
                 }
             }
         }
@@ -189,7 +193,7 @@ private fun MonthBars(months: List<SalesMath.MonthRow>) {
 }
 
 @Composable
-private fun SaleRowView(r: SalesOverview.ListRow, onClick: () -> Unit) {
+private fun SaleRowView(r: SalesOverview.ListRow, feesMark: String?, onClick: () -> Unit) {
     val cancelled = r.sale.status == "storniert"
     val deco = if (cancelled) TextDecoration.LineThrough else null
     val color = if (cancelled) Muted else OnSurface
@@ -208,6 +212,7 @@ private fun SaleRowView(r: SalesOverview.ListRow, onClick: () -> Unit) {
             if (cancelled) Text("storniert", color = Muted, style = MaterialTheme.typography.labelSmall)
             if (r.doubleSold) DoubleBadge()
             if (r.orphaned) OrphanBadge()
+            if (!cancelled && feesMark != null) FeesProvisionalBadge(feesMark)
             Spacer(Modifier.weight(1f))
             Text(SalesMath.diffText(r.netCents, r.marketCents), fontFamily = MonoFontFamily, textDecoration = deco,
                 color = if (cancelled) Muted else if (r.netCents >= r.marketCents) Good else ErrorColor,
@@ -273,6 +278,8 @@ fun SaleDetailSheet(saleId: String, onDismiss: () -> Unit, onOpenCard: ((String)
     val doubleSold = remember(data, saleId) { data?.let { SalesOverview.isDoubleSold(it, saleId) } == true }
     val orphaned = remember(data, saleId) { data?.let { SalesOverview.isOrphaned(it, saleId) } == true }
     val active = sale?.status == "aktiv"
+    val ordersState by SideStores.ebayOrders.state.collectAsState()
+    val feesMark = SaleNotices.feesMark(ordersState.value ?: emptyMap(), saleId)
 
     var form by remember { mutableStateOf<EditForm?>(null) }
     var channelOpen by remember { mutableStateOf(false) }
@@ -409,6 +416,7 @@ fun SaleDetailSheet(saleId: String, onDismiss: () -> Unit, onOpenCard: ((String)
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         SumRow("Preis", SalesMath.euroCentsText(SalesMath.toCents(sale.gross) ?: 0))
                         SumRow("Gebühren", SalesMath.euroCentsText(SalesMath.toCents(sale.fees) ?: 0))
+                        if (active && feesMark != null) FeesProvisionalBadge(feesMark)
                         SumRow("Versand", if (sale.shipping == null) "nicht erfasst" else SalesMath.euroCentsText(SalesMath.toCents(sale.shipping) ?: 0))
                         SumRow("Netto", SalesMath.euroCentsText(net))
                         SumRow("Marktwert", SalesMath.euroCentsText(market))

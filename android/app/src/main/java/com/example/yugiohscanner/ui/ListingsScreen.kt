@@ -192,6 +192,7 @@ fun ListingsSection(onOpenCard: (String) -> Unit, modifier: Modifier = Modifier)
                 TextButton(onClick = { SideStores.listings.refresh() }, enabled = !state.loading) { Text("Erneut versuchen") }
             }
         }
+        SaleNoticesSection(full = true, onOpenAll = null)   // Spec H3b2: Banner mit allen offenen eBay-Hinweisen
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically) {
             ListingOverview.STATUSES.forEach { (id, label) -> FilterChip(status == id, { status = id }, label = { Text(label) }) }

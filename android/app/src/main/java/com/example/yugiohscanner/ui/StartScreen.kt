@@ -216,6 +216,7 @@ fun StartScreen(
             SideStores.priceAlertTargets.refreshAndWait()
             SideStores.sealedItems.refreshAndWait()
             SideStores.listings.refreshAndWait()
+            SideStores.saleNotices.refreshAndWait()
         }) {
         // Befund A, Punkt 3: Anfangswert ist ein Merker-Treffer (falls die Referenzen schon
         // passen) oder null; solange null, bleibt `d` null und die betroffenen Stellen unten
@@ -350,6 +351,7 @@ fun StartScreen(
             }
 
             // Spec G2 §7: Preis-Alarme direkt über den Bewegungen, nur bei offenen Treffern.
+            SaleNoticesSection(full = false, onOpenAll = onOpenListings)   // Spec H3b2
             PriceAlertsSection(full = false, onOpenCard = { detailId = it }, onOpenAll = onOpenAlerts)
 
             MoversSection(days = 7, top = 3, full = false, onOpenCard = { detailId = it }, onOpenAll = onOpenInsights)

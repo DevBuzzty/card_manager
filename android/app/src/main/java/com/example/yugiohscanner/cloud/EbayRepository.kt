@@ -4,6 +4,7 @@ import com.example.yugiohscanner.ml.EbayMarks
 import com.example.yugiohscanner.ml.Keyset
 import com.example.yugiohscanner.ml.KeysetPager
 import com.example.yugiohscanner.ml.PhotoScale
+import com.example.yugiohscanner.ml.SaleNotices
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -87,6 +88,45 @@ object EbayRepository {
         if (after != null) p += "or" to Keyset.after(listOf("listing_id"), listOf(after))
         return p
     }
+    // ---- H3b2: eBay-Hinweise (nur dismissed darf das Handy setzen) und Stand der eBay-Bestellungen (nur lesen) ----
+    private const val NOTICE_COLS = "notice_id,kind,text,sale_id,listing_id,dismissed,created_at"
+    internal fun noticesPageParams(after: String?): List<Pair<String, String>> {
+        val p = arrayListOf("select" to NOTICE_COLS, "dismissed" to "eq.false", "order" to "notice_id.asc", "limit" to StoreQueries.PAGE.toString())
+        if (after != null) p += "or" to Keyset.after(listOf("notice_id"), listOf(after))
+        return p
+    }
+    internal fun parseNotices(text: String): List<SaleNotices.Notice> {
+        val a = JSONArray(text)
+        return (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            SaleNotices.Notice(o.getString("notice_id"), o.getString("kind"), o.getString("text"), str(o, "sale_id"),
+                str(o, "listing_id"), o.optBoolean("dismissed", false), str(o, "created_at"))
+        }
+    }
+    internal fun ordersPageParams(after: String?): List<Pair<String, String>> {
+        val p = arrayListOf("select" to "order_id,sale_id,status,fees_final", "sale_id" to "not.is.null", "order" to "order_id.asc",
+            "limit" to StoreQueries.PAGE.toString())
+        if (after != null) p += "or" to Keyset.after(listOf("order_id"), listOf(after))
+        return p
+    }
+    internal data class OrderLine(val orderId: String, val saleId: String, val mark: SaleNotices.OrderMark)
+    internal fun parseOrders(text: String): List<OrderLine> {
+        val a = JSONArray(text)
+        return (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            OrderLine(o.getString("order_id"), o.getString("sale_id"), SaleNotices.OrderMark(o.getString("status"), o.optBoolean("fees_final", false)))
+        }
+    }
+    /** Offene Hinweise, neueste zuerst (SaleNotices.sort). */
+    suspend fun loadNotices(): List<SaleNotices.Notice> = SaleNotices.sort(
+        KeysetPager.all(StoreQueries.PAGE) { after: SaleNotices.Notice? -> parseNotices(getText("sale_notices", noticesPageParams(after?.noticeId), "eBay-Hinweise laden")) })
+    /** sale_id -> Stand der eBay-Bestellung (Marke „Gebühren vorläufig“). */
+    suspend fun loadOrders(): Map<String, SaleNotices.OrderMark> =
+        KeysetPager.all(StoreQueries.PAGE) { after: OrderLine? -> parseOrders(getText("ebay_orders", ordersPageParams(after?.orderId), "eBay-Bestellungen laden")) }
+            .associate { it.saleId to it.mark }
+    suspend fun dismissNotice(noticeId: String) =
+        write("PATCH", "sale_notices", listOf("notice_id" to "eq.$noticeId"), JSONObject().put("dismissed", true).toString())
+
     internal fun photosPageParams(after: String?): List<Pair<String, String>> {
         val p = arrayListOf("select" to PHOTO_COLS, "deleted" to "eq.false", "order" to "photo_id.asc", "limit" to StoreQueries.PAGE.toString())
         if (after != null) p += "or" to Keyset.after(listOf("photo_id"), listOf(after))

@@ -36,6 +36,8 @@ object Preload {
         SideStores.allDeckCards.ensureLoaded()
         SideStores.ebayStatus.ensureLoaded()
         SideStores.ebayRows.ensureLoaded()
+        SideStores.saleNotices.ensureLoaded()
+        SideStores.ebayOrders.ensureLoaded()
         SideStores.priceAlertMoveRule.ensureLoaded()
         SideStores.reference7.ensureFresh()
     }
