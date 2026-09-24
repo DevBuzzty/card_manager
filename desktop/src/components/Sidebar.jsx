@@ -30,7 +30,8 @@ const NavItem = ({ to, icon, label, match, badge }) => {
       {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded bg-accent" />}
       <Icon className="w-[17px] h-[17px] shrink-0" strokeWidth={1.8} />
       <span>{label}</span>
-      {badge > 0 && <span className="ml-auto text-[11px] text-muted">{badge}</span>}
+      {/* Abnahme I1: auf der getoenten aktiven Flaeche erreicht text-muted hell nur 4,35:1 -- dort Textfarbe. */}
+      {badge > 0 && <span className={clsx('ml-auto text-[11px]', active ? 'text-text' : 'text-muted')}>{badge}</span>}
     </NavLink>
   );
 };
