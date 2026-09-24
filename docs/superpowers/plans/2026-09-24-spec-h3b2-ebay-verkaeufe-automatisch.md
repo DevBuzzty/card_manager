@@ -23,13 +23,17 @@ Storniert der Käufer vor dem Versand, wird der Verkauf storniert, und die Karte
 
 ---
 
-## Vor dem Start: Fragen an den Nutzer
+## Vor dem Start: Antworten des Nutzers (24.09.2026)
 
-1. **Ist H3b1 bei dir eingerichtet?** Gemeint sind SQL `ebay_schema.sql`, die Secrets, der Deploy von `ebay-auth` und `ebay-sync` und der Zeitplan. Außerdem die Frage, ob in der Sandbox schon verbunden und der Check grün ist. Ohne das lässt sich H3b2 nur mit nachgebautem eBay testen, die Abnahme (Task 11) setzt es voraus.
-2. **Deno installieren.** Deno fehlt auf diesem Laptop, alle Cloud-Tests brauchen es. Vorschlag: `winget install DenoLand.Deno`. Das ist ein Download und braucht dein Okay.
-3. **Die Abweichungen unten** (A1–A6) bitte absegnen.
+1. **H3b1 ist eingerichtet, und zwar in Produktion.** Laut `ebay_status_cache` am PC:
+   - verbunden seit 22.09.2026
+   - Zahlungs-, Versand- und Rücknahme-Richtlinie sowie Standort vorhanden
+   - ein Angebot wurde eingestellt und wieder beendet
+   Die Abnahme in Task 11 muss das berücksichtigen, siehe dort.
+2. **Deno ist installiert** (2.9.7 über winget). Grundstand Deno gesamt: 127 Tests grün.
+3. **A1–A6 sind abgesegnet.**
 
-## Abweichungen von der Spec (bitte absegnen)
+## Abweichungen von der Spec (abgesegnet 24.09.2026)
 
 | # | Spec | Vorschlag | Warum |
 |---|---|---|---|
