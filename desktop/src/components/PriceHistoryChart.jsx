@@ -28,12 +28,12 @@ export default function PriceHistoryChart({ printing }) {
   const steps = useMemo(() => (rows ? computeSteps(rows, todayUtc(), windowDays) : null), [rows, windowDays]);
 
   if (!rows) {
-    return <div className="text-[11px] text-muted py-1">{error ? 'Verlauf nicht verfügbar' : 'Verlauf lädt …'}</div>;
+    return <div className="text-klein text-muted py-1">{error ? 'Verlauf nicht verfügbar' : 'Verlauf lädt …'}</div>;
   }
-  if (steps.kind === 'none') return <div className="text-[11px] text-muted py-1">Noch kein Verlauf</div>;
-  if (steps.kind === 'series' && steps.points.length < 2) return <div className="text-[11px] text-muted py-1">Noch kein Verlauf</div>;
+  if (steps.kind === 'none') return <div className="text-klein text-muted py-1">Noch kein Verlauf</div>;
+  if (steps.kind === 'series' && steps.points.length < 2) return <div className="text-klein text-muted py-1">Noch kein Verlauf</div>;
   if (steps.kind === 'flat') {
-    return <div className="text-[11px] text-muted py-1">Seit {fmtDayDE(steps.flatDay)} unverändert {fmtEUR(steps.flatPrice)}</div>;
+    return <div className="text-klein text-muted py-1">Seit {fmtDayDE(steps.flatDay)} unverändert {fmtEUR(steps.flatPrice)}</div>;
   }
   const data = steps.points.map((p) => ({ t: ts(p.day), price: p.price }));
   return (
@@ -41,7 +41,7 @@ export default function PriceHistoryChart({ printing }) {
       <div className="flex gap-1 mb-1">
         {WINDOWS.map((w) => (
           <button key={w} onClick={() => setWindowDays(w)}
-            className={`px-2 py-0.5 rounded text-[10px] ${windowDays === w ? 'bg-accent text-accent-fg' : 'text-muted hover:text-text border border-line'}`}>{w} T</button>
+            className={`px-2 py-0.5 rounded text-klein ${windowDays === w ? 'bg-accent text-accent-fg' : 'text-muted hover:text-text border border-line'}`}>{w} T</button>
         ))}
       </div>
       <div className="h-28">

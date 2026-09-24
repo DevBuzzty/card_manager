@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { createBusyGate } from '../utils/busyGate';
 import { toCents, netCents, feeDefaultCents, diffText, euroCentsText } from '../utils/saleMath';
 import { todayLocal } from '../utils/today';
+import { validateSale } from '../utils/saleFlow';
+import FieldErrors from './FieldErrors';
 
 const toInput = (cents) => (cents == null ? '' : (cents / 100).toFixed(2).replace('.', ','));
 const parse = (s) => (String(s ?? '').trim() === '' ? null : Number(String(s).replace(',', '.')));
@@ -14,7 +16,9 @@ const NEW_CHANNEL = '__new__'; // Pseudo-Wert der Kanal-Auswahl; nie echter Form
 // Spec H3a §7.1 -- mit `listing` ({ listing_id, channel_id, priceCents }): Kanal des Angebots vorbelegt, Karten
 // abwaehlbar (Teilverkauf). Nach jeder Buchung (auch ohne `listing`) zeigt ein Abschluss-Schritt die Erinnerung
 // "Auch dort herausnehmen: …" bzw. "Preis für die übrigen Karten anpassen?"; ohne betroffene Angebote schliesst er wie bisher sofort.
-export default function SaleDialog({ copyIds, initialGrossCents = null, listing = null, onClose, onBooked, onAdjustListing = null }) {
+// Spec I §5.2 -- `embedded`: ohne eigenes Overlay, als Inhalt des Exemplar-Fensters (kein Fensterstapel);
+// `defaultChannelId`: Kanal wie beim letzten Mal (saleFlow.lastChannel), nur ohne `listing`.
+export default function SaleDialog({ copyIds, initialGrossCents = null, listing = null, onClose, onBooked, onAdjustListing = null, embedded = false, defaultChannelId = null }) {
   const [gate] = useState(createBusyGate);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -26,6 +30,8 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
   const [newChannel, setNewChannel] = useState({ name: '', fee: '' });
   const [picked, setPicked] = useState(() => new Set(copyIds));
   const [done, setDone] = useState(null); // Antwort von bookSale, solange der Abschluss-Schritt steht
+  const [fieldErrors, setFieldErrors] = useState([]); // Spec I §5.2 Punkt 6: Meldung am Feld mit Abhilfe
+  const formRef = useRef(null);
 
   // Eigener Escape-Handler: solange der Dialog offen ist, soll Escape NUR ihn schliessen, nicht das
   // dahinterliegende CopySheet (das seinen eigenen Handler waehrend sellingOpen aussetzt).
@@ -54,8 +60,11 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
         setForm((prev) => {
           // Spec H3a §7.1: Kanal des Angebots (nur beim ersten Laden und nur, wenn er noch lebt) -- vor der
           // Gebuehren-Vorbelegung, damit die Gebuehr zum Kanal des Angebots passt.
-          const f = listing && !prev.listingChannelApplied && ch.some((c) => c.channel_id === listing.channel_id)
+          const f0 = listing && !prev.listingChannelApplied && ch.some((c) => c.channel_id === listing.channel_id)
             ? { ...prev, channel_id: listing.channel_id, listingChannelApplied: true } : prev;
+          // Spec I §5.2 Punkt 2: ohne Angebot der Kanal wie beim letzten Mal, einmalig und nur, wenn er noch lebt.
+          const f = !listing && defaultChannelId && !f0.defaultChannelApplied && ch.some((c) => c.channel_id === defaultChannelId)
+            ? { ...f0, channel_id: defaultChannelId, defaultChannelApplied: true } : f0;
           const grossC = initialGrossCents ?? pv.marketCents;
           const fee = ch.find((c) => c.channel_id === f.channel_id)?.fee_percent ?? 0;
           return f.grossTouched ? f : { ...f, gross: toInput(grossC), fees: f.feesTouched ? f.fees : toInput(feeDefaultCents(grossC, fee)) };
@@ -83,7 +92,20 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
   const market = listing ? shownItems.reduce((a, i) => a + (i.valueCents || 0), 0) : (preview?.marketCents ?? 0);
   const togglePicked = (id) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
+  const suggestion = initialGrossCents ?? preview?.marketCents ?? null;
+  const errorsOf = (field) => fieldErrors.filter((e) => e.field === field);
+  const applyFix = (fix) => {
+    const v = fix.cents != null ? toInput(fix.cents) : fix.value;
+    set(fix.field === 'gross' ? { gross: v, grossTouched: true } : fix.field === 'fees' ? { fees: v, feesTouched: true } : { [fix.field]: v });
+    setFieldErrors((list) => list.filter((e) => e.field !== fix.field));
+    // Fokus zurueck ins behobene Feld, damit Enter gleich weiterbucht (Spec I §5.2 Punkt 7).
+    setTimeout(() => formRef.current?.querySelector(`[name="${fix.field}"]`)?.focus(), 0);
+  };
+
   const book = () => gate.run(async () => {
+    const errs = validateSale(form, { suggestionCents: suggestion, today: todayLocal() });
+    setFieldErrors(errs);
+    if (errs.length > 0) return;
     setBusy(true); setError(null);
     try {
       const res = await window.api.bookSale({ copyIds: listing ? shownItems.map((i) => i.copy_id) : copyIds, channel_id: form.channel_id,
@@ -94,7 +116,7 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
       window.dispatchEvent(new Event('listings-dirty'));
       // Spec H3a §7.2 / Abweichung 7: Abschluss-Schritt nur, wenn ein Angebot betroffen ist.
       if ((res.reminders?.length ?? 0) > 0 || res.askAdjust || res.listingSkipped) { setDone({ ...res, reminders: res.reminders || [] }); return; }
-      onBooked?.(res.sale_id);
+      onBooked?.(res.sale_id, { grossCents: toCents(parse(form.gross)) });
     } catch (e) { setError(e?.message || 'Buchen fehlgeschlagen.'); }
     finally { setBusy(false); }
   });
@@ -122,6 +144,9 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
     finally { setBusy(false); }
   });
 
+  // Enter im Mini-Formular "Neuer Kanal" legt den Kanal an, statt das umgebende Buchungsformular abzusenden.
+  const channelEnter = (e) => { if (e.key === 'Enter') { e.preventDefault(); createChannel(); } };
+
   const finish = () => onBooked?.(done.sale_id);
   const dismiss = () => (done ? finish() : onClose?.());
   const openReminder = async (url) => {
@@ -132,15 +157,15 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
     } catch (e) { setError(e?.message || 'Link konnte nicht geöffnet werden.'); }
   };
 
-  const field = 'w-full bg-bg border border-line rounded-lg px-3 py-2 text-sm text-text';
-  return (
-    // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur diesen Dialog, nie den darunterliegenden.
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); dismiss(); }}>
-      <div className="w-full max-w-md bg-surface border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+  const field = 'w-full bg-bg border border-line rounded-lg px-3 py-2 text-sm text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  const body = (
+    <>
+        {!embedded && (
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-text">Verkauft buchen</h2>
           <button type="button" onClick={dismiss} className="p-1 text-muted hover:text-text" aria-label="Schließen"><X className="w-4 h-4" /></button>
         </div>
+        )}
         {done ? (
           <>
             <p className="text-sm text-text">Gebucht.</p>
@@ -165,7 +190,8 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
             <div className="flex justify-end"><button type="button" onClick={finish} className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg">Fertig</button></div>
           </>
         ) : !preview || !channels ? <p className="text-muted">…</p> : (
-          <>
+          // Spec I §5.2 Punkt 7: Enter bucht (Formular-Absenden), Esc geht zurueck (eigener Handler oben).
+          <form ref={formRef} className="space-y-3" onSubmit={(e) => { e.preventDefault(); book(); }} noValidate>
             <p className="text-sm text-muted">{shownItems.length} {shownItems.length === 1 ? 'Karte' : 'Karten'} · Marktwert {euroCentsText(market)}</p>
             {listing && (
               <div className="space-y-1">
@@ -192,9 +218,9 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
             {addingChannel && (
               <div className="p-3 rounded-lg border border-line bg-bg space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <input className={field} placeholder="Name" value={newChannel.name}
+                  <input className={field} placeholder="Name" value={newChannel.name} onKeyDown={channelEnter}
                     onChange={(e) => setNewChannel((n) => ({ ...n, name: e.target.value }))} />
-                  <input inputMode="decimal" className={field} placeholder="Gebühr %" value={newChannel.fee}
+                  <input inputMode="decimal" className={field} placeholder="Gebühr %" value={newChannel.fee} onKeyDown={channelEnter}
                     onChange={(e) => setNewChannel((n) => ({ ...n, fee: e.target.value }))} />
                 </div>
                 <div className="flex justify-end gap-2">
@@ -206,19 +232,22 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
               </div>
             )}
             <label className="block text-xs text-muted">Datum
-              <input type="date" className={field} value={form.sold_on} onChange={(e) => set({ sold_on: e.target.value })} />
+              <input type="date" name="sold_on" className={field} value={form.sold_on} onChange={(e) => set({ sold_on: e.target.value })} />
             </label>
+            <FieldErrors errors={errorsOf('sold_on')} onFix={applyFix} />
             <label className="block text-xs text-muted">Gesamtpreis (€)
-              <input inputMode="decimal" className={field} value={form.gross} onChange={(e) => set({ gross: e.target.value, grossTouched: true })} />
+              <input inputMode="decimal" name="gross" autoFocus={embedded} className={field} value={form.gross} onChange={(e) => set({ gross: e.target.value, grossTouched: true })} />
             </label>
+            <FieldErrors errors={errorsOf('gross')} onFix={applyFix} />
             <div className="grid grid-cols-2 gap-2">
               <label className="block text-xs text-muted">Gebühren (€)
-                <input inputMode="decimal" className={field} value={form.fees} onChange={(e) => set({ fees: e.target.value, feesTouched: true })} />
+                <input inputMode="decimal" name="fees" className={field} value={form.fees} onChange={(e) => set({ fees: e.target.value, feesTouched: true })} />
               </label>
               <label className="block text-xs text-muted">Versand (€)
-                <input inputMode="decimal" className={field} placeholder="nicht erfasst" value={form.shipping} onChange={(e) => set({ shipping: e.target.value })} />
+                <input inputMode="decimal" name="shipping" className={field} placeholder="nicht erfasst" value={form.shipping} onChange={(e) => set({ shipping: e.target.value })} />
               </label>
             </div>
+            <FieldErrors errors={[...errorsOf('fees'), ...errorsOf('shipping')]} onFix={applyFix} />
             <label className="block text-xs text-muted">Notiz
               <input className={field} value={form.note} onChange={(e) => set({ note: e.target.value })} />
             </label>
@@ -227,13 +256,21 @@ export default function SaleDialog({ copyIds, initialGrossCents = null, listing 
               <div className={net >= market ? 'text-good' : 'text-bad'}>{diffText(net, market)} gegenüber Marktwert</div>
             </div>
             {error && <p className="text-sm text-bad">{error}</p>}
-            <div className="flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text">Abbrechen</button>
-              <button type="button" onClick={book} disabled={busy || shownItems.length === 0}
-                className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50">{busy ? 'Wird gebucht…' : 'Buchen'}</button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{embedded ? 'Zurück' : 'Abbrechen'}</button>
+              <button type="submit" disabled={busy || shownItems.length === 0}
+                className="px-4 py-2 rounded-lg text-sm bg-accent text-accent-fg disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface">{busy ? 'Wird gebucht…' : 'Buchen'}</button>
             </div>
-          </>
+          </form>
         )}
+    </>
+  );
+  if (embedded) return <div className="space-y-3">{body}</div>;
+  return (
+    // stopPropagation: ein Klick auf diesen Hintergrund schliesst nur diesen Dialog, nie den darunterliegenden.
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80" onClick={(e) => { e.stopPropagation(); dismiss(); }}>
+      <div className="w-full max-w-md bg-surface border border-line rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+        {body}
       </div>
     </div>
   );

@@ -45,6 +45,11 @@ const VERBOTEN = [
   // Feste Hex-Farbwerte direkt in style={{}} -- Ausnahmen unten (RarityGuide-Kartenfarben) werden vor
   // dieser Pruefung aus dem Text herausgeschnitten, nicht dateiweit ausgenommen.
   /(backgroundColor|color|borderColor|fill|stroke)\s*:\s*['"]#/,
+  // Spec I §6.3 (I2 Task 10): vier Schriftgroessen aus tailwind.config.js -- keine frei gesetzten Pixelgroessen,
+  // keine eingebundenen Webfonts, keine eigenen Schriftfamilien.
+  /text-\[\d+(\.\d+)?px\]/,
+  /@fontsource\//,
+  /font-\[/,
 ];
 
 // .foil-sheen (index.css) ist der Folien-Glanz-Effekt auf Kartenbildern -- ein Karteninhalt, kein

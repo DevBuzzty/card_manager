@@ -3,6 +3,7 @@ import { Download } from 'lucide-react';
 import ExportDialog from './ExportDialog';
 import SaleDialog from './SaleDialog';
 import ListingDialog from './ListingDialog';
+import { useToast } from './toastContext';
 import { LOADING, forSaleSummary, forSaleGroups, forSaleHeaderText, copyValueText } from '../utils/duplicates';
 import { createBusyGate, createLatestOnly } from '../utils/busyGate';
 import { EDITION_LABELS } from '../utils/valuation';
@@ -21,7 +22,8 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
   const [exportIds, setExportIds] = useState(null);
   const [picked, setPicked] = useState(() => new Set());
   const [selling, setSelling] = useState(null); // copyIds | null
-  const [undo, setUndo] = useState(null); // { saleId, n }
+  // Spec I §5.2 Punkt 4: Rueckgaengig ueber die Hinweisleiste (sechs Sekunden), nicht mehr als Zeile in der Liste.
+  const toast = useToast();
   const [listingFor, setListingFor] = useState(null); // copyIds | null
   // Spec H2 §9 -- Preisvorschlag: Einstellungen einmal laden, Standard wie saleMath.js.
   const [rule, setRule] = useState({ discount: 5, minCents: 10 });
@@ -85,15 +87,14 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
     }
   });
 
-  const undoSale = () => gate.run(async () => {
+  const undoSale = (saleId) => gate.run(async () => {
     setBusy(true);
     setError(null);
     try {
-      const res = await window.api.cancelSale(undo.saleId);
+      const res = await window.api.cancelSale(saleId);
       if (!res?.success) { setError(res?.error || 'Rückgängig fehlgeschlagen.'); return; }
       window.dispatchEvent(new Event('collection-dirty'));
       await reload();
-      setUndo(null);
     } catch (e) {
       setError(e?.message || 'Rückgängig fehlgeschlagen.');
     } finally {
@@ -125,7 +126,11 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
       )}
       {selling && (
         <SaleDialog copyIds={selling} initialGrossCents={sellingInitialGrossCents} onClose={() => setSelling(null)} onBooked={async (saleId) => {
-          setUndo({ saleId, n: selling.length });
+          const n = selling.length;
+          toast.show({
+            text: `${n} ${n === 1 ? 'Karte' : 'Karten'} als verkauft gebucht`,
+            action: { label: 'Rückgängig', run: () => undoSale(saleId) },
+          });
           setSelling(null);
           setPicked(new Set());
           await reload();
@@ -137,12 +142,6 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
           setPicked(new Set());
           await reload();
         }} />
-      )}
-      {undo && (
-        <p className="text-sm text-muted">
-          {undo.n} {undo.n === 1 ? 'Karte' : 'Karten'} als verkauft gebucht ·{' '}
-          <button type="button" onClick={undoSale} disabled={busy} className="text-accent hover:underline disabled:opacity-50">Rückgängig</button>
-        </p>
       )}
       {error && <p className="text-sm text-bad">{error}</p>}
       {groups.length === 0 ? (
@@ -159,7 +158,7 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
                   </div>
                   <div className="min-w-0">
                     <div className="text-sm font-bold text-text truncate">{g.name || g.card_id}</div>
-                    <div className="text-[11px] font-mono text-muted">{g.set_code} · {g.rarity} · {g.language}</div>
+                    <div className="text-klein font-mono text-muted">{g.set_code} · {g.rarity} · {g.language}</div>
                   </div>
                 </button>
                 <div className="mt-2 space-y-1">
@@ -167,15 +166,15 @@ export default function ForSaleList({ copies, containers, reload, onOpenCard }) 
                     const c = byId.get(id);
                     const sugg = suggestionOf(c);
                     return (
-                      <div key={id} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-bg/20 border border-line text-[11px]">
+                      <div key={id} className="flex items-center gap-2 px-2 py-1 rounded-lg bg-bg/20 border border-line text-klein">
                         <input type="checkbox" checked={pickedLive.has(id)} onChange={() => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; })} aria-label="Für Verkauf auswählen" />
                         <span className="font-mono text-muted">{c.condition} · {EDITION_LABELS[c.edition] || c.edition}</span>
                         <span className="font-mono text-muted truncate">{formatCopyLocation(c, (containers || []).find((ct) => ct.container_id === c.container_id))}</span>
-                        {copyBadges(offers[id] || []).map((b) => <span key={b} className="px-1 rounded bg-accent/15 text-text text-[10px] font-mono">{b}</span>)}
+                        {copyBadges(offers[id] || []).map((b) => <span key={b} className="px-1 rounded bg-accent/15 text-text text-klein font-mono">{b}</span>)}
                         <span className="ml-auto font-mono text-text">{copyValueText(c)}</span>
                         <span className="font-mono text-muted">Vorschlag {sugg == null ? '–' : euroCentsText(sugg)}</span>
                         <button type="button" onClick={() => giveBack(id)} disabled={busy}
-                          className="px-2 py-0.5 rounded text-[11px] bg-surface-2 border border-line text-muted hover:text-text disabled:opacity-50">
+                          className="px-2 py-0.5 rounded text-klein bg-surface-2 border border-line text-muted hover:text-text disabled:opacity-50">
                           Zurück in die Sammlung
                         </button>
                       </div>

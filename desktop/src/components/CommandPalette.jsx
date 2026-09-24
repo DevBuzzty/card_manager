@@ -100,12 +100,12 @@ export default function CommandPalette({ open, onClose }) {
             placeholder="Karte, Set oder Aktion suchen…"
             className="flex-1 bg-transparent outline-none text-text text-base"
           />
-          <span className="font-mono text-[10px] text-muted border border-line rounded px-1.5 py-0.5">ESC</span>
+          <span className="font-mono text-klein text-muted border border-line rounded px-1.5 py-0.5">ESC</span>
         </div>
 
         <div className="max-h-[52vh] overflow-y-auto custom-scrollbar py-2">
           {actionResults.length > 0 && (
-            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-muted px-4 pt-2 pb-1">Aktionen</div>
+            <div className="font-display text-klein tracking-[0.16em] uppercase text-muted px-4 pt-2 pb-1">Aktionen</div>
           )}
           {actionResults.map((a, i) => (
             <button key={a.id} onMouseEnter={() => setSel(i)} onClick={() => runItem({ type: 'action', ...a })} className={rowClass(i === sel)}>
@@ -115,7 +115,7 @@ export default function CommandPalette({ open, onClose }) {
           ))}
 
           {cardResults.length > 0 && (
-            <div className="font-display text-[9.5px] tracking-[0.16em] uppercase text-muted px-4 pt-3 pb-1">Karten</div>
+            <div className="font-display text-klein tracking-[0.16em] uppercase text-muted px-4 pt-3 pb-1">Karten</div>
           )}
           {cardResults.map((c, ci) => {
             const i = actionResults.length + ci;
@@ -126,7 +126,7 @@ export default function CommandPalette({ open, onClose }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-text truncate">{c.name}</div>
-                  <div className="font-mono text-[10px] text-muted">{formatPasscode(c.id)} · ×{c.quantity}</div>
+                  <div className="font-mono text-klein text-muted">{formatPasscode(c.id)} · ×{c.quantity}</div>
                 </div>
                 <CornerDownLeft className="w-3.5 h-3.5 opacity-40" />
               </button>
@@ -137,7 +137,7 @@ export default function CommandPalette({ open, onClose }) {
             <div className="px-4 py-8 text-center text-sm text-muted">Keine Treffer.</div>
           )}
           {!q && (
-            <div className="px-4 py-2 text-[11px] text-muted">Tippen, um die Sammlung zu durchsuchen…</div>
+            <div className="px-4 py-2 text-klein text-muted">Tippen, um die Sammlung zu durchsuchen…</div>
           )}
         </div>
       </div>

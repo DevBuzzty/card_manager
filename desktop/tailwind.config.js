@@ -1,4 +1,7 @@
 /** @type {import('tailwindcss').Config} */
+// Spec I §6.3: Systemschrift -- keine eingebundenen Webfonts mehr.
+const SYSTEM = ['system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'];
+
 export default {
   content: [
     "./index.html",
@@ -25,10 +28,33 @@ export default {
         // Spielfarben (Kartenrahmen Monster/Zauber/Falle) -- keine Oberflaechenfarbe, bleibt.
         frame: { monster: '#E8944A', spell: '#1DA891', trap: '#C4568A', normal: '#CBB07A' },
       },
+      // Spec I §6.3 -- eine Schriftfamilie (Systemschrift) fuer alles; font-display/font-mono bleiben als Namen
+      // stehen, loesen aber auf dieselbe Familie auf. Ziffern gleich breit ueber tabular-nums (index.css).
       fontFamily: {
-        display: ['"Chakra Petch"', 'system-ui', 'sans-serif'],
-        sans: ['"Manrope"', 'system-ui', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        display: SYSTEM,
+        sans: SYSTEM,
+        mono: SYSTEM,
+      },
+      // Spec I §6.3 -- vier Groessen (docs/fixtures/design/tokens.json#typo): Ueberschrift 22, Abschnitt 17,
+      // Zeile 15, Nebensache 13/12. Die Tailwind-Stufen werden darauf abgebildet, damit die Regel an EINER
+      // Stelle gilt; `text-klein` ersetzt frei gesetzte Pixelgroessen.
+      fontSize: {
+        klein: ['12px', { lineHeight: '1.5' }],
+        xs: ['13px', { lineHeight: '1.5' }],
+        sm: ['15px', { lineHeight: '1.5' }],
+        base: ['15px', { lineHeight: '1.5' }],
+        lg: ['17px', { lineHeight: '1.5' }],
+        xl: ['22px', { lineHeight: '1.3' }],
+        '2xl': ['22px', { lineHeight: '1.3' }],
+        '3xl': ['22px', { lineHeight: '1.3' }],
+        '4xl': ['22px', { lineHeight: '1.3' }],
+        '5xl': ['22px', { lineHeight: '1.3' }],
+      },
+      // Spec I §6.3 -- Ecken 10 fuer Flaechen, 6 fuer Felder und Knoepfe, rund (full) nur fuer Marken.
+      borderRadius: {
+        DEFAULT: '6px', sm: '6px', md: '6px', lg: '6px',
+        xl: '10px', '2xl': '10px', '3xl': '10px',
+        feld: '6px', flaeche: '10px',
       },
     },
   },

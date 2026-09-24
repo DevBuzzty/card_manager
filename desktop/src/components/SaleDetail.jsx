@@ -153,10 +153,10 @@ export default function SaleDetail({ saleId, doubleSold = false, orphaned = fals
                     {it.image_url ? <img src={it.image_url} alt="" className="w-10 h-14 object-cover rounded" /> : <div className="w-10 h-14 rounded bg-bg" />}
                     <div className="flex-1 min-w-0 text-sm">
                       <div className="text-text truncate">{it.name || it.card_id}</div>
-                      <div className="text-[11px] font-mono text-muted">{it.set_code} · {it.rarity} · {it.language}</div>
-                      <div className="text-[11px] font-mono text-muted">{it.condition} · {it.edition}</div>
+                      <div className="text-klein font-mono text-muted">{it.set_code} · {it.rarity} · {it.language}</div>
+                      <div className="text-klein font-mono text-muted">{it.condition} · {it.edition}</div>
                     </div>
-                    <div className="text-right text-[11px] font-mono">
+                    <div className="text-right text-klein font-mono">
                       <div className="text-muted">Marktwert {euroCentsText(toCents(it.value_at_sale) || 0)}</div>
                       {gone ? <div className="text-muted">zurückgenommen</div> : <div className="text-text">Anteil {euroCentsText(toCents(it.share) || 0)}</div>}
                     </div>

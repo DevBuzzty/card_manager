@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import ListingDetail, { ListingMarks, EbayMark } from './ListingDetail';
 import { LOADING } from '../utils/duplicates';
 import { toCents, euroCentsText, diffText } from '../utils/saleMath';
@@ -14,7 +15,9 @@ const ALL_CHANNELS = '__alle__';
 export default function ListingsList({ data, error, reload, onOpenCard }) {
   const [status, setStatus] = useState('aktiv');
   const [channel, setChannel] = useState(ALL_CHANNELS);
-  const [openId, setOpenId] = useState(null);
+  // Spec I §5.2 Punkt 5: "Angebot ansehen" aus dem Verkaufsweg oeffnet das gerade angelegte Angebot direkt.
+  const location = useLocation();
+  const [openId, setOpenId] = useState(() => location.state?.openListingId ?? null);
   const ebay = useEbayData();
 
   // Je vorkommendem Kanal der Name des juengsten Angebots (die Liste ist schon juengste zuerst).

@@ -58,10 +58,19 @@ internal fun schema(r: Map<String, Color>, dunkel: Boolean): ColorScheme {
     )
 }
 
+// Spec I §6.3 -- Ecken 6 fuer Felder und kleine Bedienelemente, 10 fuer Flaechen (Karten, Blaetter, Dialoge);
+// rund nur fuer Marken. Werte aus docs/fixtures/design/tokens.json#radius (DesignTokensTest).
+object Radius {
+    const val FELD = 6
+    const val FLAECHE = 10
+}
+
 private val SpaceShapes = Shapes(
-    small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
+    extraSmall = RoundedCornerShape(Radius.FELD.dp),
+    small = RoundedCornerShape(Radius.FELD.dp),
+    medium = RoundedCornerShape(Radius.FLAECHE.dp),
+    large = RoundedCornerShape(Radius.FLAECHE.dp),
+    extraLarge = RoundedCornerShape(Radius.FLAECHE.dp),
 )
 
 @Composable

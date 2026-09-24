@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.ui.theme.Line
+import com.example.yugiohscanner.ui.theme.Radius
 import com.example.yugiohscanner.ui.theme.SurfaceColor
 
 // Dark rounded surface with a subtle violet border — the container for list rows
@@ -15,7 +16,7 @@ import com.example.yugiohscanner.ui.theme.SurfaceColor
 fun SpaceCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(Radius.FLAECHE.dp), // Spec I §6.3
         color = SurfaceColor,
         border = BorderStroke(1.dp, Line),
         content = content,

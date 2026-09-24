@@ -3,7 +3,8 @@ import { fmtEUR, fmtNum } from './format.js';
 
 export const CONDITIONS = ['MT', 'NM', 'EX', 'GD', 'LP', 'PL', 'PO'];
 export const EDITIONS = ['first', 'unlimited', 'limited', 'unknown'];
-export const EDITION_LABELS = { first: '1st Ed', unlimited: 'Unlimited', limited: 'Limited', unknown: 'Unbek.' };
+// Spec I §4.1: deutsche Beschriftungen (gespeichert bleiben die Codes). ZWILLING: Valuation.kt, Fixture docs/fixtures/copies/copy-row.json.
+export const EDITION_LABELS = { first: '1. Auflage', unlimited: 'Unlimitiert', limited: 'Limitiert', unknown: 'Auflage unbekannt' };
 
 export function conditionFactor(code) {
   const f = FACTORS[String(code || '').toUpperCase()];

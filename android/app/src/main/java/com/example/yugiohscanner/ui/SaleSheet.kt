@@ -22,6 +22,7 @@ import com.example.yugiohscanner.cloud.SideStores
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.printingKey
 import com.example.yugiohscanner.ml.SaleInput
+import com.example.yugiohscanner.ml.SaleFlow
 import com.example.yugiohscanner.ml.SalesMath
 import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.theme.ErrorColor
@@ -37,7 +38,7 @@ import java.time.LocalDate
 data class ListingSale(val listingId: String, val channelId: String, val priceCents: Long)
 
 /** Abschluss-Schritt nach dem Buchen (Abweichung 7): Erinnerungen, Preis-Hinweis, Aufräum-Fehler. */
-private data class DoneStep(val saleId: String, val count: Int, val after: ListingsRepository.AfterBooking?, val cleanupError: String?)
+internal data class DoneStep(val saleId: String, val count: Int, val after: ListingsRepository.AfterBooking?, val cleanupError: String?)
 
 /**
  * Marktwert je Exemplar (copyId, Cent) aus einem Speicherstand; null, sobald ein Exemplar oder sein
@@ -74,12 +75,34 @@ fun SaleSheet(
     copyIds: List<String>, initialGrossCents: Long? = null, listing: ListingSale? = null, onAdjustListing: (() -> Unit)? = null,
     onDismiss: () -> Unit, onBooked: (saleId: String, count: Int) -> Unit,
 ) {
+    val busyState = remember { mutableStateOf(false) }
+    val doneState = remember { mutableStateOf<DoneStep?>(null) }
+    // Waehrend gebucht wird, laesst sich das Sheet auch per Wischen nicht schliessen.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !busyState.value })
+    // Im Abschluss-Schritt ist schon gebucht: Schließen meldet onBooked (Rückgängig-Zeile, Auswahl), nie onDismiss.
+    ModalBottomSheet(onDismissRequest = { val d = doneState.value; if (d != null) onBooked(d.saleId, d.count) else if (!busyState.value) onDismiss() }, sheetState = sheetState) {
+        SaleSheetContent(copyIds, initialGrossCents, listing, onAdjustListing, onBack = onDismiss, onBooked = onBooked, busyState = busyState, doneState = doneState)
+    }
+}
+
+/**
+ * Spec I §5.1/§5.2 -- der Inhalt von [SaleSheet] ohne eigenes Blatt: im Exemplar-Blatt eingebettet ([embedded], kein
+ * Fensterstapel, kein eigenes Scrollen -- das umgebende Blatt scrollt). [defaultChannelId]: Kanal wie beim letzten Mal
+ * (SaleFlow.lastChannel). [onBookedAmount] meldet den gebuchten Gesamtpreis (Cent) vor onBooked -- fuer die Rueckgaengig-Snackbar.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SaleSheetContent(
+    copyIds: List<String>, initialGrossCents: Long? = null, listing: ListingSale? = null, onAdjustListing: (() -> Unit)? = null,
+    onBack: () -> Unit, onBooked: (saleId: String, count: Int) -> Unit,
+    busyState: MutableState<Boolean> = remember { mutableStateOf(false) },
+    doneState: MutableState<DoneStep?> = remember { mutableStateOf(null) },
+    embedded: Boolean = false, defaultChannelId: String? = null, onBookedAmount: (Long?) -> Unit = {},
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val inFlight = remember { InFlight() }
-    var busy by remember { mutableStateOf(false) }
-    // Waehrend gebucht wird, laesst sich das Sheet auch per Wischen nicht schliessen.
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !busy })
+    var busy by busyState
     val sales by SideStores.sales.state.collectAsState()
     LaunchedEffect(Unit) { SideStores.sales.ensureLoaded() }
     val offline = sales.value == null || sales.error != null
@@ -89,7 +112,7 @@ fun SaleSheet(
     // Spec H3a §7.1: aus einem Angebot sind alle Positionen angehakt und einzeln abwählbar; ohne Angebot alle (wie H2).
     var picked by remember { mutableStateOf(copyIds.toSet()) }
     val chosenIds = if (listing == null) copyIds else copyIds.filter { it in picked }
-    var done by remember { mutableStateOf<DoneStep?>(null) }
+    var done by doneState
     val values = remember(ready, chosenIds) { ready?.let { saleValues(it, chosenIds) } }
     val missing = ready != null && values == null
     val marketCents = values?.sumOf { it.second }
@@ -100,7 +123,7 @@ fun SaleSheet(
     }
 
     val channels = sales.value?.channels ?: emptyList()
-    var channelId by remember { mutableStateOf<String?>(listing?.channelId) }
+    var channelId by remember { mutableStateOf<String?>(listing?.channelId ?: defaultChannelId) }
     val channel = channels.find { it.channelId == channelId } ?: channels.find { it.channelId == "cardmarket" } ?: channels.firstOrNull()
     var channelOpen by remember { mutableStateOf(false) }
     // Spec H2 §5.2 "Neuer Kanal…": Mini-Formular unter der Kanal-Auswahl.
@@ -142,8 +165,20 @@ fun SaleSheet(
     val shippingOk = SaleInput.moneyOk(shipping, required = false)
     // Platzhalter statt "0,00 €", solange Marktwert oder Betraege nicht feststehen.
     val netKnown = marketCents != null && grossOk && feesOk && shippingOk
-    val canBook = !busy && !offline && ready != null && !missing && channel != null && chosenIds.isNotEmpty() &&
-        dateOk && grossOk && feesOk && shippingOk
+    val canBook = !busy && !offline && ready != null && !missing && channel != null && chosenIds.isNotEmpty()
+    // Spec I §5.2 Punkt 6: Meldung am Feld mit Abhilfe statt eines stumm gesperrten Knopfs.
+    var fieldErrors by remember { mutableStateOf<List<SaleFlow.FieldError>>(emptyList()) }
+    fun errorsOf(vararg fields: String) = fieldErrors.filter { it.field in fields }
+    fun applyFix(fix: SaleFlow.Fix) {
+        val v = fix.cents?.let { SaleInput.centsInput(it) } ?: fix.value.orEmpty()
+        when (fix.field) {
+            "gross" -> { gross = v; grossTouched = true; followFees(channel) }
+            "fees" -> { fees = v; feesTouched = true }
+            "shipping" -> shipping = v
+            "sold_on" -> date = v
+        }
+        fieldErrors = fieldErrors.filter { it.field != fix.field }
+    }
 
     fun createChannel() {
         val fee = SaleInput.parsePercent(newFee)
@@ -174,6 +209,9 @@ fun SaleSheet(
 
     fun book() {
         val chosen = channel?.channelId ?: return
+        val errs = SaleFlow.validateSale(gross, fees, shipping, date.trim(), initialGrossCents ?: suggestionSum ?: marketCents, today)
+        fieldErrors = errs
+        if (errs.isNotEmpty()) return
         val ids = chosenIds
         if (!inFlight.tryStart()) return
         busy = true
@@ -227,7 +265,10 @@ fun SaleSheet(
                 catch (e: Exception) { cleanupError = e.message ?: "Unbekannter Fehler" }
                 if (cleanupError != null || after?.reminders?.isNotEmpty() == true || after?.askAdjust == true || after?.listingSkipped == true) {
                     done = DoneStep(saleId, count, after, cleanupError)
-                } else onBooked(saleId, count)
+                } else {
+                    onBookedAmount(SaleInput.parseMoney(gross)?.let { SalesMath.toCents(it) })
+                    onBooked(saleId, count)
+                }
             } finally {
                 inFlight.finish()
                 busy = false
@@ -235,132 +276,133 @@ fun SaleSheet(
         }
     }
 
-    // Im Abschluss-Schritt ist schon gebucht: Schließen meldet onBooked (Rückgängig-Zeile, Auswahl), nie onDismiss.
-    ModalBottomSheet(onDismissRequest = { val d = done; if (d != null) onBooked(d.saleId, d.count) else if (!busy) onDismiss() }, sheetState = sheetState) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            done?.let { d ->
-                DoneContent(d, onAdjust = onAdjustListing?.let { adjust -> { onBooked(d.saleId, d.count); adjust() } },
-                    onFinish = { onBooked(d.saleId, d.count) })
-                return@Column
-            }
-            Text("Verkauft buchen", style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
-            val n = chosenIds.size
-            Text(
-                "$n ${if (n == 1) "Karte" else "Karten"} · Marktwert ${marketCents?.let { SalesMath.euroCentsText(it) } ?: "…"}",
-                color = Muted, style = MaterialTheme.typography.bodyMedium,
-            )
-            // Spec H3a §7.1 Teilverkauf: je Exemplar ein Häkchen (Name aus dem Speicher, Druck, Zustand).
-            if (listing != null) {
-                val copiesById = remember(ready) { ready?.copies?.associateBy { it.copyId } ?: emptyMap() }
-                val cardsByKey = remember(ready) { ready?.cards?.associateBy { it.printingKey() } ?: emptyMap() }
-                copyIds.forEach { id ->
-                    val copy = copiesById[id]
-                    val card = copy?.let { cardsByKey[it.printingKey()] }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = id in picked, onCheckedChange = { picked = if (it) picked + id else picked - id }, enabled = !busy)
-                        Column(Modifier.weight(1f)) {
-                            Text(card?.name ?: copy?.cardId ?: id, color = OnSurface, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                            Text(copy?.let { "${it.setCode} · ${it.rarity} · ${it.language} · ${it.condition}" } ?: "Karte nicht mehr in der Sammlung",
-                                color = if (copy == null) ErrorColor else Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                }
-            }
-
-            if (offline) {
+    Column(
+        if (embedded) Modifier.fillMaxWidth()
+        else Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        done?.let { d ->
+            DoneContent(d, onAdjust = onAdjustListing?.let { adjust -> { onBooked(d.saleId, d.count); adjust() } },
+                onFinish = { onBooked(d.saleId, d.count) })
+            return@Column
+        }
+        if (!embedded) Text("Verkauft buchen", style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
+        val n = chosenIds.size
+        Text(
+            "$n ${if (n == 1) "Karte" else "Karten"} · Marktwert ${marketCents?.let { SalesMath.euroCentsText(it) } ?: "…"}",
+            color = Muted, style = MaterialTheme.typography.bodyMedium,
+        )
+        // Spec H3a §7.1 Teilverkauf: je Exemplar ein Häkchen (Name aus dem Speicher, Druck, Zustand).
+        if (listing != null) {
+            val copiesById = remember(ready) { ready?.copies?.associateBy { it.copyId } ?: emptyMap() }
+            val cardsByKey = remember(ready) { ready?.cards?.associateBy { it.printingKey() } ?: emptyMap() }
+            copyIds.forEach { id ->
+                val copy = copiesById[id]
+                val card = copy?.let { cardsByKey[it.printingKey()] }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (sales.loading && sales.value == null && sales.error == null) "Verkäufe werden geladen…" else "Keine Verbindung – Verkäufe nicht geladen",
-                        color = ErrorColor, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = { SideStores.sales.refresh() }, enabled = !sales.loading) { Text("Erneut versuchen") }
+                    Checkbox(checked = id in picked, onCheckedChange = { picked = if (it) picked + id else picked - id }, enabled = !busy)
+                    Column(Modifier.weight(1f)) {
+                        Text(card?.name ?: copy?.cardId ?: id, color = OnSurface, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                        Text(copy?.let { "${it.setCode} · ${it.rarity} · ${it.language} · ${it.condition}" } ?: "Karte nicht mehr in der Sammlung",
+                            color = if (copy == null) ErrorColor else Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
-            if (ready == null) Text("Sammlung ist nicht geladen.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
-            if (missing && !busy) Text("Karte nicht mehr in der Sammlung", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+        }
 
-            ExposedDropdownMenuBox(expanded = channelOpen, onExpandedChange = { if (channels.isNotEmpty()) channelOpen = it }) {
-                OutlinedTextField(
-                    value = channel?.let { feeLabel(it) } ?: "…", onValueChange = {}, readOnly = true,
-                    label = { Text("Kanal") }, singleLine = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = channelOpen) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+        if (offline) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (sales.loading && sales.value == null && sales.error == null) "Verkäufe werden geladen…" else "Keine Verbindung – Verkäufe nicht geladen",
+                    color = ErrorColor, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
                 )
-                ExposedDropdownMenu(expanded = channelOpen, onDismissRequest = { channelOpen = false }) {
-                    channels.forEach { c ->
-                        DropdownMenuItem(text = { Text(feeLabel(c)) }, onClick = {
-                            channelId = c.channelId
-                            channelOpen = false
-                            followFees(c)
-                        })
-                    }
-                    if (channels.isNotEmpty()) {
-                        DropdownMenuItem(text = { Text("Neuer Kanal…") }, onClick = { channelOpen = false; newChannelOpen = true; newError = null })
-                    }
-                }
+                TextButton(onClick = { SideStores.sales.refresh() }, enabled = !sales.loading) { Text("Erneut versuchen") }
             }
-            if (newChannelOpen) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Name") }, singleLine = true,
-                            modifier = Modifier.weight(2f))
-                        OutlinedTextField(value = newFee, onValueChange = { newFee = it }, label = { Text("Gebühr %") }, singleLine = true,
-                            isError = SaleInput.parsePercent(newFee) == null,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
-                    }
-                    newError?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = { newChannelOpen = false; newError = null }, enabled = !busy) { Text("Abbrechen") }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = { createChannel() }, enabled = !busy && !offline && newName.isNotBlank()) { Text("Anlegen") }
-                    }
-                }
-            }
+        }
+        if (ready == null) Text("Sammlung ist nicht geladen.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+        if (missing && !busy) Text("Karte nicht mehr in der Sammlung", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
 
+        ExposedDropdownMenuBox(expanded = channelOpen, onExpandedChange = { if (channels.isNotEmpty()) channelOpen = it }) {
             OutlinedTextField(
-                value = date, onValueChange = { date = it }, label = { Text("Datum (JJJJ-MM-TT)") }, singleLine = true,
-                isError = !dateOk, modifier = Modifier.fillMaxWidth(),
+                value = channel?.let { feeLabel(it) } ?: "…", onValueChange = {}, readOnly = true,
+                label = { Text("Kanal") }, singleLine = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = channelOpen) },
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+            )
+            ExposedDropdownMenu(expanded = channelOpen, onDismissRequest = { channelOpen = false }) {
+                channels.forEach { c ->
+                    DropdownMenuItem(text = { Text(feeLabel(c)) }, onClick = {
+                        channelId = c.channelId
+                        channelOpen = false
+                        followFees(c)
+                    })
+                }
+                if (channels.isNotEmpty()) {
+                    DropdownMenuItem(text = { Text("Neuer Kanal…") }, onClick = { channelOpen = false; newChannelOpen = true; newError = null })
+                }
+            }
+        }
+        if (newChannelOpen) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(value = newName, onValueChange = { newName = it }, label = { Text("Name") }, singleLine = true,
+                        modifier = Modifier.weight(2f))
+                    OutlinedTextField(value = newFee, onValueChange = { newFee = it }, label = { Text("Gebühr %") }, singleLine = true,
+                        isError = SaleInput.parsePercent(newFee) == null,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+                }
+                newError?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { newChannelOpen = false; newError = null }, enabled = !busy) { Text("Abbrechen") }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { createChannel() }, enabled = !busy && !offline && newName.isNotBlank()) { Text("Anlegen") }
+                }
+            }
+        }
+
+        OutlinedTextField(
+            value = date, onValueChange = { date = it }, label = { Text("Datum (JJJJ-MM-TT)") }, singleLine = true,
+            isError = !dateOk, modifier = Modifier.fillMaxWidth(),
+        )
+        FieldErrors(errorsOf("sold_on"), ::applyFix)
+        OutlinedTextField(
+            value = gross, onValueChange = { gross = it; grossTouched = true; followFees(channel) },
+            label = { Text("Gesamtpreis (€)") }, singleLine = true, isError = !grossOk,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth(),
+        )
+        FieldErrors(errorsOf("gross"), ::applyFix)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = fees, onValueChange = { fees = it; feesTouched = true },
+                label = { Text("Gebühren (€)") }, singleLine = true, isError = !feesOk,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f),
             )
             OutlinedTextField(
-                value = gross, onValueChange = { gross = it; grossTouched = true; followFees(channel) },
-                label = { Text("Gesamtpreis (€)") }, singleLine = true, isError = !grossOk,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth(),
+                value = shipping, onValueChange = { shipping = it },
+                label = { Text("Versand (€)") }, placeholder = { Text("nicht erfasst") }, singleLine = true, isError = !shippingOk,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = fees, onValueChange = { fees = it; feesTouched = true },
-                    label = { Text("Gebühren (€)") }, singleLine = true, isError = !feesOk,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f),
-                )
-                OutlinedTextField(
-                    value = shipping, onValueChange = { shipping = it },
-                    label = { Text("Versand (€)") }, placeholder = { Text("nicht erfasst") }, singleLine = true, isError = !shippingOk,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f),
-                )
-            }
-            OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Notiz") }, modifier = Modifier.fillMaxWidth())
+        }
+        FieldErrors(errorsOf("fees", "shipping"), ::applyFix)
+        OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Notiz") }, modifier = Modifier.fillMaxWidth())
 
-            Column {
-                Text("Netto ${if (netKnown) SalesMath.euroCentsText(net) else "…"}", color = OnSurface, fontFamily = MonoFontFamily)
-                if (netKnown && marketCents != null) {
-                    Text("${SalesMath.diffText(net, marketCents)} gegenüber Marktwert",
-                        color = if (net >= marketCents) Good else ErrorColor, fontFamily = MonoFontFamily, style = MaterialTheme.typography.bodySmall)
-                } else {
-                    Text("… gegenüber Marktwert", color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.bodySmall)
-                }
-                if (netKnown && net < 0) Text("Verlust: Gebühren und Versand übersteigen den Preis.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+        Column {
+            Text("Netto ${if (netKnown) SalesMath.euroCentsText(net) else "…"}", color = OnSurface, fontFamily = MonoFontFamily)
+            if (netKnown && marketCents != null) {
+                Text("${SalesMath.diffText(net, marketCents)} gegenüber Marktwert",
+                    color = if (net >= marketCents) Good else ErrorColor, fontFamily = MonoFontFamily, style = MaterialTheme.typography.bodySmall)
+            } else {
+                Text("… gegenüber Marktwert", color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.bodySmall)
             }
+            if (netKnown && net < 0) Text("Verlust: Gebühren und Versand übersteigen den Preis.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+        }
 
-            error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
+        error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss, enabled = !busy) { Text("Abbrechen") }
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = { book() }, enabled = canBook) { Text(if (busy) "Wird gebucht…" else "Buchen") }
-            }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onBack, enabled = !busy) { Text(if (embedded) "Zurück" else "Abbrechen") }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = { book() }, enabled = canBook) { Text(if (busy) "Wird gebucht…" else "Buchen") }
         }
     }
 }

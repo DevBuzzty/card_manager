@@ -153,6 +153,7 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashM
     var error by remember { mutableStateOf<String?>(null) }
     val (busy, mutate) = rememberMutation { error = it }
     var confirmAll by remember { mutableStateOf(false) }
+    var selling by remember { mutableStateOf<Pair<String, List<CopyRow>>?>(null) } // Spec I §5.1: (Titel, Exemplare)
 
     if (data == null) {
         // Restrunde 4: scrollbar, damit Herunterziehen (RefreshableBox in VerkaufenScreen) auch hier nachlaedt.
@@ -190,6 +191,10 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashM
                                     Text(it, color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                                 }
                             }
+                            // Spec I §5.1: derselbe Verkaufen-Einstieg wie am Exemplar -- die vorgeschlagenen Exemplare.
+                            TextButton(onClick = { selling = (first?.card?.name ?: e.mainId) to e.copyIds.mapNotNull { data.byId[it]?.copy } }, enabled = !busy) {
+                                Text("Verkaufen…")
+                            }
                             Switch(
                                 checked = Duplicates.toggleIsOn(e, data.forSaleIds), enabled = !busy,
                                 onCheckedChange = {
@@ -210,6 +215,8 @@ fun DuplicatesList(data: SaleData?, onOpenCard: (String) -> Unit, history: HashM
             }
         }
     }
+
+    selling?.let { (title, copies) -> SellFlowSheet(title, copies, onDismiss = { selling = null }) }
 
     if (confirmAll) {
         AlertDialog(
@@ -245,10 +252,6 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     // Spec H2 §5.1/§5.4: anhaken -> "Verkauft buchen"; danach "Rückgängig" = sofortiges Storno.
     var picked by remember { mutableStateOf(setOf<String>()) }
     var selling by remember { mutableStateOf<List<String>?>(null) }
-    var undo by remember { mutableStateOf<Pair<String, Int>?>(null) }
-    val sales by SideStores.sales.state.collectAsState()
-    // Plan-Abweichung 4: Storno gesperrt, solange die Verkaeufe nicht geladen sind oder das letzte Laden scheiterte.
-    val salesOffline = sales.value == null || sales.error != null
     // Spec H3a §5.1/§6: dieselben Häkchen -> "Angebot erstellen"; je Exemplar das Kanal-Kürzel aktiver Angebote.
     var listingFor by remember { mutableStateOf<List<String>?>(null) }
     val listingsState by SideStores.listings.state.collectAsState()
@@ -258,7 +261,15 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
     // VOR dem fruehen Return: ein kurzes Flackern des Speichers (data == null) waehrend des Buchens darf
     // das Sheet nicht aus der Komposition werfen (sein Scope wuerde die laufende Buchung abbrechen).
     selling?.let {
-        SaleSheet(it, onDismiss = { selling = null }, onBooked = { id, n -> undo = id to n; selling = null; picked = emptySet() })
+        SaleSheet(it, onDismiss = { selling = null }, onBooked = { id, n ->
+            selling = null; picked = emptySet()
+            // Spec I §5.2 Punkt 4: Rueckgaengig ueber die app-weite Leiste (sechs Sekunden) statt einer Zeile in der Liste.
+            AppSnackbar.show("$n ${if (n == 1) "Karte" else "Karten"} als verkauft gebucht", "Rückgängig") {
+                try { SalesRepository.cancel(id); SideStores.sales.refreshAndWait(); CollectionStore.awaitSync() }
+                catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (e: Exception) { AppSnackbar.show(e.message ?: "Rückgängig fehlgeschlagen.") }
+            }
+        })
     }
     listingFor?.let { ListingSheet(it, onDismiss = { listingFor = null }, onSaved = { listingFor = null; picked = emptySet() }) }
 
@@ -283,26 +294,6 @@ fun ForSaleList(data: SaleData?, onOpenCard: (String) -> Unit, listState: LazyLi
             }
             OutlinedButton(onClick = { listingFor = livePicked }, enabled = !busy && livePicked.isNotEmpty()) {
                 Text("Angebot erstellen (${livePicked.size})")
-            }
-        }
-        undo?.let { (saleId, n) ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("$n ${if (n == 1) "Karte" else "Karten"} als verkauft gebucht", color = OnSurface,
-                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                TextButton(onClick = {
-                    mutate {
-                        SalesRepository.cancel(saleId)
-                        SideStores.sales.refreshAndWait()
-                        undo = null
-                    }
-                }, enabled = !busy && !salesOffline) { Text("Rückgängig") }
-            }
-            if (salesOffline) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Keine Verbindung – Verkäufe nicht geladen", color = ErrorColor, style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f))
-                    TextButton(onClick = { SideStores.sales.refresh() }, enabled = !sales.loading) { Text("Erneut versuchen") }
-                }
             }
         }
         error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }

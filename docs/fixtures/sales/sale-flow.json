@@ -1,0 +1,60 @@
+{
+  "_": "ZWILLING: desktop/src/utils/saleFlow.test.js und android SaleFlowTest.kt. Spec I §5.2 -- letzter Kanal (Punkt 2), naechster Schritt (Punkt 5), Fehler mit Handlung (Punkt 6). Betraege in Cent.",
+  "lastChannel": {
+    "fallback": "cardmarket",
+    "faelle": [
+      { "name": "keine Verkaeufe -> Rueckfall", "sales": [], "channel": "cardmarket" },
+      { "name": "juengster Verkauf zaehlt", "sales": [
+        { "sold_on": "2026-09-01", "channel_id": "cardmarket", "status": "aktiv" },
+        { "sold_on": "2026-09-20", "channel_id": "ebay", "status": "aktiv" } ], "channel": "ebay" },
+      { "name": "stornierter juengster zaehlt nicht", "sales": [
+        { "sold_on": "2026-09-20", "channel_id": "ebay", "status": "storniert" },
+        { "sold_on": "2026-09-10", "channel_id": "vor-ort", "status": "aktiv" } ], "channel": "vor-ort" },
+      { "name": "gleicher Tag -> der zuerst gelieferte", "sales": [
+        { "sold_on": "2026-09-20", "channel_id": "ebay", "status": "aktiv" },
+        { "sold_on": "2026-09-20", "channel_id": "cardmarket", "status": "aktiv" } ], "channel": "ebay" },
+      { "name": "nur stornierte -> Rueckfall", "sales": [
+        { "sold_on": "2026-09-20", "channel_id": "ebay", "status": "storniert" } ], "channel": "cardmarket" }
+    ]
+  },
+  "nextSteps": {
+    "labels": { "naechstes-exemplar": "Nächstes Exemplar", "angebot-ansehen": "Angebot ansehen", "verkaufsliste-ansehen": "Verkaufsliste ansehen", "fertig": "Fertig" },
+    "faelle": [
+      { "name": "verkauft, nichts mehr vorgemerkt", "way": "verkauft", "remaining": 0, "listingId": null, "steps": ["fertig"] },
+      { "name": "verkauft, weitere vorgemerkt", "way": "verkauft", "remaining": 2, "listingId": null, "steps": ["naechstes-exemplar", "fertig"] },
+      { "name": "Angebot angelegt", "way": "angebot", "remaining": 0, "listingId": "l1", "steps": ["angebot-ansehen", "fertig"] },
+      { "name": "Angebot angelegt, weitere vorgemerkt", "way": "angebot", "remaining": 1, "listingId": "l1", "steps": ["angebot-ansehen", "naechstes-exemplar", "fertig"] },
+      { "name": "auf die Verkaufsliste", "way": "verkaufsliste", "remaining": 0, "listingId": null, "steps": ["verkaufsliste-ansehen", "fertig"] }
+    ]
+  },
+  "validateSale": {
+    "today": "2026-09-24",
+    "faelle": [
+      { "name": "alles gut", "form": { "gross": "4,50", "fees": "0,23", "shipping": "", "sold_on": "2026-09-24" }, "suggestionCents": 450, "errors": [] },
+      { "name": "Preis leer, Vorschlag vorhanden", "form": { "gross": "", "fees": "", "shipping": "", "sold_on": "2026-09-24" }, "suggestionCents": 450,
+        "errors": [ { "field": "gross", "text": "Der Preis fehlt.", "fix": { "label": "Vorschlag 4,50 € übernehmen", "field": "gross", "cents": 450 } } ] },
+      { "name": "Preis kaputt, kein Vorschlag", "form": { "gross": "abc", "fees": "", "shipping": "", "sold_on": "2026-09-24" }, "suggestionCents": null,
+        "errors": [ { "field": "gross", "text": "Der Preis muss 0 € oder mehr sein.", "fix": null } ] },
+      { "name": "Preis negativ", "form": { "gross": "-1", "fees": "", "shipping": "", "sold_on": "2026-09-24" }, "suggestionCents": 450,
+        "errors": [ { "field": "gross", "text": "Der Preis muss 0 € oder mehr sein.", "fix": { "label": "Vorschlag 4,50 € übernehmen", "field": "gross", "cents": 450 } } ] },
+      { "name": "Gebuehr und Versand negativ", "form": { "gross": "4,50", "fees": "-0,10", "shipping": "-2", "sold_on": "2026-09-24" }, "suggestionCents": 450,
+        "errors": [
+          { "field": "fees", "text": "Gebühren müssen 0 € oder mehr sein.", "fix": { "label": "Auf 0 € setzen", "field": "fees", "cents": 0 } },
+          { "field": "shipping", "text": "Versand muss 0 € oder mehr sein.", "fix": { "label": "Auf 0 € setzen", "field": "shipping", "cents": 0 } } ] },
+      { "name": "Datum kaputt", "form": { "gross": "4,50", "fees": "", "shipping": "", "sold_on": "24.09.2026" }, "suggestionCents": 450,
+        "errors": [ { "field": "sold_on", "text": "Ungültiges Datum.", "fix": { "label": "Heute", "field": "sold_on", "value": "2026-09-24" } } ] }
+    ]
+  },
+  "validateListing": {
+    "faelle": [
+      { "name": "alles gut", "form": { "price": "5,00", "url": "https://www.cardmarket.com/x" }, "suggestionCents": 450, "errors": [] },
+      { "name": "ohne Link ist erlaubt", "form": { "price": "5", "url": "" }, "suggestionCents": 450, "errors": [] },
+      { "name": "Preis 0", "form": { "price": "0", "url": "" }, "suggestionCents": 450,
+        "errors": [ { "field": "price", "text": "Der Angebotspreis muss über 0 € liegen.", "fix": { "label": "Vorschlag 4,50 € übernehmen", "field": "price", "cents": 450 } } ] },
+      { "name": "Preis leer ohne Vorschlag", "form": { "price": "", "url": "" }, "suggestionCents": null,
+        "errors": [ { "field": "price", "text": "Der Angebotspreis muss über 0 € liegen.", "fix": null } ] },
+      { "name": "Link ohne Protokoll", "form": { "price": "5", "url": "www.cardmarket.com/x" }, "suggestionCents": 450,
+        "errors": [ { "field": "url", "text": "Der Link muss mit http:// oder https:// beginnen.", "fix": { "label": "https:// ergänzen", "field": "url", "value": "https://www.cardmarket.com/x" } } ] }
+    ]
+  }
+}

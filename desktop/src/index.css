@@ -39,7 +39,9 @@ body { background: var(--bg); color: var(--text); font-variant-numeric: tabular-
 
 body {
   margin: 0;
-  font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Spec I §6.3: Systemschrift, Zeilenhoehe 1,5. */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -94,6 +96,13 @@ code {
   background-size: 260% 260%;
   animation-duration: 3.6s;
 }
+/* Spec I §5.2 Punkt 1: Schrittwechsel im selben Fenster (Verkaufsweg), 150 ms, ohne die Liste darunter zu verschieben. */
+@keyframes step-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.step-in { animation: step-in 150ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .foil-sheen { animation: none; }
+  .step-in { animation: none; }
 }

@@ -1,5 +1,11 @@
 package com.example.yugiohscanner.ui
 
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import com.example.yugiohscanner.ml.CopyRowText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -79,6 +85,8 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
     var catalogCard by remember(cardId) { mutableStateOf<CatalogCard?>(null) }
 
     var sheetCopy by remember { mutableStateOf<CopyRow?>(null) }
+    // Spec I §5.2 Punkt 3: Vormerkung gilt in der Anzeige ab dem Tippen (PendingForSale), bis der Abgleich nachzieht.
+    val pendingForSale by PendingForSale.state.collectAsState()
 
     LaunchedEffect(Unit) { SideStores.wishlist.ensureLoaded() }
     // Spec H3a §6: "angeboten auf <Kanal> für <Preis>" am Exemplar.
@@ -171,8 +179,8 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                     contentDescription = base.name,
                     modifier = Modifier
                         .height(320.dp)
-                        .shadow(2.dp, RoundedCornerShape(12.dp))
-                        .clip(RoundedCornerShape(12.dp)),
+                        .shadow(2.dp, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp)),
                 )
             }
 
@@ -217,7 +225,7 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                         PriceHistoryChart(v)
                         PriceAlertTargetsRow(v)
                         if (!migrated) {
-                            Text("${v.quantity}× NM · Unbek. (nicht migriert – Desktop einmal starten)", style = MaterialTheme.typography.bodySmall, color = Muted)
+                            Text("${v.quantity}× NM · Auflage unbekannt (nicht migriert – Desktop einmal starten)", style = MaterialTheme.typography.bodySmall, color = Muted)
                         }
                         Valuation.group(mine).forEach { g ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -240,8 +248,10 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                             // copy_id (nicht die Gruppe). Gegenstueck zu CardDetailPanel.jsx.
                             mine.filter { !it.deleted && it.edition == g.edition && it.condition == g.condition }
                                 .forEach { c ->
-                                    CopyLocationRow(c, containers.find { ct -> ct.containerId == c.containerId },
-                                        offered = ListingText.offeredText(offers[c.copyId] ?: emptyList()), onClick = { sheetCopy = c })
+                                    val copyOffers = offers[c.copyId] ?: emptyList()
+                                    CopyLocationRow(pendingForSale[c.copyId]?.let { v -> c.copy(forSale = v) } ?: c,
+                                        containers.find { ct -> ct.containerId == c.containerId },
+                                        offerCount = copyOffers.size, offered = ListingText.offeredText(copyOffers), onClick = { sheetCopy = c })
                                 }
                         }
                         TextButton(enabled = migrated, onClick = {
@@ -284,7 +294,15 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
     // Genau EINE Aufrufstelle, ausserhalb der Verzweigung: faellt `base` weg (Verkauf des letzten Exemplars),
     // bleibt dieselbe CopySheet-/SaleSheet-Instanz bestehen und fuehrt ihr Nachladen und onBooked zu Ende.
     sheetCopy?.let { c ->
-        CopySheet(copy = c, onDismiss = { sheetCopy = null }, onSaved = { scope.launch { refresh() } })
+        CopySheet(
+            copy = c,
+            cardName = base?.name,
+            // Spec I §5.2 Punkt 5: "Naechstes Exemplar" -- weitere vorgemerkte Exemplare derselben Karte.
+            siblings = copies.filter { !it.deleted && it.forSale && it.copyId != c.copyId },
+            onOpenCopy = { sheetCopy = it },
+            onDismiss = { sheetCopy = null },
+            onSaved = { scope.launch { refresh() } },
+        )
     }
 }
 
@@ -300,10 +318,13 @@ private fun StatTile(label: String, value: String) {
     }
 }
 
-// Spec B1 §10.3: eine Zeile je Exemplar -- Standort-Chip links (CopyLocation.format, zeichengleich
-// zum Desktop), Tag-Chips rechts. Ein Klick oeffnet das Exemplar-Sheet fuer genau dieses Exemplar.
+// Spec I §4.1 (vorher B1 §10.3): eine Zeile je Exemplar -- "NM · 1. Auflage · Ordner A · S3 · F5" bzw.
+// "noch nicht einsortiert" (leise), rechts hoechstens zwei Marken, darunter die Tags. Ein Klick oeffnet das
+// Exemplar-Sheet fuer genau dieses Exemplar. ZWILLING der Zeile: ml/CopyRowText.kt / copyRow.js.
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, offered: String?, onClick: () -> Unit) {
+private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, offerCount: Int, offered: String?, onClick: () -> Unit) {
+    val row = CopyRowText.of(copy, container, offerCount)
     Column(
         Modifier.fillMaxWidth().padding(top = 2.dp)
             .clip(RoundedCornerShape(8.dp))
@@ -312,24 +333,41 @@ private fun CopyLocationRow(copy: CopyRow, container: ContainerRow?, offered: St
             .padding(horizontal = 8.dp, vertical = 6.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            // Spec H1 §5.3: Preisschild an markierten Exemplaren.
-            if (copy.forSale) {
-                Icon(Icons.Default.Sell, "Zum Verkauf", tint = Warn, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-            }
             Text(
-                // Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile.
-                if (copy.containerId == null) "ohne Standort" else CopyLocation.format(copy, container),
-                style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = Muted,
-                maxLines = 1, modifier = Modifier.weight(1f),
+                buildAnnotatedString {
+                    append(row.lead)
+                    append(" · ")
+                    withStyle(SpanStyle(color = if (row.unsorted) Muted else OnSurface)) { append(row.location) }
+                },
+                style = MaterialTheme.typography.bodySmall, color = OnSurface,
+                maxLines = 2, modifier = Modifier.weight(1f),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Tags.parse(copy.tags).forEach { t -> TagChipSmall(t) }
+                row.marks.forEach { m -> MarkPill(m) }
             }
         }
-        // Spec H3a §6: zweite Zeile "angeboten auf …".
-        offered?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Warn) }
+        val tags = Tags.parse(copy.tags)
+        if (tags.isNotEmpty()) {
+            FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                tags.forEach { t -> TagChipSmall(t) }
+            }
+        }
+        // Der Angebotstext bleibt als leise Nebenzeile lesbar (am PC als Tooltip der Marke).
+        if (row.marks.contains(CopyRowText.MARK_OFFERED)) offered?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = Muted) }
     }
+}
+
+// Spec I §4.1: getoente Marke -- "zum Verkauf" in Warn, "angeboten" in Good; Text in Textfarbe (Kontrastregel aus I1).
+@Composable
+private fun MarkPill(mark: String) {
+    val tint = if (mark == CopyRowText.MARK_OFFERED) Good else Warn
+    Text(
+        CopyRowText.MARK_LABELS[mark] ?: mark,
+        style = MaterialTheme.typography.labelSmall, color = OnSurface,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(tint.copy(alpha = 0.15f))
+            .border(1.dp, tint.copy(alpha = 0.4f), RoundedCornerShape(50))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
 
 // Small violet pill for a single tag -- same shape/border style as NeutralChip, tinted like the

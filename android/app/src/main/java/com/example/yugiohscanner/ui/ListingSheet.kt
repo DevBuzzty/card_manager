@@ -27,6 +27,7 @@ import com.example.yugiohscanner.ml.EbayMarks
 import com.example.yugiohscanner.ml.ListingText
 import com.example.yugiohscanner.ml.SaleInput
 import com.example.yugiohscanner.ml.SalesMath
+import com.example.yugiohscanner.ml.SaleFlow
 import com.example.yugiohscanner.ml.openWebLink
 import com.example.yugiohscanner.ui.theme.ErrorColor
 import com.example.yugiohscanner.ui.theme.Warn
@@ -82,13 +83,29 @@ private fun centsOf(raw: String): Long? = SalesMath.toCents(SaleInput.parseMoney
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismiss: () -> Unit, onSaved: (List<String>) -> Unit) {
+    val busyState = remember { mutableStateOf(false) }
+    // Solange gespeichert wird, lässt sich das Sheet auch per Wischen nicht schließen.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !busyState.value })
+    ModalBottomSheet(onDismissRequest = { if (!busyState.value) onDismiss() }, sheetState = sheetState) {
+        ListingSheetContent(copyIds, prefill, onBack = onDismiss, onSaved = onSaved, busyState = busyState)
+    }
+}
+
+/**
+ * Spec I §5.1/§5.2 -- der Inhalt von [ListingSheet] ohne eigenes Blatt: im Exemplar-Blatt eingebettet ([embedded],
+ * kein Fensterstapel, kein eigenes Scrollen -- das umgebende Blatt scrollt).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ListingSheetContent(
+    copyIds: List<String>, prefill: ListingPrefill? = null, onBack: () -> Unit, onSaved: (List<String>) -> Unit,
+    busyState: MutableState<Boolean> = remember { mutableStateOf(false) }, embedded: Boolean = false,
+) {
     val ctx = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val inFlight = remember { InFlight() }
-    var busy by remember { mutableStateOf(false) }
-    // Solange gespeichert wird, lässt sich das Sheet auch per Wischen nicht schließen.
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || !busy })
+    var busy by busyState
 
     val listingsState by SideStores.listings.state.collectAsState()
     val salesState by SideStores.sales.state.collectAsState()
@@ -187,7 +204,16 @@ fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismi
         else SaleInput.moneyOk(price, required = true)
     val linkError = ListingsRepository.checkEdit(null, link)
     val canSave = !busy && !created && !offline && ready != null && items != null && channel != null && copyIds.isNotEmpty() &&
-        dateOk && priceOk && linkError == null
+        dateOk && (!isCm || (priceOk && linkError == null))
+    // Spec I §5.2 Punkt 6: Meldung am Feld mit Abhilfe (ohne Cardmarket; dort hat jede Gruppe ihren eigenen Preis).
+    var fieldErrors by remember { mutableStateOf<List<SaleFlow.FieldError>>(emptyList()) }
+    fun applyFix(fix: SaleFlow.Fix) {
+        when (fix.field) {
+            "price" -> { price = fix.cents?.let { SaleInput.centsInput(it) } ?: price; priceTouched = true }
+            "url" -> link = fix.value.orEmpty()
+        }
+        fieldErrors = fieldErrors.filter { it.field != fix.field }
+    }
 
     val first = groups.firstOrNull()
     val openUrl = channel?.let { ch -> if (ch.channelId == "cardmarket" && first == null) null else ListingText.listingLink(ch.channelId, null, first?.nameEn, first?.setCode) }
@@ -195,6 +221,11 @@ fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismi
 
     fun save() {
         val chosen = channel?.channelId ?: return
+        if (!isCm) {
+            val errs = SaleFlow.validateListing(price, link, prefill?.priceCents ?: suggestionSum)
+            fieldErrors = errs
+            if (errs.isNotEmpty()) return
+        }
         if (!inFlight.tryStart()) return
         busy = true; error = null; notice = null
         scope.launch {
@@ -234,147 +265,148 @@ fun ListingSheet(copyIds: List<String>, prefill: ListingPrefill? = null, onDismi
         }
     }
 
-    ModalBottomSheet(onDismissRequest = { if (!busy) onDismiss() }, sheetState = sheetState) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("Angebot erstellen", style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
-            val n = copyIds.size
-            Text(
-                "$n ${if (n == 1) "Karte" else "Karten"} · Vorschlag ${if (suggestions == null) "…" else suggestionSum?.let { SalesMath.euroCentsText(it) } ?: "–"}",
-                color = Muted, style = MaterialTheme.typography.bodyMedium,
-            )
+    Column(
+        if (embedded) Modifier.fillMaxWidth()
+        else Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (!embedded) Text("Angebot erstellen", style = MaterialTheme.typography.titleLarge, color = OnSurface, fontWeight = FontWeight.Bold)
+        val n = copyIds.size
+        Text(
+            "$n ${if (n == 1) "Karte" else "Karten"} · Vorschlag ${if (suggestions == null) "…" else suggestionSum?.let { SalesMath.euroCentsText(it) } ?: "–"}",
+            color = Muted, style = MaterialTheme.typography.bodyMedium,
+        )
 
-            if (offline) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val loadingOnly = loadingSide && listingsState.error == null && salesState.error == null
-                    Text(
-                        if (loadingOnly) "Angebote werden geladen…" else "Keine Verbindung – Angebote nicht geladen",
-                        color = if (loadingOnly) Muted else ErrorColor, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
-                    )
-                    TextButton(onClick = { SideStores.listings.refresh(); SideStores.sales.refresh() },
-                        enabled = !listingsState.loading && !salesState.loading) { Text("Erneut versuchen") }
-                }
-            }
-            if (ready == null) Text("Sammlung ist nicht geladen.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
-            if (missing && !busy) Text("Karte nicht mehr in der Sammlung", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
-            if (alsoOn.isNotEmpty()) Text("auch auf ${alsoOn.joinToString(", ")} eingestellt", color = Muted, style = MaterialTheme.typography.bodySmall)
-
-            ExposedDropdownMenuBox(expanded = channelOpen, onExpandedChange = { if (channels.isNotEmpty() && !busy) channelOpen = it }) {
-                OutlinedTextField(
-                    value = channel?.name ?: "…", onValueChange = {}, readOnly = true,
-                    label = { Text("Kanal") }, singleLine = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = channelOpen) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                )
-                ExposedDropdownMenu(expanded = channelOpen, onDismissRequest = { channelOpen = false }) {
-                    channels.forEach { c ->
-                        DropdownMenuItem(text = { Text(c.name) }, onClick = { channelId = c.channelId; channelOpen = false })
-                    }
-                }
-            }
-            OutlinedTextField(
-                value = date, onValueChange = { date = it }, label = { Text("Datum (JJJJ-MM-TT)") }, singleLine = true,
-                isError = !dateOk, modifier = Modifier.fillMaxWidth(),
-            )
-
-            if (isCm) {
-                if (groups.size > 1) Text("wird zu ${groups.size} Cardmarket-Angeboten", color = OnSurface, style = MaterialTheme.typography.bodyMedium)
-                if (items == null) Text("…", color = Muted)
-                groups.forEach { g ->
-                    val k = groupKey(g)
-                    val raw = groupPrices[k] ?: ""
-                    val e = ListingText.cardmarketEntry(g, centsOf(raw))
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(e.product, color = OnSurface, fontWeight = FontWeight.Bold)
-                        Text("Menge ${e.quantity} · Sprache ${e.language} · Zustand ${e.condition} · 1. Auflage ${if (e.firstEdition) "ja" else "nein"}",
-                            color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
-                        OutlinedTextField(
-                            value = raw, onValueChange = { groupPrices[k] = it; groupTouched[k] = true },
-                            label = { Text("Preis gesamt (€)") }, singleLine = true, isError = !SaleInput.moneyOk(raw, required = true),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth(),
-                        )
-                        Text("Preis je Stück ${e.pieceCents?.let { SalesMath.euroCentsText(it) } ?: "…"}",
-                            color = OnSurface, fontFamily = MonoFontFamily, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            } else {
-                OutlinedTextField(
-                    value = price, onValueChange = { price = it; priceTouched = true },
-                    label = { Text("Preis (€)") }, singleLine = true, isError = !SaleInput.moneyOk(price, required = true),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = title, onValueChange = { title = it; titleTouched = true }, label = { Text("Titel") },
-                    supportingText = {
-                        Text("${title.length}/${ListingText.TITLE_MAX}", color = if (title.length > ListingText.TITLE_MAX) ErrorColor else Muted)
-                    },
-                    isError = title.length > ListingText.TITLE_MAX, modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = description, onValueChange = { description = it; descriptionTouched = true }, label = { Text("Beschreibung") },
-                    minLines = 4, modifier = Modifier.fillMaxWidth(),
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { clipboard.setText(AnnotatedString(title)); notice = "Kopiert." }, enabled = title.isNotEmpty()) {
-                        Text("Titel kopieren")
-                    }
-                    OutlinedButton(onClick = { clipboard.setText(AnnotatedString(description)); notice = "Kopiert." }, enabled = description.isNotEmpty()) {
-                        Text("Beschreibung kopieren")
-                    }
-                }
-            }
-
-            OutlinedTextField(
-                value = link, onValueChange = { link = it }, label = { Text("Link der Anzeige") }, singleLine = true,
-                isError = linkError != null, supportingText = linkError?.let { { Text(it, color = ErrorColor) } },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Notiz") }, modifier = Modifier.fillMaxWidth())
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Am Handy nie cm_url (Befund 2): Cardmarket öffnet die Suche.
-                openUrl?.let { url ->
-                    OutlinedButton(onClick = { if (!openWebLink(ctx, url)) error = "Link konnte nicht geöffnet werden." }) {
-                        Text("Zum Einstellen öffnen")
-                    }
-                }
-                OutlinedButton(
-                    onClick = {
-                        val its = items ?: return@OutlinedButton
-                        sharing = true
-                        notice = null
-                        scope.launch {
-                            try {
-                                val (s, t) = ListingShare.shareImages(ctx, shareTitle, ListingText.imageUrls(its))
-                                notice = ListingText.imagesText(s, t)
-                            } catch (e: CancellationException) { throw e }
-                            catch (e: Exception) { notice = "Teilen fehlgeschlagen: ${e.message ?: "Unbekannter Fehler"}" }
-                            finally { sharing = false }
-                        }
-                    },
-                    enabled = items != null && !sharing,
-                ) { Text(if (sharing) "Bilder werden geladen…" else "Bilder") }
-            }
-            Text("Käufer erwarten oft eigene Fotos.", color = Muted, style = MaterialTheme.typography.bodySmall)
-            Text("Eigene Fotos fügst du nach dem Speichern im Angebot hinzu.", color = Muted, style = MaterialTheme.typography.bodySmall)
-            if (channel?.channelId == "ebay" && ebayStatusState.value != null &&
-                !EbayMarks.setupOk(ebayStatusState.value?.firstOrNull()?.first)
-            ) {
+        if (offline) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val loadingOnly = loadingSide && listingsState.error == null && salesState.error == null
                 Text(
-                    "eBay ist noch nicht eingerichtet – das Angebot wartet, bis der Check in den Einstellungen vollständig ist.",
-                    color = Warn, style = MaterialTheme.typography.bodySmall,
+                    if (loadingOnly) "Angebote werden geladen…" else "Keine Verbindung – Angebote nicht geladen",
+                    color = if (loadingOnly) Muted else ErrorColor, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f),
                 )
+                TextButton(onClick = { SideStores.listings.refresh(); SideStores.sales.refresh() },
+                    enabled = !listingsState.loading && !salesState.loading) { Text("Erneut versuchen") }
             }
-            notice?.let { Text(it, color = OnSurface, style = MaterialTheme.typography.bodySmall) }
-            error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
+        }
+        if (ready == null) Text("Sammlung ist nicht geladen.", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+        if (missing && !busy) Text("Karte nicht mehr in der Sammlung", color = ErrorColor, style = MaterialTheme.typography.bodySmall)
+        if (alsoOn.isNotEmpty()) Text("auch auf ${alsoOn.joinToString(", ")} eingestellt", color = Muted, style = MaterialTheme.typography.bodySmall)
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss, enabled = !busy) { Text(if (created) "Schließen" else "Abbrechen") }
-                Spacer(Modifier.width(8.dp))
-                Button(onClick = { save() }, enabled = canSave) { Text(if (busy) "Wird gespeichert…" else "Angebot speichern") }
+        ExposedDropdownMenuBox(expanded = channelOpen, onExpandedChange = { if (channels.isNotEmpty() && !busy) channelOpen = it }) {
+            OutlinedTextField(
+                value = channel?.name ?: "…", onValueChange = {}, readOnly = true,
+                label = { Text("Kanal") }, singleLine = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = channelOpen) },
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+            )
+            ExposedDropdownMenu(expanded = channelOpen, onDismissRequest = { channelOpen = false }) {
+                channels.forEach { c ->
+                    DropdownMenuItem(text = { Text(c.name) }, onClick = { channelId = c.channelId; channelOpen = false })
+                }
             }
+        }
+        OutlinedTextField(
+            value = date, onValueChange = { date = it }, label = { Text("Datum (JJJJ-MM-TT)") }, singleLine = true,
+            isError = !dateOk, modifier = Modifier.fillMaxWidth(),
+        )
+
+        if (isCm) {
+            if (groups.size > 1) Text("wird zu ${groups.size} Cardmarket-Angeboten", color = OnSurface, style = MaterialTheme.typography.bodyMedium)
+            if (items == null) Text("…", color = Muted)
+            groups.forEach { g ->
+                val k = groupKey(g)
+                val raw = groupPrices[k] ?: ""
+                val e = ListingText.cardmarketEntry(g, centsOf(raw))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(e.product, color = OnSurface, fontWeight = FontWeight.Bold)
+                    Text("Menge ${e.quantity} · Sprache ${e.language} · Zustand ${e.condition} · 1. Auflage ${if (e.firstEdition) "ja" else "nein"}",
+                        color = Muted, fontFamily = MonoFontFamily, style = MaterialTheme.typography.labelSmall)
+                    OutlinedTextField(
+                        value = raw, onValueChange = { groupPrices[k] = it; groupTouched[k] = true },
+                        label = { Text("Preis gesamt (€)") }, singleLine = true, isError = !SaleInput.moneyOk(raw, required = true),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("Preis je Stück ${e.pieceCents?.let { SalesMath.euroCentsText(it) } ?: "…"}",
+                        color = OnSurface, fontFamily = MonoFontFamily, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        } else {
+            OutlinedTextField(
+                value = price, onValueChange = { price = it; priceTouched = true },
+                label = { Text("Preis (€)") }, singleLine = true, isError = !SaleInput.moneyOk(price, required = true),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth(),
+            )
+            FieldErrors(fieldErrors.filter { it.field == "price" }, ::applyFix)
+            OutlinedTextField(
+                value = title, onValueChange = { title = it; titleTouched = true }, label = { Text("Titel") },
+                supportingText = {
+                    Text("${title.length}/${ListingText.TITLE_MAX}", color = if (title.length > ListingText.TITLE_MAX) ErrorColor else Muted)
+                },
+                isError = title.length > ListingText.TITLE_MAX, modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = description, onValueChange = { description = it; descriptionTouched = true }, label = { Text("Beschreibung") },
+                minLines = 4, modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { clipboard.setText(AnnotatedString(title)); notice = "Kopiert." }, enabled = title.isNotEmpty()) {
+                    Text("Titel kopieren")
+                }
+                OutlinedButton(onClick = { clipboard.setText(AnnotatedString(description)); notice = "Kopiert." }, enabled = description.isNotEmpty()) {
+                    Text("Beschreibung kopieren")
+                }
+            }
+        }
+
+        OutlinedTextField(
+            value = link, onValueChange = { link = it }, label = { Text("Link der Anzeige") }, singleLine = true,
+            isError = linkError != null, supportingText = linkError?.let { { Text(it, color = ErrorColor) } },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.fillMaxWidth(),
+        )
+        FieldErrors(fieldErrors.filter { it.field == "url" }, ::applyFix)
+        OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Notiz") }, modifier = Modifier.fillMaxWidth())
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Am Handy nie cm_url (Befund 2): Cardmarket öffnet die Suche.
+            openUrl?.let { url ->
+                OutlinedButton(onClick = { if (!openWebLink(ctx, url)) error = "Link konnte nicht geöffnet werden." }) {
+                    Text("Zum Einstellen öffnen")
+                }
+            }
+            OutlinedButton(
+                onClick = {
+                    val its = items ?: return@OutlinedButton
+                    sharing = true
+                    notice = null
+                    scope.launch {
+                        try {
+                            val (s, t) = ListingShare.shareImages(ctx, shareTitle, ListingText.imageUrls(its))
+                            notice = ListingText.imagesText(s, t)
+                        } catch (e: CancellationException) { throw e }
+                        catch (e: Exception) { notice = "Teilen fehlgeschlagen: ${e.message ?: "Unbekannter Fehler"}" }
+                        finally { sharing = false }
+                    }
+                },
+                enabled = items != null && !sharing,
+            ) { Text(if (sharing) "Bilder werden geladen…" else "Bilder") }
+        }
+        Text("Käufer erwarten oft eigene Fotos.", color = Muted, style = MaterialTheme.typography.bodySmall)
+        Text("Eigene Fotos fügst du nach dem Speichern im Angebot hinzu.", color = Muted, style = MaterialTheme.typography.bodySmall)
+        if (channel?.channelId == "ebay" && ebayStatusState.value != null &&
+            !EbayMarks.setupOk(ebayStatusState.value?.firstOrNull()?.first)
+        ) {
+            Text(
+                "eBay ist noch nicht eingerichtet – das Angebot wartet, bis der Check in den Einstellungen vollständig ist.",
+                color = Warn, style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        notice?.let { Text(it, color = OnSurface, style = MaterialTheme.typography.bodySmall) }
+        error?.let { Text(it, color = ErrorColor, style = MaterialTheme.typography.bodySmall) }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onBack, enabled = !busy) { Text(if (created) "Schließen" else if (embedded) "Zurück" else "Abbrechen") }
+            Spacer(Modifier.width(8.dp))
+            Button(onClick = { save() }, enabled = canSave) { Text(if (busy) "Wird gespeichert…" else "Angebot speichern") }
         }
     }
 }

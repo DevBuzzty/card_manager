@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { X, Trash2, AlertCircle } from 'lucide-react';
 import { parseTags, addTag, removeTag } from '../utils/tags';
-import { EDITION_LABELS } from '../utils/valuation';
 import { KIND_LABELS } from '../utils/containerKinds';
 import { suggestionCents, normalizeDiscount, normalizeMinPrice } from '../utils/saleMath';
-import SaleDialog from './SaleDialog';
-import ListingDialog from './ListingDialog';
+import { copyRow } from '../utils/copyRow';
+import SellFlow from './SellFlow';
 
 // Spec B1 §7.3: Das Exemplar-Sheet ist die EINZIGE Stelle, an der Standort, Tags und Notiz eines
 // Exemplars geschrieben werden -- kein zweiter Schreibweg irgendwo sonst. Gleiche Ueberlagerung,
@@ -20,7 +19,12 @@ import ListingDialog from './ListingDialog';
 // copies-location.test.cjs, die durchweg ein Array uebergeben). Ein bereits von serializeTags
 // erzeugter JSON-String faellt dort durch `Array.isArray(tags)` und wuerde als leere Liste
 // gespeichert -- die Tags waeren nach jedem Speichern weg.
-export default function CopySheet({ copy, onClose, onSaved }) {
+// Spec I §4.2 -- Kopf (Kartenname, darunter Druck · Zustand · Auflage), Mitte (Standort, Tags, Notiz), Fuss
+// (Entfernen leise links, Verkaufen, Speichern als einzige Hauptaktion; bricht um statt abzuschneiden).
+// Der fruehere Schalter "Zum Verkauf" entfaellt: "Verkaufen" oeffnet den Verkaufsweg (Spec I §5) IM SELBEN
+// Fenster (mode 'sell', SellFlow), dort auch "Auf die Verkaufsliste" bzw. "Von der Verkaufsliste nehmen".
+// cardName: Titel; siblings: weitere vorgemerkte Exemplare derselben Karte; onOpenCopy: ein anderes Exemplar oeffnen.
+export default function CopySheet({ copy, cardName = null, siblings = [], onOpenCopy, onClose, onSaved }) {
   const [containers, setContainers] = useState([]);
   const [tagSuggestions, setTagSuggestions] = useState([]);
   const [containerId, setContainerId] = useState(copy?.container_id || '');
@@ -33,13 +37,8 @@ export default function CopySheet({ copy, onClose, onSaved }) {
   const [loadError, setLoadError] = useState(null); // Lade- oder Umsortierfehler -- eigener Zustand, gleiche Bauart wie Binders.jsx
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
-  // Spec H1 §5.3: Schalter "Zum Verkauf" schreibt sofort (eigener Knopfzustand, dasselbe busyRef wie Speichern/Entfernen).
-  const [forSale, setForSale] = useState(!!copy?.for_sale);
-  const [markingSale, setMarkingSale] = useState(false);
-  // Spec H2 §5.1: Spontanverkauf direkt aus dem Sheet, unabhaengig von "Zum Verkauf".
-  const [sellingOpen, setSellingOpen] = useState(false);
-  // Spec H3a §5.1: Angebot direkt aus dem Sheet anlegen.
-  const [listingOpen, setListingOpen] = useState(false);
+  // Spec I §5.1: 'edit' = Standort/Tags/Notiz, 'sell' = Verkaufsweg im selben Fenster.
+  const [mode, setMode] = useState('edit');
   // Spec H2 §9 -- Preisvorschlag als Vorbelegung des Buchungsdialogs. copy traegt hier keine
   // Preisfelder (copies.cjs#listCopies/#listAllCopies liefern nur die Exemplarspalten), daher der
   // Umweg ueber previewSale (denselben Marktwert, den SaleDialog sonst selbst nachlaedt); die
@@ -87,15 +86,14 @@ export default function CopySheet({ copy, onClose, onSaved }) {
 
   // Waehrend das Sheet offen ist, soll Escape nur das Sheet schliessen -- nicht (zusaetzlich)
   // die dahinterliegende CardDetailPanel-Ansicht, die selbst einen globalen Escape-Handler hat.
-  // Solange SaleDialog obendrauf offen ist, gehoert Escape IHM (eigener Handler dort) -- sonst
-  // wuerde ein Druck das ganze Sheet schliessen und den laufenden Verkaufs-Dialog mit wegreissen
-  // (gleiches Muster wie CardDetailPanel.jsx: paletteOpen/sheetCopy).
+  // Im Verkaufsweg gehoert Escape dem SellFlow bzw. dem eingebetteten Dialog (eine Stufe zurueck) -- sonst
+  // wuerde ein Druck das ganze Fenster schliessen (gleiches Muster wie CardDetailPanel.jsx: paletteOpen/sheetCopy).
   useEffect(() => {
-    if (sellingOpen || listingOpen) return;
+    if (mode !== 'edit') return undefined;
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, sellingOpen, listingOpen]);
+  }, [onClose, mode]);
 
   const selectedContainer = containers.find(c => c.container_id === containerId);
   const isBinder = selectedContainer?.kind === 'binder';
@@ -159,26 +157,6 @@ export default function CopySheet({ copy, onClose, onSaved }) {
     }
   };
 
-  const toggleForSale = async () => {
-    if (busyRef.current) return;
-    busyRef.current = true;
-    setMarkingSale(true);
-    setError(null);
-    try {
-      const next = !forSale;
-      const result = await window.api?.setForSale?.({ copyIds: [copy.copy_id], value: next });
-      if (!result?.success) {
-        setError(result?.error || 'Speichern fehlgeschlagen.');
-        return;
-      }
-      setForSale(next);
-      onSaved?.();
-    } finally {
-      busyRef.current = false;
-      setMarkingSale(false);
-    }
-  };
-
   // Copy_id-genau ueber deleteCopy, NICHT removeCopy: removeCopy waehlt ueber Edition/Zustand/
   // Erstellzeit aus einer ganzen Gruppe aus, ohne Ruecksicht auf Standort/Tags/Notiz des
   // einzelnen Exemplars (Befund A) -- hier im Sheet ist aber genau EIN Exemplar (copy.copy_id)
@@ -205,18 +183,32 @@ export default function CopySheet({ copy, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="bg-surface w-full max-w-md max-h-[85vh] rounded-2xl border border-line shadow-sm overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="p-6 border-b border-line flex justify-between items-center bg-surface-2">
-          <div>
-            <h2 className="text-xl font-bold text-text">Exemplar</h2>
-            <p className="text-xs text-muted font-mono mt-0.5">
-              {copy.set_code} · {copy.rarity} · {EDITION_LABELS[copy.edition] || copy.edition} · {copy.condition}
+      <div className={`bg-surface w-full ${mode === 'sell' ? 'max-w-lg' : 'max-w-md'} max-h-[85vh] rounded-2xl border border-line shadow-sm overflow-hidden flex flex-col`} onClick={e => e.stopPropagation()}>
+        <div className="p-6 border-b border-line flex justify-between items-start gap-3 bg-surface-2">
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold text-text truncate">{mode === 'sell' ? 'Verkaufen' : (cardName || 'Exemplar')}</h2>
+            <p className="text-xs text-muted mt-0.5">
+              {mode === 'sell' && cardName ? `${cardName} · ` : ''}{copy.set_code} · {copy.rarity} · {copyRow(copy, null, []).lead}
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-surface-2 rounded-full text-muted hover:text-text transition-colors">
+          <button onClick={onClose} aria-label="Schließen" className="p-2 hover:bg-surface-2 rounded-full text-muted hover:text-text transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {mode === 'sell' ? (
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+            <SellFlow
+              copies={[copy]}
+              siblings={siblings}
+              initialGrossCents={saleInitialCents}
+              onBack={() => setMode('edit')}
+              onClose={() => { onSaved?.(); onClose?.(); }}
+              onOpenCopy={(c) => { onSaved?.(); onOpenCopy?.(c); }}
+            />
+          </div>
+        ) : (
+        <>
 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar space-y-4">
           {loadError && (
@@ -276,12 +268,6 @@ export default function CopySheet({ copy, onClose, onSaved }) {
             </datalist>
           </div>
 
-          <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
-            <span className="text-xs font-bold text-muted uppercase tracking-wider">Zum Verkauf</span>
-            <input type="checkbox" role="switch" checked={forSale} disabled={markingSale || saving || removing}
-              onChange={toggleForSale} className="accent-accent w-4 h-4" />
-          </label>
-
           <div>
             <label className="block text-xs font-bold text-muted mb-1 uppercase tracking-wider">Notiz</label>
             <textarea
@@ -295,40 +281,27 @@ export default function CopySheet({ copy, onClose, onSaved }) {
           {error && <p className="text-sm text-bad">{error}</p>}
         </div>
 
-        <div className="p-6 border-t border-line bg-surface-2 flex items-center justify-between">
-          <div className="flex gap-2">
-            <button type="button" onClick={removeExemplar} disabled={removing || saving || markingSale}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-bad hover:bg-bad/10 rounded-lg transition-colors disabled:opacity-50">
-              <Trash2 className="w-3.5 h-3.5" /> {removing ? 'Wird entfernt…' : 'Entfernen'}
-            </button>
+        <div className="p-6 border-t border-line bg-surface-2 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={removeExemplar} disabled={removing || saving}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-muted hover:text-bad hover:bg-bad/10 rounded-lg transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <Trash2 className="w-3.5 h-3.5" /> {removing ? 'Wird entfernt…' : 'Entfernen'}
+          </button>
+          <div className="ml-auto flex flex-wrap gap-2">
             {copy?.copy_id && (
-              <button type="button" onClick={() => setSellingOpen(true)} disabled={saving || removing || markingSale}
-                className="px-3 py-2 text-sm text-muted hover:text-text rounded-lg transition-colors disabled:opacity-50">
-                Verkauft…
+              <button type="button" onClick={() => setMode('sell')} disabled={saving || removing}
+                className="px-3 py-2 text-sm text-text border border-line hover:border-accent/50 rounded-lg transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                Verkaufen
               </button>
             )}
-            {copy?.copy_id && (
-              <button type="button" onClick={() => setListingOpen(true)} disabled={saving || removing || markingSale}
-                className="px-3 py-2 text-sm text-muted hover:text-text rounded-lg transition-colors disabled:opacity-50">
-                Anbieten…
-              </button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-muted hover:text-text transition-colors">Abbrechen</button>
-            <button type="button" onClick={save} disabled={saving || removing || markingSale}
-              className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="button" onClick={save} disabled={saving || removing}
+              className="px-4 py-2 rounded-lg bg-accent hover:brightness-110 text-accent-fg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-2">
               {saving ? 'Wird gespeichert…' : 'Speichern'}
             </button>
           </div>
         </div>
+        </>
+        )}
       </div>
-      {sellingOpen && (
-        <SaleDialog copyIds={[copy.copy_id]} initialGrossCents={saleInitialCents} onClose={() => setSellingOpen(false)} onBooked={() => { setSellingOpen(false); onSaved?.(); onClose?.(); }} />
-      )}
-      {listingOpen && (
-        <ListingDialog copyIds={[copy.copy_id]} onClose={() => setListingOpen(false)} onSaved={() => { setListingOpen(false); setForSale(true); onSaved?.(); }} />
-      )}
     </div>
   );
 }

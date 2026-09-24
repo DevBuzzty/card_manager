@@ -40,7 +40,7 @@ test('nothingToApply: nur wenn keine rote Zeile offen ist UND keine Zeile import
 // M6 -- Edition als Anzeigename (EDITION_LABELS aus valuation.js, wie CopyChip.jsx); Zustand bleibt der Code, wie im
 // Rest der App (CopyChip/CopySheet/BinderView zeigen MT/NM/… ebenfalls unübersetzt).
 test('Zeilentext: Edition als Anzeigename, Zustand als Code, unbekannte Edition unverändert', () => {
-  assert.equal(rowLabel(ROWS[0]), 'Dunkler Magier · LOB-DE005 · Ultra Rare · DE · 2× · 1st Ed/NM · Binder Blau · S1 · F3');
-  assert.equal(rowLabel(ROWS[1]), '46986414 · LOB-DE005 · Ultra Rare · DE · 1× · Unbek./EX · Box');
+  assert.equal(rowLabel(ROWS[0]), 'Dunkler Magier · LOB-DE005 · Ultra Rare · DE · 2× · 1. Auflage/NM · Binder Blau · S1 · F3');
+  assert.equal(rowLabel(ROWS[1]), '46986414 · LOB-DE005 · Ultra Rare · DE · 1× · Auflage unbekannt/EX · Box');
   assert.equal(rowLabel(ROWS[2]), 'X · LOB-DE005 · Ultra Rare · DE · x/y');
 });

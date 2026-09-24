@@ -92,7 +92,7 @@ export default function SealedAddDialog({ onClose, onAdded }) {
                         selected?.cm_product_id === p.cm_product_id ? 'bg-accent/15' : 'hover:bg-surface/5')}>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm text-text truncate">{p.name}</span>
-                  <span className="block text-[11px] text-muted">{p.kindLabel}</span>
+                  <span className="block text-klein text-muted">{p.kindLabel}</span>
                 </span>
                 <span className="font-mono text-sm text-muted">{p.trend == null ? '—' : fmtEUR(p.trend)}</span>
               </button>

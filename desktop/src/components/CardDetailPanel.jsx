@@ -1,4 +1,4 @@
-import { ChevronUp, ChevronDown, X, Minus, Plus, Trash2, Tag } from 'lucide-react';
+import { ChevronUp, ChevronDown, X, Minus, Plus, Trash2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import CustomSelect from './CustomSelect';
@@ -11,7 +11,7 @@ import { parseTags } from '../utils/tags';
 import { fmtEUR } from '../utils/format';
 import { printingFromParams, cardRoute, ROUTES } from '../utils/routes';
 import { T } from '../utils/i18n-de';
-import { formatCopyLocation } from '../utils/copyLocation';
+import { copyRow, MARK_LABELS } from '../utils/copyRow';
 import { formatPasscode } from '../utils/passcode';
 import { euroCentsText, toCents } from '../utils/saleMath';
 import { createLatestOnly } from '../utils/busyGate';
@@ -67,8 +67,17 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   useEffect(() => { loadCard(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [params.id]);
   // Verkauf/Storno/Abgleich an anderer Stelle: „Verkauft" frisch halten.
   // Spec H3a §6: dazu Angebote (Abgleich, 'listings-dirty') fuer "angeboten auf …".
+  // Spec I §5.2 Punkt 3/4: auch die Exemplare selbst -- ein Storno ueber die Rueckgaengig-Leiste (oder ein
+  // Verkauf aus einem anderen Fenster) aendert sie, ohne dass dieses Panel davon weiss. Verschmolzen, weil
+  // ein eigener Schreibvorgang mehrere Ereignisse ausloest; loadCard feuert selbst keins (keine Schleife).
+  const reloadTimer = useRef(null);
+  useEffect(() => () => clearTimeout(reloadTimer.current), []);
   useEffect(() => {
-    const onChange = () => { loadSold(printing.id); loadOffers(); };
+    const onChange = () => {
+      loadSold(printing.id); loadOffers();
+      clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => { loadCard(); }, 150);
+    };
     const off = window.api?.onSalesChanged?.(onChange);
     const offListings = window.api?.onListingsChanged?.(onChange);
     window.addEventListener('collection-dirty', onChange);
@@ -78,7 +87,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
       window.removeEventListener('collection-dirty', onChange);
       window.removeEventListener('listings-dirty', onChange);
     };
-  }, [printing.id]);
+  }, [printing.id]); // eslint-disable-line react-hooks/exhaustive-deps -- loadCard liest nur printing/params, wie der Effekt oben
 
   // Going back is right when we opened over a page; when /karte/… is the first history entry
   // there is nothing behind it, so fall back to the collection instead of doing nothing.
@@ -288,10 +297,10 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                       <div className="flex items-start justify-between">
                           <div className="flex flex-col">
                               <div className="flex items-center gap-2">
-                                  <span className="font-mono text-sm text-warn font-bold">{variant.set_code}</span>
+                                  <span className="font-mono text-sm text-muted font-bold">{variant.set_code}</span>
                                   <span className="text-xs text-muted border border-line px-1 rounded">{variant.rarity}</span>
                               </div>
-                              <span className="text-xs text-accent">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
+                              <span className="text-xs text-text">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
                           </div>
                           <div className="flex flex-col items-end gap-2">
                               <input type="number" step="0.01" min="0" defaultValue={variant.price ?? 0}
@@ -304,7 +313,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                 className="w-16 bg-bg/40 border border-line rounded px-1 py-0.5 text-xs text-text"
                                 title="Preis manuell setzen (überschreibt Auto-Preis)" />
                               {variant.cm_updated_at && !variant.cm_url && (
-                                <span className="text-[9px] text-warn" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
+                                <span className="text-klein text-warn" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
                               )}
                               <button onClick={() => { if (confirm(`${variant.set_code} (${variant.rarity}) mit allen Exemplaren löschen?`)) handleDeleteVariant(variant); }}
                                   className="p-1.5 bg-bad/10 hover:bg-bad/20 text-text rounded transition-colors" title="Printing löschen">
@@ -341,23 +350,30 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                               </div>
                               {/* Spec B1 §7.3: je Exemplar der Gruppe eine Zeile mit Standort- und Tag-Chips; ein Klick oeffnet das Exemplar-Sheet. */}
                               <div className="mt-1 space-y-1">
-                                  {groupRows.map(c => (
+                                  {groupRows.map(c => {
+                                      // Spec I §4.1: Zustand · Auflage · Standort, rechts hoechstens zwei Marken.
+                                      const offerList = offers[c.copy_id] || [];
+                                      const row = copyRow(c, containers.find(ct => ct.container_id === c.container_id), offerList);
+                                      return (
                                       <button key={c.copy_id} type="button" onClick={() => setSheetCopy(c)}
-                                          className="w-full flex items-center gap-2 px-2 py-1 rounded-lg bg-bg/20 hover:bg-bg/40 border border-line text-left transition-colors">
-                                          {/* Spec H1 §5.3: Preisschild an markierten Exemplaren */}
-                                          {!!c.for_sale && <Tag className="w-3 h-3 text-warn shrink-0" aria-label="Zum Verkauf" />}
-                                          <span className="text-[11px] text-muted font-mono truncate">
-                                              {/* Ohne Standort stand hier nur „—“ -- in der Kartenansicht liest sich das wie eine leere Zeile. */}
-                                              {c.container_id ? formatCopyLocation(c, containers.find(ct => ct.container_id === c.container_id)) : 'ohne Standort'}
+                                          className="w-full flex flex-wrap items-center gap-x-2 gap-y-1 px-2 py-1 rounded-lg bg-bg/20 hover:bg-bg/40 border border-line text-left transition-colors">
+                                          <span className="text-xs text-text truncate">
+                                              {row.lead} · <span className={row.unsorted ? 'text-muted' : 'text-text'}>{row.location}</span>
                                           </span>
-                                          {offeredText(offers[c.copy_id] || []) && <span className="text-[10px] text-warn font-mono truncate">{offeredText(offers[c.copy_id] || [])}</span>}
-                                          <div className="ml-auto flex gap-1 flex-wrap justify-end">
-                                              {parseTags(c.tags).map(t => (
-                                                  <span key={t} className="px-1.5 py-0.5 rounded-full bg-accent/15 text-text text-[10px] border border-accent/30">{t}</span>
+                                          <span className="ml-auto flex items-center gap-1 flex-wrap justify-end">
+                                              {row.marks.map(m => (
+                                                  <span key={m} title={m === 'angeboten' ? offeredText(offerList) : undefined}
+                                                      className={`px-1.5 py-0.5 rounded-full text-klein text-text border ${m === 'angeboten' ? 'bg-good/15 border-good/40' : 'bg-warn/15 border-warn/40'}`}>
+                                                      {MARK_LABELS[m]}
+                                                  </span>
                                               ))}
-                                          </div>
+                                              {parseTags(c.tags).map(t => (
+                                                  <span key={t} className="px-1.5 py-0.5 rounded-full bg-accent/15 text-text text-klein border border-accent/30">{t}</span>
+                                              ))}
+                                          </span>
                                       </button>
-                                  ))}
+                                      );
+                                  })}
                               </div>
                               </div>
                               );
@@ -417,7 +433,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           {card.level != null && (
               <div className="bg-bg/50 p-3 rounded-lg border border-line">
                   <span className="text-xs text-muted uppercase tracking-wider block mb-1">{levelLabel}</span>
-                  <span className="text-xl font-bold text-warn">{isLink ? `LINK-${card.level}` : `★ ${card.level}`}</span>
+                  <span className="text-xl font-bold text-text">{isLink ? `LINK-${card.level}` : `★ ${card.level}`}</span>
               </div>
           )}
 
@@ -425,7 +441,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           {card.atk != null && (
               <div className="bg-bg/50 p-3 rounded-lg border border-line">
                   <span className="text-xs text-muted uppercase tracking-wider block mb-1">ATK</span>
-                  <span className="text-xl font-bold text-bad">{card.atk}</span>
+                  <span className="text-xl font-bold text-text">{card.atk}</span>
               </div>
           )}
 
@@ -433,7 +449,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
            {!isLink && card.def != null && (
               <div className="bg-bg/50 p-3 rounded-lg border border-line">
                   <span className="text-xs text-muted uppercase tracking-wider block mb-1">DEF</span>
-                  <span className="text-xl font-bold text-accent">{card.def}</span>
+                  <span className="text-xl font-bold text-text">{card.def}</span>
               </div>
           )}
 
@@ -450,7 +466,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           <h3 className="text-lg font-semibold text-text mb-2">Verkauft</h3>
           <div className="space-y-1">
             {sold.map((s) => (
-              <div key={`${s.sale_id}|${s.copy_id}`} className={`flex items-center gap-2 text-[11px] font-mono ${s.status === 'storniert' ? 'line-through text-muted' : 'text-muted'}`}>
+              <div key={`${s.sale_id}|${s.copy_id}`} className={`flex items-center gap-2 text-klein font-mono ${s.status === 'storniert' ? 'line-through text-muted' : 'text-muted'}`}>
                 <span>{s.sold_on.split('-').reverse().join('.')}</span><span>{s.channel_name}</span>
                 <span>{s.set_code} · {s.rarity} · {s.condition}</span>
                 <span className="ml-auto text-text">{euroCentsText(toCents(s.share))}</span>
@@ -470,7 +486,12 @@ export default function CardDetailPanel({ paletteOpen = false }) {
 
     {sheetCopy && (
         <CopySheet
+            key={sheetCopy.copy_id}
             copy={sheetCopy}
+            cardName={card.name}
+            // Spec I §5.2 Punkt 5: "Naechstes Exemplar" -- weitere vorgemerkte Exemplare derselben Karte.
+            siblings={Object.values(copiesByKey).flat().filter(c => c.for_sale && c.copy_id !== sheetCopy.copy_id)}
+            onOpenCopy={(c) => setSheetCopy(c)}
             onClose={() => setSheetCopy(null)}
             onSaved={() => { refreshVariant({ set_code: sheetCopy.set_code, rarity: sheetCopy.rarity, language: sheetCopy.language }); loadSold(printing.id); loadOffers(); }}
         />

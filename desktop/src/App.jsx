@@ -15,6 +15,7 @@ import Settings from './components/Settings';
 import Start from './components/Start';
 import Deals from './components/Deals';
 import ErrorBoundary from './components/ErrorBoundary';
+import { ToastProvider } from './components/Toast';
 import CardDetailPanel from './components/CardDetailPanel';
 import { applyScan } from './utils/scanAggregate.js';
 import { ROUTES } from './utils/routes';
@@ -97,6 +98,7 @@ function App() {
   }, [navigate]);
 
   return (
+    <ToastProvider>
     <div className="flex h-screen bg-bg text-text overflow-hidden font-sans">
       <Sidebar />
       <main className="flex-1 overflow-auto bg-bg p-6 flex flex-col">
@@ -160,6 +162,7 @@ function App() {
         {paletteOpen && <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />}
       </Suspense>
     </div>
+    </ToastProvider>
   );
 }
 

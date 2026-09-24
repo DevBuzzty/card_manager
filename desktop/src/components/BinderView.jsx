@@ -272,9 +272,9 @@ export default function BinderView({ panelOpen = false }) {
             >
               {imageOf(first)
                 ? <img src={imageOf(first)} alt={nameOf(first) || first.card_id} className="w-full h-full object-cover" />
-                : <span className="absolute inset-0 flex items-center justify-center p-1 text-[10px] text-center text-muted">{nameOf(first) || first.card_id}</span>}
+                : <span className="absolute inset-0 flex items-center justify-center p-1 text-klein text-center text-muted">{nameOf(first) || first.card_id}</span>}
               {inSlot.length > 1 && (
-                <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full bg-bg/90 text-[10px] font-mono text-text">
+                <span className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full bg-bg/90 text-klein font-mono text-text">
                   ×{inSlot.length}
                 </span>
               )}
@@ -429,7 +429,7 @@ export default function BinderView({ panelOpen = false }) {
           {menuCopies.map(cp => (
             <div key={cp.copy_id} className="pt-1 border-t border-line first:border-t-0">
               <p className="px-1 text-sm text-text truncate">{nameOf(cp) || cp.card_id}</p>
-              <p className="px-1 text-[11px] font-mono text-muted truncate">
+              <p className="px-1 text-klein font-mono text-muted truncate">
                 {cp.set_code} · {cp.rarity} · {EDITION_LABELS[cp.edition] || cp.edition} · {cp.condition}
               </p>
               <div className="flex flex-col mt-1">

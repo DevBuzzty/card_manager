@@ -23,13 +23,13 @@ export default function MoversList({ movers, full = false }) {
               : <div className="w-7 h-10 rounded border border-line bg-bg shrink-0" />}
             <div className="min-w-0 flex-1">
               <div className="text-sm text-text truncate">{m.name || m.id}</div>
-              <div className="text-[11px] text-muted font-mono truncate">
+              <div className="text-klein text-muted font-mono truncate">
                 {setCodeLabel} · {rarityLabel}{full ? ` · ${fmtEUR(m.oldPrice)} → ${fmtEUR(m.newPrice)} · ${m.copies}×` : ''}
               </div>
             </div>
             <div className="text-right shrink-0">
               <div className={`font-mono text-sm ${up ? 'text-good' : 'text-bad'}`}>{fmtSignedEUR(m.deltaHolding)}</div>
-              <div className={`font-mono text-[11px] ${up ? 'text-good' : 'text-bad'}`}>{up ? '+' : ''}{m.pct.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %</div>
+              <div className={`font-mono text-klein ${up ? 'text-good' : 'text-bad'}`}>{up ? '+' : ''}{m.pct.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %</div>
             </div>
           </button>
         );

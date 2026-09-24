@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { fmtEUR } from '../utils/format';
 import { BarChart3, Library, Layers, DollarSign, Package, Sparkles } from 'lucide-react';
 
 // Lightweight horizontal-bar distribution (no chart library, keeps the bundle lean).
@@ -10,7 +11,7 @@ function BarStat({ title, icon: Icon, data, accent = 'bg-text/20', valueFormatte
                 {Icon && <Icon className="w-4 h-4 mr-2" />} {title}
             </h3>
             {data.length === 0 ? (
-                <p className="text-muted text-sm">No data.</p>
+                <p className="text-muted text-sm">Keine Daten.</p>
             ) : (
                 <div className="space-y-2.5">
                     {data.map(d => (
@@ -36,7 +37,7 @@ const Tile = ({ icon: Icon, label, value, color = 'bg-surface-2' }) => (
         <div className="flex items-center gap-3 relative z-10">
             <div className={`p-2.5 rounded-xl bg-opacity-20 ${color} text-text`}><Icon className="w-5 h-5" /></div>
             <div>
-                <p className="text-muted text-[10px] font-bold uppercase tracking-wider">{label}</p>
+                <p className="text-muted text-klein font-bold uppercase tracking-wider">{label}</p>
                 <h3 className="text-xl font-bold text-text">{value}</h3>
             </div>
         </div>
@@ -114,44 +115,44 @@ export default function Statistics() {
         };
     }, [cards]);
 
-    const money = v => `€${(v || 0).toFixed(2)}`;
+    const money = v => fmtEUR(v);
 
     return (
         <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-3xl font-bold text-text flex items-center gap-3">
-                <BarChart3 className="w-7 h-7 text-muted" /> Collection Statistics
+                <BarChart3 className="w-7 h-7 text-muted" /> Sammlungsstatistik
             </h1>
 
             {cards.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-64 text-muted border-2 border-dashed border-line rounded-xl bg-bg/50">
-                    <p className="text-lg font-medium">No cards yet</p>
-                    <p className="text-sm mt-2 opacity-60">Statistics will appear once your collection has cards.</p>
+                    <p className="text-lg font-medium">Noch keine Karten</p>
+                    <p className="text-sm mt-2 opacity-60">Die Statistik erscheint, sobald die Sammlung Karten enthält.</p>
                 </div>
             ) : (
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        <Tile icon={Library} label="Total Cards" value={s.totalCards} />
-                        <Tile icon={Layers} label="Unique" value={s.uniqueCards} />
-                        <Tile icon={DollarSign} label="Total Value" value={money(s.totalValue)} />
-                        <Tile icon={DollarSign} label="Avg / Card" value={money(s.avgValue)} />
+                        <Tile icon={Library} label="Karten gesamt" value={s.totalCards} />
+                        <Tile icon={Layers} label="Einzigartig" value={s.uniqueCards} />
+                        <Tile icon={DollarSign} label="Gesamtwert" value={money(s.totalValue)} />
+                        <Tile icon={DollarSign} label="Ø je Karte" value={money(s.avgValue)} />
                         <Tile icon={Package} label="Sets" value={s.distinctSets} />
-                        <Tile icon={Sparkles} label="Rarities" value={s.distinctRarities} />
+                        <Tile icon={Sparkles} label="Seltenheiten" value={s.distinctRarities} />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <BarStat title="Card Types" data={s.byType} />
-                        <BarStat title="Attributes" data={s.byAttr} />
-                        <BarStat title="Rarities" data={s.byRarity} />
-                        <BarStat title="Monster Types (Top 10)" data={s.byRace} />
-                        <BarStat title="Levels / Ranks" data={s.byLevel} />
-                        <BarStat title="Languages" data={s.byLang} />
+                        <BarStat title="Kartenarten" data={s.byType} />
+                        <BarStat title="Attribute" data={s.byAttr} />
+                        <BarStat title="Seltenheiten" data={s.byRarity} />
+                        <BarStat title="Monstertypen (Top 10)" data={s.byRace} />
+                        <BarStat title="Stufen / Ränge" data={s.byLevel} />
+                        <BarStat title="Sprachen" data={s.byLang} />
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <BarStat title="Top Sets (by cards owned)" data={s.bySet} />
+                        <BarStat title="Top-Sets (nach Kartenzahl)" data={s.bySet} />
                         <div className="bg-surface rounded-2xl border border-line p-6">
                             <h3 className="text-sm font-bold text-muted uppercase tracking-wider mb-4 flex items-center">
-                                <DollarSign className="w-4 h-4 mr-2" /> Most Valuable Cards
+                                <DollarSign className="w-4 h-4 mr-2" /> Wertvollste Karten
                             </h3>
                             <div className="space-y-2">
                                 {s.topValued.map(c => (

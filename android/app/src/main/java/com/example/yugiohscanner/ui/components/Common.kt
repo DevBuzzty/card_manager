@@ -6,20 +6,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
-import com.example.yugiohscanner.ui.theme.ChakraPetch
 import com.example.yugiohscanner.ui.theme.MonoFontFamily
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 
-// Section label: Chakra Petch, muted, letter-spaced.
+// Section label: Abschnittsgroesse, leise, gesperrt (Spec I §6.3: Systemschrift).
 @Composable
 fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.titleSmall.copy(
-            fontFamily = ChakraPetch,
-            letterSpacing = 1.5.sp,
-        ),
+        style = MaterialTheme.typography.titleSmall.copy(letterSpacing = 1.5.sp),
         color = Muted,
         modifier = modifier,
     )

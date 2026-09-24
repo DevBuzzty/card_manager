@@ -138,7 +138,8 @@ fun DealsScreen() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = query, onValueChange = { query = it },
-                    placeholder = { Text("Suchbegriff, z.B. Battles of Legend …") },
+                    // I2 Feinschliff: kurzer, einzeiliger Platzhalter -- der lange Beispieltext brach auf drei Zeilen um.
+                    placeholder = { Text("Suchbegriff", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
                     singleLine = true, modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(8.dp))

@@ -29,10 +29,10 @@ export default function PriceAlertsPanel() {
           </button>
         )}
       </div>
-      {failed && <div className="text-[11px] text-bad mb-2">Erledigen fehlgeschlagen.</div>}
+      {failed && <div className="text-klein text-bad mb-2">Erledigen fehlgeschlagen.</div>}
       {!events && loading && <MoversSkeleton rows={4} />}
       {!events && !loading && error && <div className="text-sm text-bad">{error}</div>}
-      {events && error && <div className="text-[11px] text-muted mb-2">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
+      {events && error && <div className="text-klein text-muted mb-2">Stand von zuvor — Aktualisieren fehlgeschlagen.</div>}
       {events && events.length === 0 && <div className="text-sm text-muted">Keine offenen Preis-Alarme</div>}
       {events && events.length > 0 && <PriceAlertsList events={events} />}
     </div>

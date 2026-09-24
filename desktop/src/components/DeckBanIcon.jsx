@@ -14,6 +14,6 @@ const BAN_CLASSES = {
 export default function DeckBanIcon({ ban }) {
   if (!ban) return null;
   return (
-    <span className={`px-1.5 rounded text-[10px] font-bold leading-4 flex-shrink-0 ${BAN_CLASSES[ban]}`}>{BAN_LABELS[ban]}</span>
+    <span className={`px-1.5 rounded text-klein font-bold leading-4 flex-shrink-0 ${BAN_CLASSES[ban]}`}>{BAN_LABELS[ban]}</span>
   );
 }

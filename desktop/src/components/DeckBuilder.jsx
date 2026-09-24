@@ -149,7 +149,7 @@ export default function DeckBuilder() {
   };
 
   const handleDeleteDeck = async (id) => {
-      if (!confirm("Delete this deck?")) return;
+      if (!confirm("Dieses Deck löschen?")) return;
       if (window.api) {
           await window.api.deleteDeck(id);
           setDecks(decks.filter(d => d.id !== id));
@@ -323,7 +323,7 @@ export default function DeckBuilder() {
         <div className="w-1/3 flex flex-col gap-4">
             <div className="bg-surface p-4 rounded-xl border border-line flex flex-col h-1/3">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-text">My Decks</h3>
+                    <h3 className="font-bold text-text">Meine Decks</h3>
                     <DeckNewMenu onEmpty={() => setIsCreating(true)} onYdkFile={handleImportYdk} onPaste={() => setImportSource({})} />
                 </div>
 
@@ -332,7 +332,7 @@ export default function DeckBuilder() {
                         <input
                             autoFocus
                             type="text"
-                            placeholder="Deck Name..."
+                            placeholder="Deckname…"
                             className="w-full bg-bg border border-line text-text px-3 py-2 rounded text-sm mb-2 focus:border-accent focus:outline-none"
                             value={newDeckName}
                             onChange={e => setNewDeckName(e.target.value)}
@@ -343,14 +343,14 @@ export default function DeckBuilder() {
                                 onClick={() => setIsCreating(false)}
                                 className="text-xs text-muted hover:text-text px-2 py-1"
                             >
-                                Cancel
+                                Abbrechen
                             </button>
                             <button
                                 type="submit"
                                 disabled={!newDeckName.trim()}
                                 className="text-xs bg-surface-2 hover:bg-bg border border-line text-text px-3 py-1 rounded disabled:opacity-50"
                             >
-                                Create
+                                Anlegen
                             </button>
                         </div>
                     </form>
@@ -368,7 +368,7 @@ export default function DeckBuilder() {
                                     <span className="truncate">{deck.name}</span>
                                     <DeckLegalityBadge showFormat format={deck.format} result={listLegality ? listLegality.get(deck.id) : null} />
                                 </span>
-                                <span className="block truncate text-[11px] font-mono text-muted">
+                                <span className="block truncate text-klein font-mono text-muted">
                                     {listCoverage ? `${boxLabel(deck, coverageData.containers)} · ${listText(listCoverage.get(deck.id))}` : LOADING}
                                 </span>
                             </div>
@@ -396,7 +396,7 @@ export default function DeckBuilder() {
                 <div className="mb-4">
                     <input
                         type="text"
-                        placeholder="Search Collection..."
+                        placeholder="Sammlung durchsuchen…"
                         className="w-full bg-bg border border-line text-text px-3 py-2 rounded-lg text-sm focus:outline-none focus:border-accent"
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
@@ -407,7 +407,7 @@ export default function DeckBuilder() {
                         <div key={card.id} onClick={() => addToDeck(card)} className="cursor-pointer group relative aspect-[2/3]">
                             <img src={card.image_url} alt={card.name} className="w-full h-full object-cover rounded border border-line group-hover:border-accent transition-colors" />
                             {/* Quantity badge */}
-                            <div className="absolute bottom-0 right-0 bg-bg/80 text-text text-[10px] px-1 font-mono">x{card.quantity}</div>
+                            <div className="absolute bottom-0 right-0 bg-bg/80 text-text text-klein px-1 font-mono">x{card.quantity}</div>
                         </div>
                     ))}
                 </div>
@@ -428,7 +428,7 @@ export default function DeckBuilder() {
                             <DeckExportMenu deckName={activeDeck.name} entries={exportEntries} />
                             <button onClick={handleSaveDeck} disabled={saving} className="flex items-center px-4 py-2 bg-accent hover:brightness-110 text-accent-fg rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
                                 <Save className="w-4 h-4 mr-2" />
-                                Save Deck
+                                Deck speichern
                             </button>
                         </div>
                     </div>
@@ -486,7 +486,7 @@ export default function DeckBuilder() {
             ) : (
                 <div className="h-full flex flex-col items-center justify-center text-muted">
                     <FileUp className="w-16 h-16 mb-4 opacity-50" />
-                    <p className="text-lg">Select or Create a Deck</p>
+                    <p className="text-lg">Deck wählen oder anlegen</p>
                 </div>
             )}
         </div>

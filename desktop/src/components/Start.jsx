@@ -102,7 +102,7 @@ export default function Start({ onOpenPalette }) {
       <span className="text-muted">{label}</span>
       {d ? (
         <span className={d.abs >= 0 ? 'text-good' : 'text-bad'}>
-          {fmtSignedEUR(d.abs)} ({d.pct >= 0 ? '+' : ''}{d.pct.toFixed(1)}%)
+          {fmtSignedEUR(d.abs)} ({d.pct >= 0 ? '+' : ''}{d.pct.toFixed(1).replace('.', ',')} %)
         </span>
       ) : (
         <span className="text-muted">—</span>
@@ -124,7 +124,7 @@ export default function Start({ onOpenPalette }) {
           >
             <Search className="w-4 h-4" strokeWidth={1.8} />
             Karte, Set oder Aktion suchen…
-            <span className="ml-auto font-mono text-[10px] text-muted border border-line rounded px-1.5 py-0.5">Strg K</span>
+            <span className="ml-auto font-mono text-klein text-muted border border-line rounded px-1.5 py-0.5">Strg K</span>
           </button>
           <form onSubmit={handleQuickAdd} className="flex bg-surface border border-line rounded-xl overflow-hidden focus-within:border-accent transition-colors">
             <input
@@ -143,7 +143,7 @@ export default function Start({ onOpenPalette }) {
       <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-5">
         {/* Value panel */}
         <div className="relative overflow-hidden bg-surface border border-line rounded-2xl p-6">
-          <div className="font-display text-[11px] tracking-[0.14em] uppercase text-muted">Sammlungswert</div>
+          <div className="font-display text-klein tracking-[0.14em] uppercase text-muted">Sammlungswert</div>
           <div className="font-display font-bold text-4xl text-text mt-2">
             {statsLoaded ? money(stats.totalValue) : <span className="inline-block h-9 w-40 rounded-lg bg-bg animate-pulse align-middle" />}
           </div>
@@ -171,7 +171,7 @@ export default function Start({ onOpenPalette }) {
           <div className="flex gap-3 mt-4">
             {[{ l: 'Karten', v: stats.totalCards || 0 }, { l: 'Einzigartig', v: stats.uniqueCards || 0 }, { l: 'Sets', v: new Set(cards.filter(c => c.set_code && c.set_code !== 'Unknown').map(c => c.set_code.split('-')[0])).size }].map(m => (
               <div key={m.l} className="flex-1 bg-bg border border-line rounded-xl px-3.5 py-2.5">
-                <div className="font-display text-[10px] uppercase tracking-wide text-muted">{m.l}</div>
+                <div className="font-display text-klein uppercase tracking-wide text-muted">{m.l}</div>
                 <div className="font-display font-bold text-xl text-text mt-0.5">{m.v}</div>
               </div>
             ))}
@@ -180,7 +180,7 @@ export default function Start({ onOpenPalette }) {
 
         {/* Scan + attention */}
         <div className="bg-surface border border-line rounded-2xl p-6 flex flex-col gap-4">
-          <div className="font-display text-[11px] tracking-[0.14em] uppercase text-muted">Scan-Status</div>
+          <div className="font-display text-klein tracking-[0.14em] uppercase text-muted">Scan-Status</div>
           <div className="flex items-center gap-3 bg-bg border border-line rounded-xl px-4 py-3">
             <div className="w-9 h-9 rounded-lg grid place-items-center bg-good/10 border border-good/30"><ScanLine className="w-5 h-5 text-good" strokeWidth={1.8} /></div>
             <div><div className="text-sm font-bold text-text">Bereit zum Scannen</div><div className="text-xs text-muted">Handy-Kamera auf eine Karte richten</div></div>
@@ -188,15 +188,15 @@ export default function Start({ onOpenPalette }) {
           <div className="flex flex-wrap gap-3">
             <button onClick={() => navigate(ROUTES.scannen)} className="flex-1 text-left rounded-xl p-3 border border-accent/30 bg-accent/5 hover:bg-accent/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-accent"><TriangleAlert className="w-4 h-4" />{unknownCount}</div>
-              <div className="text-[11px] text-muted mt-0.5">Unbekanntes Set</div>
+              <div className="text-klein text-muted mt-0.5">Unbekanntes Set</div>
             </button>
             <button onClick={() => navigate(ROUTES.karten, { state: { preset: 'unvollstaendig' } })} className="flex-1 text-left rounded-xl p-3 border border-warn/30 bg-warn/5 hover:bg-warn/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-warn"><FileWarning className="w-4 h-4" />{incompleteCount}</div>
-              <div className="text-[11px] text-muted mt-0.5">Fehlende Daten</div>
+              <div className="text-klein text-muted mt-0.5">Fehlende Daten</div>
             </button>
             <button onClick={() => navigate(ROUTES.binder)} className="flex-1 text-left rounded-xl p-3 border border-warn/30 bg-warn/5 hover:bg-warn/10 transition-colors">
               <div className="flex items-center gap-1.5 font-display font-bold text-2xl text-warn"><PackageOpen className="w-4 h-4" />{unsortedError ? '—' : unsortedCount}</div>
-              <div className="text-[11px] text-muted mt-0.5">Nicht einsortiert{unsortedError ? ' (Ladefehler)' : ''}</div>
+              <div className="text-klein text-muted mt-0.5">Nicht einsortiert{unsortedError ? ' (Ladefehler)' : ''}</div>
             </button>
           </div>
           <div className="flex flex-wrap gap-3">
