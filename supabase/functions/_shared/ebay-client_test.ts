@@ -4,6 +4,7 @@ import {
   APP_SCOPE, appToken, CALL_TIMEOUT_MS, categoryAspects, consentUrl, credsFor, EbayError, ebayApi, ensureAccess, exchangeCode,
   type Fetch, refreshAccess,
 } from "./ebay-client.ts";
+import { fakeEbay } from "./fake-ebay.ts";
 import { fakeFetch } from "./fake-fetch.ts";
 
 const C = { clientId: "app-id", clientSecret: "geheim", ruName: "Ru-Name-1" };
@@ -173,4 +174,40 @@ Deno.test("Taxonomy: Baum-ID holen, dann Merkmale der Kategorie", async () => {
   });
   assertEquals(await categoryAspects(f.fetchFn, "sandbox", "APP", "183454"), [{ localizedAspectName: "Spiel" }]);
   assertEquals(f.calls.map((c) => c.headers["authorization"]), ["Bearer APP", "Bearer APP"]);
+});
+
+// H3b2 Task 4 -- Bestellungen (Fulfillment) und Finanzdaten (Finances) gegen das nachgebaute eBay.
+
+const order = (id: string, modified: string) => ({ orderId: id, creationDate: modified, lastModifiedDate: modified, lineItems: [] });
+
+Deno.test("Bestellungen: Filter lastmodifieddate in der Adresse, Blättern über zwei Seiten", async () => {
+  const orders = Array.from({ length: 205 }, (_, i) => order(`O${String(i).padStart(3, "0")}`, "2026-09-24T10:00:00.000Z"));
+  orders.push(order("ALT", "2026-09-01T00:00:00.000Z"));
+  const e = fakeEbay({ orders });
+  const got = await ebayApi(e.fetchFn, "production", "AT").getOrders("2026-09-24T09:50:00.000Z");
+  assertEquals(got.length, 205);
+  assertEquals(got.some((o) => o.orderId === "ALT"), false);
+  const urls = e.calls.map((c) => c.url);
+  assertEquals(urls.length, 2);
+  assertEquals(urls[0], "https://api.ebay.com/sell/fulfillment/v1/order?filter=lastmodifieddate%3A%5B2026-09-24T09%3A50%3A00.000Z..%5D&limit=200&offset=0");
+  assertEquals(urls[1].endsWith("&limit=200&offset=200"), true);
+});
+
+Deno.test("Bestellungen: 503 -> vorübergehend, 401 -> neu verbinden", async () => {
+  const down = await assertRejects(() => ebayApi(fakeEbay({ ordersDown: true }).fetchFn, "sandbox", "AT").getOrders("2026-09-24T00:00:00Z"), EbayError);
+  assertEquals([down.transient, down.auth], [true, false]);
+  const auth = await assertRejects(() => ebayApi(fakeEbay({ ordersAuthError: true }).fetchFn, "sandbox", "AT").getOrders("2026-09-24T00:00:00Z"), EbayError);
+  assertEquals([auth.transient, auth.auth], [false, true]);
+});
+
+Deno.test("Finanzdaten: Host apiz, Marktplatz-Kopf EBAY_DE, Filter orderId + SALE", async () => {
+  const e = fakeEbay({ transactions: { "O-1": [
+    { transactionType: "SALE", totalFeeAmount: { value: "0.81", currency: "EUR" } },
+    { transactionType: "REFUND", totalFeeAmount: { value: "-0.81", currency: "EUR" } },
+  ] } });
+  const t = await ebayApi(e.fetchFn, "sandbox", "AT").saleTransactions("O-1");
+  assertEquals(t.map((x) => x.transactionType), ["SALE"]);
+  const c = e.calls[0];
+  assertEquals(c.url, "https://apiz.sandbox.ebay.com/sell/finances/v1/transaction?filter=orderId%3A%7BO-1%7D&filter=transactionType%3A%7BSALE%7D&limit=50");
+  assertEquals([c.marketplace, c.auth], ["EBAY_DE", "Bearer AT"]);
 });

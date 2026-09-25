@@ -87,6 +87,8 @@ fun VerkaufenScreen(segment: String, onSegment: (String) -> Unit) {
             CollectionStore.awaitSync()
             SideStores.listings.refreshAndWait()
             SideStores.sales.refreshAndWait()
+            SideStores.saleNotices.refreshAndWait()
+            SideStores.ebayOrders.refreshAndWait()
         }, modifier = Modifier.weight(1f)) {
         when (segment) {
             "zum-verkauf" -> ForSaleList(sale, onOpenCard = { detailId = it }, listState = forSaleListState,

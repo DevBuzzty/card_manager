@@ -77,6 +77,8 @@ function App() {
 
   // Spec G2 §6.2: Klick auf die Windows-Benachrichtigung -> Insights, Reiter „Alarme".
   useEffect(() => window.api?.onOpenPriceAlerts?.(() => navigate(ROUTES.insights, { state: { tab: 'alarme' } })), [navigate]);
+  // H3b2: Klick auf eine eBay-Hinweis-Benachrichtigung öffnet die Angebote (Banner mit allen Hinweisen).
+  useEffect(() => window.api?.onOpenSaleNotices?.(() => navigate(ROUTES.angebote)), [navigate]);
 
   // Cmd/Ctrl+K opens the palette; Alt+Arrow walks the history like a browser (Electron's
   // mouse back/forward buttons already drive the same history).

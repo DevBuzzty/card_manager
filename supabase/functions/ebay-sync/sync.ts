@@ -1,6 +1,6 @@
 // supabase/functions/ebay-sync/sync.ts
-// Spec H3b §8 -- ein Durchgang des Abgleichers, H3b1: Schritt 1 (Token), 4 (Angebote abgleichen, höchstens 50),
-// 5 (Stand schreiben). Nur ein Durchgang gleichzeitig (Sperre in ebay_account, Abweichung 2). Einzelne Ablehnungen
+// Spec H3b §8 -- ein Durchgang des Abgleichers: Schritt 1 (Token), 2+3 (H3b2: Bestellungen buchen, Gebühren nachtragen --
+// ebay-sync/orders.ts), 4 (Angebote abgleichen, höchstens 50), 5 (Stand schreiben). Nur ein Durchgang gleichzeitig (Sperre in ebay_account, Abweichung 2). Einzelne Ablehnungen
 // betreffen nur ihr Angebot; eBay nicht erreichbar / Verbindung weg bricht den Durchgang ab (Spec §9).
 import {
   appToken, categoryAspects, credsFor, type EbayApi, ebayApi, EbayError, ensureAccess, type Env, type Fetch, type Offer,
@@ -13,6 +13,8 @@ import {
   decide, type EbayRow, emptySummary, ENDED_ON_EBAY, EXPIRED, offerEnded, SOLD_ON_EBAY, type Summary, summaryText,
 } from "../_shared/ebay-plan.ts";
 import type { Store } from "../_shared/ebay-store.ts";
+import { notices, tokenDue } from "../_shared/ebay-orders.ts";
+import { runFees, runOrders } from "./orders.ts";
 
 export const LOCK_SECONDS = 300;
 export const MAX_PER_RUN = 50;
@@ -92,6 +94,7 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     let lastError: string | null = null;
     let api: EbayApi | null = null;
     let connected = !!acc.refresh_token;
+    let authReason: string | null = null;
     const expired = !!acc.refresh_expires_at && Date.parse(acc.refresh_expires_at) <= now.getTime();
     const creds = connected ? credsFor(env, d.env) : null;
     // Schritt 1: Token erneuern. Abgelehnt (invalid_grant) oder abgelaufen -> trennen, Angebote bleiben „wartet“.
@@ -111,6 +114,9 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
       } catch (e) {
         if (!(e instanceof EbayError && e.auth)) throw e;
         connected = false;
+        // eBays eigene Begründung (error_description, nie ein Token) zur Fehlersuche mitschreiben -- H3b2-Befund
+        // 24.09.2026: die erste Token-Erneuerung in Produktion wurde abgelehnt, ohne dass sichtbar war, warum.
+        authReason = e.message;
       }
     } else connected = false;
     if (!connected && acc.refresh_token) {
@@ -121,7 +127,7 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
       // Fixrunde 2 (Task 5) Minor 2: ebenso hier -- die Zeile passt nicht mehr (z.B. inzwischen neu verbunden);
       // dann nicht fälschlich EXPIRED setzen, sondern sauber abbrechen und den nächsten Lauf entscheiden lassen.
       if (!ok) return { ok: true, busy: false, summary: s, text: summaryText(s) };
-      lastError = EXPIRED;
+      lastError = authReason ? `${EXPIRED} (eBay: ${authReason})` : EXPIRED;
     } else if (!connected) {
       // Fixrunde 1 (Task 5) Important 2: ohne (neue) Verbindung bleibt ein zuvor gesetzter Hinweis stehen, statt
       // am Laufende auf null überschrieben zu werden -- sonst verschwindet EXPIRED nach dem ersten Folgelauf.
@@ -129,6 +135,22 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     }
     const setupOk = connected && !!(acc.payment_policy_id && acc.fulfillment_policy_id && acc.return_policy_id && acc.location_key);
     const policies: Policies = acc;
+    let feesError: string | null = null;
+
+    // H3b2 Schritte 2/3: Bestellungen abholen und buchen, danach Gebühren nachtragen -- vor Schritt 4, damit ein gerade
+    // gebuchter Verkauf (Angebot verkauft/Menge gesenkt, sold_seen erhöht) im selben Lauf auf eBay nachgezogen wird.
+    if (connected && api) {
+      if (tokenDue(acc.refresh_expires_at, now.getTime())) await d.store.addNotices([notices.token(acc.refresh_expires_at!)]);
+      const over = () => d.now().getTime() >= deadline;
+      await runOrders(api, d.store, env, acc, now, over, s);
+      // Schritt 3 ist nie fatal: fehlen Finanzdaten (oder ist der apiz-Host der Sandbox anders), sollen Buchen und
+      // Angebots-Abgleich trotzdem laufen. Nur eine abgelaufene Verbindung bricht ab (wie überall).
+      try { await runFees(api, d.store, env, over, s); }
+      catch (e) {
+        if (e instanceof EbayError && e.auth) throw e;
+        feesError = `Gebühren nicht lesbar: ${(e as Error).message}`;
+      }
+    }
 
     // Schritt 4: Angebote abgleichen.
     const rows = await d.store.openRows(retryId);
@@ -224,7 +246,7 @@ export async function runSync(d: SyncDeps, opts: { retry?: string | null; max?: 
     }
     // Schritt 5: Stand schreiben.
     const text = summaryText(s);
-    await d.store.saveAccount({ last_run_at: nowIso, last_run_summary: text, last_error: lastError });
+    await d.store.saveAccount({ last_run_at: nowIso, last_run_summary: text, last_error: lastError ?? feesError });
     return { ok: true, busy: false, summary: s, text };
   } catch (e) {
     const msg = e instanceof EbayError && e.auth ? EXPIRED : (e as Error).message;

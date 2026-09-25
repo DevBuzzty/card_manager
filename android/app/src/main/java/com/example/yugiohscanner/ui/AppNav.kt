@@ -179,6 +179,8 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                     SideStores.priceAlertEvents.refresh()
                     SideStores.priceAlertTargets.refresh()
                     SideStores.sealedItems.refresh()   // Spec G3 §8
+                    SideStores.saleNotices.refresh()   // Spec H3b2: neue eBay-Hinweise beim Zurückkommen
+                    SideStores.ebayOrders.refresh()
                 },
                 tick = { CollectionStore.requestSync() },
             )

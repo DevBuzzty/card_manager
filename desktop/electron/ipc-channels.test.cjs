@@ -36,10 +36,13 @@ const H3A_CHANNELS = ['listing-preview', 'listing-create', 'listing-update', 'li
 const H3B1_CHANNELS = ['ebay-status', 'ebay-listings', 'ebay-auth', 'ebay-sync-now', 'listing-photos', 'listing-photo-add',
   'listing-photo-delete', 'listing-photo-reorder'];
 
+// Spec H3b2 §7.6: eBay-Hinweise, Wegtippen, Stand der eBay-Bestellungen.
+const H3B2_CHANNELS = ['sale-notices', 'sale-notice-dismiss', 'ebay-orders'];
+
 // Spec I1 Task 6 §3.1: Zaehler der Seitenleiste (Scannen, Verkaufen).
 const I1_CHANNELS = ['nav-counts'];
 
-for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS, ...H2_CHANNELS, ...H3A_CHANNELS, ...H3B1_CHANNELS, ...I1_CHANNELS]) {
+for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS, ...H2_CHANNELS, ...H3A_CHANNELS, ...H3B1_CHANNELS, ...H3B2_CHANNELS, ...I1_CHANNELS]) {
   test(`Kanal ${ch} steht in main.cjs und preload.cjs`, () => {
     assert.ok(MAIN.includes(`ipcMain.handle('${ch}'`), `main.cjs fehlt ipcMain.handle('${ch}'`);
     assert.ok(PRELOAD.includes(`ipcRenderer.invoke('${ch}'`), `preload.cjs fehlt ipcRenderer.invoke('${ch}'`);

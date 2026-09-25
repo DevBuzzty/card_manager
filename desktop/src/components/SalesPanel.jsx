@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import SaleDetail from './SaleDetail';
+import { feesMark } from '../utils/saleNotices';
+import { useEbayOrders } from '../utils/useSaleNotices';
 import { euroCentsText, diffText } from '../utils/saleMath';
 import { createLatestOnly } from '../utils/busyGate';
 import { todayLocal } from '../utils/today';
@@ -25,6 +27,7 @@ export default function SalesPanel() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [openId, setOpenId] = useState(null);
+  const ebayOrders = useEbayOrders();
   const latest = useRef(createLatestOnly());
 
   const load = useCallback(() => {
@@ -124,6 +127,7 @@ export default function SalesPanel() {
                   {cancelled && <span className="inline-block text-xs">storniert</span>}
                   {s.doubleSold && <span className="inline-block text-xs px-2 py-0.5 rounded bg-bad/20 text-text">Karte doppelt verkauft</span>}
                   {s.orphaned && <span className="inline-block text-xs px-2 py-0.5 rounded bg-bad/20 text-text">Position ohne verkauftes Exemplar – bitte prüfen</span>}
+                  {!cancelled && feesMark(ebayOrders, s.sale_id) && <span className="inline-block text-xs px-2 py-0.5 rounded bg-warn/15 text-text">{feesMark(ebayOrders, s.sale_id)}</span>}
                   <span className="ml-auto font-mono">{euroCentsText(s.netCents)}</span>
                   <span className={`font-mono ${cancelled ? '' : s.netCents >= s.marketCents ? 'text-good' : 'text-bad'}`}>{diffText(s.netCents, s.marketCents)}</span>
                 </button>

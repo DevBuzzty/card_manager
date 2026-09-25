@@ -1,9 +1,12 @@
 // supabase/functions/_shared/listing-text.ts
-// Spec H3b §5.2/§10 -- Deno-ZWILLING (Teilmenge) von desktop/electron/listing-text.cjs: groupItems, truncateTitle,
-// listingTitle, listingDescription, pieceCents, dazu euroCentsText aus desktop/electron/sales-math.cjs.
+// Spec H3b §5.2/§7.2/§10 -- Deno-ZWILLING (Teilmenge) von desktop/electron/listing-text.cjs: groupItems, truncateTitle,
+// listingTitle, listingDescription, pieceCents, cardmarketProduct, rowTitle, afterListingSale, cleanupAfterSale
+// (H3b2: Aufraeumen nach einem eBay-Verkauf in der Cloud), dazu euroCentsText aus desktop/electron/sales-math.cjs.
 // Weitere Fassungen: desktop/src/utils/listingText.js, android .../ml/ListingText.kt. Gemeinsame Fixture:
-// docs/fixtures/listings/listings.json (titles, descriptions, pieceCents). Wer eine Fassung aendert, aendert alle.
+// docs/fixtures/listings/listings.json (titles, descriptions, pieceCents, afterSale, rowTitleCases, board.cleanup). Wer eine Fassung aendert, aendert alle.
 // Laengen in UTF-16-Codeeinheiten, Vergleiche per Codeeinheiten (kein localeCompare).
+
+import { toCents } from "./sales-math.ts";
 
 export type LineItem = {
   copy_id: string; card_id: string; name?: string | null; set_code: string; language: string; rarity: string;
@@ -22,6 +25,7 @@ const TITLE_EDITION: Record<string, string> = { first: "1. Auflage", limited: "L
 const LINE_EDITION: Record<string, string> = { first: "1. Auflage", unlimited: "Unlimitiert", limited: "Limitiert" };
 const EDITION_ORDER = ["first", "unlimited", "limited", "unknown"];
 const CONDITION_ORDER = ["MT", "NM", "EX", "GD", "LP", "PL", "PO"];
+
 const DISCLAIMER = "Privatverkauf, keine Garantie oder Rücknahme.";
 const MINUS = "−";
 
@@ -92,4 +96,70 @@ export function listingDescription(items: LineItem[], priceCents: number | null)
 
 export function pieceCents(totalCents: number, quantity: number): number {
   return Math.round(totalCents / quantity);
+}
+
+export function cardmarketProduct(g: { name?: string | null; card_id: string; set_code: string }): string {
+  return [nameOf(g), known(g.set_code) ? g.set_code : null].filter((p) => p != null).join(" ");
+}
+
+export type ListingHead = {
+  listing_id: string; channel_id: string; channel_name?: string | null; title?: string | null; price: number | string | null;
+  status: string; deleted?: boolean | null; external_url?: string | null;
+};
+export type ListingItemRow = LineItem & { listing_id: string; deleted?: boolean | null };
+
+export const isActive = (l: { status: string; deleted?: boolean | null }) => l.status === "aktiv" && !l.deleted;
+
+export function rowTitle(listing: { channel_id: string; title?: string | null }, liveItems: LineItem[]): string {
+  if (listing.channel_id === "cardmarket") {
+    const groups = groupItems(liveItems);
+    if (groups.length === 0) return "(ohne Karten)";
+    return `${groups.reduce((a, g) => a + g.count, 0)}× ${cardmarketProduct(groups[0])}`;
+  }
+  return listing.title != null && listing.title.trim() !== "" ? listing.title : "(ohne Titel)";
+}
+
+export type AfterSale = { status: string; removeCopyIds: string[]; priceCents: number | null; askAdjust: boolean };
+
+// Das Angebot, aus dem verkauft wurde: ganz verkauft -> "verkauft"; Teilverkauf -> verkaufte Positionen raus.
+// A6 H3b2: eBay rechnet wie Cardmarket mit Stueckpreis -- der Rest kostet Stueckpreis x Restmenge (nie 0 Cent).
+export function afterListingSale(
+  listing: { channel_id: string; price: number | string | null; status: string }, liveCopyIds: string[], soldCopyIds: string[],
+): AfterSale {
+  const live = [...new Set(liveCopyIds)];
+  const sold = new Set(soldCopyIds);
+  const hit = live.filter((id) => sold.has(id)).sort(cmp);
+  const price = toCents(listing.price);
+  if (hit.length === 0) return { status: listing.status, removeCopyIds: [], priceCents: price, askAdjust: false };
+  if (hit.length === live.length) return { status: "verkauft", removeCopyIds: [], priceCents: price, askAdjust: false };
+  if (listing.channel_id === "cardmarket" || listing.channel_id === "ebay") {
+    const rest = Math.max(1, pieceCents(price ?? 0, live.length) * (live.length - hit.length));
+    return { status: "aktiv", removeCopyIds: hit, priceCents: rest, askAdjust: false };
+  }
+  return { status: "aktiv", removeCopyIds: hit, priceCents: price, askAdjust: true };
+}
+
+export type Cleanup = {
+  removeItems: { listing_id: string; copy_id: string }[];
+  endListings: string[];
+  remind: { listing_id: string; channel_name: string | null | undefined; title: string; external_url: string | null }[];
+};
+
+// Verkaufte Exemplare aus allen ANDEREN aktiven Angeboten nehmen; ein leer gewordenes Angebot endet; je betroffenem
+// Angebot eine Erinnerung (dort von Hand anpassen/beenden).
+export function cleanupAfterSale(
+  listings: ListingHead[], items: ListingItemRow[], soldCopyIds: string[], exceptListingId: string | null = null,
+): Cleanup {
+  const sold = new Set(soldCopyIds);
+  const out: Cleanup = { removeItems: [], endListings: [], remind: [] };
+  const active = listings.filter((l) => isActive(l) && l.listing_id !== exceptListingId).sort((a, b) => cmp(a.listing_id, b.listing_id));
+  for (const l of active) {
+    const live = (items || []).filter((it) => it.listing_id === l.listing_id && !it.deleted);
+    const hit = live.map((it) => it.copy_id).filter((id) => sold.has(id)).sort(cmp);
+    if (hit.length === 0) continue;
+    for (const id of hit) out.removeItems.push({ listing_id: l.listing_id, copy_id: id });
+    if (hit.length === live.length) out.endListings.push(l.listing_id);
+    out.remind.push({ listing_id: l.listing_id, channel_name: l.channel_name, title: rowTitle(l, live), external_url: l.external_url ?? null });
+  }
+  return out;
 }

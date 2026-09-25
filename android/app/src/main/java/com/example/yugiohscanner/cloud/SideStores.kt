@@ -48,6 +48,9 @@ object SideStores {
     val ebayStatus = ListCache(scope) { listOfNotNull(EbayRepository.loadStatus()) }
     val ebayRows = ListCache(scope) { EbayRepository.loadRows() }
     val listingPhotos = ListCache(scope) { EbayRepository.loadPhotos() }
+    // Spec H3b2: eBay-Hinweise (Start, Banner „Angebote“) und je Verkauf der Stand der eBay-Bestellung (Marke).
+    val saleNotices = ListCache(scope) { EbayRepository.loadNotices() }
+    val ebayOrders = ListCache(scope) { EbayRepository.loadOrders() }
 
     private val historyCaches = BoundedMap<String, ListCache<List<PriceRef>>>(20)
 
@@ -71,6 +74,7 @@ object SideStores {
         sales.clear()
         listings.clear()
         ebayStatus.clear(); ebayRows.clear(); listingPhotos.clear()
+        saleNotices.clear(); ebayOrders.clear()
         historyCaches.values().forEach { it.clear() }
         historyCaches.clear()
         synchronized(deckCardCaches) {

@@ -17,6 +17,7 @@ const { referenceRows, cardHistory } = require('./price-reference.cjs');
 const { recordPortfolioValue, portfolioTotals } = require('./portfolio-value.cjs');
 const { copyCount } = require('./valuation.cjs');
 const { alertText } = require('./alert-text.cjs');
+const { noticeNotificationBody } = require('./notice-notify.cjs');
 const copies = require('./copies.cjs');
 const { deleteContainer } = require('./containers-schema.cjs');
 const sealed = require('./sealed-items.cjs');
@@ -172,7 +173,7 @@ app.whenReady().then(() => {
   startPricePoller();
   startCardmarketPoller();
   startCardmarketBulkScheduler();
-  sync = startSync(db, () => mainWindow, { onPriceAlerts: showPriceAlertNotification });
+  sync = startSync(db, () => mainWindow, { onPriceAlerts: showPriceAlertNotification, onSaleNotices: showSaleNoticeNotification });
   startCatalogScheduler();
   // Deals now live in Supabase (the cloud Edge Function scrapes, shared with the phone).
   // The old local SQLite poller is disabled — the desktop reads/writes the cloud tables.
@@ -363,6 +364,23 @@ function showPriceAlertNotification(r) {
         mainWindow.show();
         mainWindow.focus();
         mainWindow.webContents.send('open-price-alerts');
+    });
+    n.on('close', drop);
+    n.show();
+}
+// H3b2 §7.6: neue eBay-Hinweise (sale_notices) als Windows-Benachrichtigung; Klick öffnet „Angebote“.
+function showSaleNoticeNotification(r) {
+    if (!Notification.isSupported()) return;
+    const n = new Notification({ title: 'eBay', body: noticeNotificationBody(r) });
+    liveNotifications.add(n);
+    const drop = () => liveNotifications.delete(n);
+    n.on('click', () => {
+        drop();
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.webContents.send('open-sale-notices');
     });
     n.on('close', drop);
     n.show();
@@ -1009,6 +1027,21 @@ function kickEbay() {
 // Abschluss-Fix B2: vor dem ersten Ziehen { pending: true } statt null (Renderer: Ladezustand „…“, kein roter Fehler).
 ipcMain.handle('ebay-status', () => ebayStatusReply(getSetting('ebay_status_cache'), !!sync?.ebayStatusTried?.()));
 ipcMain.handle('ebay-listings', () => Object.fromEntries(db.prepare('SELECT * FROM ebay_listings').all().map((r) => [r.listing_id, r])));
+// H3b2: offene eBay-Hinweise (neueste zuerst) und je Verkauf der Stand der eBay-Bestellung (Marke „Gebühren vorläufig“).
+ipcMain.handle('sale-notices', () => db.prepare('SELECT * FROM sale_notices WHERE dismissed = 0 ORDER BY created_at DESC, notice_id').all());
+ipcMain.handle('ebay-orders', () => Object.fromEntries(db.prepare('SELECT sale_id, status, fees_final FROM ebay_orders WHERE sale_id IS NOT NULL').all()
+    .map((r) => [r.sale_id, { status: r.status, fees_final: !!r.fees_final }])));
+// Wegtippen schreibt direkt in die Cloud (Plan-Abweichung A5, wie price-alerts-event-dismiss); die lokale Zeile folgt
+// sofort, der nächste Pull bestätigt sie. Ohne Cloud-Verbindung: Fehler statt stillem lokalem Wegtippen.
+ipcMain.handle('sale-notice-dismiss', async (event, noticeId) => {
+    if (typeof noticeId !== 'string' || noticeId === '') throw new Error('Ungültiger Hinweis');
+    const c = await alertsClient();
+    const { error } = await c.from('sale_notices').update({ dismissed: true }).eq('notice_id', noticeId);
+    if (error) throw new Error(error.message);
+    db.prepare('UPDATE sale_notices SET dismissed = 1 WHERE notice_id = ?').run(noticeId);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('sale-notices-changed');
+    return true;
+});
 ipcMain.handle('ebay-auth', async (event, d) => {
     const action = d?.action;
     if (!EBAY_AUTH_ACTIONS.includes(action)) return { ok: false, error: 'Unbekannte Aktion.' };

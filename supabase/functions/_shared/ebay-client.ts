@@ -3,14 +3,17 @@
 // kein Netz). Fehler kommen einheitlich als EbayError (transient = Durchgang abbrechen, auth = neu verbinden).
 // NIE Tokens, Codes oder Secrets protokollieren oder in Fehlermeldungen übernehmen.
 import { type AspectDef, MARKETPLACE } from "./ebay-map.ts";
+import type { Amount, EbayOrder } from "./ebay-orders.ts";
 
 export type Env = "sandbox" | "production";
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 export type Creds = { clientId: string; clientSecret: string; ruName: string };
 
-export const HOSTS: Record<Env, { auth: string; api: string }> = {
-  sandbox: { auth: "https://auth.sandbox.ebay.com", api: "https://api.sandbox.ebay.com" },
-  production: { auth: "https://auth.ebay.com", api: "https://api.ebay.com" },
+// H3b2: die Finances API läuft über einen eigenen Host (apiz; Vertrag sell_finances_v1_oas3.json). Der Sandbox-Host
+// steht nicht im Vertrag -- apiz.sandbox.ebay.com ist die übliche Form, bestätigt erst die Abnahme.
+export const HOSTS: Record<Env, { auth: string; api: string; apiz: string }> = {
+  sandbox: { auth: "https://auth.sandbox.ebay.com", api: "https://api.sandbox.ebay.com", apiz: "https://apiz.sandbox.ebay.com" },
+  production: { auth: "https://auth.ebay.com", api: "https://api.ebay.com", apiz: "https://apiz.ebay.com" },
 };
 // Befund eBay-Doku 3: dieselben Scope-Adressen in Sandbox und Produktion.
 export const USER_SCOPES = [
@@ -132,6 +135,9 @@ export async function ensureAccess(
   return { token: p.access_token, patch: p };
 }
 
+export const ORDERS_PAGE = 200;
+export type Transaction = { transactionType?: string | null; totalFeeAmount?: Amount; orderId?: string | null };
+
 export type Offer = {
   offerId: string; sku?: string; marketplaceId?: string; status?: string;
   listing?: { listingId?: string; listingStatus?: string; soldQuantity?: number };
@@ -177,6 +183,27 @@ export function ebayApi(fetchFn: Fetch, env: Env, token: string) {
     updateOffer: (offerId: string, body: unknown) => call("PUT", `/sell/inventory/v1/offer/${enc(offerId)}`, body),
     publishOffer: async (offerId: string) => String(requireField(await call("POST", `/sell/inventory/v1/offer/${enc(offerId)}/publish`), "listingId")),
     withdrawOffer: (offerId: string) => call("POST", `/sell/inventory/v1/offer/${enc(offerId)}/withdraw`),
+    // H3b2 §7.1: alle Bestellungen, die seit `sinceIso` geändert wurden (höchstens 200 je Seite, über offset geblättert).
+    getOrders: async (sinceIso: string): Promise<EbayOrder[]> => {
+      const out: EbayOrder[] = [];
+      const filter = enc(`lastmodifieddate:[${sinceIso}..]`);
+      for (let offset = 0; ; offset += ORDERS_PAGE) {
+        const b = await call("GET", `/sell/fulfillment/v1/order?filter=${filter}&limit=${ORDERS_PAGE}&offset=${offset}`);
+        const page = (b?.orders ?? []) as EbayOrder[];
+        out.push(...page);
+        const total = Number(b?.total);
+        if (page.length < ORDERS_PAGE || (Number.isFinite(total) && offset + page.length >= total)) return out;
+      }
+    },
+    // H3b2 §7.3: Verkaufs-Transaktionen einer Bestellung (Host apiz, Marktplatz-Kopf Pflicht -- sonst gilt EBAY_US).
+    saleTransactions: async (orderId: string): Promise<Transaction[]> => {
+      const q = `filter=${enc(`orderId:{${orderId}}`)}&filter=${enc("transactionType:{SALE}")}&limit=50`;
+      const b = await send(fetchFn, `${HOSTS[env].apiz}/sell/finances/v1/transaction?${q}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE },
+      });
+      return (b?.transactions ?? []) as Transaction[];
+    },
   };
 }
 export type EbayApi = ReturnType<typeof ebayApi>;

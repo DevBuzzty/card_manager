@@ -104,7 +104,7 @@ test('Verkauft ganz: Status verkauft, sale_id gesetzt, Positionen bleiben', () =
   assert.deepEqual([r.reminders, r.askAdjust, r.listingSkipped], [[], false, false]);
 });
 
-test('Teilverkauf Cardmarket: Stückpreis x Rest; anderer Kanal: Preis bleibt, Hinweis', () => {
+test('Teilverkauf Cardmarket/eBay (A6 H3b2): Stückpreis x Rest; anderer Kanal: Preis bleibt, Hinweis', () => {
   const db = freshDb();
   const cm3 = addCard(db, '1', 3, 3);
   const [cm] = L.createListings(db, { listings: [base({ channel_id: 'cardmarket', copyIds: cm3, price: 10 })] });
@@ -114,8 +114,13 @@ test('Teilverkauf Cardmarket: Stückpreis x Rest; anderer Kanal: Preis bleibt, H
   const eb = addCard(db, '2', 1, 2);
   const [e] = L.createListings(db, { listings: [base({ copyIds: eb })] });
   const r2 = S.bookSaleDetailed(db, { ...sale, copyIds: [eb[1]], listing_id: e });
-  assert.deepEqual([listing(db, e).status, listing(db, e).price, r2.askAdjust], ['aktiv', 12, true]);
+  assert.deepEqual([listing(db, e).status, listing(db, e).price, r2.askAdjust], ['aktiv', 6, false]);
   assert.deepEqual(liveItems(db, e), [eb[0]]);
+  const ka = addCard(db, '3', 1, 2);
+  const [k] = L.createListings(db, { listings: [base({ channel_id: 'kleinanzeigen', copyIds: ka })] });
+  const r3 = S.bookSaleDetailed(db, { ...sale, channel_id: 'kleinanzeigen', copyIds: [ka[1]], listing_id: k });
+  assert.deepEqual([listing(db, k).status, listing(db, k).price, r3.askAdjust], ['aktiv', 12, true]);
+  assert.deepEqual(liveItems(db, k), [ka[0]]);
 });
 
 test('I2: Teilverkauf zählt tote Positionen nicht als Rest -- Angebot [a tot, b], b verkauft -> verkauft', () => {

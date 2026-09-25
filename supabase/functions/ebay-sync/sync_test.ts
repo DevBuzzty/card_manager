@@ -140,7 +140,8 @@ Deno.test("Token abgelaufen/widerrufen -> getrennt, Hinweis, neue Angebote warte
   const w = world({ account: account({ access_expires_at: "2026-09-22T11:00:00Z" }) }, { refreshInvalid: true });
   const r = await w.run();
   assertEquals(r.ok, true);
-  assertEquals([w.state.account.refresh_token, w.state.account.access_token, w.state.account.last_error], [null, null, EXPIRED]);
+  assertEquals([w.state.account.refresh_token, w.state.account.access_token, w.state.account.last_error],
+    [null, null, `${EXPIRED} (eBay: refresh token is invalid)`], "eBays Begründung steht mit im Hinweis");
   assertEquals(w.state.rows.get("l1")!.state, "wartet");
   assertEquals(w.eb.ebayCalls().length, 0);
 });
@@ -221,9 +222,10 @@ Deno.test("Zeitbudget überschritten -> Rest als deferred, nicht bearbeitet", as
 Deno.test("EXPIRED bleibt stehen, solange nicht neu verbunden statt am Laufende auf null überschrieben", async () => {
   const w = world({ account: account({ access_expires_at: "2026-09-22T11:00:00Z" }) }, { refreshInvalid: true });
   await w.run();
-  assertEquals(w.state.account.last_error, EXPIRED);
+  const first = w.state.account.last_error;
+  assertEquals(first, `${EXPIRED} (eBay: refresh token is invalid)`);
   await w.run();
-  assertEquals(w.state.account.last_error, EXPIRED, "zweiter Lauf ohne neue Verbindung löscht den Hinweis nicht");
+  assertEquals(w.state.account.last_error, first, "zweiter Lauf ohne neue Verbindung löscht den Hinweis nicht");
 });
 
 Deno.test("dauerhafter Merkmale-Fehler betrifft nur seine Kategorie; andere Aktionen laufen weiter", async () => {
@@ -281,6 +283,7 @@ Deno.test("saveAccountIf: schreibt nur bei passendem Refresh-Token/Umgebung, son
 Deno.test("Sperre nicht zu bekommen (Store-Fehler) -> {ok:false,error}, keine Tokens im Fehlertext, kein Absturz", async () => {
   const boom = () => Promise.reject(new Error("sollte nicht aufgerufen werden"));
   const store: Store = {
+    ...fakeStore({}).store,
     photoBase: "https://proj.supabase.co",
     account: boom, saveAccount: boom, unlock: boom,
     tryLock: () => Promise.reject(new Error("DB nicht erreichbar")),

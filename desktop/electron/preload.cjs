@@ -135,6 +135,12 @@ contextBridge.exposeInMainWorld('api', {
   deleteListingPhoto: (photoId) => ipcRenderer.invoke('listing-photo-delete', photoId),
   reorderListingPhotos: (data) => ipcRenderer.invoke('listing-photo-reorder', data),
   onEbayChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('ebay-changed', s); return () => ipcRenderer.removeListener('ebay-changed', s); },
+  // Spec H3b2: eBay-Hinweise und Stand der eBay-Bestellungen
+  saleNotices: () => ipcRenderer.invoke('sale-notices'),
+  dismissSaleNotice: (noticeId) => ipcRenderer.invoke('sale-notice-dismiss', noticeId),
+  ebayOrders: () => ipcRenderer.invoke('ebay-orders'),
+  onSaleNoticesChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('sale-notices-changed', s); return () => ipcRenderer.removeListener('sale-notices-changed', s); },
+  onOpenSaleNotices: (cb) => { const s = (_e) => cb(); ipcRenderer.on('open-sale-notices', s); return () => ipcRenderer.removeListener('open-sale-notices', s); },
 
   // Wishlist
   getWishlist: () => ipcRenderer.invoke('get-wishlist'),

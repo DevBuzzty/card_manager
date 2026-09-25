@@ -155,3 +155,34 @@ ein Fremder selbst ein Konto anlegen und ebenfalls Zugriff auf die eBay-Funktion
 - Die Sandbox-Anzeigen-Adresse `https://sandbox.ebay.de/itm/<id>` ist ungeprüft; ist sie falsch,
   ändert sich nur `itemUrl` in `ebay-map.ts`.
 - Foto-Adressen (`listing-photos`-Bucket) sind öffentlich lesbar, wie von eBay verlangt.
+
+## 10. H3b2 — Verkäufe automatisch (Bestellungen, Gebühren, Hinweise)
+
+Ab H3b2 holt `ebay-sync` bei jedem Lauf die eBay-Bestellungen ab, bucht jede Bestellung zu einem App-Angebot
+(SKU `L-…`) als Verkauf (Preis + vom Käufer bezahlter Versand, Gebühren vorläufig aus der Bestellung), räumt die
+Angebote auf, trägt später die echten Gebühren aus den Finanzdaten nach und schreibt Hinweise (Start + „Angebote“,
+am PC zusätzlich als Windows-Benachrichtigung). Design: `docs/superpowers/plans/2026-09-24-spec-h3b2-ebay-verkaeufe-automatisch.md`.
+
+**Reihenfolge ist Pflicht:**
+
+1. Dashboard › SQL Editor › Inhalt von `supabase/ebay_orders_schema.sql` › Run (idempotent). Die Prüfabfragen stehen
+   am Ende der Datei; erwartet: `ebay_orders 10`, `sale_notices 8`, drei Regeln, `false | true | false | true`.
+2. Die neue Funktion deployen (der Zeitplan aus Schritt 5 bleibt, wie er ist):
+
+   ```bash
+   supabase functions deploy ebay-sync --no-verify-jwt --project-ref uirfqwklvavgjklgqpnn
+   ```
+3. Neuen PC-Build und neue Handy-APK installieren. Ohne Schritt 1 laufen beide weiter; der PC protokolliert dann
+   `[sync] ebay_orders pull: …`, das Handy zeigt schlicht keine Hinweise.
+
+**Gut zu wissen:**
+
+- Gebucht werden nur Bestellungen, die **nach dem Verbinden** geändert wurden (`connected_at`); ältere nie.
+  Bestellungen zu Anzeigen, die von Hand auf eBay eingestellt wurden (keine App-SKU), bleiben unberührt (`fremd`).
+- Nie doppelt: `sale_id = ebay-<Umgebung>-<Bestellnummer>`; ein abgebrochener Lauf setzt beim nächsten fort.
+- Auch **Sandbox**-Bestellungen buchen echte Verkäufe in der (einzigen) Sammlung — für Tests eine billige Karte
+  nehmen und den Verkauf danach stornieren.
+- Gebühren: eine von Hand geänderte Gebühr wird nie überschrieben; die Marke „Gebühren vorläufig“ verschwindet, sobald
+  eBays Finanzdaten da sind (in der Sandbox bleiben sie oft leer).
+- Die Finanzdaten kommen vom Host `apiz.ebay.com` (Sandbox vermutlich `apiz.sandbox.ebay.com` — scheitert das,
+  steht es in `last_error`, Bestellungen werden trotzdem gebucht).
