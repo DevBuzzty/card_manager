@@ -2,7 +2,11 @@ package com.example.yugiohscanner.cloud
 
 import android.content.SharedPreferences
 import com.example.yugiohscanner.BuildConfig
+import com.example.yugiohscanner.ml.OfflineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -21,6 +25,20 @@ object SupabaseCloud {
     private var email: String = ""
     private var password: String = ""
     @Volatile private var accessToken: String? = null
+    private var prefs: SharedPreferences? = null
+
+    // Offline-Start (26.09.2026): Konto des gespeicherten Stands, solange die Anmeldung an der Verbindung scheitert.
+    // userId() liefert es, damit der Kaltstart-Zwischenspeicher passt; token() wirft mit klarer Offline-Meldung.
+    @Volatile private var offlineAccount: String? = null
+    private val _offline = MutableStateFlow(false)
+    val offline: StateFlow<Boolean> = _offline.asStateFlow()
+
+    // Zuletzt erfolgreich angemeldetes Konto und seine E-Mail (Grundlage für den Offline-Start).
+    fun savedAccount(p: SharedPreferences): String? = p.getString("last_account_id", null)
+    fun savedEmail(p: SharedPreferences): String? = p.getString("last_account_email", null)
+    fun email(): String = email
+
+    fun startOffline(account: String) { offlineAccount = account; _offline.value = true }
 
     // The project URL and the publishable key are build config (local.properties); the prefs only
     // override them when the user pointed the app at a different project under "Erweitert".
@@ -36,6 +54,7 @@ object SupabaseCloud {
             !prefs.getString("supabase_email", "").isNullOrBlank()
 
     fun init(prefs: SharedPreferences) {
+        this.prefs = prefs
         baseUrl = cfgUrl(prefs)
         apiKey = cfgKey(prefs)
         email = prefs.getString("supabase_email", "")!!.trim()
@@ -57,6 +76,9 @@ object SupabaseCloud {
             val token = JSONObject(text).optString("access_token")
             if (token.isBlank()) throw RuntimeException("Login: kein access_token erhalten")
             accessToken = token
+            offlineAccount = null
+            _offline.value = false
+            jwtSubject(token)?.let { id -> prefs?.edit()?.putString("last_account_id", id)?.putString("last_account_email", email)?.apply() }
         }
     }
 
@@ -64,6 +86,8 @@ object SupabaseCloud {
     // keep writing to the account after "Abmelden". A later login re-fills them via init(prefs).
     fun signOut() {
         accessToken = null
+        offlineAccount = null
+        _offline.value = false
         email = ""
         password = ""
     }
@@ -72,7 +96,7 @@ object SupabaseCloud {
      * Nutzer-ID des angemeldeten Kontos (JWT `sub`), `null` ohne Anmeldung. Schluessel des
      * Kaltstart-Zwischenspeichers -- ein gespeicherter Stand eines anderen Kontos wird nie gezeigt.
      */
-    fun userId(): String? = accessToken?.let(::jwtSubject)
+    fun userId(): String? = accessToken?.let(::jwtSubject) ?: offlineAccount
 
     internal fun jwtSubject(token: String): String? = runCatching {
         val payload = token.split('.')[1]
@@ -83,5 +107,6 @@ object SupabaseCloud {
     internal fun http(): OkHttpClient = client
     internal fun base(): String = baseUrl
     internal fun key(): String = apiKey
-    internal fun token(): String = accessToken ?: throw RuntimeException("Nicht eingeloggt")
+    internal fun token(): String = accessToken
+        ?: throw RuntimeException(if (offlineAccount != null) OfflineStart.WRITE_OFFLINE else "Nicht eingeloggt")
 }
