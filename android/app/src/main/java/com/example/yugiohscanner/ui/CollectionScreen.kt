@@ -1,8 +1,11 @@
 package com.example.yugiohscanner.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
@@ -32,9 +36,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.yugiohscanner.cloud.CollectionStore
+import com.example.yugiohscanner.cloud.CopyRow
 import com.example.yugiohscanner.cloud.StoreState
 import com.example.yugiohscanner.cloud.Valuation
 import com.example.yugiohscanner.ml.CardFilterPresets
+import com.example.yugiohscanner.ml.Selection
 import com.example.yugiohscanner.ui.components.RarityChip
 import com.example.yugiohscanner.ui.components.SpaceCard
 import com.example.yugiohscanner.ui.components.ValueText
@@ -89,6 +95,16 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
         CardDetailScreen(cardId = id, onClose = { detailId = null })
         return
     }
+
+    // Mehrfachauswahl (Spec I §5.1, Plan 2026-09-26): langes Drücken startet sie, danach Tippen = aus-/abwählen,
+    // Zurück hebt sie auf. Gezählt werden nur SICHTBARE gewählte Karten.
+    val selected = rememberSaveableList()
+    var selectMode by rememberSaveable { mutableStateOf(false) }
+    var sellCopies by remember { mutableStateOf<Pair<String, List<CopyRow>>?>(null) }
+    var moveCopies by remember { mutableStateOf<List<CopyRow>?>(null) }
+    val endSelection = { selectMode = false; selected.clear() }
+    BackHandler(selectMode) { endSelection() }
+    fun toggle(id: String) { if (selected.contains(id)) selected.remove(id) else selected.add(id) }
 
     val activeFilterCount = listOf(fSet, fRarity, fType, fLang, fCondition, fEdition).count { it != null } +
         fContainers.size + fTags.size + fPresets.size
@@ -163,30 +179,54 @@ fun CollectionScreen(onOpenSuche: () -> Unit) {
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 88.dp), // clear the "+" FAB
+                    contentPadding = PaddingValues(bottom = if (selectMode) 180.dp else 88.dp), // "+"-Knopf bzw. Auswahl-Leiste freihalten
                 ) {
                     items(groups, key = { it.id }, contentType = { "karte" }) { group ->
-                        CardGroupGridItem(group, onOpen = { detailId = group.id })
+                        CardGroupGridItem(group, selectMode, selected.contains(group.id),
+                            onOpen = { if (selectMode) toggle(group.id) else detailId = group.id },
+                            onLongPress = { selectMode = true; toggle(group.id) })
                     }
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 88.dp), // clear the "+" FAB
+                    contentPadding = PaddingValues(bottom = if (selectMode) 180.dp else 88.dp), // "+"-Knopf bzw. Auswahl-Leiste freihalten
                 ) {
                     items(groups, key = { it.id }, contentType = { "karte" }) { group ->
-                        CardGroupItem(group, onOpen = { detailId = group.id })
+                        CardGroupItem(group, selectMode, selected.contains(group.id),
+                            onOpen = { if (selectMode) toggle(group.id) else detailId = group.id },
+                            onLongPress = { selectMode = true; toggle(group.id) })
                     }
                 }
             }
         }
-        FloatingActionButton(
-            onClick = onOpenSuche,
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-        ) { Icon(Icons.Default.Add, "Karte suchen") }
+        if (selectMode) {
+            val visible = groups.filter { selected.contains(it.id) }
+            val selCopies = remember(visible, copies, fContainers.toList()) {
+                Selection.copies(visible.map { it.id to it.variants }, visible.map { it.id }.toSet(), copies, fContainers.toSet())
+            }
+            SelectionBar(visible.size, selCopies.size,
+                onSelectAll = { groups.forEach { if (!selected.contains(it.id)) selected.add(it.id) } },
+                onSell = { sellCopies = Selection.sellSubtitle(visible.size, selCopies.size) to selCopies },
+                onMove = { moveCopies = selCopies },
+                onCancel = endSelection,
+                modifier = Modifier.align(Alignment.BottomCenter))
+        } else {
+            FloatingActionButton(
+                onClick = onOpenSuche,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            ) { Icon(Icons.Default.Add, "Karte suchen") }
+        }
+        sellCopies?.let { (subtitle, list) ->
+            // Schließen behält die Auswahl (nur abgebrochen?); verkaufte Exemplare fallen von selbst heraus.
+            SellFlowSheet("", list, onDismiss = { sellCopies = null }, subtitle = subtitle)
+        }
+        moveCopies?.let { list ->
+            MoveSheet(list, containers, onDismiss = { moveCopies = null }, onMoved = { moveCopies = null; endSelection() })
+        }
 
         if (filterOpen) {
             ModalBottomSheet(onDismissRequest = { filterOpen = false }) {
@@ -265,11 +305,18 @@ private fun ActiveFilterChip(text: String, onClear: () -> Unit) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CardGroupItem(group: CardGroup, onOpen: () -> Unit) {
-    SpaceCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.clickable { onOpen() }.padding(10.dp)) {
+private fun CardGroupItem(group: CardGroup, selectMode: Boolean, isSelected: Boolean, onOpen: () -> Unit, onLongPress: () -> Unit) {
+    val mark = if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp)) else Modifier
+    SpaceCard(Modifier.fillMaxWidth().then(mark)) {
+        Column(Modifier.combinedClickable(onClick = onOpen, onLongClick = onLongPress).padding(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selectMode) {
+                    Icon(Icons.Default.CheckCircle, if (isSelected) "Ausgewählt" else "Nicht ausgewählt",
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary else Muted.copy(alpha = 0.4f))
+                    Spacer(Modifier.width(8.dp))
+                }
                 AsyncImage(model = group.imageUrl, contentDescription = group.name,
                     modifier = Modifier.width(48.dp).height(70.dp).clip(RoundedCornerShape(6.dp)))
                 Spacer(Modifier.width(10.dp))
@@ -319,14 +366,16 @@ private fun CardGroupItem(group: CardGroup, onOpen: () -> Unit) {
 }
 
 // Grid tile: cover art with quantity/value overlays; tapping opens the same detail screen as the list.
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CardGroupGridItem(group: CardGroup, onOpen: () -> Unit) {
+private fun CardGroupGridItem(group: CardGroup, selectMode: Boolean, isSelected: Boolean, onOpen: () -> Unit, onLongPress: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.68f)
             .clip(RoundedCornerShape(6.dp))
-            .clickable { onOpen() },
+            .then(if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp)) else Modifier)
+            .combinedClickable(onClick = onOpen, onLongClick = onLongPress),
     ) {
         AsyncImage(
             model = group.imageUrl,
@@ -334,6 +383,12 @@ private fun CardGroupGridItem(group: CardGroup, onOpen: () -> Unit) {
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
+        if (selectMode) {
+            Icon(Icons.Default.CheckCircle, if (isSelected) "Ausgewählt" else "Nicht ausgewählt",
+                tint = if (isSelected) MaterialTheme.colorScheme.primary else OnSurface.copy(alpha = 0.5f),
+                modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
+                    .background(SurfaceColor.copy(alpha = 0.85f), RoundedCornerShape(50)))
+        }
         Text(
             "×${group.totalQty}",
             fontFamily = MonoFontFamily,

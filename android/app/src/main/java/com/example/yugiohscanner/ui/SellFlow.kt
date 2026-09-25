@@ -223,7 +223,8 @@ private fun NextSteps(next: Pair<String, List<String>>?, onStep: (String) -> Uni
  */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun SellFlowSheet(title: String, copies: List<CopyRow>, onDismiss: () -> Unit) {
+// subtitle: frei wählbare Unterzeile (Mehrfachauswahl der Kartenliste); ohne sie gilt der Kandidaten-Text.
+fun SellFlowSheet(title: String, copies: List<CopyRow>, onDismiss: () -> Unit, subtitle: String? = null) {
     val sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -234,7 +235,7 @@ fun SellFlowSheet(title: String, copies: List<CopyRow>, onDismiss: () -> Unit) {
             Column {
                 Text("Verkaufen", style = MaterialTheme.typography.titleLarge, color = OnSurface)
                 val n = copies.size
-                Text("$title · ${if (n == 1) "1 Exemplar" else "$n Exemplare"} über dem Playset", style = MaterialTheme.typography.labelSmall, color = Muted)
+                Text(subtitle ?: "$title · ${if (n == 1) "1 Exemplar" else "$n Exemplare"} über dem Playset", style = MaterialTheme.typography.labelSmall, color = Muted)
             }
             SellFlow(copies = copies, onBack = onDismiss, onClose = onDismiss)
         }

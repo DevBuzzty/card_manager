@@ -440,7 +440,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
         )}
         {selling && (
             <SellFlowDialog title="" subtitle={selling.subtitle} copies={selling.copies}
-                onClose={() => { setSelling(null); endSelection(); window.dispatchEvent(new Event('collection-dirty')); }} />
+                onClose={() => { setSelling(null); window.dispatchEvent(new Event('collection-dirty')); }} />
         )}
         {moving && <MoveDialog copyIds={moving} containers={containers} onClose={() => setMoving(null)} onMoved={onMoved} />}
     </div>
