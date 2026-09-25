@@ -51,7 +51,7 @@ const Cell = ({ columnIndex, rowIndex, style, ...props }) => {
     // Wait, .d.ts says: cellComponent receives (props: { ... } & CellProps)
     // So items and columnCount should be in props directly if I pass them in cellProps.
 
-    const { items, columnCount, containers, filterContainers, forSaleByCard, onOpen } = props;
+    const { items, columnCount, containers, filterContainers, forSaleByCard, onOpen, selectMode, selected } = props;
     // Note: columnIndex and rowIndex are also in props.
 
     const index = rowIndex * columnCount + columnIndex;
@@ -65,7 +65,8 @@ const Cell = ({ columnIndex, rowIndex, style, ...props }) => {
 
     return (
         <div style={{ ...style, padding: 8 }}>
-            <CardTile card={card} onClick={() => onOpen(card)} saleNote={forSaleSuffix(forSaleByCard.get(String(card.id)) || 0)} />
+            <CardTile card={card} onClick={(e) => onOpen(card, e)} saleNote={forSaleSuffix(forSaleByCard.get(String(card.id)) || 0)}
+                selectMode={selectMode} selected={!!selected && selected.has(String(card.id))} />
             {filterContainers.length > 0 && locationCopy && (
                 <div className="mt-1 px-0.5">
                     <span className="inline-flex items-center font-mono text-klein text-muted bg-surface border border-line rounded px-1.5 py-0.5 truncate max-w-full">
@@ -78,7 +79,7 @@ const Cell = ({ columnIndex, rowIndex, style, ...props }) => {
 };
 
 
-export default function CollectionGrid({ items, containers, filterContainers, forSaleByCard, onOpen }) {
+export default function CollectionGrid({ items, containers, filterContainers, forSaleByCard, onOpen, selectMode = false, selected = null }) {
   return (
     <AutoSizer>
         {({ height, width }) => {
@@ -101,7 +102,7 @@ export default function CollectionGrid({ items, containers, filterContainers, fo
                     rowHeight={300}
                     width={width}
                     height={height} // Also pass height for Grid style
-                    cellProps={{ items, columnCount, containers, filterContainers, forSaleByCard, onOpen }}
+                    cellProps={{ items, columnCount, containers, filterContainers, forSaleByCard, onOpen, selectMode, selected }}
                     cellComponent={Cell}
                 />
             );

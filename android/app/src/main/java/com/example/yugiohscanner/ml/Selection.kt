@@ -29,6 +29,7 @@ object Selection {
 
     /** target: Name des Ziel-Behälters oder null (= aus dem Behälter nehmen). */
     fun moveText(count: Int, target: String?): String = when {
+        count == 0 -> "Nichts verschoben – alle Exemplare waren schon dort"
         target == null && count == 1 -> "1 Exemplar aus seinem Behälter genommen"
         target == null -> "$count Exemplare aus ihren Behältern genommen"
         else -> "$count ${copiesWord(count)} nach „$target“ verschoben"

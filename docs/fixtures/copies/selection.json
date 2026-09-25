@@ -33,7 +33,9 @@
     { "count": 3, "target": "Box Doppelte", "text": "3 Exemplare nach „Box Doppelte“ verschoben" },
     { "count": 1, "target": "Ordner A", "text": "1 Exemplar nach „Ordner A“ verschoben" },
     { "count": 2, "target": null, "text": "2 Exemplare aus ihren Behältern genommen" },
-    { "count": 1, "target": null, "text": "1 Exemplar aus seinem Behälter genommen" }
+    { "count": 1, "target": null, "text": "1 Exemplar aus seinem Behälter genommen" },
+    { "count": 0, "target": "Box Doppelte", "text": "Nichts verschoben – alle Exemplare waren schon dort" },
+    { "count": 0, "target": null, "text": "Nichts verschoben – alle Exemplare waren schon dort" }
   ],
   "sellSubtitles": [
     { "cards": 1, "copies": 3, "text": "1 Karte · 3 Exemplare ausgewählt" },

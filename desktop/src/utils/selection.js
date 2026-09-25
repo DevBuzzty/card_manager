@@ -32,6 +32,7 @@ export function sellSubtitle(cards, copies) {
 
 // target: Name des Ziel-Behälters oder null (= aus dem Behälter nehmen).
 export function moveText(count, target) {
+  if (count === 0) return 'Nichts verschoben – alle Exemplare waren schon dort';
   if (target == null) return count === 1 ? '1 Exemplar aus seinem Behälter genommen' : `${count} Exemplare aus ihren Behältern genommen`;
   return `${count} ${copiesWord(count)} nach „${target}“ verschoben`;
 }
