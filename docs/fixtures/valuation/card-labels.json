@@ -1,0 +1,24 @@
+{
+  "_comment": "Deutsche Anzeige der englischen Kartendaten (YGOPRODeck) in Statistik/Portfolio/Auswertung, Feinschliff 26.09.2026. ZWILLING: desktop/src/utils/cardLabels.js und android ml/CardLabels.kt. Unbekannte Werte bleiben, wie sie sind. Namen wie auf deutschen Konami-Karten.",
+  "typeGroups": [
+    { "type": "Effect Monster", "group": "Monster" },
+    { "type": "Synchro Tuner Monster", "group": "Monster" },
+    { "type": "Spell Card", "group": "Zauber" },
+    { "type": "Trap Card", "group": "Falle" },
+    { "type": "Skill Card", "group": "Sonstige" },
+    { "type": null, "group": "Sonstige" }
+  ],
+  "attributes": {
+    "DARK": "Finsternis", "LIGHT": "Licht", "EARTH": "Erde", "WATER": "Wasser", "FIRE": "Feuer", "WIND": "Wind", "DIVINE": "Göttlich"
+  },
+  "races": {
+    "Aqua": "Aqua", "Beast": "Ungeheuer", "Beast-Warrior": "Ungeheuer-Krieger", "Creator-God": "Schöpfergott", "Cyberse": "Cyberse",
+    "Dinosaur": "Dinosaurier", "Divine-Beast": "Göttliches Ungeheuer", "Dragon": "Drache", "Fairy": "Fee", "Fiend": "Unterweltler",
+    "Fish": "Fisch", "Illusion": "Illusion", "Insect": "Insekt", "Machine": "Maschine", "Plant": "Pflanze", "Psychic": "Psi",
+    "Pyro": "Pyro", "Reptile": "Reptil", "Rock": "Fels", "Sea Serpent": "Seeschlange", "Spellcaster": "Hexer", "Thunder": "Donner",
+    "Warrior": "Krieger", "Winged Beast": "Geflügeltes Ungeheuer", "Wyrm": "Wyrm", "Zombie": "Zombie",
+    "Normal": "Normal", "Continuous": "Permanent", "Quick-Play": "Schnell", "Field": "Spielfeld", "Equip": "Ausrüstung",
+    "Ritual": "Ritual", "Counter": "Konter"
+  },
+  "passThrough": ["Unbekanntes Attribut", "Galaxy"]
+}

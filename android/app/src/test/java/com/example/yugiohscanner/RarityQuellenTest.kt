@@ -116,4 +116,16 @@ class RarityQuellenTest {
             RarityQuellen.ohneErfundeneRarity(roh),
         )
     }
+
+    /** Feinschliff 26.09.2026 -- ZWILLING von printingRarity.test.js, dieselbe Fixture. */
+    @org.junit.Test fun `Anzeige der Seltenheit aus der Fixture`() {
+        val f = org.json.JSONObject(Fixtures.text("docs/fixtures/valuation/rarity-display.json"))
+        org.junit.Assert.assertEquals(f.getString("unknownLabel"), RarityQuellen.UNKNOWN_LABEL)
+        val cases = f.getJSONArray("cases")
+        for (i in 0 until cases.length()) {
+            val c = cases.getJSONObject(i)
+            val raw = if (c.isNull("raw")) null else c.getString("raw")
+            org.junit.Assert.assertEquals(raw.toString(), c.getString("display"), RarityQuellen.display(raw))
+        }
+    }
 }

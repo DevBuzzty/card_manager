@@ -7,7 +7,7 @@ import com.example.yugiohscanner.cloud.printingKey
 
 data class Mover(
     val key: String, val card: CardRow,
-    val oldPrice: Double, val newPrice: Double, val deltaUnit: Double, val pct: Double,
+    val oldPrice: Double, val newPrice: Double, val deltaUnit: Double, val pct: Double?,
     val weight: Double, val copies: Int, val deltaHolding: Double,
 )
 
@@ -19,6 +19,9 @@ data class MoversResult(val status: String, val firstDay: String?, val winners: 
  * Wer eine Seite aendert, aendert beide.
  */
 object Movers {
+    /** Unter diesem alten Preis (EUR) kein Prozentwert (0,02 -> 1,00 EUR waeren +4900 %). ZWILLING: movers.cjs#PCT_MIN_BASE. */
+    const val PCT_MIN_BASE = 0.1
+
     private fun round(x: Double, f: Double): Double = Math.round(x * f).toDouble() / f
 
     private fun better(a: PriceRef?, b: PriceRef, cutoff: String): PriceRef {
@@ -70,7 +73,7 @@ object Movers {
             if (deltaUnit == 0.0) continue
             movers += Mover(
                 key = k, card = c, oldPrice = oldPrice, newPrice = newPrice, deltaUnit = deltaUnit,
-                pct = round((newPrice - oldPrice) / oldPrice * 100.0, 10.0),
+                pct = if (oldPrice < PCT_MIN_BASE) null else round((newPrice - oldPrice) / oldPrice * 100.0, 10.0),
                 weight = round(w, 100.0), copies = count[k] ?: 0,
                 deltaHolding = round((newPrice - oldPrice) * w, 100.0),
             )

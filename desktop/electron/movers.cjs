@@ -25,6 +25,10 @@ function addDays(day, n) {
 
 const round = (x, f) => Math.round(x * f) / f;
 
+// Unter diesem alten Preis (EUR) kein Prozentwert: 0,02 -> 1,00 EUR waeren +4900 % und sagen nichts. Die Reihenfolge
+// haengt ohnehin an der Euro-Aenderung des Bestands (deltaHolding). ZWILLING: Movers.kt#PCT_MIN_BASE.
+const PCT_MIN_BASE = 0.1;
+
 // Pro Printing: die letzte Zeile <= Stichtag; gibt es keine, die frueheste (fuer "erscheinen ab").
 function better(a, b, cutoff) {
   if (!a) return b;
@@ -80,7 +84,7 @@ function computeMovers({ cards, copies, references, today, days, top = 10 }) {
       key: k, id: c.id, set_code: c.set_code, language: c.language, rarity: c.rarity,
       name: c.name, image_url: c.image_url,
       oldPrice, newPrice, deltaUnit,
-      pct: round(((newPrice - oldPrice) / oldPrice) * 100, 10),
+      pct: oldPrice < PCT_MIN_BASE ? null : round(((newPrice - oldPrice) / oldPrice) * 100, 10),
       weight: round(own.weight, 100),
       copies: own.count,
       deltaHolding: round((newPrice - oldPrice) * own.weight, 100),
@@ -96,4 +100,4 @@ function computeMovers({ cards, copies, references, today, days, top = 10 }) {
   return { status, firstDay: status === 'no_reference' ? firstDay : null, winners, losers };
 }
 
-module.exports = { computeMovers, familyOfSource, familyOfLock, addDays, keyOf };
+module.exports = { computeMovers, familyOfSource, familyOfLock, addDays, keyOf, PCT_MIN_BASE };

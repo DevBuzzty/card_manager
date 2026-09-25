@@ -23,6 +23,15 @@ export function kenntRarity(rarity) {
   return !PLATZHALTER.has(r.toLowerCase()) && /[A-Za-z]/.test(r);
 }
 
+// Anzeige einer Seltenheit in Filter, Chips und Suche (Feinschliff 26.09.2026): keine Auskunft -> "Unbekannt",
+// Tippfehler-Anhaengsel am Ende ("Rare-->") fallen weg. Die Daten bleiben, wie sie sind. ZWILLING:
+// android cloud/RarityQuellen.kt#display, gemeinsame Fixture docs/fixtures/valuation/rarity-display.json.
+export const RARITY_UNKNOWN_LABEL = 'Unbekannt';
+export function rarityDisplay(rarity) {
+  const r = String(rarity ?? '').trim().replace(/[^A-Za-z0-9')]+$/, '');
+  return kenntRarity(r) ? r : RARITY_UNKNOWN_LABEL;
+}
+
 // Praefix + Nummer, ohne Region -- MAMO-DE072 und MAMO-EN072 sind dieselbe Druckzeile.
 function zeile(code) {
   const m = /^([A-Z0-9]{2,6})-([A-Z]{1,2})([A-Z]?\d{1,4})$/.exec(String(code || '').trim().toUpperCase());

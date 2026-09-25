@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.ui
 
+import com.example.yugiohscanner.cloud.RarityQuellen
+import com.example.yugiohscanner.ml.CardLabels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,12 +48,7 @@ private fun rarityRank(r: String?): Int = when (r?.lowercase()) {
     else -> 10
 }
 
-private fun typeGroup(type: String?): String = when {
-    type?.contains("Spell", ignoreCase = true) == true -> "Zauber"
-    type?.contains("Trap", ignoreCase = true) == true -> "Falle"
-    type?.contains("Monster", ignoreCase = true) == true -> "Monster"
-    else -> "Sonstige"
-}
+private fun typeGroup(type: String?): String = CardLabels.typeGroup(type) // Zwilling: cardLabels.js
 
 // Value of one printing, from its cached prices and the copies actually owned of it (Spec G4: 1st Ed mit eigenem Preis).
 internal fun printingValue(c: CardRow, byKey: Map<String, List<CopyRow>>): Double =
@@ -82,7 +79,7 @@ fun computeDashboard(cards: List<CardRow>, copies: List<CopyRow>): Dashboard {
     val totalCards = cards.sumOf { it.quantity }
     val top = cards.sortedByDescending { printingValue(it, byKey) }.take(10)
 
-    val byRarity = groupCards(cards, byKey) { it.rarity?.takeIf { s -> s.isNotBlank() && s != "Unknown" } ?: "Unbekannt" }
+    val byRarity = groupCards(cards, byKey) { RarityQuellen.display(it.rarity) } // „2“/„3“/„New“ -> „Unbekannt“
         .sortedBy { rarityRank(if (it.label == "Unbekannt") null else it.label) }
 
     val typeOrder = listOf("Monster", "Zauber", "Falle", "Sonstige")
@@ -92,7 +89,7 @@ fun computeDashboard(cards: List<CardRow>, copies: List<CopyRow>): Dashboard {
     val bySet = groupCards(cards, byKey) { it.setCode.takeIf { s -> s.isNotBlank() && s != "Unknown" } ?: "Unbekannt" }
         .sortedByDescending { it.count }.take(10)
 
-    val byAttribute = groupCards(cards, byKey, include = { !it.attribute.isNullOrBlank() }) { it.attribute }
+    val byAttribute = groupCards(cards, byKey, include = { !it.attribute.isNullOrBlank() }) { CardLabels.attribute(it.attribute!!) }
         .sortedByDescending { it.count }
 
     return Dashboard(totalValue, totalCards, cards.size, top, byRarity, byType, bySet, byAttribute)

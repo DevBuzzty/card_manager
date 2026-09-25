@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import com.example.yugiohscanner.cloud.RarityQuellen
 import androidx.compose.runtime.Immutable
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.ContainerRow
@@ -41,7 +42,7 @@ private fun groupCards(cards: List<CardRow>, byKey: Map<String, List<CopyRow>>):
             totalQty = rows.sumOf { it.quantity },
             totalValue = rows.sumOf { printingValue(it, byKey) },
             maxPrice = rows.maxOfOrNull { it.price ?: 0.0 } ?: 0.0,
-            rarities = rows.mapNotNull { it.rarity }.distinct(),
+            rarities = rows.map { RarityQuellen.display(it.rarity) }.distinct(), // „2“/„3“/„New“ -> „Unbekannt“
             variants = rows.sortedByDescending { it.price ?: 0.0 },
         )
     }
@@ -75,7 +76,7 @@ internal class CollectionBase(
     val groups: List<CardGroup> = groupCards(cards, byKey)
     val tagOptions: List<String> = TagVocabulary.from(copies)
     val setOptions: List<String> = cards.map { it.setCode.substringBefore('-') }.distinct().sorted()
-    val rarityOptions: List<String> = cards.mapNotNull { it.rarity }.distinct().sorted()
+    val rarityOptions: List<String> = cards.map { RarityQuellen.display(it.rarity) }.distinct().sorted()
     val typeOptions: List<String> = cards.mapNotNull { it.type }.distinct().sorted()
     val langOptions: List<String> = cards.map { it.language }.distinct().sorted()
 }

@@ -655,7 +655,7 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                                                 />
                                                 <input
                                                     type="text"
-                                                    placeholder="Rarity"
+                                                    placeholder="Seltenheit"
                                                     className="w-1/2 bg-bg/40 border border-line rounded px-2 py-1 text-xs text-text focus:border-accent outline-none"
                                                     value={card.manualRarity || ''}
                                                     onChange={(e) => handleUpdateCard(card.tempId, { manualRarity: e.target.value })}

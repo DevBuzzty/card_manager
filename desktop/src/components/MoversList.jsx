@@ -29,7 +29,7 @@ export default function MoversList({ movers, full = false }) {
             </div>
             <div className="text-right shrink-0">
               <div className={`font-mono text-sm ${up ? 'text-good' : 'text-bad'}`}>{fmtSignedEUR(m.deltaHolding)}</div>
-              <div className={`font-mono text-klein ${up ? 'text-good' : 'text-bad'}`}>{up ? '+' : ''}{m.pct.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %</div>
+              {m.pct != null && <div className={`font-mono text-klein ${up ? 'text-good' : 'text-bad'}`}>{up ? '+' : ''}{m.pct.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %</div>}
             </div>
           </button>
         );
