@@ -14,6 +14,7 @@ import { passcodeMatches } from '../utils/passcode';
 import { PRESETS, matchesPresetGroup, presetsFromState } from '../utils/cardFilters.js';
 import { filterCopyIds } from '../utils/exportScope';
 import { useSaleData } from '../hooks/useSaleData';
+import { rarityDisplay } from '../utils/printingRarity';
 import { selectionCopies, sellSubtitle } from '../utils/selection';
 import { SelectionBar, MoveDialog } from './CollectionSelection';
 import SellFlowDialog from './SellFlowDialog';
@@ -227,7 +228,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
           g.variants.push(card);
           if (card.set_code) g.sets.add(card.set_code.split('-')[0]);
           if (card.language) g.languages.add(card.language);
-          if (card.rarity) g.rarities.add(card.rarity);
+          g.rarities.add(rarityDisplay(card.rarity)); // „2“/„3“/„New“ -> „Unbekannt“ (rarityDisplay)
           if ((card.price || 0) > g.maxPrice) g.maxPrice = card.price || 0;
           const cDate = new Date(card.created_at);
           if (cDate > g.newestDate) g.newestDate = cDate;

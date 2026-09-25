@@ -116,6 +116,32 @@
         ],
         "losers": []
       }
+    },
+    {
+      "name": "Alter Preis unter 0,10 EUR: kein Prozentwert (sonst +4900 %), die Euro-Aenderung zaehlt weiter",
+      "input": {
+        "today": "2026-09-20", "days": 7, "top": 10,
+        "cards": [
+          { "id": "20", "set_code": "CCC-DE001", "language": "DE", "rarity": "Common", "name": "Billig", "image_url": null, "price": 1.0, "price_locked": 1 },
+          { "id": "21", "set_code": "CCC-DE002", "language": "DE", "rarity": "Common", "name": "Grenze", "image_url": null, "price": 0.2, "price_locked": 1 }
+        ],
+        "copies": [
+          { "card_id": "20", "set_code": "CCC-DE001", "language": "DE", "rarity": "Common", "condition": "NM" },
+          { "card_id": "21", "set_code": "CCC-DE002", "language": "DE", "rarity": "Common", "condition": "NM" }
+        ],
+        "references": [
+          { "card_id": "20", "set_code": "CCC-DE001", "language": "DE", "rarity": "Common", "day": "2026-09-10", "price": 0.02, "source": "cm_scrape" },
+          { "card_id": "21", "set_code": "CCC-DE002", "language": "DE", "rarity": "Common", "day": "2026-09-10", "price": 0.1, "source": "cm_scrape" }
+        ]
+      },
+      "expected": {
+        "status": "ok", "firstDay": null,
+        "winners": [
+          { "key": "20|CCC-DE001|DE|Common", "oldPrice": 0.02, "newPrice": 1.0, "deltaUnit": 0.98, "pct": null, "weight": 1.0, "copies": 1, "deltaHolding": 0.98 },
+          { "key": "21|CCC-DE002|DE|Common", "oldPrice": 0.1, "newPrice": 0.2, "deltaUnit": 0.1, "pct": 100.0, "weight": 1.0, "copies": 1, "deltaHolding": 0.1 }
+        ],
+        "losers": []
+      }
     }
   ]
 }

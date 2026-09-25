@@ -63,7 +63,7 @@ class MoversTest {
                     assertEquals(at, x.getDouble("oldPrice"), m.oldPrice, 1e-9)
                     assertEquals(at, x.getDouble("newPrice"), m.newPrice, 1e-9)
                     assertEquals(at, x.getDouble("deltaUnit"), m.deltaUnit, 1e-9)
-                    assertEquals(at, x.getDouble("pct"), m.pct, 1e-9)
+                    if (x.isNull("pct")) assertEquals(at, null, m.pct) else assertEquals(at, x.getDouble("pct"), m.pct!!, 1e-9)
                     assertEquals(at, x.getDouble("weight"), m.weight, 1e-9)
                     assertEquals(at, x.getDouble("deltaHolding"), m.deltaHolding, 1e-9)
                 }

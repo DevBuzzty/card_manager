@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { typeGroup } from '../utils/cardLabels';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, TrendingDown, ArrowUpRight, DollarSign, Clock, Layers, RefreshCw } from 'lucide-react';
 import { fmtEUR, fmtSignedEUR, fmtNum } from '../utils/format';
@@ -59,10 +60,7 @@ export default function Portfolio() {
         // Process Allocation (by Type)
         const typeMap = {};
         collection.forEach(c => {
-            const type = c.type?.includes('Monster') ? 'Monster'
-                       : c.type?.includes('Spell') ? 'Spell'
-                       : c.type?.includes('Trap') ? 'Trap'
-                       : 'Other';
+            const type = typeGroup(c.type); // Monster / Zauber / Falle / Sonstige (cardLabels.js)
             if (!typeMap[type]) typeMap[type] = 0;
             typeMap[type] += c.value != null ? c.value : (c.price || 0) * (c.quantity || 1);
         });

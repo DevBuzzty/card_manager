@@ -3,6 +3,7 @@
 // Printing-Filter (Sprache, Seltenheit, Set) und die Exemplar-Filter (Zustand, Edition, Behälter, Tags) erfüllen.
 import { parseTags } from './tags.js';
 import { printingKey } from './printingKey.js';
+import { rarityDisplay } from './printingRarity.js';
 
 export const EXPORT_FORMAT_OPTIONS = [
   { value: 'carddex', label: 'Card Dex (CSV)' },
@@ -25,7 +26,7 @@ export function filterCopyIds(groups, copiesByPrinting, filters = {}) {
   for (const g of groups || []) {
     for (const v of g.variants || []) {
       if (f.lang !== ALL && v.language !== f.lang) continue;
-      if (f.rarity !== ALL && v.rarity !== f.rarity) continue;
+      if (f.rarity !== ALL && rarityDisplay(v.rarity) !== f.rarity) continue; // Filterwerte sind Anzeige-Werte
       if (f.set !== ALL && setOf(v.set_code) !== f.set) continue;
       for (const cp of (copiesByPrinting && copiesByPrinting[printingKey(v)]) || []) {
         if (f.condition !== ALL && cp.condition !== f.condition) continue;

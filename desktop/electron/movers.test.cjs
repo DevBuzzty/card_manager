@@ -21,7 +21,8 @@ for (const c of FIX.cases) {
         const got = pick(m);
         assert.equal(got.key, e.key, `${list}[${i}].key`);
         assert.equal(got.copies, e.copies, `${list}[${i}].copies`);
-        for (const f of ['oldPrice', 'newPrice', 'deltaUnit', 'pct', 'weight', 'deltaHolding']) near(got[f], e[f], `${list}[${i}].${f}`);
+        for (const f of ['oldPrice', 'newPrice', 'deltaUnit', 'weight', 'deltaHolding']) near(got[f], e[f], `${list}[${i}].${f}`);
+        if (e.pct == null) assert.equal(got.pct, null, `${list}[${i}].pct`); else near(got.pct, e.pct, `${list}[${i}].pct`);
       });
     }
   });

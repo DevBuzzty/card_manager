@@ -31,6 +31,15 @@ object RarityQuellen {
      * Decks" liefert YGOPRODeck `set_rarity: "3"` bzw. "2" (94 Drucke im Katalog). Als Rarity
      * gefuehrt ergibt das Anzeigen wie "Rarity mehrdeutig: 3/Secret Rare/Starlight Rare".
      */
+    /** Anzeige in Filter, Chips und Suche: keine Auskunft -> "Unbekannt", Anhaengsel wie in "Rare-->" fallen weg.
+     *  ZWILLING: desktop/src/utils/printingRarity.js#rarityDisplay, Fixture docs/fixtures/valuation/rarity-display.json. */
+    const val UNKNOWN_LABEL = "Unbekannt"
+    private val TRAILING = Regex("[^A-Za-z0-9')]+$")
+    fun display(rarity: String?): String {
+        val r = rarity?.trim().orEmpty().replace(TRAILING, "")
+        return if (kenntRarity(r)) r else UNKNOWN_LABEL
+    }
+
     fun kenntRarity(rarity: String?): Boolean {
         val r = rarity?.trim().orEmpty()
         if (r.isEmpty() || r.lowercase() in PLATZHALTER) return false

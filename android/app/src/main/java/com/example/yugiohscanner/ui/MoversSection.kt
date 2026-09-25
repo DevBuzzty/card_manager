@@ -126,7 +126,7 @@ private fun MoverList(title: String, movers: List<Mover>, full: Boolean, onOpenC
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text("%+.2f €".format(m.deltaHolding), style = MaterialTheme.typography.bodySmall, fontFamily = MonoFontFamily, color = tint)
-                Text("%+.1f %%".format(m.pct), style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = tint)
+                m.pct?.let { Text("%+.1f %%".format(it), style = MaterialTheme.typography.labelSmall, fontFamily = MonoFontFamily, color = tint) }
             }
         }
     }

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fuelleRarityAusGeschwistern, kenntRarity } from './printingRarity.js';
+import { readFileSync } from 'node:fs';
+import { fuelleRarityAusGeschwistern, kenntRarity, rarityDisplay, RARITY_UNKNOWN_LABEL } from './printingRarity.js';
 
 const d = (set_code, set_rarity, language) => ({ set_code, set_rarity, language });
 
@@ -45,4 +46,11 @@ test('keine Dublette, wenn die aufgefuellte Zeile schon existiert', () => {
 test('Platzhalter erkennen wie im Hauptprozess', () => {
   for (const r of ['', 'Unknown', 'New', '3', null]) assert.ok(!kenntRarity(r), String(r));
   assert.ok(kenntRarity('Ultra Rare'));
+});
+
+// Feinschliff 26.09.2026 -- ZWILLING: android RarityQuellenTest liest dieselbe Fixture.
+test('Anzeige der Seltenheit (Fixture rarity-display.json)', () => {
+  const F = JSON.parse(readFileSync(new URL('../../../docs/fixtures/valuation/rarity-display.json', import.meta.url), 'utf8'));
+  assert.equal(RARITY_UNKNOWN_LABEL, F.unknownLabel);
+  for (const c of F.cases) assert.equal(rarityDisplay(c.raw), c.display, JSON.stringify(c.raw));
 });

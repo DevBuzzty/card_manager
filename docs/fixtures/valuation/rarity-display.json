@@ -1,0 +1,18 @@
+{
+  "_comment": "Anzeige einer Seltenheit in Filter, Chips und Suche (Feinschliff 26.09.2026). ZWILLING: desktop/src/utils/printingRarity.js#rarityDisplay und android cloud/RarityQuellen.kt#display. Gleiche Regel wie kenntRarity: leer, Unknown, New und Angaben ohne Buchstaben (YGOPRODeck liefert fuer frische Sets \"2\"/\"3\") sind keine Auskunft -> \"Unbekannt\". Tippfehler-Anhaengsel am Ende fallen weg. Die Daten selbst bleiben unveraendert.",
+  "unknownLabel": "Unbekannt",
+  "cases": [
+    { "raw": "Ultra Rare", "display": "Ultra Rare" },
+    { "raw": "  Secret Rare ", "display": "Secret Rare" },
+    { "raw": "Collector's Rare", "display": "Collector's Rare" },
+    { "raw": "Quarter Century Secret Rare", "display": "Quarter Century Secret Rare" },
+    { "raw": "Rare-->", "display": "Rare" },
+    { "raw": "Common.", "display": "Common" },
+    { "raw": "2", "display": "Unbekannt" },
+    { "raw": "3", "display": "Unbekannt" },
+    { "raw": "New", "display": "Unbekannt" },
+    { "raw": "Unknown", "display": "Unbekannt" },
+    { "raw": "", "display": "Unbekannt" },
+    { "raw": null, "display": "Unbekannt" }
+  ]
+}

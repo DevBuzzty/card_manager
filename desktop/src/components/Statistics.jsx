@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
+import { attributeLabel, raceLabel, typeGroup } from '../utils/cardLabels';
+import { rarityDisplay } from '../utils/printingRarity';
 import { fmtEUR } from '../utils/format';
 import { BarChart3, Library, Layers, DollarSign, Package, Sparkles } from 'lucide-react';
 
@@ -67,21 +69,20 @@ export default function Statistics() {
             totalCards += q;
             totalValue += c.value != null ? c.value : (c.price || 0) * q;
 
-            const type = c.type?.includes('Monster') ? 'Monster'
-                       : c.type?.includes('Spell') ? 'Spell'
-                       : c.type?.includes('Trap') ? 'Trap' : 'Other';
+            const type = typeGroup(c.type); // Monster / Zauber / Falle / Sonstige (cardLabels.js)
             byType[type] = (byType[type] || 0) + q;
 
             const isMonster = type === 'Monster';
             if (isMonster) {
-                if (c.attribute) byAttr[c.attribute] = (byAttr[c.attribute] || 0) + q;
-                if (c.race) byRace[c.race] = (byRace[c.race] || 0) + q;
+                if (c.attribute) { const a = attributeLabel(c.attribute); byAttr[a] = (byAttr[a] || 0) + q; }
+                if (c.race) { const r = raceLabel(c.race); byRace[r] = (byRace[r] || 0) + q; }
                 if (c.level != null) {
                     const key = `Lvl/Rk ${c.level}`;
                     byLevel[key] = (byLevel[key] || 0) + q;
                 }
             }
-            byRarity[c.rarity || 'Unknown'] = (byRarity[c.rarity || 'Unknown'] || 0) + q;
+            const rar = rarityDisplay(c.rarity);
+            byRarity[rar] = (byRarity[rar] || 0) + q;
             byLang[c.language || 'DE'] = (byLang[c.language || 'DE'] || 0) + q;
             const setPrefix = c.set_code ? c.set_code.split('-')[0] : 'Unknown';
             bySet[setPrefix] = (bySet[setPrefix] || 0) + q;
