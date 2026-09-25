@@ -1,0 +1,42 @@
+{
+  "_comment": "Mehrfachauswahl in der Kartenliste (Spec I §5.1, Plan 2026-09-26). ZWILLING: desktop/src/utils/selection.js und android ml/Selection.kt. Gruppen = eine Karte (Passcode) mit ihren Drucken; Exemplare mit printing-Schluessel (card_id|set_code|language|rarity). Sortierung per Codeeinheiten.",
+  "groups": [
+    { "id": "46986414", "variants": [
+      { "id": "46986414", "set_code": "LOB-DE005", "language": "DE", "rarity": "Ultra Rare" },
+      { "id": "46986414", "set_code": "SDY-DE006", "language": "DE", "rarity": "Common" } ] },
+    { "id": "89631139", "variants": [
+      { "id": "89631139", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare" } ] },
+    { "id": "12345678", "variants": [
+      { "id": "12345678", "set_code": "MP23-DE001", "language": "DE", "rarity": "Common" } ] }
+  ],
+  "copies": [
+    { "copy_id": "c3", "card_id": "46986414", "set_code": "LOB-DE005", "language": "DE", "rarity": "Ultra Rare", "container_id": "box1", "deleted": false },
+    { "copy_id": "c1", "card_id": "46986414", "set_code": "SDY-DE006", "language": "DE", "rarity": "Common", "container_id": null, "deleted": false },
+    { "copy_id": "c2", "card_id": "46986414", "set_code": "SDY-DE006", "language": "DE", "rarity": "Common", "container_id": "binder1", "deleted": false },
+    { "copy_id": "c9", "card_id": "46986414", "set_code": "SDY-DE006", "language": "DE", "rarity": "Common", "container_id": "box1", "deleted": true },
+    { "copy_id": "b1", "card_id": "89631139", "set_code": "LOB-DE001", "language": "DE", "rarity": "Ultra Rare", "container_id": "box1", "deleted": false },
+    { "copy_id": "x1", "card_id": "12345678", "set_code": "MP23-DE001", "language": "DE", "rarity": "Common", "container_id": "box1", "deleted": false }
+  ],
+  "cases": [
+    { "name": "alle Drucke einer Karte, gelöschte fallen raus, sortiert", "selected": ["46986414"], "containers": [], "copyIds": ["c1", "c2", "c3"] },
+    { "name": "zwei Karten", "selected": ["89631139", "46986414"], "containers": [], "copyIds": ["b1", "c1", "c2", "c3"] },
+    { "name": "Behälter-Filter: nur Exemplare darin", "selected": ["46986414", "89631139"], "containers": ["box1"], "copyIds": ["b1", "c3"] },
+    { "name": "Behälter-Filter mit zwei Behältern", "selected": ["46986414"], "containers": ["box1", "binder1"], "copyIds": ["c2", "c3"] },
+    { "name": "nicht ausgewählte Karte zählt nicht", "selected": [], "containers": [], "copyIds": [] }
+  ],
+  "selectionTexts": [
+    { "cards": 1, "copies": 1, "text": "1 Karte · 1 Exemplar" },
+    { "cards": 2, "copies": 5, "text": "2 Karten · 5 Exemplare" },
+    { "cards": 0, "copies": 0, "text": "Nichts ausgewählt" }
+  ],
+  "moveTexts": [
+    { "count": 3, "target": "Box Doppelte", "text": "3 Exemplare nach „Box Doppelte“ verschoben" },
+    { "count": 1, "target": "Ordner A", "text": "1 Exemplar nach „Ordner A“ verschoben" },
+    { "count": 2, "target": null, "text": "2 Exemplare aus ihren Behältern genommen" },
+    { "count": 1, "target": null, "text": "1 Exemplar aus seinem Behälter genommen" }
+  ],
+  "sellSubtitles": [
+    { "cards": 1, "copies": 3, "text": "1 Karte · 3 Exemplare ausgewählt" },
+    { "cards": 4, "copies": 4, "text": "4 Karten · 4 Exemplare ausgewählt" }
+  ]
+}
