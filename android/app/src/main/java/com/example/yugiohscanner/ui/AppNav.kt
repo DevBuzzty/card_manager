@@ -33,6 +33,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.example.yugiohscanner.ml.OfflineStart
 import com.example.yugiohscanner.cloud.CatalogSync
 import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.SideStores
@@ -121,6 +122,9 @@ fun AppNav(onThemeChange: (String) -> Unit) {
     val prefs = remember { context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE) }
     val nav = rememberNavController()
     var cloudReady by remember { mutableStateOf(false) }
+    // Offline-Start: die App läuft mit dem gespeicherten Stand, die Anmeldung wird im Hintergrund wiederholt.
+    var offline by remember { mutableStateOf(false) }
+    val ready = cloudReady || offline
     // Spec §3.3/§9.7: mit gespeicherten Zugangsdaten steht beim Start der Ladebildschirm, nie der
     // Login -- auch wenn die automatische Anmeldung scheitert (Flugmodus); dann "Erneut versuchen".
     var autoLoginRunning by remember { mutableStateOf(SupabaseCloud.isConfigured(prefs)) }
@@ -146,11 +150,20 @@ fun AppNav(onThemeChange: (String) -> Unit) {
         autoLoginRunning = true
         autoLoginError = null
         try {
-            SupabaseCloud.init(prefs); SupabaseCloud.signIn(); cloudReady = true
+            SupabaseCloud.init(prefs); SupabaseCloud.signIn(); offline = false; cloudReady = true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            autoLoginError = e.message ?: "Anmeldung fehlgeschlagen"
+            // Offline-Start: nur bei Verbindungsfehlern (IOException) und nur mit dem Stand desselben Kontos.
+            val acc = OfflineStart.account(e is java.io.IOException, SupabaseCloud.savedAccount(prefs), SupabaseCloud.savedEmail(prefs), SupabaseCloud.email())
+            if (acc != null) {
+                SupabaseCloud.startOffline(acc)
+                offline = true
+                // Stellt den gespeicherten Stand her (ohne ihn scheitert es sichtbar mit der Offline-Meldung).
+                if (CollectionStore.state.value !is StoreState.Ready) CollectionStore.startInitialLoad()
+            } else {
+                autoLoginError = e.message ?: "Anmeldung fehlgeschlagen"
+            }
         } finally {
             autoLoginRunning = false
         }
@@ -158,6 +171,21 @@ fun AppNav(onThemeChange: (String) -> Unit) {
 
     LaunchedEffect(Unit) {
         if (SupabaseCloud.isConfigured(prefs)) autoLogin()
+    }
+    // Offline-Start: Anmeldung mit wachsendem Abstand wiederholen; gelingt sie, gleicht der Speicher sofort ab.
+    LaunchedEffect(offline) {
+        var attempt = 0
+        while (offline && !cloudReady) {
+            kotlinx.coroutines.delay(OfflineStart.retryDelayMs(attempt++))
+            try {
+                SupabaseCloud.signIn()
+                offline = false
+                cloudReady = true
+                CollectionStore.requestSync()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) { /* weiter offline, nächster Versuch */ }
+        }
     }
     // Top-level so it runs once per app start, not once per tab switch. Works before login: the
     // catalog table/bucket are public and this never touches SupabaseCloud's session state.
@@ -188,18 +216,20 @@ fun AppNav(onThemeChange: (String) -> Unit) {
     }
     // Spec §3.3: nach der Anmeldung erst laden. Der Speicher startet das Laden in seinem eigenen
     // Bereich -- ein Wechsel dieses Effekts bricht es nicht ab.
-    LaunchedEffect(cloudReady, storeState is StoreState.Empty) {
-        if (cloudReady && CollectionStore.state.value is StoreState.Empty) CollectionStore.startInitialLoad()
+    LaunchedEffect(ready, storeState is StoreState.Empty) {
+        if (ready && CollectionStore.state.value is StoreState.Empty) CollectionStore.startInitialLoad()
     }
     // Performance (Vorladen): die kleinen Listen aller Reiter laden parallel zur Sammlung, statt erst
     // beim ersten Oeffnen des jeweiligen Reiters.
-    LaunchedEffect(cloudReady) {
-        if (cloudReady) Preload.startSideStores()
+    // Offline starten sie auch (und zeigen dann ihren Fehlerzustand statt ewig zu laden); beim Wechsel auf online
+    // (cloudReady) laufen sie erneut -- ensureLoaded laedt, was noch keinen Wert hat.
+    LaunchedEffect(ready, cloudReady) {
+        if (ready) Preload.startSideStores()
     }
     // Sobald die Sammlung da ist: Anzeigen vorrechnen (abseits des Hauptthreads), kurz auf die
     // Nebenlisten warten, dann den Ladebildschirm freigeben.
-    LaunchedEffect(cloudReady, storeState is StoreState.Ready) {
-        if (cloudReady && storeState is StoreState.Ready && !warm) {
+    LaunchedEffect(ready, storeState is StoreState.Ready) {
+        if (ready && storeState is StoreState.Ready && !warm) {
             Preload.warmUp(context)
             warm = true
             // Messpunkt fuer den Kaltstart (adb logcat -s Startzeit): Prozessstart bis Ende des Ladebildschirms.
@@ -207,14 +237,19 @@ fun AppNav(onThemeChange: (String) -> Unit) {
         }
     }
     // Ladebildschirm auch, solange die automatische Anmeldung laeuft oder gescheitert ist.
-    val autoLoginPending = !cloudReady && (autoLoginRunning || autoLoginError != null)
-    if (autoLoginPending || (cloudReady && (storeState !is StoreState.Ready || !warm))) {
+    val autoLoginPending = !ready && (autoLoginRunning || autoLoginError != null)
+    if (autoLoginPending || (ready && (storeState !is StoreState.Ready || !warm))) {
         StartupLoadingScreen(
-            state = if (cloudReady) (if (storeState is StoreState.Ready) StoreState.Loading else storeState)
+            state = if (ready) (if (storeState is StoreState.Ready) StoreState.Loading else storeState)
                 else autoLoginError?.let { StoreState.Failed(it) } ?: StoreState.Loading,
             onRetry = {
                 if (cloudReady) {
                     CollectionStore.startInitialLoad()
+                } else if (offline) {
+                    // Offline ohne brauchbaren gespeicherten Stand: neu anmelden (klappt es, lädt der Speicher).
+                    offline = false
+                    autoLoginRunning = true
+                    scope.launch { autoLogin() }
                 } else {
                     // Sofort Loading zeigen, damit ein zweiter Tipp keinen zweiten Versuch startet.
                     autoLoginRunning = true
@@ -227,6 +262,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 SupabaseCloud.signOut()
                 resetSession()
                 autoLoginError = null
+                offline = false
                 cloudReady = false
             },
         )
@@ -270,7 +306,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
             popExitTransition = { ExitTransition.None },
         ) {
             composable(Routes.START) {
-                if (cloudReady) StartScreen(
+                if (ready) StartScreen(
                     onOpenSammlung = { nav.navigateTop(Routes.sammlung()) },
                     onOpenScan = { nav.navigate(Routes.SCAN) { launchSingleTop = true } },
                     onOpenDeals = { nav.navigateTop(Routes.DEALS) },
@@ -300,7 +336,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                     LaunchedEffect(Unit) {
                         nav.navigate(Routes.verkaufen("verkaeufe")) { popUpTo(Routes.INSIGHTS) { inclusive = true } }
                     }
-                } else if (cloudReady) InsightsScreen(
+                } else if (ready) InsightsScreen(
                     initialTab = tab,
                     onBack = { nav.popBackStack() },
                 )
@@ -310,7 +346,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 Routes.SAMMLUNG,
                 arguments = listOf(navArgument("segment") { type = NavType.StringType; defaultValue = "karten" }),
             ) { backStackEntry ->
-                if (cloudReady) SammlungScreen(
+                if (ready) SammlungScreen(
                     segment = backStackEntry.arguments?.getString("segment") ?: "karten",
                     onSegment = { nav.navigate(Routes.sammlung(it)) { popUpTo(Routes.SAMMLUNG) { inclusive = true } } },
                     onOpenSuche = { nav.navigate(Routes.SUCHE) },
@@ -323,7 +359,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 Routes.VERKAUFEN,
                 arguments = listOf(navArgument("segment") { type = NavType.StringType; defaultValue = "kandidaten" }),
             ) { backStackEntry ->
-                if (cloudReady) VerkaufenScreen(
+                if (ready) VerkaufenScreen(
                     segment = backStackEntry.arguments?.getString("segment") ?: "kandidaten",
                     onSegment = { nav.navigate(Routes.verkaufen(it)) { popUpTo(Routes.VERKAUFEN) { inclusive = true } } },
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
@@ -332,7 +368,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 // Spec I Fixrunde 1: dieselbe Wisch-Aktualisierung, die vorher SammlungScreen fuer den
                 // Decks-Reiter lieferte (RefreshableBox von aussen, wie zuvor -- unveraendert gegenueber
                 // Task 9, nur der Aufrufort zog von SammlungScreen hierher um).
-                if (cloudReady) RefreshableBox(onRefresh = {
+                if (ready) RefreshableBox(onRefresh = {
                     SideStores.decks.refreshAndWait()
                     SideStores.allDeckCards.refreshAndWait()
                     CollectionStore.awaitSync()
@@ -349,7 +385,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 // wenn sie beim Zurueckkommen gar nicht neu zusammengesetzt wird.
                 val seite by backStackEntry.savedStateHandle
                     .getStateFlow<Int?>(Routes.SEITE_NACH_EINSORTIEREN, null).collectAsState()
-                if (cloudReady) BinderPageScreen(
+                if (ready) BinderPageScreen(
                     containerId = id,
                     onBack = { nav.popBackStack() },
                     onEinsortieren = { nav.navigate(Routes.einsortieren(id)) },
@@ -363,7 +399,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 Routes.EINSORTIEREN,
                 arguments = listOf(navArgument("containerId") { type = NavType.StringType }),
             ) { backStackEntry ->
-                if (cloudReady) SortIntoBinderScreen(
+                if (ready) SortIntoBinderScreen(
                     containerId = backStackEntry.arguments?.getString("containerId").orEmpty(),
                     onDone = { page ->
                         // Erst den Rueckkanal setzen, dann zurueckgehen: der Eintrag, an dem der
@@ -381,11 +417,11 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 ) else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(Routes.SCAN) {
-                if (cloudReady) ScanScreen(onClose = { nav.popBackStack() })
+                if (ready) ScanScreen(onClose = { nav.popBackStack() })
                 else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(Routes.DEALS) {
-                if (cloudReady) DealsScreen() else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
+                if (ready) DealsScreen() else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(Routes.EINSTELLUNGEN) {
                 SettingsScreen(prefs, onBack = { nav.popBackStack() }, onTheme = onThemeChange) {
@@ -393,7 +429,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
                 }
             }
             composable(Routes.SUCHE) {
-                if (cloudReady) SearchScreen(onClose = { nav.popBackStack() }, onAdded = { CollectionStore.requestSync() })
+                if (ready) SearchScreen(onClose = { nav.popBackStack() }, onAdded = { CollectionStore.requestSync() })
                 else CloudLoginScreen(prefs) { resetSession(); cloudReady = true }
             }
             composable(Routes.SEALED_SUCHE) {
