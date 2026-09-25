@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import CollectionToolbar from './CollectionToolbar';
 import CollectionFilters from './CollectionFilters';
@@ -14,6 +14,10 @@ import { passcodeMatches } from '../utils/passcode';
 import { PRESETS, matchesPresetGroup, presetsFromState } from '../utils/cardFilters.js';
 import { filterCopyIds } from '../utils/exportScope';
 import { useSaleData } from '../hooks/useSaleData';
+import { selectionCopies, sellSubtitle } from '../utils/selection';
+import { SelectionBar, MoveDialog } from './CollectionSelection';
+import SellFlowDialog from './SellFlowDialog';
+import { useToast } from './toastContext';
 
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const navigate = useNavigate();
@@ -362,6 +366,44 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
     })),
   );
 
+  // Mehrfachauswahl (Spec I §5.1, Plan 2026-09-26): Auswahl-Modus per Knopf oder Strg+Klick, Esc hebt auf.
+  // Gezählt werden nur SICHTBARE gewählte Karten; die Exemplare kommen aus listSaleCopies (dort steht for_sale).
+  const toast = useToast();
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const [selling, setSelling] = useState(null);
+  const [moving, setMoving] = useState(null);
+  const endSelection = useCallback(() => { setSelectMode(false); setSelected(new Set()); }, []);
+  const toggleSelect = (card) => setSelected((s) => {
+    const n = new Set(s); const id = String(card.id);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const visibleSelected = useMemo(() => filtered.filter((c) => selected.has(String(c.id))), [filtered, selected]);
+  const selCopies = useMemo(() => selectionCopies(visibleSelected.map((c) => ({ ...c, id: String(c.id) })),
+    visibleSelected.map((c) => String(c.id)), sale.data?.copies || [], filterContainers), [visibleSelected, sale.data, filterContainers]);
+  useEffect(() => {
+    if (!selectMode || selling || moving) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') endSelection(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectMode, selling, moving, endSelection]);
+  const onTileClick = (card, e) => {
+    if (selectMode || e?.ctrlKey || e?.metaKey) { setSelectMode(true); toggleSelect(card); return; }
+    openCard(card);
+  };
+  const onMoved = ({ moved, text }) => {
+    setMoving(null);
+    endSelection();
+    window.dispatchEvent(new Event('collection-dirty'));
+    toast.show({ text, action: moved.length === 0 ? null : { label: 'Rückgängig', run: () => {
+      window.api.restoreCopyLocations(moved).then((r) => {
+        if (!r?.success) toast.show({ text: r?.error || 'Rückgängig fehlgeschlagen.' });
+        window.dispatchEvent(new Event('collection-dirty'));
+      });
+    } } });
+  };
+
   // The panel walks the list with the arrow buttons, so it gets the current order handed over.
   const openCard = (card) => {
     const first = (card.variants && card.variants[0]) || card;
@@ -377,7 +419,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
         <div className="flex flex-col gap-4 mb-4 bg-surface p-4 rounded-xl border border-line shrink-0">
-            <CollectionToolbar t={{ filter, setFilter, sortType, setSortType, setFiltersOpen, filtersOpen, activeFilters, openExport, exportCopyIds, setExportCopyIds, setPricesOpen, pricesOpen, runBulk, cmBulkBusy, cmRunning, cmProgress, runCardmarket, cmAuto, toggleCmAuto, cmMinRank, setCmMinRank, handleUpdate, updating, cmStatus, relTime, containersTagsError, copiesLoadError, count: filtered.length }} />
+            <CollectionToolbar t={{ filter, setFilter, sortType, setSortType, setFiltersOpen, filtersOpen, activeFilters, openExport, exportCopyIds, setExportCopyIds, setPricesOpen, pricesOpen, runBulk, cmBulkBusy, cmRunning, cmProgress, runCardmarket, cmAuto, toggleCmAuto, cmMinRank, setCmMinRank, handleUpdate, updating, cmStatus, relTime, containersTagsError, copiesLoadError, count: filtered.length, selectMode, toggleSelectMode: () => (selectMode ? endSelection() : setSelectMode(true)) }} />
             <CollectionFilters f={{ filtersOpen, presets, togglePreset, filterType, setFilterType, filterLang, setFilterLang, filterAttribute, setFilterAttribute, attributes, filterRace, setFilterRace, races, filterRarity, setFilterRarity, rarities, filterCondition, setFilterCondition, filterEdition, setFilterEdition, filterSet, setFilterSet, sets, clearFilters, containers, filterContainers, toggleContainerFilter, tagOptions, filterTags, toggleTagFilter, activeFilters }} />
         </div>
 
@@ -386,9 +428,21 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
                 <div className="h-full flex items-center justify-center text-muted">Keine Karten gefunden.</div>
             ) : (
                 <CollectionGrid items={filtered} containers={containers} filterContainers={filterContainers}
-                    forSaleByCard={forSaleByCard} onOpen={openCard} />
+                    forSaleByCard={forSaleByCard} onOpen={onTileClick} selectMode={selectMode} selected={selected} />
             )}
         </div>
+        {selectMode && (
+            <SelectionBar cards={visibleSelected.length} copies={selCopies.length}
+                onSelectAll={() => setSelected(new Set(filtered.map((c) => String(c.id))))}
+                onSell={() => setSelling({ copies: selCopies, subtitle: sellSubtitle(visibleSelected.length, selCopies.length) })}
+                onMove={() => setMoving(selCopies.map((c) => c.copy_id))}
+                onCancel={endSelection} />
+        )}
+        {selling && (
+            <SellFlowDialog title="" subtitle={selling.subtitle} copies={selling.copies}
+                onClose={() => { setSelling(null); window.dispatchEvent(new Event('collection-dirty')); }} />
+        )}
+        {moving && <MoveDialog copyIds={moving} containers={containers} onClose={() => setMoving(null)} onMoved={onMoved} />}
     </div>
   );
 }

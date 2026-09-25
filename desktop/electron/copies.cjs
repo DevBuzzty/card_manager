@@ -131,6 +131,34 @@ function setCopyLocation(db, { copy_id, container_id, page, slot }) {
   if (info.changes === 0) throw new ValidationError('Exemplar nicht gefunden.');
 }
 
+// Mehrfachauswahl (Plan 2026-09-26): alle Exemplare in EINER Transaktion in einen Behälter jeder Art oder heraus
+// (containerId null). Seite/Fach leert setCopyLocation. Wer schon im Ziel liegt, bleibt unangetastet -- sonst verlöre ein
+// einsortiertes Exemplar im selben Ordner sein Fach. -> alte Standorte der wirklich verschobenen (für Rückgängig).
+function relocateCopies(db, { copyIds, containerId } = {}) {
+  if (!Array.isArray(copyIds) || copyIds.length === 0) throw new ValidationError('Keine Exemplare ausgewählt.');
+  const target = containerId ?? null;
+  const get = db.prepare('SELECT copy_id, container_id, page, slot FROM card_copies WHERE copy_id = ? AND deleted = 0');
+  return db.transaction(() => {
+    const moved = [];
+    for (const id of copyIds) {
+      const row = get.get(id);
+      if (!row) throw new ValidationError('Exemplar nicht gefunden.');
+      if ((row.container_id ?? null) === target) continue;
+      setCopyLocation(db, { copy_id: id, container_id: target, page: null, slot: null });
+      moved.push(row);
+    }
+    return moved;
+  })();
+}
+
+// Rückgängig zu relocateCopies: jeden alten Standort wiederherstellen, alles oder nichts.
+function restoreCopyLocations(db, locations) {
+  if (!Array.isArray(locations)) throw new ValidationError('Nichts zum Wiederherstellen.');
+  db.transaction(() => {
+    for (const l of locations) setCopyLocation(db, { copy_id: l.copy_id, container_id: l.container_id ?? null, page: l.page ?? null, slot: l.slot ?? null });
+  })();
+}
+
 // Copy_id-genauer Soft-Delete -- das exemplarbezogene Gegenstueck zu removeCopies() (Gruppe nach
 // Edition/Zustand/Erstellzeit), nicht dessen Ersatz. Seit jedes Exemplar eigene Standort-, Tag-
 // und Notizdaten traegt, ist es NICHT mehr egal, welches physische Exemplar einer Gruppe geloescht
@@ -396,5 +424,5 @@ module.exports = {
   ValidationError,
   defaults, listCopies, listAllCopies, groupCopies, addCopies, removeCopies, moveCopies, updateCopyGroup, softDeletePrinting,
   setCopyLocation, deleteCopy, setCopyTagsNote, listUnsortedCopies, listDeckCopies, listTags, listContainers, saveContainer,
-  normalizeTagList, CONTAINER_KINDS, BINDER_POCKETS, setForSale, listSaleCopies,
+  normalizeTagList, CONTAINER_KINDS, BINDER_POCKETS, setForSale, listSaleCopies, relocateCopies, restoreCopyLocations,
 };

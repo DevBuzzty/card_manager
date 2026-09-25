@@ -314,7 +314,7 @@ fun CopySheet(
 
 // Dropdown fuer die Behaelterauswahl -- gleicher Aufbau wie SetPicker in ScanStagingScreen.kt.
 @Composable
-private fun ContainerPicker(containers: List<ContainerRow>, current: ContainerRow?, onSelect: (ContainerRow?) -> Unit) {
+internal fun ContainerPicker(containers: List<ContainerRow>, current: ContainerRow?, onSelect: (ContainerRow?) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val label = current?.let { "${it.name} (${CONTAINER_KIND_LABELS[it.kind] ?: it.kind})" } ?: "Kein Behälter"
 

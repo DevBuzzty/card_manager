@@ -2,7 +2,8 @@ import { getFrameColor, getRarityInfo } from '../utils/rarity.js';
 import { fmtEUR } from '../utils/format';
 
 // saleNote: Spec H1 §5.3 Zusatz "(2 zum Verkauf)" der Sammlungszeile, sonst null.
-export default function CardTile({ card, onClick, saleNote = null }) {
+// selectMode/selected: Mehrfachauswahl der Kartenliste (Häkchen oben links, Rahmen in Akzentfarbe).
+export default function CardTile({ card, onClick, saleNote = null, selectMode = false, selected = false }) {
   const frame = getFrameColor(card.type);
   const qty = card.quantity || 1;
   const total = card.totalValue != null ? card.totalValue
@@ -25,9 +26,14 @@ export default function CardTile({ card, onClick, saleNote = null }) {
   return (
     <div
       onClick={onClick}
-      className="group relative rounded-xl overflow-hidden bg-surface-2 border border-line cursor-pointer transition-transform hover:-translate-y-0.5"
+      className={`group relative rounded-xl overflow-hidden bg-surface-2 border cursor-pointer transition-transform hover:-translate-y-0.5 ${selected ? 'border-accent outline outline-2 outline-accent' : 'border-line'}`}
       style={{ boxShadow: `inset 0 0 0 1.5px ${frame}55` }}
+      aria-pressed={selectMode ? selected : undefined}
     >
+      {selectMode && (
+        <span className={`absolute top-2 left-2 z-20 w-6 h-6 rounded-full border-2 grid place-items-center text-sm font-bold ${selected ? 'bg-accent border-accent text-accent-fg' : 'bg-bg/80 border-line text-transparent'}`}
+          aria-hidden="true">✓</span>
+      )}
       {/* Art */}
       <div className="relative h-36 bg-bg overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-1 z-10" style={{ backgroundColor: frame }} />

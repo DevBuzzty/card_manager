@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Search, SlidersHorizontal, Coins, AlertCircle, Download } from 'lucide-react';
+import { Search, SlidersHorizontal, Coins, AlertCircle, Download, CheckSquare } from 'lucide-react';
 import CustomSelect from './CustomSelect';
 import ExportDialog from './ExportDialog';
 
@@ -7,7 +7,7 @@ import ExportDialog from './ExportDialog';
 // Suche, Sortierung, Filter-Knopf, Export, Preise-Menue) und die Ladefehler-Banner. Zustand und Logik bleiben in
 // CollectionList.jsx und kommen gebuendelt in `t` herein.
 export default function CollectionToolbar({ t }) {
-  const { filter, setFilter, sortType, setSortType, setFiltersOpen, filtersOpen, activeFilters, openExport, exportCopyIds, setExportCopyIds, setPricesOpen, pricesOpen, runBulk, cmBulkBusy, cmRunning, cmProgress, runCardmarket, cmAuto, toggleCmAuto, cmMinRank, setCmMinRank, handleUpdate, updating, cmStatus, relTime, containersTagsError, copiesLoadError, count } = t;
+  const { filter, setFilter, sortType, setSortType, setFiltersOpen, filtersOpen, activeFilters, openExport, exportCopyIds, setExportCopyIds, setPricesOpen, pricesOpen, runBulk, cmBulkBusy, cmRunning, cmProgress, runCardmarket, cmAuto, toggleCmAuto, cmMinRank, setCmMinRank, handleUpdate, updating, cmStatus, relTime, containersTagsError, copiesLoadError, count, selectMode, toggleSelectMode } = t;
   return (
     <>
       {/* Row 1: count, search, sort, filter toggle, prices menu */}
@@ -26,6 +26,11 @@ export default function CollectionToolbar({ t }) {
                     filtersOpen || activeFilters.length ? 'bg-accent/15 border-accent/40 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
               <SlidersHorizontal className="w-4 h-4" /> Filter
               {activeFilters.length > 0 && <span className="font-mono text-klein bg-accent text-accent-fg rounded-full px-1.5">{activeFilters.length}</span>}
+          </button>
+          <button onClick={toggleSelectMode} aria-pressed={selectMode}
+                  className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
+                    selectMode ? 'bg-accent/15 border-accent/40 text-text' : 'bg-surface border-line text-muted hover:text-text')}>
+              <CheckSquare className="w-4 h-4" /> {selectMode ? 'Auswahl beenden' : 'Auswählen'}
           </button>
           <button onClick={openExport} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface border border-line text-muted hover:text-text">
               <Download className="w-4 h-4" /> Exportieren…
