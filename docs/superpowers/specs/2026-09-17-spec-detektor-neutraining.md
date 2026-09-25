@@ -1,6 +1,18 @@
 # Spec: Detektor neu trainieren – ganze Karten statt nackter Artworks
 
-Stand 17.09.2026 · Entwurf zur Freigabe
+Stand 17.09.2026 · **Umgesetzt** (Nachtrag 26.09.2026)
+
+> **Ergebnis:** Detektor v2 (ganze Karten, `4e7036e`/`d597177`, gemergt `3a5597c`) und v3 (Pendel, `dd0504a`/`469506d`) sind in der App.
+> Messkorb `ml/detector_bench.py`, Ende-zu-Ende-Trefferquote, conf 0,6:
+>
+> | Korb | alt | v2 | v3 |
+> |---|---|---|---|
+> | eigene Fotos (Halterung + Boden) | 0/3 | 3/3 | **93/94 (98,9 %)** — Ziel ≥ 95 % erreicht |
+> | eBay/Kleinanzeigen gesamt | 44,4 % | 77,5 % | **79,4 %** — Ziel ≥ 85 % nicht erreicht |
+> | davon Pendel | 0 % | 20 % | 80 % |
+>
+> Der Detektor findet auf 605/608 eBay-Fotos eine Box (99,5 %). Die restlichen ~20 % Fehlgriffe entstehen danach beim
+> **Embedder** (falsche Karte gewählt) — der ist nach §7 nicht Teil dieser Spec. Messdateien: `ml/ocr_bench/detector-*.json`.
 
 ## 1. Warum
 Befund `docs/superpowers/ledgers/2026-09-17-kartenerkennung-befund/befund.md`:
