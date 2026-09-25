@@ -496,3 +496,40 @@ test('listDeckCopies liefert lebende Exemplare lebender Printings mit Standort u
   assert.equal(lebt.edition, 'unknown');
   assert.equal(lebt.condition, 'NM');
 });
+
+// Mehrfachauswahl (Plan 2026-09-26): verschieben in jede Behälterart, Rückgängig, schon im Ziel = unberührt.
+test('relocateCopies: in eine Box, alte Standorte zurück, Rückgängig stellt Seite/Fach wieder her', () => {
+  const db = freshDb();
+  addContainer(db, 'b', 'Ordner A', 'binder');
+  addContainer(db, 'x', 'Box Doppelte', 'box', null);
+  addCopy(db, 'k1', { container_id: 'b', page: 2, slot: 5 });
+  addCopy(db, 'k2');
+  const moved = copies.relocateCopies(db, { copyIds: ['k1', 'k2'], containerId: 'x' });
+  assert.deepEqual(moved.map((m) => [m.copy_id, m.container_id, m.page, m.slot]), [['k1', 'b', 2, 5], ['k2', null, null, null]]);
+  assert.deepEqual(['k1', 'k2'].map((id) => { const r = readCopy(db, id); return [r.container_id, r.page, r.slot]; }), [['x', null, null], ['x', null, null]]);
+  copies.restoreCopyLocations(db, moved);
+  assert.deepEqual([readCopy(db, 'k1').container_id, readCopy(db, 'k1').page, readCopy(db, 'k1').slot, readCopy(db, 'k2').container_id], ['b', 2, 5, null]);
+});
+
+test('relocateCopies: heraus aus dem Behälter; wer schon im Ziel liegt, behält sein Fach', () => {
+  const db = freshDb();
+  addContainer(db, 'b', 'Ordner A', 'binder');
+  addCopy(db, 'k1', { container_id: 'b', page: 1, slot: 1 });
+  addCopy(db, 'k2', { container_id: 'b', page: 1, slot: 2 });
+  assert.deepEqual(copies.relocateCopies(db, { copyIds: ['k1'], containerId: 'b' }), []);
+  assert.equal(readCopy(db, 'k1').slot, 1);
+  const moved = copies.relocateCopies(db, { copyIds: ['k2'], containerId: null });
+  assert.equal(moved.length, 1);
+  assert.deepEqual([readCopy(db, 'k2').container_id, readCopy(db, 'k2').slot], [null, null]);
+});
+
+test('relocateCopies: unbekanntes/gelöschtes Exemplar oder Behälter -> nichts geändert (eine Transaktion)', () => {
+  const db = freshDb();
+  addContainer(db, 'x', 'Box', 'box', null);
+  addCopy(db, 'k1');
+  addCopy(db, 'k2', { deleted: 1 });
+  assert.throws(() => copies.relocateCopies(db, { copyIds: ['k1', 'k2'], containerId: 'x' }), /Exemplar nicht gefunden/);
+  assert.equal(readCopy(db, 'k1').container_id, null, 'k1 wurde mit zurückgerollt');
+  assert.throws(() => copies.relocateCopies(db, { copyIds: ['k1'], containerId: 'weg' }), /Behälter nicht gefunden/);
+  assert.throws(() => copies.relocateCopies(db, { copyIds: [], containerId: 'x' }), /Keine Exemplare/);
+});

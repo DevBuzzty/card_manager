@@ -584,6 +584,15 @@ ipcMain.handle('set-copy-location', (event, loc) => {
     try { copies.setCopyLocation(db, loc); return { success: true }; }
     catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'set-copy-location') }; }
 });
+// Mehrfachauswahl (Plan 2026-09-26): verschieben in jeden Behälter oder heraus; moved = alte Standorte fürs Rückgängig.
+ipcMain.handle('relocate-copies', (event, d) => {
+    try { return { success: true, moved: copies.relocateCopies(db, d) }; }
+    catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'relocate-copies') }; }
+});
+ipcMain.handle('restore-copy-locations', (event, locations) => {
+    try { copies.restoreCopyLocations(db, locations); return { success: true }; }
+    catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'restore-copy-locations') }; }
+});
 ipcMain.handle('set-copy-tags-note', (event, d) => {
     try { copies.setCopyTagsNote(db, d); return { success: true }; }
     catch (e) { return { success: false, error: containerCopyErrorMessage(e, 'set-copy-tags-note') }; }
