@@ -27,4 +27,7 @@ data class CardRow(
     // Spec G4 §6: 1st-Ed-Preis (Cloud-Trigger aus price x cm_first_ed_factor) und Aufschlagsfaktor. Nur gelesen.
     val priceFirstEd: Double? = null,
     val cmFirstEdFactor: Double? = null,
+    // Koreanische Karten (Spec 2026-10-01): koreanischer Name und Sprach-Preisfaktor, nur bei KR-Zeilen gesetzt.
+    val nameKo: String? = null,
+    val cmLangFactor: Double? = null,
 )

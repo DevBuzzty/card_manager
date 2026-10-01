@@ -178,7 +178,12 @@ object SetCodeMatch {
      * to [evidence] for callers that have no better per-frame breakdown to offer (matches was the
      * pre-Task-6 behaviour, just also now populating the two new fields off whatever was passed).
      */
-    fun best(evidence: List<String>, known: List<SetOption>, framesEvidence: List<String> = evidence): MatchResult {
+    fun best(
+        evidence: List<String>,
+        known: List<SetOption>,
+        framesEvidence: List<String> = evidence,
+        festeSprache: String? = null,
+    ): MatchResult {
         if (known.isEmpty() || evidence.isEmpty()) return MatchResult(null, emptyList(), MatchReason.NO_MATCH)
         val joined = evidence.joinToString(" ")
         val hay = norm(joined)
@@ -237,6 +242,23 @@ object SetCodeMatch {
         val codeExactMatch = codeFrameCount >= 1
 
         fun byVerifiedFirst(list: List<Scored>) = list.map { it.option }.sortedByDescending { it.verified }
+
+        // Feste Scan-Sprache (Spec koreanische Karten §3.2): Kuerzel+Nummer sind erkannt, die Sprache
+        // gibt der Nutzer vor -- vor Kartentext-Hinweis und gelesener Region. Gibt es keinen Druck in
+        // dieser Sprache, wird der Code zusammengesetzt (unverifiziert), wie im Fall 1 unten.
+        if (festeSprache != null) {
+            val passend = byVerifiedFirst(bestGroup.filter { it.option.language.equals(festeSprache, ignoreCase = true) })
+            val gewaehlt = passend.firstOrNull() ?: SetOption(
+                setCode = "$groupPrefix-${com.example.yugiohscanner.ml.ScanSprache.region(festeSprache)}$groupNumber",
+                rarity = byVerifiedFirst(bestGroup).first().rarity,
+                price = 0.0,
+                language = festeSprache,
+                verified = false,
+            )
+            val rest = byVerifiedFirst(bestGroup).filter { it !in passend }
+            val liste = if (passend.isNotEmpty()) passend + rest else listOf(gewaehlt) + rest
+            return MatchResult(gewaehlt, liste.distinctBy { it.setCode + "|" + it.rarity }, MatchReason.MATCHED, codeExactMatch, codeFrameCount)
+        }
 
         // Sprache aus dem gelesenen Kartentext (19.09.2026, SprachHinweis): der Text ist gross und steht in
         // jedem Bild, die Region im Set-Code oft nur in einem verstuemmelten. Ist die Sprache eindeutig und

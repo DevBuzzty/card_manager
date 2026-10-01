@@ -19,7 +19,7 @@ export type Group = {
 
 export const TITLE_MAX = 65;
 export const LANGUAGE_NAMES: Record<string, string> = {
-  DE: "Deutsch", EN: "Englisch", FR: "Französisch", IT: "Italienisch", SP: "Spanisch", PT: "Portugiesisch", JP: "Japanisch",
+  DE: "Deutsch", EN: "Englisch", FR: "Französisch", IT: "Italienisch", SP: "Spanisch", PT: "Portugiesisch", JP: "Japanisch", KR: "Koreanisch",
 };
 const TITLE_EDITION: Record<string, string> = { first: "1. Auflage", limited: "Limitiert" };
 const LINE_EDITION: Record<string, string> = { first: "1. Auflage", unlimited: "Unlimitiert", limited: "Limitiert" };

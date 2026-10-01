@@ -245,24 +245,30 @@ object CollectionRepository {
     // Uses insertCopies (not addCopies) because the fresh row has quantity = 1 and no copies yet,
     // which would otherwise trip the NotMigratedException guard in ensureMigrated.
     suspend fun addPrinting(base: CardRow, setCode: String, rarity: String, price: Double, language: String = "DE",
-                            edition: String, condition: String, count: Int = 1): List<String> = withContext(Dispatchers.IO) {
+                            edition: String, condition: String, count: Int = 1, nameKo: String? = null): List<String> = withContext(Dispatchers.IO) {
+        // KR (Spec 2026-10-01): Standardfaktor; der PC rechnet beim naechsten Sync auf seinen Faktor um.
+        val factor = if (language == "KR") LanguageKr.DEFAULT_FACTOR else null
         val body = JSONObject()
             .put("id", base.id).put("set_code", setCode).put("language", language)
             .put("name", base.name).put("type", base.type).put("desc", base.desc)
             .put("image_url", base.imageUrl).put("atk", base.atk ?: JSONObject.NULL)
             .put("def", base.def ?: JSONObject.NULL).put("level", base.level ?: JSONObject.NULL)
             .put("race", base.race).put("attribute", base.attribute)
-            .put("rarity", rarity).put("price", price).put("deleted", false)
-            .toString()
+            .put("rarity", rarity).put("price", LanguageKr.applyFactor(price, factor) ?: price).put("deleted", false)
+            .put("cm_lang_factor", factor ?: JSONObject.NULL)
+        // Nur senden, wenn bekannt: merge-duplicates wuerde mit null einen vom PC gespeicherten Namen loeschen.
+        if (nameKo != null) body.put("name_ko", nameKo)
+        val bodyText = body.toString()
         executeWithReauth {
             auth(Request.Builder().url("${SupabaseCloud.base()}/rest/v1/cards"))
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Prefer", "resolution=merge-duplicates,return=minimal")
-                .post(body.toRequestBody(SupabaseCloud.jsonMedia)).build()
+                .post(bodyText.toRequestBody(SupabaseCloud.jsonMedia)).build()
         }.use { resp ->
             if (!resp.isSuccessful) throw RuntimeException("Hinzufügen fehlgeschlagen (${resp.code}): ${resp.body?.string()}")
         }
-        val printing = CardRow(base.id, setCode, language, base.name, base.imageUrl, rarity, 0, price)
+        val printing = CardRow(base.id, setCode, language, base.name, base.imageUrl, rarity, 0, price,
+            nameKo = nameKo, cmLangFactor = factor)
         insertCopies(printing, edition, condition, count)
     }
 
@@ -276,7 +282,9 @@ object CollectionRepository {
         if (existing != null) {
             addCopies(existing, edition, condition, count)
         } else {
-            addPrinting(base, setCode, rarity, 0.0, language, edition, condition, count)
+            // KR: koreanischen Namen mitschicken (Netz, hoechstens 2,5 s; ein Fehlschlag laesst ihn leer).
+            val nameKo = if (language == "KR") PrintingRepository.koreanNameKurz(base.id) else null
+            addPrinting(base, setCode, rarity, 0.0, language, edition, condition, count, nameKo)
         }
     }
 
@@ -361,6 +369,8 @@ object CollectionRepository {
                     priceLocked = if (o.isNull("price_locked")) 0 else o.optInt("price_locked", 0),
                     priceFirstEd = if (o.isNull("price_first_ed")) null else o.optDouble("price_first_ed"),
                     cmFirstEdFactor = if (o.isNull("cm_first_ed_factor")) null else o.optDouble("cm_first_ed_factor"),
+                    nameKo = o.strOrNull("name_ko"),
+                    cmLangFactor = if (o.isNull("cm_lang_factor")) null else o.optDouble("cm_lang_factor"),
                 )
             )
         }

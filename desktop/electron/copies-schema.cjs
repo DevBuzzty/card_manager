@@ -102,6 +102,9 @@ function ensureCopiesSchema(db) {
   // Spec G4 §5: Aufschlagsfaktor der Ersten Auflage. Trigger bei jedem Start neu (wie die Recount-Trigger),
   // danach einmal idempotent nachrechnen -- schreibt im Normalfall keine Zeile.
   addColumnIfMissing(db, 'cards', 'cm_first_ed_factor', 'REAL');
+  // Koreanische Karten (Spec 2026-10-01): koreanischer Name und Sprach-Preisfaktor (nur KR-Zeilen).
+  addColumnIfMissing(db, 'cards', 'name_ko', 'TEXT');
+  addColumnIfMissing(db, 'cards', 'cm_lang_factor', 'REAL');
   db.exec(`
     DROP TRIGGER IF EXISTS trg_cards_first_ed_ins;
     DROP TRIGGER IF EXISTS trg_cards_first_ed_upd;

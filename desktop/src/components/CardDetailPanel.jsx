@@ -143,10 +143,12 @@ export default function CardDetailPanel({ paletteOpen = false }) {
           window.api.fetchYugipediaSets(card.id).then(s => s || []).catch(() => []),
           window.api.fetchCardData(card.id).then(d => (d && d.card_sets) || []).catch(() => []),
           window.api.fetchJapaneseSets(card.id).then(s => s || []).catch(() => []),
-      ]).then(([deSets, enSets, jpSets]) => {
+          window.api.fetchKoreanSets(card.id).then(s => s || []).catch(() => []),
+      ]).then(([deSets, enSets, jpSets, krSets]) => {
           const tagged = [
               ...deSets.map(s => ({ ...s, language: 'DE' })),
               ...enSets.map(s => ({ ...s, language: 'EN' })),
+              ...krSets.map(s => ({ ...s, language: 'KR' })),
               ...jpSets.map(s => ({ ...s, language: 'JP' })),
           ];
           const seen = new Set();
@@ -162,6 +164,8 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   }, [card]);
 
   if (!card) return null;
+
+  const nameKo = (card.variants || []).find(v => v.language === 'KR' && v.name_ko)?.name_ko;
 
   const removeVariantLocal = (variant) => {
       setLocalVariants(prev => prev.filter(v =>
@@ -266,6 +270,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
 
       <div>
           <h2 className="text-2xl font-bold text-text mb-2">{card.name}</h2>
+          {nameKo && <p className="text-sm text-muted mb-2">{nameKo}</p>}
           <div className="flex flex-wrap gap-2">
               <span className="px-3 py-1 bg-accent/20 text-text rounded-full text-sm font-medium border border-accent/30">
                   {card.type}
@@ -301,6 +306,9 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   <span className="text-xs text-muted border border-line px-1 rounded">{variant.rarity}</span>
                               </div>
                               <span className="text-xs text-text">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
+                              {variant.language === 'KR' && variant.cm_lang_factor != null && (
+                                  <span className="text-xs text-muted">KR-Faktor {Math.round(variant.cm_lang_factor * 100)} %</span>
+                              )}
                           </div>
                           <div className="flex flex-col items-end gap-2">
                               <input type="number" step="0.01" min="0" defaultValue={variant.price ?? 0}

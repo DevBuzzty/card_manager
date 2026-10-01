@@ -180,7 +180,7 @@ class ScanCapture(
         // veraendert wird (siehe stageScan), und ist ein reiner Vergleich ueber eine kurze Liste
         // (kein Netz, keine Datenbank), verursacht auf dem Hauptthread also keine spuerbare
         // Blockade -- waere er aber trotzdem noetig gewesen.
-        val match = SetCodeMatch.best(evidence, entry.knownSets, framesEvidence)
+        val match = SetCodeMatch.best(evidence, entry.knownSets, framesEvidence, com.example.yugiohscanner.ml.ScanSprache.fest)
         val name = entry.base?.name ?: pc
         // Review-Befund 3: `entry.quantity++`/`--` und das ExtraPrinting-Aequivalent sind
         // Lesen-Aendern-Schreiben auf einem Feld, das der QtyStepper im Pruefen-Blatt (Hauptthread)
@@ -361,7 +361,7 @@ class ScanCapture(
      */
     fun schattenrechnung(pc: String, evidence: List<String>, framesEvidence: List<String>, editionTexts: List<String>) {
         val alt = gesendeteAufloesung[pc] ?: return
-        val neu = SetCodeMatch.best(evidence, alt.knownSets, framesEvidence)
+        val neu = SetCodeMatch.best(evidence, alt.knownSets, framesEvidence, com.example.yugiohscanner.ml.ScanSprache.fest)
         val neueAmpel = com.example.yugiohscanner.ml.ScanConfidence.fromEvidence(
             neu, alt.knownSets, editionTexts, com.example.yugiohscanner.Prefs.defaultEdition(context),
         )

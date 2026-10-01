@@ -13,6 +13,8 @@ import ImportDialog from './ImportDialog';
 import ExportDialog from './ExportDialog';
 import EbaySettings from './EbaySettings';
 
+const normalizeKr = (v) => { const f = Number(v); return v != null && Number.isFinite(f) && f > 0 && f <= 1 ? f : 0.5; };
+
 const SECTIONS = [
     { id: 'konto', label: 'Konto & Sync' },
     { id: 'darstellung', label: 'Darstellung' },
@@ -41,6 +43,8 @@ export default function Settings() {
     const [defaults, setDefaults] = useState({ edition: 'unknown', condition: 'NM' });
     // Spec H1 §4: keep_per_card als Text im Eingabefeld; gespeichert wird der normalisierte Wert (ungültig -> 3).
     const [keepInput, setKeepInput] = useState(String(KEEP_DEFAULT));
+    const [krFactorInput, setKrFactorInput] = useState('50');
+    const [krFactorSaved, setKrFactorSaved] = useState('50'); // zuletzt gespeicherter Wert, für ungültige Eingaben
     // Spec H2 §9: Preisvorschlag-Einstellungen, gleiche Bauart wie keepInput (Text im Feld, normalisiert beim Speichern).
     const [discountInput, setDiscountInput] = useState('5');
     const [minPriceInput, setMinPriceInput] = useState('0,10');
@@ -65,6 +69,9 @@ export default function Settings() {
                     sync_enabled: settings?.sync_enabled ?? 'false',
                 }));
                 setKeepInput(String(keepPerCard(settings?.keep_per_card)));
+                const kr = String(Math.round(normalizeKr(settings?.kr_price_factor) * 100));
+                setKrFactorInput(kr);
+                setKrFactorSaved(kr);
                 setDiscountInput(String(normalizeDiscount(settings?.sale_discount_percent)));
                 setMinPriceInput((normalizeMinPrice(settings?.sale_min_price) / 100).toFixed(2).replace('.', ','));
             });
@@ -104,6 +111,23 @@ export default function Settings() {
         const k = keepPerCard(keepInput);
         setKeepInput(String(k));
         if (window.api) await window.api.saveSetting({ key: 'keep_per_card', value: String(k) });
+    };
+
+    const saveKrFactor = async () => {
+        // Ungültig (leer, 0, über 100): nicht speichern -- sonst rechnete ein geleertes Feld still alle KR-Preise auf 50 % um.
+        const pct = Number(String(krFactorInput).replace(',', '.'));
+        if (String(krFactorInput).trim() === '' || !Number.isFinite(pct) || pct < 1 || pct > 100) {
+            setKrFactorInput(krFactorSaved);
+            return;
+        }
+        const f = normalizeKr(pct / 100);
+        const shown = String(Math.round(f * 100));
+        setKrFactorInput(shown);
+        if (window.api?.setKrPriceFactor) {
+            await window.api.setKrPriceFactor(f);
+            setKrFactorSaved(shown);
+            window.dispatchEvent(new Event('collection-dirty'));
+        }
     };
 
     const saveDiscount = async () => {
@@ -592,6 +616,14 @@ export default function Settings() {
                                 onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                                 className="w-24 bg-surface-2 border border-line text-text rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent" />
                             <p className="text-xs text-muted mt-2">Alles über dieser Anzahl je Karte (über alle Printings) erscheint unter „Duplikate“. Ganze Zahl 1–99, Standard 3. Wird nicht synchronisiert – auf beiden Geräten gleich einstellen.</p>
+                        </div>
+                        <div className="mt-6 pt-6 border-t border-line">
+                            <label className="block text-sm font-bold text-muted mb-2 uppercase tracking-wider">Preisfaktor koreanische Karten (%)</label>
+                            <input type="number" min="1" max="100" step="1" value={krFactorInput}
+                                onChange={e => setKrFactorInput(e.target.value)} onBlur={saveKrFactor}
+                                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                                className="w-24 bg-surface-2 border border-line text-text rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-accent" />
+                            <p className="text-xs text-muted mt-2">KR-Karten bekommen den Cardmarket-Trend des Sets mal diesen Faktor. Ganze Zahl 1–100, Standard 50. Ändern rechnet alle KR-Preise sofort um; manuell gesetzte Preise bleiben.</p>
                         </div>
                         <SaleChannelSettings />
                         <div className="mt-6 pt-6 border-t border-line">

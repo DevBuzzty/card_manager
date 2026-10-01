@@ -51,14 +51,16 @@ Neue Funktion nach dem JP-Muster, auf PC und Handy:
 - Handy: `localizedUnion(title, cid, "kr", "KR")` in `PrintingRepository`, parallel zu DE/JP; die
   Konami-Locale ergibt sich aus dem Tag (`DE→de`, `JP→ja`, `KR→ko`).
 - Filter „gehört zu KR“: Region-Infix `KR` oder altes einzelnes `K` direkt vor der Nummer –
-  `/-(KR|K(?=\d))/i`. Beispiele: `CORI-KR001` ✓, `LOB-K005` ✓, `DOOD-EN001` ✗, `SYE-KR001` ✓.
+  `/-KR?[A-Z]?\d/i` (JS) bzw. `Regex("""-KR?[A-Z]?\d""", IGNORE_CASE)` (Kotlin; der optionale
+  Buchstabe deckt Variantencodes wie `MVP1-KRQ54` ab). Beispiele: `CORI-KR001` ✓, `LOB-K005` ✓,
+  `MVP1-KRQ54` ✓, `DOOD-EN001` ✗, `SYE-KR001` ✓.
   Dieser Filter ist Zwillingslogik (JS + Kotlin) und wird über eine gemeinsame Fixture geprüft.
 - Jeder Treffer trägt `language = 'KR'`.
 
 ### 2.2 Koreanischer Name
 
-- Neue nullable Spalte `name_ko TEXT` an `cards`: SQLite-Migration in `database.cjs` (additiv),
-  Postgres-Migration `supabase/cards_name_ko_lang_factor.sql`, Sync-Feld in `sync.cjs` und im
+- Neue nullable Spalte `name_ko TEXT` an `cards`: SQLite-Migration in `copies-schema.cjs` (additiv,
+  `addColumnIfMissing`), Postgres-Migration `supabase/cards_korean.sql`, Sync-Feld in `sync.cjs` und im
   Android-Cloud-Modell.
 - Befüllt wird sie, wenn eine KR-Zeile angelegt wird (PC oder Handy) und `name_ko` noch leer ist.
   Quelle: Yugipedia `| ko_name = …` aus dem ohnehin geladenen Wikitext; fällt der aus, der
@@ -73,14 +75,20 @@ Neue Funktion nach dem JP-Muster, auf PC und Handy:
   (statt EN). Alle übrigen Regeln bleiben.
 - Die Liste der bekannten Drucke für den Abgleich enthält die KR-Drucke aus 2.1. Liest der Scanner
   `CORI-KR001`, wird der echte KR-Druck gewählt (bestehende Fälle 1–3 in `SetCodeMatch.best`).
+  Im Katalogpfad (Katalog mit verifizierten Drucken, oder Netz-Timeout mit Katalog-Drucken) stehen
+  keine KR-Drucke im Katalog: sie kommen aus dem Zwischenspeicher (`PrintingRepository.cachedKoreanSets`),
+  fehlen sie dort, werden sie im Hintergrund nachgeladen. Beim ersten Scan einer Karte wird der
+  KR-Code daher evtl. noch zusammengesetzt (unverifiziert).
 - `SprachHinweis` bleibt DE/EN (Hangul ist nicht lesbar). Er kann KR weder bestätigen noch
   überstimmen. Liefert er DE/EN, gewinnt er wie bisher nur, wenn es in der besten Gruppe einen
   Druck dieser Sprache gibt.
 
 ### 3.2 Feste Sprache
 
-- Chip im Scanner: **Sprache: Auto · DE · EN · KR · JP**. Ist eine feste Sprache gewählt, ist der
-  Chip hervorgehoben sichtbar.
+- Chip im Scanner, Werte Auto · DE · EN · KR · JP. Beschriftung kompakt: **„🌐 Auto“** bzw. Flagge +
+  Code (z. B. „🇰🇷 KR“); das Wort „Sprache“ steht nur in der Bedienhilfe
+  (`contentDescription = "Scan-Sprache: …"`). Ist eine feste Sprache gewählt, ist der Chip
+  hervorgehoben sichtbar.
 - Zustand lebt nur im Speicher (ViewModel/Prozess). Beim App-Neustart gilt wieder **Auto**.
 - `SetCodeMatch.best(…, festeSprache: String? = null)`: Ist `festeSprache` gesetzt, wird nach dem
   Prefix+Nummer-Abgleich **vor** SprachHinweis und Region entschieden:

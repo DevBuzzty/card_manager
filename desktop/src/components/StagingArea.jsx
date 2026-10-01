@@ -17,15 +17,16 @@ import { unknownCardGroups } from '../utils/unknownCards';
 import { useNavCounts } from '../hooks/useNavCounts';
 
 // Merge a card's printings from all sources into ONE flagged list: German (wiki+Konami) + English
-// (YGOPRODeck, with prices) + Japanese (wiki+Konami). Each entry carries its language so the picker
+// (YGOPRODeck, with prices) + Korean + Japanese (wiki+Konami). Each entry carries its language so the picker
 // can show a flag and the commit knows the language. Deduped by code+rarity+language.
-function mergePrintings(cardSets, germanSets, japaneseSets) {
+function mergePrintings(cardSets, germanSets, japaneseSets, koreanSets = []) {
     const de = (germanSets || []).map(s => ({ set_code: s.set_code, set_rarity: s.set_rarity, set_price: s.set_price || 0, language: 'DE', isYugipedia: true }));
     const en = (cardSets || []).map(s => ({ set_code: s.set_code, set_rarity: s.set_rarity, set_price: s.set_price, language: 'EN' }));
     const jp = (japaneseSets || []).map(s => ({ set_code: s.set_code, set_rarity: s.set_rarity, set_price: s.set_price || 0, language: 'JP', isYugipedia: true }));
+    const kr = (koreanSets || []).map(s => ({ set_code: s.set_code, set_rarity: s.set_rarity, set_price: s.set_price || 0, language: 'KR', isYugipedia: true }));
     const seen = new Set();
     const out = [];
-    for (const s of [...de, ...en, ...jp]) {
+    for (const s of [...de, ...en, ...kr, ...jp]) {
         const key = `${s.set_code}|${s.set_rarity}|${s.language}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -181,10 +182,11 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
         Promise.all([
             window.api.fetchYugipediaSets(passcode).then(s => s || []).catch(() => []),
             window.api.fetchJapaneseSets(passcode).then(s => s || []).catch(() => []),
-        ]).then(([germanSets, japaneseSets]) => {
+            window.api.fetchKoreanSets(passcode).then(s => s || []).catch(() => []),
+        ]).then(([germanSets, japaneseSets, koreanSets]) => {
             setScannedCards(prev => prev.map(c => {
                 if (c.tempId !== tempId) return c;
-                const allPrintings = mergePrintings(c.data.card_sets, germanSets, japaneseSets);
+                const allPrintings = mergePrintings(c.data.card_sets, germanSets, japaneseSets, koreanSets);
                 const keepSelection = c.setTouched || c.isManualEntry;
                 let chosen = c.selectedSet;
                 let auto = c.setAutoDetected;

@@ -4,7 +4,8 @@ const fs = require('fs');
 const { Server } = require('socket.io');
 const os = require('os');
 const { initDatabase, getDb } = require('./database.cjs');
-const { fetchCardData, fetchYugipediaSets, fetchJapaneseSets, cachedFetch } = require('./api-handler.cjs');
+const { fetchCardData, fetchYugipediaSets, fetchJapaneseSets, fetchKoreanSets, fetchKoreanName, cachedFetch } = require('./api-handler.cjs');
+const { applyLangFactor, krPriceFields, setKrFactor } = require('./language-kr.cjs');
 const { belongsToCard, resolveSetCode } = require('./setcode-resolve.cjs');
 const { startSync, ebayStatusReply } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
@@ -474,6 +475,22 @@ ipcMain.handle('fetch-japanese-sets', async (event, passcode) => {
     return await fetchJapaneseSets(passcode);
 });
 
+ipcMain.handle('fetch-korean-sets', async (event, passcode) => {
+    return await fetchKoreanSets(passcode);
+});
+
+// Koreanischer Name fuer alle KR-Zeilen eines Passcodes, die noch keinen haben. Laeuft im Hintergrund;
+// ein Fehlschlag laesst name_ko einfach leer.
+function fillKoreanName(id) {
+    const missing = db.prepare("SELECT 1 FROM cards WHERE id = ? AND language = 'KR' AND name_ko IS NULL LIMIT 1").get(id);
+    if (!missing) return;
+    fetchKoreanName(id).then(name => {
+        if (name) db.prepare("UPDATE cards SET name_ko = ? WHERE id = ? AND language = 'KR' AND name_ko IS NULL").run(name, id);
+    }).catch(e => console.error('[kr] name:', e.message));
+}
+
+ipcMain.handle('set-kr-price-factor', (event, value) => setKrFactor(db, value));
+
 ipcMain.handle('add-card-to-db', (event, card) => {
   try {
     const id = String(card.id);
@@ -484,22 +501,23 @@ ipcMain.handle('add-card-to-db', (event, card) => {
     // Copies to create: explicit groups from the staging chip, else quantity × defaults.
     const groups = (Array.isArray(card.copies) && card.copies.length) ? card.copies : [{ count: card.quantity || 1 }];
 
+    const pf = krPriceFields(db, language, card.price || 0);
     const existing = db.prepare('SELECT quantity FROM cards WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?').get(id, setCode, language, rarity);
     let inserted = false;
     const copiesAdded = db.transaction(() => {
       if (existing) {
-        db.prepare('UPDATE cards SET price = @price, deleted = 0 WHERE id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity')
-          .run({ price: card.price || 0, id, set_code: setCode, language, rarity });
+        db.prepare('UPDATE cards SET price = @price, cm_lang_factor = @cm_lang_factor, deleted = 0 WHERE id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity')
+          .run({ price: pf.price, cm_lang_factor: pf.cm_lang_factor, id, set_code: setCode, language, rarity });
       } else {
         const imageUrl = card.card_images && card.card_images.length > 0 ? card.card_images[0].image_url : (card.image_url || '');
         let level = card.level;
         if (card.type && card.type.includes('Link') && card.linkval !== undefined) level = card.linkval;
-        db.prepare(`INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language)
-          VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute, 0, @rarity, @set_code, @price, @language)`).run({
+        db.prepare(`INSERT INTO cards (id, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, set_code, price, language, cm_lang_factor)
+          VALUES (@id, @name, @type, @desc, @image_url, @atk, @def, @level, @race, @attribute, 0, @rarity, @set_code, @price, @language, @cm_lang_factor)`).run({
           id, name: card.name, type: card.type, desc: card.desc, image_url: imageUrl,
           atk: valOrNull(card.atk), def: valOrNull(card.def), level: valOrNull(level),
           race: card.race || null, attribute: card.attribute || null,
-          rarity, set_code: setCode, price: card.price || 0, language
+          rarity, set_code: setCode, price: pf.price, language, cm_lang_factor: pf.cm_lang_factor
         });
         inserted = true;
       }
@@ -507,6 +525,7 @@ ipcMain.handle('add-card-to-db', (event, card) => {
       for (const g of groups) n += copies.addCopies(db, printing, { edition: g.edition, condition: g.condition, count: g.count || 1 }).length;
       return n;
     })();
+    if (language === 'KR') fillKoreanName(id);
     return inserted ? { success: true, inserted: true, copiesAdded } : { success: true, updated: true, copiesAdded };
   } catch (error) {
     console.error('DB Insert Error:', error);
@@ -1418,7 +1437,7 @@ function startPricePoller() {
         if (!mainWindow) return;
         try {
             // Prioritize cards updated longest ago
-            const cards = db.prepare('SELECT id, set_code, language, rarity, price FROM cards WHERE deleted = 0 AND (price_locked IS NULL OR price_locked = 0) ORDER BY last_updated ASC LIMIT 50').all();
+            const cards = db.prepare('SELECT id, set_code, language, rarity, price, cm_lang_factor FROM cards WHERE deleted = 0 AND (price_locked IS NULL OR price_locked = 0) ORDER BY last_updated ASC LIMIT 50').all();
             if (cards.length === 0) return;
 
             const uniqueIds = [...new Set(cards.map(c => c.id))].join(',');
@@ -1462,6 +1481,7 @@ function startPricePoller() {
                     if (!foundSetPrice && apiData.card_prices && apiData.card_prices.length > 0) {
                         newPrice = parseFloat(apiData.card_prices[0][apiField]) || 0;
                     }
+                    newPrice = applyLangFactor(newPrice, localCard.cm_lang_factor);
 
                     if (Math.abs(newPrice - (localCard.price || 0)) > 0.01) {
                         updateStmt.run({ price: newPrice, id: localCard.id, set_code: localCard.set_code, language: localCard.language, rarity: localCard.rarity });
@@ -1548,7 +1568,7 @@ ipcMain.handle('nav-counts', () => navCounts(db));
 // (prices change) by batching unique passcodes directly against YGOPRODeck.
 ipcMain.handle('update-all-cards', async (event) => {
     try {
-        const rows = db.prepare('SELECT id, set_code, language, rarity FROM cards').all();
+        const rows = db.prepare('SELECT id, set_code, language, rarity, cm_lang_factor FROM cards').all();
         const total = rows.length;
         if (total === 0) return { success: true, updatedCount: 0 };
 
@@ -1580,7 +1600,7 @@ ipcMain.handle('update-all-cards', async (event) => {
                 const apiData = apiMap.get(String(row.id));
                 if (!apiData) return;
                 const d = detailsFromApi(apiData);
-                const price = priceForCard(apiData, row.set_code, apiField);
+                const price = applyLangFactor(priceForCard(apiData, row.set_code, apiField), row.cm_lang_factor);
                 const before = db.prepare('SELECT price FROM cards WHERE id=? AND set_code=? AND language=? AND rarity=?').get(String(row.id), row.set_code, row.language, row.rarity);
                 const info = updateStmt.run({ ...d, price, id: String(row.id), set_code: row.set_code, language: row.language });
                 if (info.changes > 0 && before && Math.abs((before.price || 0) - price) > 0.01) recordPrice(db, row, price, 'ygoprodeck');

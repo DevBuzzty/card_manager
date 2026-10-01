@@ -19,4 +19,15 @@ class CardRowParseTest {
         assertNull(rows[1].priceFirstEd); assertNull(rows[1].cmFirstEdFactor)
         assertNull(rows[2].priceFirstEd); assertNull(rows[2].cmFirstEdFactor)
     }
+
+    @Test fun `liest name_ko und cm_lang_factor, fehlend ergibt null`() {
+        val rows = CollectionRepository.parse(JSONArray("""[
+            {"id":"1","set_code":"CORI-KR001","language":"KR","rarity":"Common","quantity":1,"price":5.0,"name_ko":"블랙 매지션","cm_lang_factor":0.5},
+            {"id":"2","set_code":"X-1","price":1.0}
+        ]"""))
+        assertEquals("블랙 매지션", rows[0].nameKo)
+        assertEquals(0.5, rows[0].cmLangFactor!!, 0.0)
+        assertNull(rows[1].nameKo)
+        assertNull(rows[1].cmLangFactor)
+    }
 }

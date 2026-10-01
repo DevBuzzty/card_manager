@@ -169,6 +169,8 @@ contextBridge.exposeInMainWorld('api', {
   downgradeToLowestRarity: () => ipcRenderer.invoke('downgrade-to-lowest-rarity'),
   fetchYugipediaSets: (passcode) => ipcRenderer.invoke('fetch-yugipedia-sets', passcode),
   fetchJapaneseSets: (passcode) => ipcRenderer.invoke('fetch-japanese-sets', passcode),
+  fetchKoreanSets: (passcode) => ipcRenderer.invoke('fetch-korean-sets', passcode),
+  setKrPriceFactor: (value) => ipcRenderer.invoke('set-kr-price-factor', value),
 
   // Offline-Katalog (Spec D1)
   buildCatalogNow: () => ipcRenderer.invoke('catalog-build-now'),

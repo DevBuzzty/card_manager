@@ -1,6 +1,7 @@
 const https = require('https');
 const { getDb } = require('./database.cjs');
 const { dropErfundeneRarity } = require('./rarity-sources.cjs');
+const { isKoreanCode, extractKoName, konamiTitleName } = require('./language-kr.cjs');
 
 function fetchJson(url, options = {}) {
     return new Promise((resolve, reject) => {
@@ -197,17 +198,43 @@ function isForeignForJapanese(code) {
     return /-(EN|DE|FR|IT|PT|SP|KR|AE|EU)\d/i.test(code);
 }
 
+// Welche Codes gehoeren zur angefragten Sprache (wirft von Wikis falsch einsortierte fremde Codes raus).
+function setsBelongTo(wikiLang) {
+    if (wikiLang === 'de') return (c) => isGermanCode(c);
+    if (wikiLang === 'kr') return (c) => isKoreanCode(c);
+    return (c) => !isForeignForJapanese(c);
+}
+
 // Konami branch: resolve the search hits, then in PARALLEL read each candidate's EN printings and
 // pick the one that overlaps YGOPRODeck's (validates the card + selects the right one of several).
-async function fetchKonamiForCard(englishName, ygoprodeckCodes, konamiLocale) {
+// Konami-cid der Karte: Suchtreffer, deren EN-Drucke sich mit YGOPRODeck ueberschneiden.
+async function konamiCidFor(englishName, ygoprodeckCodes) {
     const cids = await konamiCids(englishName);
-    if (cids.length === 0) return [];
+    if (cids.length === 0) return null;
     const enLists = await Promise.all(
         cids.map(cid => fetchKonamiSets(cid, 'en').then(s => ({ cid, codes: s.map(x => x.set_code) })))
     );
     const match = enLists.find(e => e.codes.some(c => ygoprodeckCodes.includes(c)));
-    if (!match) return [];
-    return await fetchKonamiSets(match.cid, konamiLocale);
+    return match ? match.cid : null;
+}
+
+async function fetchKonamiForCard(englishName, ygoprodeckCodes, konamiLocale) {
+    const cid = await konamiCidFor(englishName, ygoprodeckCodes);
+    return cid ? await fetchKonamiSets(cid, konamiLocale) : [];
+}
+
+// Yugipedias eigener Seitentitel per Passcode-Weiterleitung (alternative Schreibweisen), sonst der englische Name.
+async function yugipediaTitle(passcode, englishName) {
+    const redirectData = await cachedFetch(
+        `https://yugipedia.com/api.php?action=query&titles=${passcode}&redirects&format=json`,
+        'yugipedia_redirect', 168);
+    let yugiTitle = null;
+    if (redirectData && redirectData.query && redirectData.query.pages) {
+        const pages = redirectData.query.pages;
+        const pageId = Object.keys(pages)[0];
+        if (pageId !== '-1') yugiTitle = pages[pageId].title;
+    }
+    return yugiTitle || englishName;
 }
 
 // Union of all sources for one language. wikiLang = 'de'|'jp', konamiLocale = 'de'|'ja'.
@@ -230,17 +257,7 @@ async function fetchSetsUnion(passcode, wikiLang, konamiLocale) {
             ? parseWikiSets('https://yugioh.fandom.com/api.php', englishName, wikiLang, 'wiki_parse')
             : Promise.resolve([]),
         (async () => {
-            // Yugipedia's own title via passcode redirect (handles alt spellings), else English name.
-            const redirectData = await cachedFetch(
-                `https://yugipedia.com/api.php?action=query&titles=${passcode}&redirects&format=json`,
-                'yugipedia_redirect', 168);
-            let yugiTitle = null;
-            if (redirectData && redirectData.query && redirectData.query.pages) {
-                const pages = redirectData.query.pages;
-                const pageId = Object.keys(pages)[0];
-                if (pageId !== '-1') yugiTitle = pages[pageId].title;
-            }
-            yugiTitle = yugiTitle || englishName;
+            const yugiTitle = await yugipediaTitle(passcode, englishName);
             return yugiTitle ? parseWikiSets('https://yugipedia.com/api.php', yugiTitle, wikiLang, 'wiki_parse') : [];
         })(),
         (englishName && ygoprodeckCodes.length > 0)
@@ -252,7 +269,7 @@ async function fetchSetsUnion(passcode, wikiLang, konamiLocale) {
 
     // Keep only codes that really belong to the requested language (drops foreign codes a wiki
     // mislabelled into the block).
-    const belongs = wikiLang === 'de' ? (c) => isGermanCode(c) : (c) => !isForeignForJapanese(c);
+    const belongs = setsBelongTo(wikiLang);
 
     const seen = new Set();
     const out = [];
@@ -277,9 +294,36 @@ async function fetchJapaneseSets(passcode) {
     catch (e) { console.error("Japanese set lookup error:", e); return []; }
 }
 
+async function fetchKoreanSets(passcode) {
+    try { return await fetchSetsUnion(passcode, 'kr', 'ko'); }
+    catch (e) { console.error("Korean set lookup error:", e); return []; }
+}
+
+// Koreanischer Kartenname: Yugipedia ko_name, sonst der Titel der koreanischen Konami-Seite. null, wenn keiner.
+async function fetchKoreanName(passcode) {
+    try {
+        const card = await fetchCardData(passcode);
+        const c0 = card && card.data && card.data[0];
+        const englishName = c0 && c0.name;
+        const title = await yugipediaTitle(passcode, englishName);
+        if (title) {
+            const parseUrl = `https://yugipedia.com/api.php?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json`;
+            const data = await cachedFetch(parseUrl, 'wiki_parse', 24);
+            const name = data && data.parse && data.parse.wikitext ? extractKoName(data.parse.wikitext['*']) : null;
+            if (name) return name;
+        }
+        const codes = ((c0 && c0.card_sets) || []).map(s => s.set_code);
+        if (!englishName || codes.length === 0) return null;
+        const cid = await konamiCidFor(englishName, codes);
+        if (!cid) return null;
+        const html = await cachedFetchText(`${KONAMI_BASE}?ope=2&cid=${cid}&request_locale=ko`, 'konami_detail', 168);
+        return konamiTitleName(html);
+    } catch (e) { console.error("Korean name lookup error:", e); return null; }
+}
+
 async function fetchCardData(passcode) {
     // Cache YGOPRODeck responses for 24h
     return await cachedFetch(`https://db.ygoprodeck.com/api/v7/cardinfo.php?id=${passcode}`, 'ygoprodeck', 24);
 }
 
-module.exports = { fetchJson, cachedFetch, fetchYugipediaSets, fetchJapaneseSets, fetchCardData };
+module.exports = { fetchJson, cachedFetch, fetchYugipediaSets, fetchJapaneseSets, fetchKoreanSets, fetchKoreanName, fetchCardData, setsBelongTo };

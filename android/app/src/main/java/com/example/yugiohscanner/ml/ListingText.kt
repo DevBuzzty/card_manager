@@ -20,6 +20,7 @@ object ListingText {
     val LANGUAGE_NAMES = mapOf(
         "DE" to "Deutsch", "EN" to "Englisch", "FR" to "Französisch", "IT" to "Italienisch",
         "SP" to "Spanisch", "PT" to "Portugiesisch", "JP" to "Japanisch",
+        "KR" to "Koreanisch",
     )
     private val TITLE_EDITION = mapOf("first" to "1. Auflage", "limited" to "Limitiert")
     // Wie export-formats.cjs#SALE_EDITION (F1-Verkaufsliste).

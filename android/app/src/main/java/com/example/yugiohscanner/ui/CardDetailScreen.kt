@@ -171,6 +171,9 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                     )
                 }
             }
+            printings.firstOrNull { it.language == "KR" && it.nameKo != null }?.nameKo?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = Muted, modifier = Modifier.padding(start = 48.dp))
+            }
 
             // Kartenbild mit kleiner neutraler Erhebung (Spec I §6.2 Regel 1: kein Leuchtschatten).
             Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
@@ -221,6 +224,11 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                         // Spec G4 §7: Preiszeile nur bei gesetztem 1st-Ed-Preis (Gegenstueck zu CardDetailPanel.jsx).
                         Valuation.firstEdLine(v)?.let {
                             Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = MonoFontFamily, color = Muted)
+                        }
+                        // Spec koreanische Karten §4: Preis ist Trend x KR-Faktor -- Gegenstueck zu CardDetailPanel.jsx.
+                        val krFaktor = v.cmLangFactor
+                        if (v.language == "KR" && krFaktor != null) {
+                            Text("KR-Faktor ${Math.round(krFaktor * 100)} %", style = MaterialTheme.typography.bodySmall, color = Muted)
                         }
                         PriceHistoryChart(v)
                         PriceAlertTargetsRow(v)

@@ -39,9 +39,10 @@ object RegionToken {
     //                           (e.g. "MP23-TC001") -- not yet exercised by this project's own
     //                           corpus, but real Konami-issued codes, kept for completeness per
     //                           the task brief's list.
+    //  - K                    : altes koreanisches Einbuchstaben-Infix, z. B. LOB-K005 (Yugipedia kr_sets).
     val KNOWN: Set<String> = setOf(
         "DE", "G", "EN", "E", "FR", "F", "IT", "I", "SP", "S", "PT", "P",
-        "JP", "JA", "KR", "AE", "TC", "SC"
+        "JP", "JA", "KR", "K", "AE", "TC", "SC"
     )
 
     // Spec D3 fix C1: a REGION INFIX is not a language code -- `language` is part of the collection's
@@ -54,7 +55,8 @@ object RegionToken {
     // one:
     //  - DE, G  -> "DE"  (PrintingRepository.germanCode: "-DE|-G\d" tags a printing "DE")
     //  - JP, JA -> "JP"  (PrintingRepository tags Japanese printings "JP", passes wiki locale "ja")
-    //  - everything else (EN, E, FR, F, IT, I, SP, S, PT, P, KR, AE, TC, SC) has no language slot of
+    //  - KR, K  -> "KR"  (Seit 2026-10-01 hat KR eine eigene Sprache, Spec koreanische Karten.)
+    //  - everything else (EN, E, FR, F, IT, I, SP, S, PT, P, AE, TC, SC) has no language slot of
     //    its own anywhere in this app -- PrintingRepository.fetchSets already collapses EVERY
     //    non-German, non-Japanese network hit into "EN" regardless of its real region infix (see its
     //    `SetOption(code, rarity, price, "EN")`, applied to French/Italian/Spanish/... codes alike).
@@ -63,6 +65,7 @@ object RegionToken {
     fun language(region: String): String = when (region.uppercase(Locale.ROOT)) {
         "DE", "G" -> "DE"
         "JP", "JA" -> "JP"
+        "KR", "K" -> "KR"
         else -> "EN"
     }
 

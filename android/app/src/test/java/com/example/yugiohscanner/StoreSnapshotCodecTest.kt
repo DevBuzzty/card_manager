@@ -64,7 +64,7 @@ class StoreSnapshotCodecTest {
     /** Waechter: ein neues Feld an einer Zeilenklasse muss in den Codec (und VERSION hoch), sonst ginge es beim Kaltstart verloren. */
     @Test fun `Codec kennt genau die Felder der Zeilenklassen`() {
         fun fields(c: Class<*>) = c.declaredFields.count { !Modifier.isStatic(it.modifiers) }
-        assertEquals("CardRow: Feld ergaenzt? StoreSnapshotCodec anpassen und VERSION erhoehen", 20, fields(CardRow::class.java))
+        assertEquals("CardRow: Feld ergaenzt? StoreSnapshotCodec anpassen und VERSION erhoehen", 22, fields(CardRow::class.java))
         assertEquals("CopyRow: Feld ergaenzt? StoreSnapshotCodec anpassen und VERSION erhoehen", 16, fields(CopyRow::class.java))
         assertEquals("ContainerRow: Feld ergaenzt? StoreSnapshotCodec anpassen und VERSION erhoehen", 8, fields(ContainerRow::class.java))
     }

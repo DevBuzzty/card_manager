@@ -69,7 +69,11 @@ object ScanResolver {
             // Durch RarityQuellen, wie jeder andere Weg auch. Dieser Pfad liest den Katalog DIREKT
             // und ging bisher an der Korrektur in PrintingRepository vorbei -- im Lauf vom 21.09.
             // kam deshalb YGOPRODecks Platzhalter "New" als Rarity durch ("Grand Master Rare/New/...").
-            knownSets = RarityQuellen.ohneErfundeneRarity(catalogSets.map { it.toSetOption() })
+            // KR-Drucke stehen nicht im Katalog: aus dem Zwischenspeicher, sonst im Hintergrund
+            // nachgeladen (beim ersten Scan einer Karte wird der KR-Code also noch zusammengesetzt).
+            knownSets = RarityQuellen.ohneErfundeneRarity(
+                catalogSets.map { it.toSetOption() } + PrintingRepository.cachedKoreanSets(pc)
+            )
         } else {
             base = catalogCard?.toCardRow()
                 ?: CardSearchRepository.search(pc).firstOrNull()
@@ -81,7 +85,9 @@ object ScanResolver {
             } ?: run {
                 com.example.yugiohscanner.ml.ScanLog.line("Drucke", "pc=$pc Netz > ${NETZ_WARTEN_MS}ms, Katalog-Drucke genutzt")
                 hintergrund.launch { runCatching { PrintingRepository.fetchAllSets(pc) } }
-                RarityQuellen.ohneErfundeneRarity(catalogCard?.printings?.map { it.toSetOption() } ?: emptyList())
+                RarityQuellen.ohneErfundeneRarity(
+                    (catalogCard?.printings?.map { it.toSetOption() } ?: emptyList()) + PrintingRepository.cachedKoreanSets(pc)
+                )
             }
         }
 
@@ -89,7 +95,7 @@ object ScanResolver {
         // hielt im Stapel-Modus beim Buchen Oberflaeche UND Kamera 1-3 s an (Thread-Stacks,
         // docs/superpowers/ledgers/2026-09-17-stapel-lichtschranke/performance-2-roh.log).
         val (match, confidence) = withContext(Dispatchers.Default) {
-            val m = SetCodeMatch.best(evidence, knownSets, framesEvidence)
+            val m = SetCodeMatch.best(evidence, knownSets, framesEvidence, com.example.yugiohscanner.ml.ScanSprache.fest)
             m to ScanConfidence.fromEvidence(m, knownSets, editionTexts, defaultEdition)
         }
         val readSetCode = com.example.yugiohscanner.ml.ReadSetCode.aus(framesEvidence)

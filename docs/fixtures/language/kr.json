@@ -1,0 +1,35 @@
+{
+  "default_factor": 0.5,
+  "region_language": [
+    ["KR", "KR"], ["K", "KR"], ["kr", "KR"],
+    ["DE", "DE"], ["G", "DE"],
+    ["EN", "EN"], ["E", "EN"], ["FR", "EN"], ["SP", "EN"], ["AE", "EN"],
+    ["JP", "JP"], ["JA", "JP"]
+  ],
+  "korean_code": [
+    ["CORI-KR001", true], ["LOB-K005", true], ["SYE-KR001", true], ["QCAC-KR018", true],
+    ["MVP1-KRQ54", true], ["cori-kr001", true],
+    ["DOOD-EN001", false], ["LOB-DE005", false], ["TP1-G015", false], ["KRT-EN001", false],
+    ["B3-17", false], ["Unknown", false], ["", false]
+  ],
+  "apply_factor": [
+    [10.0, 0.5, 5.0], [0.15, 0.5, 0.08], [3.33, null, 3.33], [12.5, 0.6, 7.5],
+    [null, 0.5, null], [0.0, 0.5, 0.0], [7.49, 1.0, 7.49]
+  ],
+  "normalize_factor": [
+    ["0.5", 0.5], ["0.6", 0.6], [null, 0.5], ["abc", 0.5], ["0", 0.5], ["-1", 0.5], ["1.5", 0.5], ["1", 1.0]
+  ],
+  "ko_name": [
+    ["{{CardTable2\n| en_name = Dark Magician\n| ko_name               = 블랙 매지션\n| ko_rr_name = Beullaek\n}}", "블랙 매지션"],
+    ["| ko_name = <ruby>마법</ruby>사\n", "마법사"],
+    ["| ko_name = \n| ja_name = x", null],
+    ["| en_name = Foo\n", null],
+    ["| ko_name = Dark Magician\n", null]
+  ],
+  "konami_title": [
+    ["<html><head><title>블랙 매지션 | 카드 상세 | Yu-Gi-Oh! Neuron</title>", "블랙 매지션"],
+    ["<title>Yu-Gi-Oh! Neuron</title>", null],
+    ["", null],
+    ["<title>Dark Magician | Card Details</title>", null]
+  ]
+}

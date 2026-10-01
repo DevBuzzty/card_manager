@@ -21,7 +21,7 @@ export const CARD_CONDITION_VALUE: Record<string, string> = {
 };
 const CONDITION_ORDER = ["MT", "NM", "EX", "GD", "LP", "PL", "PO"];
 const LANGUAGE_EN: Record<string, string> = {
-  DE: "German", EN: "English", FR: "French", IT: "Italian", SP: "Spanish", PT: "Portuguese", JP: "Japanese",
+  DE: "German", EN: "English", FR: "French", IT: "Italian", SP: "Spanish", PT: "Portuguese", JP: "Japanese", KR: "Korean",
 };
 
 export type SollListing = {
