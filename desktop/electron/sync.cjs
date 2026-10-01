@@ -9,6 +9,7 @@ const { nextNotification, openSignature } = require('./alert-notify.cjs');
 const { nextNoticeNotification } = require('./notice-notify.cjs');
 const { CHANNEL_COLS, SALE_COLS, ITEM_COLS } = require('./sales-schema.cjs');
 const { LISTING_COLS, LISTING_ITEM_COLS } = require('./listings-schema.cjs');
+const { getKrFactor, rescaleKrRow } = require('./language-kr.cjs');
 const { EBAY_LISTING_COLS, LISTING_PHOTO_COLS, EBAY_ORDER_COLS, SALE_NOTICE_COLS } = require('./ebay-schema.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
@@ -18,7 +19,8 @@ const { EBAY_LISTING_COLS, LISTING_PHOTO_COLS, EBAY_ORDER_COLS, SALE_NOTICE_COLS
 // Spec G4 §5: cm_first_ed_factor mit; die Cloud rechnet price_first_ed per Trigger aus price x Faktor.
 const MIRROR_COLS = ['id', 'set_code', 'language', 'name', 'type', 'desc',
   'image_url', 'atk', 'def', 'level', 'race', 'attribute',
-  'rarity', 'price', 'deleted', 'cm_product_id', 'price_locked', 'price_first_ed', 'cm_first_ed_factor'];
+  'rarity', 'price', 'deleted', 'cm_product_id', 'price_locked', 'price_first_ed', 'cm_first_ed_factor',
+  'name_ko', 'cm_lang_factor'];
 
 const COPY_COLS = ['copy_id', 'card_id', 'set_code', 'language', 'rarity', 'edition', 'condition', 'deleted',
   'container_id', 'page', 'slot', 'tags', 'note', 'needs_review', 'review_reason', 'for_sale', 'sold_in'];
@@ -58,6 +60,8 @@ function rowToRemote(row) {
     else if (c === 'cm_product_id') out.cm_product_id = row.cm_product_id ?? null;
     else if (c === 'price_first_ed') out.price_first_ed = row.price_first_ed ?? null;
     else if (c === 'cm_first_ed_factor') out.cm_first_ed_factor = row.cm_first_ed_factor ?? null;
+    else if (c === 'name_ko') out.name_ko = row.name_ko ?? null;
+    else if (c === 'cm_lang_factor') out.cm_lang_factor = row.cm_lang_factor ?? null;
     else out[c] = row[c];
   }
   return out;
@@ -80,6 +84,8 @@ function remoteToLocalFull(r) {
     cm_product_id: r.cm_product_id ?? null, price_locked: Number(r.price_locked) || 0,
     price_first_ed: r.price_first_ed ?? null,
     cm_first_ed_factor: r.cm_first_ed_factor ?? null,
+    name_ko: r.name_ko ?? null,
+    cm_lang_factor: r.cm_lang_factor ?? null,
   };
 }
 
@@ -104,9 +110,12 @@ function applyRemoteRow(db, r) {
   const exists = db.prepare('SELECT 1 FROM cards WHERE id = @id AND set_code = @set_code AND language = @language AND rarity = @rarity LIMIT 1').get(p);
   if (!exists) {
     db.prepare(`INSERT OR IGNORE INTO cards
-      (id, set_code, language, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, price, deleted, cm_product_id, price_locked, price_first_ed, cm_first_ed_factor)
-      VALUES (@id,@set_code,@language,@name,@type,@desc,@image_url,@atk,@def,@level,@race,@attribute,@quantity,@rarity,@price,@deleted,@cm_product_id,@price_locked,@price_first_ed,@cm_first_ed_factor)`)
+      (id, set_code, language, name, type, desc, image_url, atk, def, level, race, attribute, quantity, rarity, price, deleted, cm_product_id, price_locked, price_first_ed, cm_first_ed_factor, name_ko, cm_lang_factor)
+      VALUES (@id,@set_code,@language,@name,@type,@desc,@image_url,@atk,@def,@level,@race,@attribute,@quantity,@rarity,@price,@deleted,@cm_product_id,@price_locked,@price_first_ed,@cm_first_ed_factor,@name_ko,@cm_lang_factor)`)
       .run(remoteToLocalFull(r));
+    // Das Handy kennt nur den Standardfaktor; der PC rechnet auf seinen eingestellten Wert um.
+    // Die Umrechnung stempelt updated_at, der naechste Push bringt Preis + Faktor zurueck in die Cloud.
+    if (p.language === 'KR') rescaleKrRow(db, p, getKrFactor(db));
     return;
   }
   db.prepare(`UPDATE cards SET deleted = @deleted

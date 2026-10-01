@@ -47,7 +47,7 @@ assert.strictEqual(remote.cm_first_ed_factor, null, 'fehlender Faktor spiegelt a
     id TEXT, set_code TEXT, language TEXT DEFAULT 'DE', name TEXT, type TEXT, desc TEXT,
     image_url TEXT, atk INTEGER, def INTEGER, level INTEGER, race TEXT, attribute TEXT,
     quantity INTEGER DEFAULT 1, rarity TEXT, price REAL, deleted INTEGER DEFAULT 0,
-    cm_product_id INTEGER, price_locked INTEGER DEFAULT 0, price_first_ed REAL, cm_first_ed_factor REAL,
+    cm_product_id INTEGER, price_locked INTEGER DEFAULT 0, price_first_ed REAL, cm_first_ed_factor REAL, name_ko TEXT, cm_lang_factor REAL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id, set_code, language, rarity)
   )`);
