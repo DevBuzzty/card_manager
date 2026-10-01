@@ -68,7 +68,7 @@ class FileSnapshotStore(private val file: File) : StoreSnapshotStore {
  * anderer Version wird nicht gelesen (die App laedt dann einmal vollstaendig aus der Cloud).
  */
 object StoreSnapshotCodec {
-    const val VERSION = 1
+    const val VERSION = 2
     private const val MAGIC = 0x59474F43 // "YGOC"
 
     fun encode(s: StoreSnapshot, out: OutputStream) {
@@ -83,7 +83,7 @@ object StoreSnapshotCodec {
             o.writeUTF(c.id); o.writeUTF(c.setCode); o.writeUTF(c.language); o.str(c.name); o.str(c.imageUrl)
             o.str(c.rarity); o.writeInt(c.quantity); o.dbl(c.price); o.str(c.type); o.str(c.desc)
             o.int(c.atk); o.int(c.def); o.int(c.level); o.str(c.race); o.str(c.attribute)
-            o.writeBoolean(c.deleted); o.str(c.updatedAt); o.writeInt(c.priceLocked); o.dbl(c.priceFirstEd); o.dbl(c.cmFirstEdFactor)
+            o.writeBoolean(c.deleted); o.str(c.updatedAt); o.writeInt(c.priceLocked); o.dbl(c.priceFirstEd); o.dbl(c.cmFirstEdFactor); o.str(c.nameKo); o.dbl(c.cmLangFactor)
         }
         o.writeInt(s.copies.size)
         for (c in s.copies) {
@@ -112,6 +112,7 @@ object StoreSnapshotCodec {
                 rarity = i.str(), quantity = i.readInt(), price = i.dbl(), type = i.str(), desc = i.str(),
                 atk = i.int(), def = i.int(), level = i.int(), race = i.str(), attribute = i.str(),
                 deleted = i.readBoolean(), updatedAt = i.str(), priceLocked = i.readInt(), priceFirstEd = i.dbl(), cmFirstEdFactor = i.dbl(),
+                nameKo = i.str(), cmLangFactor = i.dbl(),
             )
         }
         val copies = List(i.count()) {
