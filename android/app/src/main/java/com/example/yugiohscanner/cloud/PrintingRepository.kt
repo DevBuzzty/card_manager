@@ -77,12 +77,10 @@ object PrintingRepository {
             // stehen genauso darin, und dieser Pfad kehrt VOR der Netz-Union zurueck -- ohne das
             // hier wirkte die Korrektur ausgerechnet dort nicht, wo die meisten deutschen Drucke
             // herkommen. Er wird ausserdem nur woechentlich neu gebaut, ist also noch lange alt.
-            // KR steht nicht im Katalog: nur aus dem Plattenspeicher, sonst im Hintergrund nachladen
-            // (die naechste Abfrage dieser Karte hat sie dann).
-            val kr = ScanCache.read(KR_CACHE, passcode)?.let { runCatching { deserializeSets(it) }.getOrNull() }
-                ?: emptyList<SetOption>().also { hintergrund.launch { runCatching { fetchKoreanSets(passcode) } } }
+            // KR steht nicht im Katalog: siehe cachedKoreanSets.
             return@coroutineScope RarityQuellen.ohneErfundeneRarity(
-                catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN", verified = it.verified) } + kr
+                catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN", verified = it.verified) } +
+                    cachedKoreanSets(passcode)
             )
         }
         // Disk cache: the 3-source union is the scan flow's slowest step (seconds). It's
@@ -160,6 +158,26 @@ object PrintingRepository {
         val belongs = belongsTo(tag)
         val seen = HashSet<String>()
         collected.filter { belongs(it.setCode) && seen.add("${it.setCode}|${it.rarity}") }
+    }
+
+    // Passcodes, deren KR-Drucke gerade im Hintergrund geladen werden -- gegen Doppelstarts, wenn
+    // dieselbe Karte mehrmals hintereinander gescannt wird.
+    private val krLaeuft = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * KR-Drucke fuer den Katalog-Pfad, OHNE zu warten: KR steht nicht im Katalog, also nur aus dem
+     * Plattenspeicher. Fehlt er, wird im Hintergrund nachgeladen und jetzt leer geantwortet -- die
+     * naechste Abfrage dieser Karte hat sie dann.
+     */
+    fun cachedKoreanSets(passcode: String): List<SetOption> {
+        val kr = ScanCache.read(KR_CACHE, passcode)?.let { runCatching { deserializeSets(it) }.getOrNull() }
+        if (!kr.isNullOrEmpty()) return RarityQuellen.ohneErfundeneRarity(kr)
+        if (krLaeuft.add(passcode)) {
+            hintergrund.launch {
+                try { runCatching { fetchKoreanSets(passcode) } } finally { krLaeuft.remove(passcode) }
+            }
+        }
+        return emptyList()
     }
 
     /** Nur die KR-Drucke (Hintergrund-Nachladen fuer den Katalog-Pfad). Schreibt KR_CACHE. */

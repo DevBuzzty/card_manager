@@ -69,7 +69,11 @@ object ScanResolver {
             // Durch RarityQuellen, wie jeder andere Weg auch. Dieser Pfad liest den Katalog DIREKT
             // und ging bisher an der Korrektur in PrintingRepository vorbei -- im Lauf vom 21.09.
             // kam deshalb YGOPRODecks Platzhalter "New" als Rarity durch ("Grand Master Rare/New/...").
-            knownSets = RarityQuellen.ohneErfundeneRarity(catalogSets.map { it.toSetOption() })
+            // KR-Drucke stehen nicht im Katalog: aus dem Zwischenspeicher, sonst im Hintergrund
+            // nachgeladen (beim ersten Scan einer Karte wird der KR-Code also noch zusammengesetzt).
+            knownSets = RarityQuellen.ohneErfundeneRarity(
+                catalogSets.map { it.toSetOption() } + PrintingRepository.cachedKoreanSets(pc)
+            )
         } else {
             base = catalogCard?.toCardRow()
                 ?: CardSearchRepository.search(pc).firstOrNull()
@@ -81,7 +85,9 @@ object ScanResolver {
             } ?: run {
                 com.example.yugiohscanner.ml.ScanLog.line("Drucke", "pc=$pc Netz > ${NETZ_WARTEN_MS}ms, Katalog-Drucke genutzt")
                 hintergrund.launch { runCatching { PrintingRepository.fetchAllSets(pc) } }
-                RarityQuellen.ohneErfundeneRarity(catalogCard?.printings?.map { it.toSetOption() } ?: emptyList())
+                RarityQuellen.ohneErfundeneRarity(
+                    (catalogCard?.printings?.map { it.toSetOption() } ?: emptyList()) + PrintingRepository.cachedKoreanSets(pc)
+                )
             }
         }
 
