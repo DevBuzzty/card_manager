@@ -4,6 +4,7 @@ package com.example.yugiohscanner.ui
 fun langFlag(lang: String): String = when (lang) {
     "DE" -> "🇩🇪"
     "JP" -> "🇯🇵"
+    "KR" -> "🇰🇷"
     "EN" -> "🇬🇧"
     else -> "🏳️"
 }
