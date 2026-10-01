@@ -89,7 +89,7 @@ object ScanResolver {
         // hielt im Stapel-Modus beim Buchen Oberflaeche UND Kamera 1-3 s an (Thread-Stacks,
         // docs/superpowers/ledgers/2026-09-17-stapel-lichtschranke/performance-2-roh.log).
         val (match, confidence) = withContext(Dispatchers.Default) {
-            val m = SetCodeMatch.best(evidence, knownSets, framesEvidence)
+            val m = SetCodeMatch.best(evidence, knownSets, framesEvidence, com.example.yugiohscanner.ml.ScanSprache.fest)
             m to ScanConfidence.fromEvidence(m, knownSets, editionTexts, defaultEdition)
         }
         val readSetCode = com.example.yugiohscanner.ml.ReadSetCode.aus(framesEvidence)
