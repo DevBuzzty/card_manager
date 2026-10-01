@@ -2,7 +2,7 @@
 import { toCents, euroCentsText } from './saleMath.js';
 
 export const TITLE_MAX = 65;
-export const LANGUAGE_NAMES = { DE: 'Deutsch', EN: 'Englisch', FR: 'Französisch', IT: 'Italienisch', SP: 'Spanisch', PT: 'Portugiesisch', JP: 'Japanisch' };
+export const LANGUAGE_NAMES = { DE: 'Deutsch', EN: 'Englisch', FR: 'Französisch', IT: 'Italienisch', SP: 'Spanisch', PT: 'Portugiesisch', JP: 'Japanisch', KR: 'Koreanisch' };
 const TITLE_EDITION = { first: '1. Auflage', limited: 'Limitiert' };
 // Wie export-formats.cjs#SALE_EDITION (F1-Verkaufsliste).
 const LINE_EDITION = { first: '1. Auflage', unlimited: 'Unlimitiert', limited: 'Limitiert' };

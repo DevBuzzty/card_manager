@@ -7,7 +7,7 @@ const { suggestionCents, marketValueCents } = require('./sales-math.cjs');
 
 const DS_CONDITION = { MT: 'Near Mint', NM: 'Near Mint', EX: 'Excellent', GD: 'Good', LP: 'Light Played', PL: 'Played', PO: 'Poor' };
 const DS_PRINTING = { first: '1st Edition', unlimited: 'Unlimited', limited: 'Limited', unknown: '' };
-const DS_LANGUAGE = { DE: 'German', EN: 'English', JP: 'Japanese', FR: 'French', IT: 'Italian', SP: 'Spanish', PT: 'Portuguese' };
+const DS_LANGUAGE = { DE: 'German', EN: 'English', JP: 'Japanese', KR: 'Korean', FR: 'French', IT: 'Italian', SP: 'Spanish', PT: 'Portuguese' };
 const SALE_EDITION = { first: '1. Auflage', unlimited: 'Unlimitiert', limited: 'Limitiert', unknown: null };
 
 const isUnknown = (cp) => !cp.set_code || cp.set_code === 'Unknown';

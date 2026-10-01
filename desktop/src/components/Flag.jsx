@@ -19,6 +19,20 @@ export default function Flag({ lang, className = "" }) {
                     <circle cx="4.5" cy="3" r="1.8" fill="#BC002D" />
                 </svg>
             );
+        case 'KR':
+            return (
+                <svg {...common} viewBox="0 0 36 24">
+                    <rect width="36" height="24" fill="#fff" />
+                    <circle cx="18" cy="12" r="6" fill="#CD2E3A" />
+                    <path d="M12,12 a6,6 0 0,0 12,0 a3,3 0 0,0 -6,0 a3,3 0 0,1 -6,0" fill="#0047A0" />
+                    <g stroke="#000" strokeWidth="1.2">
+                        <path d="M5,5 l3,-2.5 M6,6.5 l3,-2.5 M7,8 l3,-2.5" />
+                        <path d="M26,3 l3,2.5 M27,4.5 l3,2.5 M25,6.5 l3,2.5" />
+                        <path d="M5,19 l3,2.5 M6,17.5 l3,2.5 M7,16 l3,2.5" />
+                        <path d="M26,21 l3,-2.5 M27,19.5 l3,-2.5 M25,17.5 l3,-2.5" />
+                    </g>
+                </svg>
+            );
         case 'EN':
             return (
                 <svg {...common} viewBox="0 0 60 30">
