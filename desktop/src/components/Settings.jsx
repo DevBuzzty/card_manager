@@ -44,6 +44,7 @@ export default function Settings() {
     // Spec H1 §4: keep_per_card als Text im Eingabefeld; gespeichert wird der normalisierte Wert (ungültig -> 3).
     const [keepInput, setKeepInput] = useState(String(KEEP_DEFAULT));
     const [krFactorInput, setKrFactorInput] = useState('50');
+    const [krFactorSaved, setKrFactorSaved] = useState('50'); // zuletzt gespeicherter Wert, für ungültige Eingaben
     // Spec H2 §9: Preisvorschlag-Einstellungen, gleiche Bauart wie keepInput (Text im Feld, normalisiert beim Speichern).
     const [discountInput, setDiscountInput] = useState('5');
     const [minPriceInput, setMinPriceInput] = useState('0,10');
@@ -68,7 +69,9 @@ export default function Settings() {
                     sync_enabled: settings?.sync_enabled ?? 'false',
                 }));
                 setKeepInput(String(keepPerCard(settings?.keep_per_card)));
-                setKrFactorInput(String(Math.round(normalizeKr(settings?.kr_price_factor) * 100)));
+                const kr = String(Math.round(normalizeKr(settings?.kr_price_factor) * 100));
+                setKrFactorInput(kr);
+                setKrFactorSaved(kr);
                 setDiscountInput(String(normalizeDiscount(settings?.sale_discount_percent)));
                 setMinPriceInput((normalizeMinPrice(settings?.sale_min_price) / 100).toFixed(2).replace('.', ','));
             });
@@ -111,9 +114,20 @@ export default function Settings() {
     };
 
     const saveKrFactor = async () => {
-        const f = normalizeKr(Number(String(krFactorInput).replace(',', '.')) / 100);
-        setKrFactorInput(String(Math.round(f * 100)));
-        if (window.api?.setKrPriceFactor) await window.api.setKrPriceFactor(f);
+        // Ungültig (leer, 0, über 100): nicht speichern -- sonst rechnete ein geleertes Feld still alle KR-Preise auf 50 % um.
+        const pct = Number(String(krFactorInput).replace(',', '.'));
+        if (String(krFactorInput).trim() === '' || !Number.isFinite(pct) || pct < 1 || pct > 100) {
+            setKrFactorInput(krFactorSaved);
+            return;
+        }
+        const f = normalizeKr(pct / 100);
+        const shown = String(Math.round(f * 100));
+        setKrFactorInput(shown);
+        if (window.api?.setKrPriceFactor) {
+            await window.api.setKrPriceFactor(f);
+            setKrFactorSaved(shown);
+            window.dispatchEvent(new Event('collection-dirty'));
+        }
     };
 
     const saveDiscount = async () => {
