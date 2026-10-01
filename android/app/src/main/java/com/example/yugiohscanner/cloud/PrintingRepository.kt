@@ -1,11 +1,13 @@
 package com.example.yugiohscanner.cloud
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -191,9 +193,31 @@ object PrintingRepository {
         kr
     }
 
+    // Passcodes ohne koreanischen Namen (diese Sitzung): nicht bei jeder Buchung erneut bis zu
+    // sechs Netzanfragen stellen.
+    private val koNameFehlt = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private const val KO_NAME_WARTEN_MS = 2_500L
+
+    /**
+     * [koreanName] fuer das Anlegen eines Drucks: hoechstens [KO_NAME_WARTEN_MS] warten, sonst ohne
+     * Namen weiter. Die Abfrage laeuft im Hintergrund zu Ende und legt den Namen in den Speicher --
+     * die blockierenden Netzaufrufe darin lassen sich nicht abbrechen, ein blosses Timeout um sie
+     * herum kehrte erst nach ihnen zurueck. Ein Abbruch des Aufrufers wird nicht geschluckt.
+     */
+    suspend fun koreanNameKurz(passcode: String): String? = withTimeoutOrNull(KO_NAME_WARTEN_MS) {
+        try {
+            hintergrund.async { koreanName(passcode) }.await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /** Koreanischer Name: Yugipedia ko_name, sonst Titel der koreanischen Konami-Seite. null, wenn keiner. */
     suspend fun koreanName(passcode: String): String? = withContext(Dispatchers.IO) {
         ScanCache.read(NAME_KO_CACHE, passcode)?.let { return@withContext it }
+        if (passcode in koNameFehlt) return@withContext null
         val title = resolveYugipediaTitle(passcode) ?: return@withContext null
         val fromWiki = runCatching {
             val req = Request.Builder()
@@ -210,7 +234,7 @@ object PrintingRepository {
             val cid = if (enCodes.isNotEmpty()) konamiValidCid(title, enCodes) else null
             cid?.let { konamiGet("$KONAMI?ope=2&cid=$it&request_locale=ko") }?.let { LanguageKr.konamiTitleName(it) }
         }
-        if (name != null) ScanCache.write(NAME_KO_CACHE, passcode, name)
+        if (name != null) ScanCache.write(NAME_KO_CACHE, passcode, name) else koNameFehlt.add(passcode)
         name
     }
 

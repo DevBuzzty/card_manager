@@ -57,7 +57,7 @@ fun AddPrintingSection(base: CardRow, owned: List<CardRow>, onError: (String) ->
                             adding = true
                             scope.launch {
                                 try {
-                                    val nameKo = if (s.language == "KR") runCatching { PrintingRepository.koreanName(base.id) }.getOrNull() else null
+                                    val nameKo = if (s.language == "KR") PrintingRepository.koreanNameKurz(base.id) else null
                                     CollectionRepository.addPrinting(base, s.setCode, s.rarity, s.price, s.language, edition = Prefs.defaultEdition(context), condition = Prefs.defaultCondition(context), nameKo = nameKo); onAdded(); expanded = false }
                                 catch (e: Exception) { onError(e.message ?: "Hinzufügen fehlgeschlagen") }
                                 adding = false

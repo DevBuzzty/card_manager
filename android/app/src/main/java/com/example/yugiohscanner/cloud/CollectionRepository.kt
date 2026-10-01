@@ -282,8 +282,8 @@ object CollectionRepository {
         if (existing != null) {
             addCopies(existing, edition, condition, count)
         } else {
-            // KR: koreanischen Namen mitschicken (Netz; ein Fehlschlag laesst ihn leer).
-            val nameKo = if (language == "KR") runCatching { PrintingRepository.koreanName(base.id) }.getOrNull() else null
+            // KR: koreanischen Namen mitschicken (Netz, hoechstens 2,5 s; ein Fehlschlag laesst ihn leer).
+            val nameKo = if (language == "KR") PrintingRepository.koreanNameKurz(base.id) else null
             addPrinting(base, setCode, rarity, 0.0, language, edition, condition, count, nameKo)
         }
     }
