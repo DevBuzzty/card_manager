@@ -27,6 +27,16 @@ class SetCodeMatchFesteSpracheTest {
         assertFalse(r.selected!!.verified)
     }
 
+    @Test fun `fest KR mit zwei KR-Seltenheiten haelt beide im Kandidatenkreis`() {
+        val krUr = SetOption("CORI-KR001", "Ultra Rare", 0.0, "KR")
+        val r = SetCodeMatch.best(listOf("CORI-EN001"), listOf(de, en, kr, krUr), festeSprache = "KR")
+        assertEquals("KR", r.selected?.language)
+        assertEquals(r.selected, r.candidates.first())
+        assertEquals(true, r.candidates.any { it.rarity == "Super Rare" && it.language == "KR" })
+        assertEquals(true, r.candidates.any { it.rarity == "Ultra Rare" && it.language == "KR" })
+        assertEquals(r.candidates.size, r.candidates.distinctBy { it.setCode + "|" + it.rarity }.size)
+    }
+
     @Test fun `fest DE schlaegt eine gelesene EN-Region`() {
         val r = SetCodeMatch.best(listOf("CORI-EN001", "CORI-EN001"), listOf(de, en), festeSprache = "DE")
         assertEquals("CORI-DE001", r.selected?.setCode)

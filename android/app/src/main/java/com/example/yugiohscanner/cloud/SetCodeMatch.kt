@@ -256,7 +256,8 @@ object SetCodeMatch {
                 verified = false,
             )
             val rest = byVerifiedFirst(bestGroup).filter { it !in passend }
-            return MatchResult(gewaehlt, (listOf(gewaehlt) + rest).distinctBy { it.setCode + "|" + it.rarity }, MatchReason.MATCHED, codeExactMatch, codeFrameCount)
+            val liste = if (passend.isNotEmpty()) passend + rest else listOf(gewaehlt) + rest
+            return MatchResult(gewaehlt, liste.distinctBy { it.setCode + "|" + it.rarity }, MatchReason.MATCHED, codeExactMatch, codeFrameCount)
         }
 
         // Sprache aus dem gelesenen Kartentext (19.09.2026, SprachHinweis): der Text ist gross und steht in
