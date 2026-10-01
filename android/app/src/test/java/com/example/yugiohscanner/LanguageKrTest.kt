@@ -56,4 +56,13 @@ class LanguageKrTest {
             assertEquals(if (p.isNull(1)) null else p.getString(1), LanguageKr.konamiTitleName(p.getString(0)))
         }
     }
+
+    @Test fun `belongsTo KR nimmt nur KR-Codes`() {
+        val kr = com.example.yugiohscanner.cloud.PrintingRepository.belongsTo("KR")
+        assertEquals(listOf("SYE-KR001", "LOB-K005"), listOf("SYE-KR001", "LOB-K005", "DOOD-EN001", "LOB-DE005").filter(kr))
+        val de = com.example.yugiohscanner.cloud.PrintingRepository.belongsTo("DE")
+        assertEquals(listOf("LOB-DE005", "TP1-G015"), listOf("LOB-DE005", "TP1-G015", "SYE-KR001").filter(de))
+        val jp = com.example.yugiohscanner.cloud.PrintingRepository.belongsTo("JP")
+        assertEquals(listOf("B3-17"), listOf("B3-17", "SYE-KR001").filter(jp))
+    }
 }

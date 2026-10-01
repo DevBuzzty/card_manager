@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,7 +28,7 @@ data class SetOption(
 // Looks up all real printings of a passcode across languages. We UNION several real sources
 // (never guessing codes — the region infix varies DE/G):
 //   * EN / international : YGOPRODeck (with prices)
-//   * DE and JP          : Fandom wiki + Yugipedia ({lang}_sets blocks) + Konami's official DB
+//   * DE, JP and KR      : Fandom wiki + Yugipedia ({lang}_sets blocks) + Konami's official DB
 // Konami is authoritative and catches niche printings (e.g. Speed Duel "SGX3-DEA10") the wikis
 // miss. Mirrors the desktop app.
 object PrintingRepository {
@@ -52,7 +53,11 @@ object PrintingRepository {
     // echte Angabe aussieht -- RarityQuellen kann es nachtraeglich nicht mehr erkennen. Im Lauf vom
     // 21.09. stand deshalb 13 mal "Rarity mehrdeutig: Ultra Rare/.../Common". Mit neuem Namen werden
     // die alten Eintraege schlicht nicht mehr gelesen; die erste Abfrage je Karte ist einmal langsamer.
-    private const val SETS_CACHE = "sets-v2"
+    // v3 (2026-10-01): Unions enthalten jetzt auch KR-Drucke; v2-Eintraege haben keine und werden nicht mehr gelesen.
+    private const val SETS_CACHE = "sets-v3"
+    private const val KR_CACHE = "sets-kr-v1"
+    private const val NAME_KO_CACHE = "name-ko-v1"
+    private val hintergrund = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
     suspend fun fetchAllSets(passcode: String): List<SetOption> = coroutineScope {
         // Catalog first (Task 9), but only on CONFIRMED German data: unverified catalog printings
@@ -72,8 +77,12 @@ object PrintingRepository {
             // stehen genauso darin, und dieser Pfad kehrt VOR der Netz-Union zurueck -- ohne das
             // hier wirkte die Korrektur ausgerechnet dort nicht, wo die meisten deutschen Drucke
             // herkommen. Er wird ausserdem nur woechentlich neu gebaut, ist also noch lange alt.
+            // KR steht nicht im Katalog: nur aus dem Plattenspeicher, sonst im Hintergrund nachladen
+            // (die naechste Abfrage dieser Karte hat sie dann).
+            val kr = ScanCache.read(KR_CACHE, passcode)?.let { runCatching { deserializeSets(it) }.getOrNull() }
+                ?: emptyList<SetOption>().also { hintergrund.launch { runCatching { fetchKoreanSets(passcode) } } }
             return@coroutineScope RarityQuellen.ohneErfundeneRarity(
-                catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN", verified = it.verified) }
+                catalogSets.map { SetOption(it.code, it.rarity, 0.0, it.lang ?: "EN", verified = it.verified) } + kr
             )
         }
         // Disk cache: the 3-source union is the scan flow's slowest step (seconds). It's
@@ -94,9 +103,12 @@ object PrintingRepository {
 
         val deD = async(Dispatchers.IO) { localizedUnion(title, cid, "de", "DE") }
         val jpD = async(Dispatchers.IO) { localizedUnion(title, cid, "jp", "JP") }
+        val krD = async(Dispatchers.IO) { localizedUnion(title, cid, "kr", "KR") }
+        val kr = krD.await()
+        if (kr.isNotEmpty()) ScanCache.write(KR_CACHE, passcode, serializeSets(kr))
 
         val seen = HashSet<String>()
-        val result = RarityQuellen.ohneErfundeneRarity(deD.await() + en + jpD.await())
+        val result = RarityQuellen.ohneErfundeneRarity(deD.await() + en + kr + jpD.await())
             .filter { seen.add("${it.setCode}|${it.rarity}") }
         // Only cache a real, non-empty union so a transient failure can't poison it for 14 days.
         if (result.isNotEmpty()) ScanCache.write(SETS_CACHE, passcode, serializeSets(result))
@@ -129,18 +141,59 @@ object PrintingRepository {
     private val germanCode = Regex("""-DE|-G\d""", RegexOption.IGNORE_CASE)
     private val foreignForJp = Regex("""-(EN|DE|FR|IT|PT|SP|KR|AE|EU)\d""", RegexOption.IGNORE_CASE)
 
-    // Union of the two wikis + Konami for one language. tag = "DE"/"JP", wikiLang = "de"/"jp".
+    internal fun belongsTo(tag: String): (String) -> Boolean = when (tag) {
+        "DE" -> { c -> germanCode.containsMatchIn(c) }
+        "KR" -> { c -> LanguageKr.isKoreanCode(c) }
+        else -> { c -> !foreignForJp.containsMatchIn(c) }
+    }
+
+    private fun konamiLocale(tag: String) = when (tag) { "JP" -> "ja"; "KR" -> "ko"; else -> "de" }
+
+    // Union of the two wikis + Konami for one language. tag = "DE"/"JP"/"KR", wikiLang = "de"/"jp"/"kr".
     // The three sources run concurrently.
     private suspend fun localizedUnion(title: String?, cid: String?, wikiLang: String, tag: String): List<SetOption> = coroutineScope {
         if (title == null) return@coroutineScope emptyList()
         val fandomD = async(Dispatchers.IO) { parseWikiSets("https://yugioh.fandom.com/api.php", title, wikiLang, tag) }
         val yugiD = async(Dispatchers.IO) { parseWikiSets("https://yugipedia.com/api.php", title, wikiLang, tag) }
-        val konamiD = async(Dispatchers.IO) { if (cid != null) konamiDetail(cid, if (tag == "JP") "ja" else "de", tag) else emptyList() }
+        val konamiD = async(Dispatchers.IO) { if (cid != null) konamiDetail(cid, konamiLocale(tag), tag) else emptyList() }
         val collected = fandomD.await() + yugiD.await() + konamiD.await()
-        val belongs: (String) -> Boolean =
-            if (tag == "DE") { c -> germanCode.containsMatchIn(c) } else { c -> !foreignForJp.containsMatchIn(c) }
+        val belongs = belongsTo(tag)
         val seen = HashSet<String>()
         collected.filter { belongs(it.setCode) && seen.add("${it.setCode}|${it.rarity}") }
+    }
+
+    /** Nur die KR-Drucke (Hintergrund-Nachladen fuer den Katalog-Pfad). Schreibt KR_CACHE. */
+    suspend fun fetchKoreanSets(passcode: String): List<SetOption> = coroutineScope {
+        val enD = async(Dispatchers.IO) { runCatching { fetchSets(passcode) }.getOrDefault(emptyList()) }
+        val title = resolveYugipediaTitle(passcode)
+        val enCodes = enD.await().map { it.setCode }
+        val cid = if (title != null && enCodes.isNotEmpty()) konamiValidCid(title, enCodes) else null
+        val kr = localizedUnion(title, cid, "kr", "KR")
+        if (kr.isNotEmpty()) ScanCache.write(KR_CACHE, passcode, serializeSets(kr))
+        kr
+    }
+
+    /** Koreanischer Name: Yugipedia ko_name, sonst Titel der koreanischen Konami-Seite. null, wenn keiner. */
+    suspend fun koreanName(passcode: String): String? = withContext(Dispatchers.IO) {
+        ScanCache.read(NAME_KO_CACHE, passcode)?.let { return@withContext it }
+        val title = resolveYugipediaTitle(passcode) ?: return@withContext null
+        val fromWiki = runCatching {
+            val req = Request.Builder()
+                .url("https://yugipedia.com/api.php?action=parse&page=${URLEncoder.encode(title, "UTF-8")}&prop=wikitext&format=json")
+                .header("User-Agent", UA).get().build()
+            client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) null
+                else JSONObject(resp.body?.string() ?: "").optJSONObject("parse")?.optJSONObject("wikitext")
+                    ?.optString("*", "")?.let { LanguageKr.extractKoName(it) }
+            }
+        }.getOrNull()
+        val name = fromWiki ?: run {
+            val enCodes = runCatching { fetchSets(passcode) }.getOrDefault(emptyList()).map { it.setCode }
+            val cid = if (enCodes.isNotEmpty()) konamiValidCid(title, enCodes) else null
+            cid?.let { konamiGet("$KONAMI?ope=2&cid=$it&request_locale=ko") }?.let { LanguageKr.konamiTitleName(it) }
+        }
+        if (name != null) ScanCache.write(NAME_KO_CACHE, passcode, name)
+        name
     }
 
     // English/international printings from YGOPRODeck.
