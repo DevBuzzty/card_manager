@@ -10,6 +10,7 @@ const { cachedFetch, fetchCardData } = require('./api-handler.cjs');
 const { buildExpansionIndex, buildSinglesIndex, resolveProduct } = require('./cardmarket-bulk-parse.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { applySealedPrices } = require('./sealed-items.cjs');
+const { applyLangFactor } = require('./language-kr.cjs');
 
 const H = 3600 * 1000;
 const FILES = {
@@ -122,7 +123,7 @@ function applyPrices(db, guide) {
   const trendById = new Map();
   for (const g of guide) if (g && g.trend != null && g.trend > 0) trendById.set(Number(g.idProduct), Number(g.trend));
   const rows = db.prepare(
-    "SELECT id, set_code, language, rarity, cm_product_id FROM cards WHERE deleted = 0 AND cm_product_id IS NOT NULL AND COALESCE(price_locked, 0) != 2"
+    "SELECT id, set_code, language, rarity, cm_product_id, cm_lang_factor FROM cards WHERE deleted = 0 AND cm_product_id IS NOT NULL AND COALESCE(price_locked, 0) != 2"
   ).all();
   // Only writes (and only counts as "priced") when the price actually changes, so an unchanged
   // day's refresh doesn't touch `updated_at` on every resolved row (which would trigger a full
@@ -133,8 +134,9 @@ function applyPrices(db, guide) {
   let priced = 0, skipped = 0, unchanged = 0;
   db.transaction(() => {
     for (const r of rows) {
-      const t = trendById.get(Number(r.cm_product_id));
-      if (t == null) { skipped++; continue; }
+      const trend = trendById.get(Number(r.cm_product_id));
+      if (trend == null) { skipped++; continue; }
+      const t = applyLangFactor(trend, r.cm_lang_factor); // KR: Trend x Sprachfaktor
       const info = upd.run(t, r.id, r.set_code, r.language, r.rarity, t);
       if (info.changes > 0) { priced++; recordPrice(db, r, t, 'cm_bulk'); } else unchanged++;
     }

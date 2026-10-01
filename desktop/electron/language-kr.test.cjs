@@ -82,3 +82,11 @@ test('setKrFactor mit ungueltigem Wert speichert den Standard', () => {
   const db = makeDb();
   assert.strictEqual(kr.setKrFactor(db, 'abc').factor, 0.5);
 });
+
+test('setsBelongTo: kr nimmt nur KR-Codes, de nur deutsche, jp keine fremden TCG-Regionen', () => {
+  const { setsBelongTo } = require('./api-handler.cjs');
+  const kr = setsBelongTo('kr');
+  assert.deepStrictEqual(['SYE-KR001', 'LOB-K005', 'DOOD-EN001', 'LOB-DE005'].filter(kr), ['SYE-KR001', 'LOB-K005']);
+  assert.deepStrictEqual(['LOB-DE005', 'TP1-G015', 'SYE-KR001'].filter(setsBelongTo('de')), ['LOB-DE005', 'TP1-G015']);
+  assert.deepStrictEqual(['B3-17', 'SYE-KR001'].filter(setsBelongTo('jp')), ['B3-17']);
+});

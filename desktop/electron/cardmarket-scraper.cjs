@@ -7,6 +7,7 @@ const { rarityRank, selectVersionRow, productUrl, firstEdUrl, parseFromPrice, fi
 const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 const { recordPrice } = require('./price-history.cjs');
+const { applyLangFactor } = require('./language-kr.cjs');
 
 const BASE = 'https://www.cardmarket.com';
 const DELAY_MIN_MS = 2000, DELAY_MAX_MS = 4000; // jittered polite delay per page
@@ -128,7 +129,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
       if (scraped >= maxCards) break; // background poller: stop after a small batch per tick
       onProgress && onProgress({ current: i + 1, total: cards.length, name: cards[i].name });
       const printings = db.prepare(
-        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL " +
+        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id, cm_lang_factor FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL " +
         "AND COALESCE(price_locked, 0) != 2"
       ).all(String(cards[i].id));
       // Only printings at/above the chosen rarity threshold, and not priced recently. Cards with no
@@ -157,9 +158,10 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
           if (hit && hit.trend != null) {
             const pid = idProductFromImageUrl(hit.imgSrc);
             if (!pid) { if (idMissed === 0) console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc); idMissed++; }
+            const price = applyLangFactor(hit.trend, p.cm_lang_factor);
             db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_product_id = COALESCE(?, cm_product_id), cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
-              .run(hit.trend, url, pid, String(cards[i].id), p.set_code, p.language, p.rarity);
-            recordPrice(db, { id: cards[i].id, set_code: p.set_code, language: p.language, rarity: p.rarity }, hit.trend, 'cm_scrape');
+              .run(price, url, pid, String(cards[i].id), p.set_code, p.language, p.rarity);
+            recordPrice(db, { id: cards[i].id, set_code: p.set_code, language: p.language, rarity: p.rarity }, price, 'cm_scrape');
             updated++;
           } else {
             db.prepare("UPDATE cards SET cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
