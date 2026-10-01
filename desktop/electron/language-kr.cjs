@@ -22,18 +22,24 @@ function normalizeKrFactor(value) {
   return (value != null && Number.isFinite(f) && f > 0 && f <= 1) ? f : KR_DEFAULT_FACTOR;
 }
 
+// Nur ein Name mit Hangul (U+AC00-U+D7A3) ist ein koreanischer -- sonst liefert z. B. Konami bei
+// einer Karte ohne KR-Veroeffentlichung den englischen Titel.
+const HANGUL_RE = /[가-힣]/;
+function nurHangul(name) {
+  return name && HANGUL_RE.test(name) ? name : null;
+}
+
 // "| ko_name = 블랙 매지션" aus Yugipedia-Wikitext; HTML-Tags (z. B. <ruby>) werden entfernt.
 function extractKoName(wikitext) {
   const m = String(wikitext || '').match(/^\|\s*ko_name\s*=[ \t]*(.*)$/m);
   if (!m) return null;
-  const name = m[1].replace(/<[^>]+>/g, '').trim();
-  return name || null;
+  return nurHangul(m[1].replace(/<[^>]+>/g, '').trim());
 }
 
 // Konami-Detailseite mit request_locale=ko: "<title>블랙 매지션 | 카드 상세 | ...".
 function konamiTitleName(html) {
   const m = String(html || '').match(/<title>\s*([^|<]+?)\s*\|/);
-  return m ? m[1] : null;
+  return m ? nurHangul(m[1]) : null;
 }
 
 function getKrFactor(db) {

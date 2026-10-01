@@ -23,11 +23,13 @@
     ["{{CardTable2\n| en_name = Dark Magician\n| ko_name               = 블랙 매지션\n| ko_rr_name = Beullaek\n}}", "블랙 매지션"],
     ["| ko_name = <ruby>마법</ruby>사\n", "마법사"],
     ["| ko_name = \n| ja_name = x", null],
-    ["| en_name = Foo\n", null]
+    ["| en_name = Foo\n", null],
+    ["| ko_name = Dark Magician\n", null]
   ],
   "konami_title": [
     ["<html><head><title>블랙 매지션 | 카드 상세 | Yu-Gi-Oh! Neuron</title>", "블랙 매지션"],
     ["<title>Yu-Gi-Oh! Neuron</title>", null],
-    ["", null]
+    ["", null],
+    ["<title>Dark Magician | Card Details</title>", null]
   ]
 }

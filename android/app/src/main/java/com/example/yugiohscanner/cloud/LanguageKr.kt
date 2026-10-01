@@ -18,11 +18,16 @@ object LanguageKr {
         return Math.round(price * factor * 100 + 1e-7) / 100.0
     }
 
+    // Nur ein Name mit Hangul (U+AC00-U+D7A3) ist ein koreanischer -- sonst liefert z. B. Konami bei
+    // einer Karte ohne KR-Veroeffentlichung den englischen Titel.
+    private fun nurHangul(name: String?): String? =
+        name?.takeIf { n -> n.any { it in '가'..'힣' } }
+
     private val KO_NAME = Regex("""^\|\s*ko_name\s*=[ \t]*(.*)$""", RegexOption.MULTILINE)
     private val TAG = Regex("<[^>]+>")
     fun extractKoName(wikitext: String): String? =
-        KO_NAME.find(wikitext)?.groupValues?.get(1)?.replace(TAG, "")?.trim()?.ifEmpty { null }
+        nurHangul(KO_NAME.find(wikitext)?.groupValues?.get(1)?.replace(TAG, "")?.trim())
 
     private val TITLE = Regex("""<title>\s*([^|<]+?)\s*\|""")
-    fun konamiTitleName(html: String): String? = TITLE.find(html)?.groupValues?.get(1)
+    fun konamiTitleName(html: String): String? = nurHangul(TITLE.find(html)?.groupValues?.get(1))
 }
