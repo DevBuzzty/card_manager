@@ -250,7 +250,7 @@ object SetCodeMatch {
             val passend = byVerifiedFirst(bestGroup.filter { it.option.language.equals(festeSprache, ignoreCase = true) })
             val gewaehlt = passend.firstOrNull() ?: SetOption(
                 setCode = "$groupPrefix-${com.example.yugiohscanner.ml.ScanSprache.region(festeSprache)}$groupNumber",
-                rarity = bestGroup.first().option.rarity,
+                rarity = byVerifiedFirst(bestGroup).first().rarity,
                 price = 0.0,
                 language = festeSprache,
                 verified = false,

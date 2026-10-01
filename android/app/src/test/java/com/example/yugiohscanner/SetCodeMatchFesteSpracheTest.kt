@@ -27,6 +27,14 @@ class SetCodeMatchFesteSpracheTest {
         assertFalse(r.selected!!.verified)
     }
 
+    @Test fun `fest KR setzt den Code mit der Seltenheit des verifizierten Drucks zusammen`() {
+        val enRare = SetOption("CORI-EN001", "Rare", 0.0, "EN")
+        val r = SetCodeMatch.best(listOf("CORI-EN001"), listOf(enRare, de), festeSprache = "KR")
+        assertEquals("CORI-KR001", r.selected?.setCode)
+        assertEquals("Super Rare", r.selected?.rarity)
+        assertFalse(r.selected!!.verified)
+    }
+
     @Test fun `fest KR mit zwei KR-Seltenheiten haelt beide im Kandidatenkreis`() {
         val krUr = SetOption("CORI-KR001", "Ultra Rare", 0.0, "KR")
         val r = SetCodeMatch.best(listOf("CORI-EN001"), listOf(de, en, kr, krUr), festeSprache = "KR")
