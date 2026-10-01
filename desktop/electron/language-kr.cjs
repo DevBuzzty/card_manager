@@ -2,6 +2,8 @@
 // Gemeinsame Fixture: docs/fixtures/language/kr.json. Wer eine Fassung aendert, aendert beide.
 const KR_DEFAULT_FACTOR = 0.5;
 
+const { recordPrice } = require('./price-history.cjs');
+
 // KR-Region ("CORI-KR001", "MVP1-KRQ54") oder das alte einzelne K ("LOB-K005") direkt vor der Nummer.
 const KOREAN_CODE_RE = /-KR?[A-Z]?\d/i;
 function isKoreanCode(code) {
@@ -56,6 +58,8 @@ function rescaleKrRow(db, key, newFactor) {
   const price = row.price == null ? null : applyLangFactor(row.price / old, newFactor);
   db.prepare(`UPDATE cards SET price = @price, cm_lang_factor = @f WHERE ${KEY_WHERE}`)
     .run({ ...key, price, f: newFactor });
+  // Jede Preisaenderung gehoert in den Verlauf (eine Zeile je Druck/Variante/Tag).
+  if (price !== row.price) recordPrice(db, key, price, 'kr_factor');
 }
 
 // Neuer KR-Faktor: speichern und alle lebenden, nicht manuell gesperrten KR-Zeilen umrechnen.

@@ -37,7 +37,11 @@ function makeDb() {
   db.exec(`CREATE TABLE cards (id TEXT, set_code TEXT, language TEXT, rarity TEXT, price REAL,
              price_locked INTEGER DEFAULT 0, cm_lang_factor REAL, deleted INTEGER DEFAULT 0,
              PRIMARY KEY (id, set_code, language, rarity));
-           CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);`);
+           CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+           CREATE TABLE price_history (card_id TEXT NOT NULL, set_code TEXT NOT NULL, language TEXT NOT NULL,
+             rarity TEXT NOT NULL, variant TEXT NOT NULL DEFAULT 'base', day TEXT NOT NULL, price REAL NOT NULL,
+             source TEXT NOT NULL, recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+             PRIMARY KEY (card_id, set_code, language, rarity, variant, day));`);
   return db;
 }
 
@@ -76,6 +80,16 @@ test('setKrFactor: 50 -> 60 -> 50 % landet wieder beim Ausgangspreis, gesperrte 
     { id: '3', price: 4, cm_lang_factor: null },
   ]);
   assert.strictEqual(db.prepare("SELECT value FROM settings WHERE key='kr_price_factor'").get().value, '0.5');
+});
+
+test('setKrFactor schreibt den umgerechneten Preis in den Preisverlauf', () => {
+  const db = makeDb();
+  db.prepare("INSERT INTO cards VALUES ('1','CORI-KR001','KR','Common',5,1,0.5,0)").run();
+  kr.setKrFactor(db, 0.6);
+  const h = db.prepare('SELECT card_id, set_code, language, rarity, variant, price, source FROM price_history').all();
+  assert.deepStrictEqual(h, [
+    { card_id: '1', set_code: 'CORI-KR001', language: 'KR', rarity: 'Common', variant: 'base', price: 6, source: 'kr_factor' },
+  ]);
 });
 
 test('setKrFactor mit ungueltigem Wert speichert den Standard', () => {
