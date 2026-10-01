@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { cachedFetch, fetchCardData } = require('./api-handler.cjs');
-const { buildExpansionIndex, buildSinglesIndex, resolveProduct } = require('./cardmarket-bulk-parse.cjs');
+const { buildExpansionIndex, buildSinglesIndex, resolveProduct, buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning } = require('./cardmarket-bulk-parse.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { applySealedPrices } = require('./sealed-items.cjs');
 const { applyLangFactor } = require('./language-kr.cjs');
@@ -83,15 +83,12 @@ function countUnresolved(db) {
   return db.prepare("SELECT COUNT(*) AS n FROM cards WHERE deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND set_code != 'Unknown'").get().n;
 }
 
-// Step A: resolve cm_product_id for unresolved printings from the files alone (no guessing).
-async function resolveMissing(db, { singles, nonsingles, cardsets }) {
-  const reasons = {};
-  if (!Array.isArray(cardsets)) return { resolved: 0, reasons: { 'no-cardsets': 1 } };
-  const rows = db.prepare(
-    "SELECT id, name, set_code, language, rarity FROM cards WHERE deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND set_code != 'Unknown'"
-  ).all();
-  if (rows.length === 0) return { resolved: 0, reasons };
+const UNRESOLVED_SQL = "SELECT id, name, set_code, language, rarity FROM cards WHERE deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND set_code != 'Unknown'";
+const prefixOf = (setCode) => String(setCode || '').split('-')[0].toUpperCase();
 
+// Lookup structures shared by Step A, Step A2 and the scraper's deriver. null without cardsets.
+function buildIndexes({ singles, nonsingles, cardsets }) {
+  if (!Array.isArray(cardsets)) return null;
   const setsByPrefix = new Map();
   for (const s of cardsets) {
     const k = String(s.set_code || '').toUpperCase();
@@ -99,21 +96,78 @@ async function resolveMissing(db, { singles, nonsingles, cardsets }) {
     if (!setsByPrefix.has(k)) setsByPrefix.set(k, []);
     setsByPrefix.get(k).push(s.set_name);
   }
-  const idx = { expansionIndex: buildExpansionIndex(nonsingles), singlesIndex: buildSinglesIndex(singles) };
+  return {
+    setsByPrefix,
+    expansionIndex: buildExpansionIndex(nonsingles),
+    singlesIndex: buildSinglesIndex(singles),
+    versionIndex: buildVersionIndex(singles),
+  };
+}
+
+// Step A: resolve cm_product_id for unresolved printings from the files alone (no guessing).
+async function resolveMissing(db, ix) {
+  const reasons = {};
+  if (!ix) return { resolved: 0, reasons: { 'no-cardsets': 1 } };
+  const rows = db.prepare(UNRESOLVED_SQL).all();
+  if (rows.length === 0) return { resolved: 0, reasons };
 
   const pending = [];
   for (const r of rows) {
     let cardName = r.name;
     if (!cardName) { try { cardName = (await fetchCardData(r.id))?.data?.[0]?.name || null; } catch { cardName = null; } }
     if (!cardName) { reasons['no-name'] = (reasons['no-name'] || 0) + 1; continue; }
-    const setNames = setsByPrefix.get(String(r.set_code || '').split('-')[0].toUpperCase()) || [];
-    const res = resolveProduct({ cardName, setNames }, idx);
+    const setNames = ix.setsByPrefix.get(prefixOf(r.set_code)) || [];
+    const res = resolveProduct({ cardName, setNames }, ix);
     reasons[res.reason] = (reasons[res.reason] || 0) + 1;
     if (res.idProduct) pending.push({ ...r, idProduct: res.idProduct });
   }
   const upd = db.prepare("UPDATE cards SET cm_product_id = ? WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?");
   db.transaction(() => { for (const p of pending) upd.run(p.idProduct, p.id, p.set_code, p.language, p.rarity); })();
   return { resolved: pending.length, reasons };
+}
+
+// Learned from real ids only (derived ones would reinforce their own mistakes).
+function learnedFrom(db, ix) {
+  const known = db.prepare(
+    "SELECT rarity, cm_product_id AS idProduct FROM cards WHERE cm_product_id IS NOT NULL AND COALESCE(cm_product_derived, 0) = 0"
+  ).all();
+  return learnRanks(known, ix.versionIndex);
+}
+
+// Rarities YGOPRODeck lists for a passcode under one set prefix (api_cache-backed; [] when unknown).
+async function printingRaritiesOf(id, prefix) {
+  try {
+    const sets = (await fetchCardData(id))?.data?.[0]?.card_sets || [];
+    return sets.filter(s => prefixOf(s.set_code) === prefix).map(s => s.set_rarity);
+  } catch { return []; }
+}
+
+// Step A2: printings Step A left ambiguous get the version that the same set's other cards of that
+// rarity sit at (see deriveProduct), flagged cm_product_derived = 1. An id a real printing of another
+// rarity already holds is never handed out a second time. `raritiesOf` is injected by tests.
+async function deriveMissing(db, ix, raritiesOf = printingRaritiesOf) {
+  if (!ix) return 0;
+  const learned = learnedFrom(db, ix);
+  const taken = new Map();
+  for (const t of db.prepare("SELECT cm_product_id AS idProduct, rarity FROM cards WHERE cm_product_id IS NOT NULL").all()) {
+    if (!taken.has(t.idProduct)) taken.set(t.idProduct, new Set());
+    taken.get(t.idProduct).add(t.rarity);
+  }
+  const upd = db.prepare("UPDATE cards SET cm_product_id = ?, cm_product_derived = 1 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ? AND cm_product_id IS NULL");
+  const pending = [];
+  for (const r of db.prepare(UNRESOLVED_SQL).all()) {
+    if (!r.name) continue;
+    const q = { cardName: r.name, setNames: ix.setsByPrefix.get(prefixOf(r.set_code)) || [], rarity: r.rarity };
+    let res = deriveProduct(q, { ...ix, learned });
+    if (res.reason === 'needs-printings') res = deriveProduct({ ...q, printingRarities: await raritiesOf(r.id, prefixOf(r.set_code)) }, { ...ix, learned });
+    if (!res.idProduct) continue;
+    const owners = taken.get(res.idProduct);
+    if (owners && [...owners].some(rar => rar !== r.rarity)) continue;
+    pending.push({ ...r, idProduct: res.idProduct });
+  }
+  let derived = 0;
+  db.transaction(() => { for (const p of pending) derived += upd.run(p.idProduct, p.id, p.set_code, p.language, p.rarity).changes; })();
+  return derived;
 }
 
 // Step B: price = trend for every resolved, non-manual printing present in the guide with a
@@ -145,7 +199,7 @@ function applyPrices(db, guide) {
 }
 
 // Entry point. `files` (tests only) injects { guide, singles, nonsingles, cardsets } or { error }.
-async function runBulkRefresh(db, { userDataPath, force = false, files = null } = {}) {
+async function runBulkRefresh(db, { userDataPath, force = false, files = null, raritiesOf } = {}) {
   let data;
   try {
     if (files && files.error) throw files.error;
@@ -154,7 +208,9 @@ async function runBulkRefresh(db, { userDataPath, force = false, files = null } 
     console.error('[cardmarket-bulk] load failed:', e.message);
     return { error: 'download', message: e.message, resolved: 0, priced: 0, skipped: 0, unchanged: 0, sealedPriced: 0, unresolved: countUnresolved(db), reasons: {} };
   }
-  const a = await resolveMissing(db, data);
+  const ix = buildIndexes(data);
+  const a = await resolveMissing(db, ix);
+  const derived = await deriveMissing(db, ix, raritiesOf);
   const b = applyPrices(db, data.guide);
   // Step C runs isolated: a failure here must not lose the A/B numbers already written, nor skip
   // the cm_bulk_last_run stamp (the bulk run would otherwise look overdue forever).
@@ -168,7 +224,7 @@ async function runBulkRefresh(db, { userDataPath, force = false, files = null } 
   }
   db.prepare("INSERT INTO settings (key, value) VALUES ('cm_bulk_last_run', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
     .run(new Date().toISOString());
-  const out = { resolved: a.resolved, reasons: a.reasons, priced: b.priced, skipped: b.skipped, unchanged: b.unchanged, sealedPriced, unresolved: countUnresolved(db) };
+  const out = { resolved: a.resolved, derived, reasons: a.reasons, priced: b.priced, skipped: b.skipped, unchanged: b.unchanged, sealedPriced, unresolved: countUnresolved(db) };
   if (sealedError) out.sealed = { error: sealedError };
   console.log('[cardmarket-bulk]', JSON.stringify(out));
   return out;
@@ -182,4 +238,41 @@ function getBulkStatus(db) {
   return { lastRun: last ? last.value : null, resolvedCount: c.r || 0, unresolvedCount: c.u || 0 };
 }
 
-module.exports = { runBulkRefresh, getBulkStatus };
+// Scraper helper: order cards so each set/rarity group gets its two real ids first, and after every
+// hit derive (and price) the siblings that became derivable. Files come from the bulk cache; the
+// parsed indexes are kept for an hour so the 10-minute poller doesn't re-parse 30 MB each tick.
+let deriverCache = null;
+async function makeDeriver(db, userDataPath) {
+  if (!deriverCache || Date.now() - deriverCache.at > H) {
+    const data = await loadAll(userDataPath, false);
+    deriverCache = { at: Date.now(), guide: data.guide, ix: buildIndexes(data) };
+  }
+  const { guide, ix } = deriverCache;
+  if (!ix) return null;
+  return {
+    async order(cards) {
+      const learned = learnedFrom(db, ix);
+      const keysById = new Map();
+      for (const r of db.prepare(UNRESOLVED_SQL).all()) {
+        if (!r.name) continue;
+        const { groupKey } = deriveProduct({ cardName: r.name, setNames: ix.setsByPrefix.get(prefixOf(r.set_code)) || [], rarity: r.rarity }, { ...ix, learned });
+        if (!groupKey) continue;
+        // Deck-Sets lernen nichts aus Vorbildern -> diese Karten nicht vorziehen.
+        const n = Number(groupKey.split('|')[1]);
+        if (!versionsAreRarities(await printingRaritiesOf(r.id, prefixOf(r.set_code)), n)) continue;
+        if (!keysById.has(String(r.id))) keysById.set(String(r.id), []);
+        keysById.get(String(r.id)).push(groupKey);
+      }
+      // A group whose examples disagree can't be fixed by more scraping -> counts as satisfied.
+      const startCount = (k) => { const m = learned.get(k); return !m ? 0 : m.size === 1 ? [...m.values()][0] : 2; };
+      return orderForLearning(cards, c => keysById.get(String(c.id)) || [], startCount);
+    },
+    async derive() {
+      const n = await deriveMissing(db, ix);
+      if (n > 0) applyPrices(db, guide);
+      return n;
+    },
+  };
+}
+
+module.exports = { runBulkRefresh, getBulkStatus, makeDeriver };

@@ -10,7 +10,7 @@ const { belongsToCard, resolveSetCode } = require('./setcode-resolve.cjs');
 const { startSync, ebayStatusReply } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape, runFirstEdPass } = require('./cardmarket-scraper.cjs');
-const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
+const { runBulkRefresh, getBulkStatus, makeDeriver } = require('./cardmarket-bulk.cjs');
 const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = require('./catalog-builder.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { computeMovers, addDays } = require('./movers.cjs');
@@ -1248,6 +1248,8 @@ ipcMain.handle('reveal-cm-window', () => {
   try { if (cmWin && !cmWin.isDestroyed()) { cmWin.show(); cmWin.focus(); } } catch (e) {}
   return { success: true };
 });
+// Abgeleitete IDs (01.10.2026): ohne Cardmarket-Dateien laeuft der Scraper wie bisher, nur ohne Ableitung.
+const cmDeriver = () => makeDeriver(db, userDataPath).catch(e => { console.warn('[cardmarket] ohne Ableitung:', e.message); return null; });
 ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
   if (cmRunning) return { updated: 0, noMatch: 0, errors: 0, noMatchList: [], busy: true };
   cmAbort = false; cmRunning = true;
@@ -1260,6 +1262,7 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
       onProgress: (p) => send({ current: p.current, total: p.total }),
       shouldAbort: () => cmAbort,
       onChallenge,
+      deriver: await cmDeriver(),
     });
     // Spec G4 §4: 1st-Ed-Durchgang nach dem Basis-Durchgang, im selben cmRunning-Schutz, ohne Grenze.
     // Eigener try/catch: ein Ausfall hier laesst das Basis-Ergebnis unberuehrt.
@@ -1275,7 +1278,7 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
         });
       } catch (e) { console.error('[cardmarket] 1st-Ed-Durchgang:', e); }
     }
-    if ((res && res.updated > 0) || firstEd.updated > 0) recordPortfolioValue(db);
+    if ((res && (res.updated > 0 || res.derived > 0)) || firstEd.updated > 0) recordPortfolioValue(db);
     send({ current: 1, total: 1 }); // clears the bar
     return { ...res, firstEd };
   } finally { cmRunning = false; cmWin = null; }
@@ -1298,6 +1301,7 @@ function startCardmarketPoller() {
         maxCards: 4,      // small polite batch per tick
         headless: true,   // never surface a window; skip challenged cards silently, retry next tick
         shouldAbort: () => cmAbort,
+        deriver: await cmDeriver(),
       });
       // Spec G4 §4: danach hoechstens 2 Kandidaten der Ersten Auflage; eigener try/catch.
       let firstEdUpdated = 0;
@@ -1307,7 +1311,7 @@ function startCardmarketPoller() {
           firstEdUpdated = fe.updated;
         } catch (e) { console.error('Cardmarket 1st-Ed poller error:', e); }
       }
-      if (res.updated > 0 || firstEdUpdated > 0) {
+      if (res.updated > 0 || res.derived > 0 || firstEdUpdated > 0) {
         recordPortfolioValue(db);
         if (mainWindow) {
           const stats = { totalValue: portfolioTotals(db).total };

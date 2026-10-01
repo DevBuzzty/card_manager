@@ -103,6 +103,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
       const r = await window.api.scrapeCardmarketPrices(cmMinRank);
       if (r?.busy) { alert('Cardmarket läuft gerade schon (Scraper oder Update). Bitte kurz warten.'); return; }
       let msg = `Cardmarket fertig: ${r.updated} aktualisiert, ${r.noMatch} ohne Treffer, ${r.errors} Fehler.`;
+      if (r.derived > 0) msg += ` ${r.derived} aus dem Set abgeleitet.`;
       if (r.noMatchList && r.noMatchList.length) {
         msg += `\n\nOhne Treffer (bitte manuell setzen):\n` + r.noMatchList.slice(0, 40).join('\n')
              + (r.noMatchList.length > 40 ? `\n… +${r.noMatchList.length - 40} weitere` : '');

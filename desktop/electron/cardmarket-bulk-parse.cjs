@@ -74,18 +74,112 @@ function buildSinglesIndex(singles) {
 // Resolve one printing. `setNames` = every YGOPRODeck set_name sharing the printing's set-code
 // prefix (e.g. LOB -> original + 25th Anniversary Edition). Exactly one product for the card in
 // the union of those expansions -> resolved. Anything else -> null, never a guess.
-function resolveProduct({ cardName, setNames }, { expansionIndex, singlesIndex }) {
+function expansionIdsFor(setNames, expansionIndex) {
   const expIds = new Set();
   for (const sn of setNames || []) {
     const clean = decodeEntities(sn);
     const ids = expansionIndex.get(normName(clean)) || expansionIndex.get(tokenKey(clean));
     if (ids) for (const id of ids) expIds.add(id);
   }
+  return expIds;
+}
+
+function resolveProduct({ cardName, setNames }, { expansionIndex, singlesIndex }) {
+  const expIds = expansionIdsFor(setNames, expansionIndex);
   if (expIds.size === 0) return { idProduct: null, reason: 'no-expansion' };
   const cands = (singlesIndex.get(normName(cardName)) || []).filter(p => expIds.has(p.idExpansion));
   if (cands.length === 0) return { idProduct: null, reason: 'no-candidate' };
   if (cands.length > 1) return { idProduct: null, reason: 'ambiguous' };
   return { idProduct: cands[0].idProduct, reason: 'resolved' };
+}
+
+// --- Abgeleitete Produkt-IDs (01.10.2026) ---
+// Cardmarket legt die Versionen eines Sets seltenheitsweise in Bloecken an (alle Super Rares, dann alle
+// Ultra Rares ...). Die k-te Version einer Karte (nach idProduct sortiert) ist darum im ganzen Set
+// dieselbe Seltenheit -- vorausgesetzt, die Karte hat dort gleich viele Versionen. Gegenprobe an 188
+// bekannten Drucken mit >= 2 Vorbildern: 185 richtig.
+
+// normName(Karte)|idExpansion -> nach idProduct sortierte Versionen; pos: idProduct -> { exp, n, rank }.
+function buildVersionIndex(singles) {
+  const byKey = new Map();
+  for (const p of singles || []) {
+    const name = normName(p.name);
+    if (!name || p.idExpansion == null) continue;
+    const key = name + '|' + Number(p.idExpansion);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(Number(p.idProduct));
+  }
+  const pos = new Map();
+  for (const [key, ids] of byKey) {
+    ids.sort((a, b) => a - b);
+    const exp = Number(key.slice(key.lastIndexOf('|') + 1));
+    ids.forEach((id, rank) => pos.set(id, { exp, n: ids.length, rank }));
+  }
+  return { byKey, pos };
+}
+
+// known: [{ rarity, idProduct }] mit ECHTEN (nicht abgeleiteten) IDs -> 'exp|n|rarity' -> Map(rank -> Anzahl).
+function learnRanks(known, versionIndex) {
+  const learned = new Map();
+  for (const k of known || []) {
+    const p = versionIndex.pos.get(Number(k.idProduct));
+    if (!p || p.n < 2) continue;
+    const key = `${p.exp}|${p.n}|${k.rarity}`;
+    if (!learned.has(key)) learned.set(key, new Map());
+    const m = learned.get(key);
+    m.set(p.rank, (m.get(p.rank) || 0) + 1);
+  }
+  return learned;
+}
+
+// Leitet die Version eines mehrdeutigen Drucks ab. Nur wenn die Karte in genau EINEM Set-Kandidaten
+// mehrere Versionen hat und sich alle (>= minSamples) Vorbilder dieser Gruppe auf eine Position einig
+// sind. groupKey benennt die Gruppe auch ohne Ergebnis (der Scraper sammelt damit gezielt Vorbilder).
+// printingRarities = Seltenheiten, die YGOPRODeck fuer die Karte unter diesem Set-Kuerzel listet. Nur
+// wenn das genau n VERSCHIEDENE sind, stehen die Versionen fuer Seltenheiten -- in Deck-Sets wie YGLD
+// (Deck A/B/C) oder bei Neuauflagen ist eine Seltenheit mehrfach da, die Reihenfolge sagt dann nichts.
+function deriveProduct({ cardName, setNames, rarity, printingRarities }, { expansionIndex, versionIndex, learned }, minSamples = 2) {
+  const name = normName(cardName);
+  const hits = [];
+  for (const e of expansionIdsFor(setNames, expansionIndex)) {
+    const ids = versionIndex.byKey.get(name + '|' + e);
+    if (ids) hits.push({ e, ids });
+  }
+  if (hits.length !== 1 || hits[0].ids.length < 2) return { idProduct: null, groupKey: null, reason: 'no-group' };
+  const { e, ids } = hits[0];
+  const groupKey = `${e}|${ids.length}|${rarity}`;
+  const m = learned.get(groupKey);
+  if (!m) return { idProduct: null, groupKey, reason: 'no-model' };
+  if (m.size !== 1) return { idProduct: null, groupKey, reason: 'conflict' };
+  const [[rank, count]] = m;
+  if (count < minSamples) return { idProduct: null, groupKey, reason: 'too-few' };
+  if (printingRarities === undefined) return { idProduct: null, groupKey, reason: 'needs-printings' }; // Aufrufer holt sie nach
+  return versionsAreRarities(printingRarities, ids.length)
+    ? { idProduct: ids[rank], groupKey, reason: 'derived' }
+    : { idProduct: null, groupKey: null, reason: 'not-by-rarity' };
+}
+
+function versionsAreRarities(printingRarities, n) {
+  const rar = printingRarities || [];
+  return rar.length === n && new Set(rar).size === n;
+}
+
+// Scraper-Reihenfolge: eine Gruppe braucht `need` echte IDs, danach sind ihre restlichen Karten
+// ableitbar. Darum zuerst die Karten, die einer Gruppe noch ein Vorbild liefern (und Karten ohne
+// Gruppe, die ohnehin gescrapt werden muessen); der Rest nach hinten. Sonst bleibt die Reihenfolge.
+function orderForLearning(items, keysOf, startCount = () => 0, need = 2) {
+  const seen = new Map();
+  const ranked = items.map((it, i) => {
+    const keys = keysOf(it);
+    let later = false;
+    if (keys.length) {
+      const counts = keys.map(k => (seen.has(k) ? seen.get(k) : startCount(k)));
+      later = Math.min(...counts) >= need;
+      keys.forEach((k, j) => seen.set(k, counts[j] + 1));
+    }
+    return { it, i, later };
+  });
+  return ranked.sort((a, b) => (a.later - b.later) || (a.i - b.i)).map(x => x.it);
 }
 
 // "https://product-images.s3.cardmarket.com/5/LOB/102800/102800.jpg" -> 102800
@@ -97,4 +191,5 @@ function idProductFromImageUrl(url) {
 module.exports = {
   expansionNameFromProduct, buildExpansionIndex, buildSinglesIndex, resolveProduct, idProductFromImageUrl,
   expansionNameVariants, decodeEntities, tokenKey,
+  buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning,
 };

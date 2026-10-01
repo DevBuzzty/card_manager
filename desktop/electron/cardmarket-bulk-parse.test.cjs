@@ -126,3 +126,59 @@ test('idProductFromImageUrl reads the doubled id from the product image URL', ()
   assert.equal(idProductFromImageUrl(''), null);
   assert.equal(idProductFromImageUrl(null), null);
 });
+
+// --- Abgeleitete Produkt-IDs ---
+const { buildVersionIndex, learnRanks, deriveProduct, orderForLearning } = require('./cardmarket-bulk-parse.cjs');
+
+// Set 5848 legt je Karte drei Versionen an, seltenheitsweise in Bloecken (wie RA03 am 04.11.2024).
+const singles3 = [
+  { idProduct: 100, name: 'Toadally Awesome', idExpansion: 5848 },
+  { idProduct: 200, name: 'Toadally Awesome', idExpansion: 5848 },
+  { idProduct: 300, name: 'Toadally Awesome', idExpansion: 5848 },
+  { idProduct: 101, name: 'Effect Veiler', idExpansion: 5848 },
+  { idProduct: 201, name: 'Effect Veiler', idExpansion: 5848 },
+  { idProduct: 301, name: 'Effect Veiler', idExpansion: 5848 },
+  { idProduct: 102, name: 'Ash Blossom & Joyous Spring', idExpansion: 5848 },
+  { idProduct: 202, name: 'Ash Blossom & Joyous Spring', idExpansion: 5848 },
+  { idProduct: 302, name: 'Ash Blossom & Joyous Spring', idExpansion: 5848 },
+  { idProduct: 900, name: 'Toadally Awesome', idExpansion: 7000 },
+  { idProduct: 901, name: 'Toadally Awesome', idExpansion: 7000 },
+];
+const ix3 = { expansionIndex: buildExpansionIndex([{ name: 'Quarter Century Bonanza Booster', idExpansion: 5848 }, { name: 'Other Set Booster', idExpansion: 7000 }]),
+  versionIndex: buildVersionIndex(singles3) };
+const qcb = ['Quarter Century Bonanza'];
+const three = ['Super Rare', 'Ultra Rare', 'Secret Rare'];
+
+test('buildVersionIndex sortiert die Versionen je Karte und Set nach idProduct', () => {
+  assert.deepEqual(ix3.versionIndex.byKey.get('toadallyawesome|5848'), [100, 200, 300]);
+  assert.deepEqual(ix3.versionIndex.pos.get(201), { exp: 5848, n: 3, rank: 1 });
+});
+
+test('deriveProduct leitet die Version aus zwei einigen Vorbildern ab', () => {
+  const learned = learnRanks([{ rarity: 'Super Rare', idProduct: 201 }, { rarity: 'Super Rare', idProduct: 202 }], ix3.versionIndex);
+  const r = deriveProduct({ cardName: 'Toadally Awesome', setNames: qcb, rarity: 'Super Rare', printingRarities: three }, { ...ix3, learned });
+  assert.deepEqual(r, { idProduct: 200, groupKey: '5848|3|Super Rare', reason: 'derived' });
+});
+
+test('deriveProduct raet nicht: ein Vorbild, Widerspruch, fremde Seltenheit, mehrere Sets', () => {
+  const one = learnRanks([{ rarity: 'Super Rare', idProduct: 201 }], ix3.versionIndex);
+  assert.equal(deriveProduct({ cardName: 'Toadally Awesome', setNames: qcb, rarity: 'Super Rare', printingRarities: three }, { ...ix3, learned: one }).reason, 'too-few');
+  const clash = learnRanks([{ rarity: 'Super Rare', idProduct: 201 }, { rarity: 'Super Rare', idProduct: 302 }], ix3.versionIndex);
+  assert.equal(deriveProduct({ cardName: 'Toadally Awesome', setNames: qcb, rarity: 'Super Rare', printingRarities: three }, { ...ix3, learned: clash }).reason, 'conflict');
+  const two = learnRanks([{ rarity: 'Super Rare', idProduct: 201 }, { rarity: 'Super Rare', idProduct: 202 }], ix3.versionIndex);
+  assert.equal(deriveProduct({ cardName: 'Toadally Awesome', setNames: qcb, rarity: 'Ultra Rare', printingRarities: three }, { ...ix3, learned: two }).reason, 'no-model');
+  assert.equal(deriveProduct({ cardName: 'Toadally Awesome', setNames: [...qcb, 'Other Set'], rarity: 'Super Rare', printingRarities: three }, { ...ix3, learned: two }).reason, 'no-group');
+  // Deck-Set: eine Seltenheit mehrfach -> Versionen stehen nicht fuer Seltenheiten
+  const decks = deriveProduct({ cardName: 'Toadally Awesome', setNames: qcb, rarity: 'Super Rare', printingRarities: ['Super Rare', 'Super Rare', 'Ultra Rare'] }, { ...ix3, learned: two });
+  assert.deepEqual(decks, { idProduct: null, groupKey: null, reason: 'not-by-rarity' });
+  // Cardmarket hat mehr Versionen als YGOPRODeck Drucke kennt -> nicht ableiten
+  assert.equal(deriveProduct({ cardName: 'Toadally Awesome', setNames: qcb, rarity: 'Super Rare', printingRarities: ['Super Rare', 'Ultra Rare'] }, { ...ix3, learned: two }).reason, 'not-by-rarity');
+});
+
+test('orderForLearning zieht je Gruppe zwei Karten vor, Karten ohne Gruppe bleiben vorn', () => {
+  const keys = { a1: ['A'], a2: ['A'], a3: ['A'], b1: ['B'], x: [] };
+  const order = orderForLearning(['a1', 'a2', 'a3', 'b1', 'x'], k => keys[k]);
+  assert.deepEqual(order, ['a1', 'a2', 'b1', 'x', 'a3']);
+  // Gruppe A hat schon ein Vorbild -> nur noch eine Karte vorziehen
+  assert.deepEqual(orderForLearning(['a1', 'a2', 'b1'], k => keys[k], k => (k === 'A' ? 1 : 0)), ['a1', 'b1', 'a2']);
+});

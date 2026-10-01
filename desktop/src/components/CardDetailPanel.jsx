@@ -320,7 +320,9 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                 }}
                                 className="w-16 bg-bg/40 border border-line rounded px-1 py-0.5 text-xs text-text"
                                 title="Preis manuell setzen (überschreibt Auto-Preis)" />
-                              {variant.cm_updated_at && !variant.cm_url && (
+                              {variant.cm_product_derived ? (
+                                <span className="text-klein text-muted" title="Cardmarket-Version aus der Reihenfolge der anderen Karten dieses Sets abgeleitet, nicht direkt gefunden">Preis abgeleitet</span>
+                              ) : variant.cm_updated_at && !variant.cm_url && (
                                 <span className="text-klein text-warn" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
                               )}
                               <button onClick={() => { if (confirm(`${variant.set_code} (${variant.rarity}) mit allen Exemplaren löschen?`)) handleDeleteVariant(variant); }}
