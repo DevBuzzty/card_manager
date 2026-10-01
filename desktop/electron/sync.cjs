@@ -114,8 +114,9 @@ function applyRemoteRow(db, r) {
       VALUES (@id,@set_code,@language,@name,@type,@desc,@image_url,@atk,@def,@level,@race,@attribute,@quantity,@rarity,@price,@deleted,@cm_product_id,@price_locked,@price_first_ed,@cm_first_ed_factor,@name_ko,@cm_lang_factor)`)
       .run(remoteToLocalFull(r));
     // Das Handy kennt nur den Standardfaktor; der PC rechnet auf seinen eingestellten Wert um.
+    // Manuelle Preise (price_locked = 2) bleiben unangetastet.
     // Die Umrechnung stempelt updated_at, der naechste Push bringt Preis + Faktor zurueck in die Cloud.
-    if (p.language === 'KR') rescaleKrRow(db, p, getKrFactor(db));
+    if (p.language === 'KR' && Number(r.price_locked) !== 2) rescaleKrRow(db, p, getKrFactor(db));
     return;
   }
   db.prepare(`UPDATE cards SET deleted = @deleted

@@ -50,3 +50,11 @@ test('Vom Handy angelegte DE-Zeile bleibt unveraendert', () => {
   const r = db.prepare("SELECT price, cm_lang_factor FROM cards WHERE id='8'").get();
   assert.deepStrictEqual(r, { price: 5, cm_lang_factor: null });
 });
+
+test('Vom Handy angelegte KR-Zeile mit price_locked 2 (manueller Preis) wird nicht umgerechnet', () => {
+  const db = makeDb();
+  db.prepare("INSERT INTO settings (key, value) VALUES ('kr_price_factor', '0.6')").run();
+  applyRemoteRow(db, { id: '7', set_code: 'CORI-KR002', language: 'KR', rarity: 'Common', deleted: false, price: 9.99, price_locked: 2, cm_lang_factor: 0.5 });
+  const r = db.prepare("SELECT price, cm_lang_factor FROM cards WHERE id='7'").get();
+  assert.deepStrictEqual(r, { price: 9.99, cm_lang_factor: 0.5 });
+});
