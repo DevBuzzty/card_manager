@@ -1,6 +1,8 @@
 package com.example.yugiohscanner.ui
 
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -856,11 +858,18 @@ fun ScanScreen(onClose: () -> Unit) {
                     com.example.yugiohscanner.ml.ScanSprache.fest = next
                     scanSprache = next
                 },
-                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50)),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+                    .defaultMinSize(minWidth = 1.dp)
+                    .heightIn(min = 32.dp)
+                    .semantics { contentDescription = "Scan-Sprache: ${scanSprache ?: "Auto"}" },
             ) {
                 Text(
-                    scanSprache?.let { "${langFlag(it)} $it" } ?: "Sprache: Auto",
+                    scanSprache?.let { "${langFlag(it)} $it" } ?: "🌐 Auto",
                     color = if (scanSprache != null) Color.Yellow else Color.White,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
             // Spec D4 §3: Einzeln = jede Karte einmal pro Stapel. Stapel = ein erneutes Erkennen
