@@ -173,6 +173,8 @@ function newEntry(d) {
     scannedSetCode: d.setCode,
     scannedRarity: d.rarity,
     scannedLanguage: d.language,
+    // Am Handy fest eingestellte Scan-Sprache (z. B. "KR"); fehlt bei "Auto" und bei aelteren Handys.
+    scannedFixedLanguage: d.fixedLanguage,
     scannedEdition: d.edition,
     scannedEditionConfidence: d.editionConfidence,
     scannedConfidence: d.confidence,

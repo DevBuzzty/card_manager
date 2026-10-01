@@ -115,7 +115,9 @@ class ScanCapture(
                 // vergleichen kann (D3 Task 6, SetCodeEvidence.shouldSilentlyImprove) -- gegen die
                 // SetOption allein ginge das nicht, sie traegt weder Distanz noch Frameanzahl.
                 entry.codeMatch = r.match
+                // Feste Scan-Sprache auch ohne lesbaren Set-Code (Abnahme 01.10.2026).
                 entry.selectedSet = r.match.selected
+                    ?: com.example.yugiohscanner.ml.ScanSprache.ersatzDruck(com.example.yugiohscanner.ml.ScanSprache.fest, r.knownSets)
                 entry.confidence = r.confidence
                 entry.edition = r.confidence.effectiveEdition
                 entry.loading = false
@@ -453,5 +455,7 @@ private fun sendScanToDesktop(socket: Socket, pc: String, r: ResolvedScan, mode:
     data.put("confidence", r.confidence.light.name.lowercase(Locale.ROOT))
     data.put("reason", r.confidence.reason ?: JSONObject.NULL)
     data.put("mode", mode)
+    // Feste Scan-Sprache: der PC braucht sie auch dann, wenn kein Druck gewaehlt ist (Abnahme 01.10.2026).
+    com.example.yugiohscanner.ml.ScanSprache.fest?.let { data.put("fixedLanguage", it) }
     socket.emit("card_scanned", data)
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalize, confusionDistance, matchCandidates, phoneSelectedSet, mapPhoneConfidence } from './setCodeMatch.js';
+import { normalize, confusionDistance, matchCandidates, phoneSelectedSet, mapPhoneConfidence, fixedLanguageSet } from './setCodeMatch.js';
 
 const sets = [
   { set_code: 'DOOD-DE038', set_rarity: 'Secret Rare' },
@@ -94,4 +94,26 @@ test('mapPhoneConfidence maps the Ampel onto the exact/fuzzy/none vocabulary', (
   assert.equal(mapPhoneConfidence('yellow'), 'fuzzy');
   assert.equal(mapPhoneConfidence('red'), 'none');
   assert.equal(mapPhoneConfidence(undefined), 'none');
+});
+
+// Feste Scan-Sprache (Abnahme 01.10.2026): las das Handy keinen Set-Code, kam die eingestellte
+// Sprache nie am PC an -- er nahm stur den ersten deutschen Druck.
+test('fixedLanguageSet nimmt den ersten Druck der festen Sprache', () => {
+  const printings = [
+    { set_code: 'CORI-DE030', set_rarity: 'Rare', language: 'DE' },
+    { set_code: 'CORI-KR030', set_rarity: 'Rare', language: 'KR' },
+    { set_code: 'CORI-KR031', set_rarity: 'Common', language: 'KR' },
+  ];
+  assert.deepEqual(fixedLanguageSet('KR', printings), printings[1]);
+});
+
+test('fixedLanguageSet ohne Druck der Sprache legt Unknown in dieser Sprache an', () => {
+  const printings = [{ set_code: 'CORI-DE030', set_rarity: 'Rare', language: 'DE' }];
+  assert.deepEqual(fixedLanguageSet('KR', printings), { set_code: 'Unknown', set_rarity: 'Unknown', set_price: 0, language: 'KR' });
+  assert.deepEqual(fixedLanguageSet('KR', undefined), { set_code: 'Unknown', set_rarity: 'Unknown', set_price: 0, language: 'KR' });
+});
+
+test('fixedLanguageSet ohne feste Sprache liefert null', () => {
+  assert.equal(fixedLanguageSet(null, [{ set_code: 'X', language: 'DE' }]), null);
+  assert.equal(fixedLanguageSet(undefined, []), null);
 });

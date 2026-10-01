@@ -247,3 +247,10 @@ test('ein automatisch angelegter Zusatzdruck uebernimmt die erkannte Auflage', (
   assert.equal(out.extraPrintings[0].edition, 'first');
   assert.equal(out.extraPrintings[0].condition, 'NM');
 });
+
+test('neuer Eintrag merkt sich die am Handy fest eingestellte Sprache', () => {
+  const [e] = applyScan([], { passcode: '43989315', confidence: 'red', fixedLanguage: 'KR', mode: 'stapel' });
+  assert.equal(e.scannedFixedLanguage, 'KR');
+  const [auto] = applyScan([], { passcode: '43989315', confidence: 'red', mode: 'stapel' });
+  assert.equal(auto.scannedFixedLanguage, undefined);
+});

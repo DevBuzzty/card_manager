@@ -100,7 +100,7 @@ object ScanResolver {
         }
         val readSetCode = com.example.yugiohscanner.ml.ReadSetCode.aus(framesEvidence)
         logScanDecision("erst", pc, match, confidence, knownSets)
-        com.example.yugiohscanner.ml.ScanLog.line("Gelesen", "pc=$pc code=${readSetCode ?: "-"} gewaehlt=${match.selected?.setCode ?: "-"}")
+        com.example.yugiohscanner.ml.ScanLog.line("Gelesen", "pc=$pc code=${readSetCode ?: "-"} gewaehlt=${match.selected?.setCode ?: "-"} fest=${com.example.yugiohscanner.ml.ScanSprache.fest ?: "auto"}")
         com.example.yugiohscanner.ml.ScanLog.line("Sprache", "pc=$pc hinweis=${com.example.yugiohscanner.ml.SprachHinweis.aus(framesEvidence)}")
         // Ohne diese Zeile laesst sich am Protokoll NICHT unterscheiden, ob eine Auflage GELESEN
         // oder nur aus der Voreinstellung uebernommen wurde: resolveEdition nimmt die Erkennung nur

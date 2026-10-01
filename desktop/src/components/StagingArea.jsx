@@ -5,7 +5,7 @@ import CustomSelect from './CustomSelect';
 import RarityGuide from './RarityGuide';
 import CardSearchModal from './CardSearchModal';
 import { Search } from 'lucide-react';
-import { matchCandidates, phoneSelectedSet, mapPhoneConfidence } from '../utils/setCodeMatch';
+import { matchCandidates, phoneSelectedSet, mapPhoneConfidence, fixedLanguageSet } from '../utils/setCodeMatch';
 import { fuelleRarityAusGeschwistern } from '../utils/printingRarity';
 import { werteFuerZusatz } from '../utils/scanAggregate';
 import Flag from './Flag';
@@ -159,7 +159,10 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
             // older phone never sends it, so `usePhoneMatch` is false and this stays exactly the
             // pre-Task-8 local-matching path.
             const usePhoneMatch = c.scannedConfidence != null;
-            const phoneSet = usePhoneMatch ? phoneSelectedSet(c.scannedSetCode, c.scannedRarity, c.scannedLanguage, enPrintings) : null;
+            const phoneSet = usePhoneMatch
+                ? (phoneSelectedSet(c.scannedSetCode, c.scannedRarity, c.scannedLanguage, enPrintings)
+                    || fixedLanguageSet(c.scannedFixedLanguage, enPrintings))
+                : null;
             const apiMatch = usePhoneMatch ? null : matchCandidates(c.scannedSetCandidates, data.card_sets);
             return {
                 ...c,
@@ -200,7 +203,10 @@ export default function StagingArea({ scannedCards, setScannedCards, isUpdating 
                         chosen = phoneSelectedSet(c.scannedSetCode, c.scannedRarity, c.scannedLanguage, allPrintings) || chosen;
                         // Hat das Handy gar keinen Set-Code gelesen, bleibt die Sammlung DE-first:
                         // deutscher statt englischer Standarddruck (Nutzerentscheid 17.09.).
-                        if (!c.scannedSetCode && germanSets.length > 0) {
+                        // Ausnahme: am Handy war eine Sprache fest eingestellt -- dann gilt sie (Abnahme 01.10.2026).
+                        if (!c.scannedSetCode && c.scannedFixedLanguage) {
+                            chosen = fixedLanguageSet(c.scannedFixedLanguage, allPrintings);
+                        } else if (!c.scannedSetCode && germanSets.length > 0) {
                             chosen = { ...germanSets[0], language: 'DE', isYugipedia: true };
                         }
                         auto = c.scannedConfidence !== 'red';

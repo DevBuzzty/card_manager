@@ -83,6 +83,15 @@ export function phoneSelectedSet(setCode, rarity, language, printings) {
   return { set_code: setCode, set_rarity: rarity || 'Unknown', set_price: 0, language: language || 'DE' };
 }
 
+// Feste Scan-Sprache (Abnahme 01.10.2026): hat das Handy keinen Set-Code gelesen, aber eine Sprache
+// fest eingestellt, gilt sie trotzdem -- erster bekannter Druck dieser Sprache (wie die DE-first-Regel),
+// sonst der Sammelbehaelter 'Unknown' in dieser Sprache. `null`, wenn keine Sprache fest steht.
+export function fixedLanguageSet(language, printings) {
+  if (!language) return null;
+  const hit = (printings || []).find(p => normalize(p.language) === normalize(language));
+  return hit || { set_code: 'Unknown', set_rarity: 'Unknown', set_price: 0, language };
+}
+
 // Maps the phone's traffic light (green/yellow/red) onto the 'exact'/'fuzzy'/'none' vocabulary
 // matchCandidates() already returns above, so a phone-resolved card drives the same "Erkannt"/
 // "Prüfen?" badges and the "Erkannte übernehmen" bulk button in StagingArea as a locally-matched
