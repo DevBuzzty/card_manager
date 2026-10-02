@@ -2,7 +2,9 @@
 // Scrapes per-rarity Cardmarket EUR "Trend" prices for owned cards, via a hidden BrowserWindow
 // (real Chromium on the user's residential IP). Sequential + polite; the user solves the rare
 // Cloudflare/captcha challenge manually, then the run resumes.
-const { BrowserWindow, session } = require('electron');
+const fs = require('fs');
+const path = require('path');
+const { app, BrowserWindow, session } = require('electron');
 const { rarityRank, selectVersionRow, productUrl, firstEdUrl, parseFromPrice, firstEdFactor } = require('./cardmarket-parse.cjs');
 const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
@@ -53,7 +55,7 @@ const EXTRACT_JS = `(() => {
     col.querySelectorAll('p').forEach(p => {
       if (/\\b(Ab|From)\\b/i.test(p.textContent)) { const b = p.querySelector('b'); price = num(b ? b.textContent : p.textContent); }
     });
-    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc, href });
+    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc, href, alt });
   });
   return rows;
 })()`;
@@ -113,6 +115,16 @@ function resolveUrl(name) {
 
 // `deriver` (cardmarket-bulk makeDeriver, optional): orders the cards so each set/rarity group gets its
 // real example ids first, and after every found id derives the siblings, which then drop out of the run.
+// Diagnose (02.10.2026): 123 Drucke bekamen einen Preis, aber keine idProduct aus der Bild-Adresse, und
+// einige Karten finden nie eine Versionszeile. Jeder Lauf schreibt diese Faelle frisch nach
+// userData/cardmarket-scraper.log (eine JSON-Zeile je Fall), damit man das Seitenformat nachsehen kann.
+function openDiagLog() {
+  let file = null;
+  try { file = path.join(app.getPath('userData'), 'cardmarket-scraper.log'); fs.writeFileSync(file, ''); } catch { file = null; }
+  return (entry) => { if (file) try { fs.appendFileSync(file, JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n'); } catch { /* Diagnose ist best-effort */ } };
+}
+const rowSummary = (r) => ({ code: r.code, rarity: r.rarity, expansion: r.expansion, alt: r.alt, imgSrc: r.imgSrc, href: r.href });
+
 async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity, headless = false, force = false, deriver = null } = {}) {
   // Distinct owned cards (one page scrape covers all their printings). Oldest-scraped first so the
   // background poller (which passes a small maxCards) works through the collection round-robin.
@@ -125,6 +137,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
   let updated = 0, noMatch = 0, errors = 0, scraped = 0, idMissed = 0, derived = 0;
   const noMatchList = []; // card names/set codes that couldn't be matched -> user sets them manually
   const zaehler = { pruefungen: 0 };
+  const diag = openDiagLog();
   const win = await makeWindow();
   try {
     for (let i = 0; i < cards.length; i++) {
@@ -161,7 +174,11 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
           const hit = await selectVersionRow(rows, p, () => setNameFor(cards[i].id, p.set_code));
           if (hit && hit.trend != null) {
             const pid = idProductFromImageUrl(hit.imgSrc);
-            if (!pid) { if (idMissed === 0) console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc); idMissed++; } else foundId = true;
+            if (!pid) {
+              if (idMissed === 0) console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc);
+              idMissed++;
+              diag({ kind: 'id-missed', card: cards[i].name, set_code: p.set_code, rarity: p.rarity, url, hit: rowSummary(hit) });
+            } else foundId = true;
             const price = applyLangFactor(hit.trend, p.cm_lang_factor);
             db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_product_id = COALESCE(?, cm_product_id), cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
               .run(price, url, pid, String(cards[i].id), p.set_code, p.language, p.rarity);
@@ -172,6 +189,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
               .run(String(cards[i].id), p.set_code, p.language, p.rarity); // mark attempted (no match)
             noMatch++;
             if (noMatchList.length < 100) noMatchList.push(`${cards[i].name} — ${p.set_code} (${p.rarity})`);
+            diag({ kind: 'no-match', card: cards[i].name, set_code: p.set_code, rarity: p.rarity, url, rows: rows.map(rowSummary) });
           }
         }
         if (deriver && foundId) {

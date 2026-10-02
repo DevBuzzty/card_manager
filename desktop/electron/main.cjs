@@ -1261,7 +1261,8 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
     const onChallenge = (win) => { cmWin = win; try { event.sender.send('cm-challenge'); } catch (e) {} };
     const res = await runCardmarketScrape(db, {
       minRank: Number(minRank) || 1,
-      force: true, // a manual click means "re-fetch now" — ignore the 7-day freshness window
+      // Kein force mehr (02.10.2026): jeder Klick lud alle Drucke ohne idProduct neu (>100 Seiten) und
+      // loeste so laufend Cloudflare-Pruefungen aus. Frisch (< 7 Tage) gescrapte Drucke bleiben liegen.
       onProgress: (p) => send({ current: p.current, total: p.total }),
       shouldAbort: () => cmAbort,
       onChallenge,
@@ -1274,7 +1275,6 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
       try {
         firstEd = await runFirstEdPass(db, {
           minRank: Number(minRank) || 1,
-          force: true,
           onProgress: (p) => send({ current: p.current, total: p.total }),
           shouldAbort: () => cmAbort,
           onChallenge,
