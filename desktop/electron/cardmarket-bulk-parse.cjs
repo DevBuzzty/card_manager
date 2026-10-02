@@ -182,6 +182,23 @@ function orderForLearning(items, keysOf, startCount = () => 0, need = 2) {
   return ranked.sort((a, b) => (a.later - b.later) || (a.i - b.i)).map(x => x.it);
 }
 
+// Cardmarket nummeriert die Versionen einer Karte je Set ("Armed Ninja (V.1 - Rare)") in der Reihenfolge,
+// in der es sie angelegt hat -- also nach idProduct. Damit liefert eine Versionszeile die idProduct auch
+// dann, wenn ihr Bild (verzoegert geladen) keine Adresse traegt. Ohne "V.n" hat die Karte im Set nur
+// eine Version. null, wenn das Set nicht eindeutig ist oder es so viele Versionen nicht gibt.
+function idFromVersionRow({ cardName, expansion, alt }, { expansionIndex, versionIndex }) {
+  const clean = decodeEntities(expansion);
+  const exps = expansionIndex.get(normName(clean)) || expansionIndex.get(tokenKey(clean));
+  if (!exps) return null;
+  const hits = [...exps].map(e => versionIndex.byKey.get(normName(cardName) + '|' + e)).filter(Boolean);
+  if (hits.length !== 1) return null;
+  const m = String(alt || '').match(/\(V\.(\d+)\b/);
+  const ids = hits[0];
+  if (!m) return ids.length === 1 ? ids[0] : null;
+  const v = Number(m[1]);
+  return v >= 1 && v <= ids.length ? ids[v - 1] : null;
+}
+
 // "https://product-images.s3.cardmarket.com/5/LOB/102800/102800.jpg" -> 102800
 function idProductFromImageUrl(url) {
   const m = String(url || '').match(/\/(\d+)\/\1\.(?:jpe?g|png|webp|gif)(?:[?#]|$)/i);
@@ -191,5 +208,5 @@ function idProductFromImageUrl(url) {
 module.exports = {
   expansionNameFromProduct, buildExpansionIndex, buildSinglesIndex, resolveProduct, idProductFromImageUrl,
   expansionNameVariants, decodeEntities, tokenKey,
-  buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning,
+  buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning, idFromVersionRow,
 };

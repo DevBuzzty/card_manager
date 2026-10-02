@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { cachedFetch, fetchCardData } = require('./api-handler.cjs');
-const { buildExpansionIndex, buildSinglesIndex, resolveProduct, buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning } = require('./cardmarket-bulk-parse.cjs');
+const { buildExpansionIndex, buildSinglesIndex, resolveProduct, buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning, idFromVersionRow } = require('./cardmarket-bulk-parse.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { applySealedPrices } = require('./sealed-items.cjs');
 const { applyLangFactor } = require('./language-kr.cjs');
@@ -267,6 +267,10 @@ async function makeDeriver(db, userDataPath) {
       // A group whose examples disagree can't be fixed by more scraping -> counts as satisfied.
       const startCount = (k) => { const m = learned.get(k); return !m ? 0 : m.size === 1 ? [...m.values()][0] : 2; };
       return orderForLearning(cards, c => keysById.get(String(c.id)) || [], startCount);
+    },
+    // idProduct einer Versionszeile ohne Bild-Adresse (siehe idFromVersionRow).
+    idForRow(cardName, row) {
+      return idFromVersionRow({ cardName, expansion: row.expansion, alt: row.alt }, ix);
     },
     async derive() {
       const n = await deriveMissing(db, ix);

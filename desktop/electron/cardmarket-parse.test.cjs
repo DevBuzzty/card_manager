@@ -103,3 +103,13 @@ test('firstEdFactor: Untergrenze 1, 4 Stellen, fromAll 0/NULL, fromFirst NULL', 
   assert.deepStrictEqual(firstEdFactor(55, null), { write: true, factor: null }, 'kein Angebot mit Filter');
   assert.deepStrictEqual(firstEdFactor(55, 0), { write: true, factor: null });
 });
+
+test('selectVersionRow: Cardmarket "Shatterfoil" trifft "Shatterfoil Rare" (Toy Vendor SP15, Log 02.10.2026)', async () => {
+  const { selectVersionRow } = require('./cardmarket-parse.cjs');
+  const rows = [
+    { code: 'SP15', rarity: 'Shatterfoil', trend: 0.4, expansion: 'Star Pack 2015' },
+    { code: 'SP15', rarity: 'Common', trend: 0.05, expansion: 'Star Pack 2015' },
+  ];
+  const hit = await selectVersionRow(rows, { set_code: 'SP15-DE043', rarity: 'Shatterfoil Rare' }, async () => null);
+  assert.equal(hit, rows[0]);
+});

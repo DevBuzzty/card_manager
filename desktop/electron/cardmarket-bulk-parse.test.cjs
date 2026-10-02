@@ -182,3 +182,23 @@ test('orderForLearning zieht je Gruppe zwei Karten vor, Karten ohne Gruppe bleib
   // Gruppe A hat schon ein Vorbild -> nur noch eine Karte vorziehen
   assert.deepEqual(orderForLearning(['a1', 'a2', 'b1'], k => keys[k], k => (k === 'A' ? 1 : 0)), ['a1', 'b1', 'a2']);
 });
+
+const { idFromVersionRow } = require('./cardmarket-bulk-parse.cjs');
+
+test('idFromVersionRow: V.n ist die n-te idProduct der Karte im Set (Log 02.10.2026, Bild ohne Adresse)', () => {
+  const singles = [
+    { idProduct: 578029, name: 'Armed Ninja', idExpansion: 1064 },
+    { idProduct: 101998, name: 'Armed Ninja', idExpansion: 1064 },
+    { idProduct: 578424, name: 'Armed Ninja', idExpansion: 1064 },
+    { idProduct: 700000, name: 'Solo Card', idExpansion: 1064 },
+  ];
+  const ix = { expansionIndex: buildExpansionIndex([{ name: 'Legend of Blue Eyes White Dragon Booster', idExpansion: 1064 }]),
+    versionIndex: buildVersionIndex(singles) };
+  const exp = 'Legend of Blue Eyes White Dragon';
+  assert.equal(idFromVersionRow({ cardName: 'Armed Ninja', expansion: exp, alt: 'Armed Ninja (V.1 - Rare)' }, ix), 101998);
+  assert.equal(idFromVersionRow({ cardName: 'Armed Ninja', expansion: exp, alt: 'Armed Ninja (V.3 - Common)' }, ix), 578424);
+  assert.equal(idFromVersionRow({ cardName: 'Armed Ninja', expansion: exp, alt: 'Armed Ninja (V.4 - Rare)' }, ix), null); // gibt es nicht
+  assert.equal(idFromVersionRow({ cardName: 'Armed Ninja', expansion: exp, alt: 'Armed Ninja' }, ix), null);           // mehrere, keine V-Nummer
+  assert.equal(idFromVersionRow({ cardName: 'Solo Card', expansion: exp, alt: 'Solo Card' }, ix), 700000);              // einzige Version
+  assert.equal(idFromVersionRow({ cardName: 'Armed Ninja', expansion: 'Unbekanntes Set', alt: 'Armed Ninja (V.1 - Rare)' }, ix), null);
+});

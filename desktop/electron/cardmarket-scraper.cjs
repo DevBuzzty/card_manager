@@ -46,8 +46,11 @@ const EXTRACT_JS = `(() => {
     const code = (col.querySelector('.expansion-symbol span')?.textContent || '').trim();
     const imgEl = col.querySelector('img');
     const alt = imgEl?.getAttribute('alt') || '';
-    const srcset = imgEl ? (imgEl.getAttribute('srcset') || '').split(/[ ,]/)[0] : '';
-    const imgSrc = imgEl ? (imgEl.getAttribute('src') || imgEl.getAttribute('data-src') || imgEl.getAttribute('data-echo') || srcset || '') : '';
+    const srcset = imgEl ? (imgEl.getAttribute('srcset') || imgEl.getAttribute('data-srcset') || '').split(/[ ,]/)[0] : '';
+    const real = (u) => u && !/transparent\.gif|^data:/i.test(u) ? u : '';
+    const imgSrc = imgEl ? (real(imgEl.getAttribute('data-src')) || real(imgEl.getAttribute('data-echo')) || real(imgEl.getAttribute('data-original'))
+      || real(srcset) || real(imgEl.getAttribute('src')) || '') : '';
+    const imgAttrs = imgEl ? [...imgEl.attributes].map(a => a.name + '=' + String(a.value).slice(0, 160)).join(' | ') : '';
     let rarity = '';
     const pm = alt.match(/\\(([^)]+)\\)\\s*$/);
     if (pm) { const parts = pm[1].split(' - '); rarity = parts[parts.length - 1].trim(); }
@@ -55,7 +58,7 @@ const EXTRACT_JS = `(() => {
     col.querySelectorAll('p').forEach(p => {
       if (/\\b(Ab|From)\\b/i.test(p.textContent)) { const b = p.querySelector('b'); price = num(b ? b.textContent : p.textContent); }
     });
-    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc, href, alt });
+    if (rarity || code) rows.push({ expansion: exp, code, rarity, trend: price, imgSrc, imgAttrs, href, alt });
   });
   return rows;
 })()`;
@@ -123,7 +126,7 @@ function openDiagLog() {
   try { file = path.join(app.getPath('userData'), 'cardmarket-scraper.log'); fs.writeFileSync(file, ''); } catch { file = null; }
   return (entry) => { if (file) try { fs.appendFileSync(file, JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n'); } catch { /* Diagnose ist best-effort */ } };
 }
-const rowSummary = (r) => ({ code: r.code, rarity: r.rarity, expansion: r.expansion, alt: r.alt, imgSrc: r.imgSrc, href: r.href });
+const rowSummary = (r) => ({ code: r.code, rarity: r.rarity, expansion: r.expansion, alt: r.alt, imgSrc: r.imgSrc, imgAttrs: r.imgAttrs, href: r.href });
 
 async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity, headless = false, force = false, deriver = null } = {}) {
   // Distinct owned cards (one page scrape covers all their printings). Oldest-scraped first so the
@@ -173,15 +176,20 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
           // cheapest of those. Fall back to fuzzy expansion-name matching when no code matches.
           const hit = await selectVersionRow(rows, p, () => setNameFor(cards[i].id, p.set_code));
           if (hit && hit.trend != null) {
-            const pid = idProductFromImageUrl(hit.imgSrc);
+            let pid = idProductFromImageUrl(hit.imgSrc);
+            let pidDerived = 0;
+            if (!pid && deriver) { // Bild ohne Adresse: idProduct aus "V.n" + Set (als abgeleitet markiert)
+              pid = deriver.idForRow(name, hit) || null;
+              if (pid) pidDerived = 1;
+            }
             if (!pid) {
               if (idMissed === 0) console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc);
               idMissed++;
               diag({ kind: 'id-missed', card: cards[i].name, set_code: p.set_code, rarity: p.rarity, url, hit: rowSummary(hit) });
             } else foundId = true;
             const price = applyLangFactor(hit.trend, p.cm_lang_factor);
-            db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_product_id = COALESCE(?, cm_product_id), cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
-              .run(price, url, pid, String(cards[i].id), p.set_code, p.language, p.rarity);
+            db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_product_id = COALESCE(?, cm_product_id), cm_product_derived = CASE WHEN ? IS NULL THEN cm_product_derived ELSE ? END, cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
+              .run(price, url, pid, pid, pidDerived, String(cards[i].id), p.set_code, p.language, p.rarity);
             recordPrice(db, { id: cards[i].id, set_code: p.set_code, language: p.language, rarity: p.rarity }, price, 'cm_scrape');
             updated++;
           } else {

@@ -20,6 +20,7 @@ const RARITY_SYNONYMS = {
   prismaticsecretrare: 'prismaticsecretrare',
   goldrare: 'goldrare',
   platinumsecretrare: 'platinumsecretrare',
+  shatterfoil: 'shatterfoilrare', // Cardmarket "Shatterfoil" = YGOPRODeck "Shatterfoil Rare" (SP15, Log 02.10.2026)
 };
 
 function rarityKey(s) {
