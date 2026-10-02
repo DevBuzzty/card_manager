@@ -306,9 +306,15 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   <span className="text-xs text-muted border border-line px-1 rounded">{variant.rarity}</span>
                               </div>
                               <span className="text-xs text-text">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
-                              {variant.language === 'KR' && variant.cm_lang_factor != null && (
+                              {variant.language === 'KR' && (variant.kr_updated_at ? (
+                                  variant.kr_ktcg_usd == null
+                                    ? <span className="text-xs text-warn" title="k-tcg.com führt diesen Druck nicht">kein KR-Preis</span>
+                                    : variant.kr_ktcg_usd <= 1
+                                      ? <span className="text-xs text-muted" title="k-tcg.com verkauft nichts unter 1 USD; gerechnet wird mit 0,10 €">unter 1 € · k-tcg</span>
+                                      : <span className="text-xs text-muted" title="Ladenpreis von k-tcg.com, kein Marktpreis">k-tcg {variant.kr_ktcg_usd.toFixed(2)} USD (Ladenpreis)</span>
+                              ) : variant.cm_lang_factor != null && (
                                   <span className="text-xs text-muted">KR-Faktor {Math.round(variant.cm_lang_factor * 100)} %</span>
-                              )}
+                              ))}
                           </div>
                           <div className="flex flex-col items-end gap-2">
                               <input type="number" step="0.01" min="0" defaultValue={variant.price ?? 0}
@@ -320,7 +326,9 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                 }}
                                 className="w-16 bg-bg/40 border border-line rounded px-1 py-0.5 text-xs text-text"
                                 title="Preis manuell setzen (überschreibt Auto-Preis)" />
-                              {variant.cm_updated_at && !variant.cm_url && (
+                              {variant.cm_product_derived ? (
+                                <span className="text-klein text-muted" title="Cardmarket-Version aus der Reihenfolge der anderen Karten dieses Sets abgeleitet, nicht direkt gefunden">Preis abgeleitet</span>
+                              ) : variant.cm_updated_at && !variant.cm_url && (
                                 <span className="text-klein text-warn" title="Auf Cardmarket nicht eindeutig gefunden">kein CM-Treffer</span>
                               )}
                               <button onClick={() => { if (confirm(`${variant.set_code} (${variant.rarity}) mit allen Exemplaren löschen?`)) handleDeleteVariant(variant); }}

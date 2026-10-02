@@ -12,7 +12,7 @@ function makeDb() {
   db.exec(`
     CREATE TABLE cards (id TEXT, name TEXT, set_code TEXT, language TEXT DEFAULT 'DE', rarity TEXT,
       quantity INTEGER DEFAULT 1, price REAL, price_locked INTEGER DEFAULT 0, cm_url TEXT,
-      cm_updated_at DATETIME, cm_product_id INTEGER, deleted INTEGER DEFAULT 0,
+      cm_updated_at DATETIME, cm_product_id INTEGER, cm_product_derived INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0,
       PRIMARY KEY (id, set_code, language, rarity));
     CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
     CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY AUTOINCREMENT, total_value REAL);
@@ -165,12 +165,51 @@ test('Schritt C: wirft applySealedPrices, laufen A/B trotzdem durch und cm_bulk_
   assert.ok(getBulkStatus(db).lastRun, 'cm_bulk_last_run wird trotz gescheitertem Sealed-Schritt gestempelt');
 });
 
-test('applyPrices: KR-Zeile bekommt Trend x cm_lang_factor', async () => {
+test('applyPrices: KR-Zeilen laesst der Cardmarket-Lauf aus (Preis kommt aus kr-prices.cjs)', async () => {
   const db = makeDb();
-  db.prepare("INSERT INTO cards (id, name, set_code, language, rarity, price, cm_product_id, cm_lang_factor) VALUES ('00102380','Lava Golem','RA01-KR001','KR','Secret Rare',0,741145,0.5)").run();
+  db.prepare("INSERT INTO cards (id, name, set_code, language, rarity, price, cm_product_id, cm_lang_factor) VALUES ('00102380','Lava Golem','RA01-KR001','KR','Secret Rare',3.5,741145,0.5)").run();
   await runBulkRefresh(db, { files });
   const kr = db.prepare("SELECT price FROM cards WHERE set_code='RA01-KR001'").get();
   const de = db.prepare("SELECT price FROM cards WHERE set_code='RA01-DE001'").get();
-  assert.strictEqual(kr.price, 6.25);
+  assert.strictEqual(kr.price, 3.5);
   assert.strictEqual(de.price, 12.5);
+});
+
+test('runBulkRefresh leitet mehrdeutige Drucke aus zwei Vorbildern des Sets ab und markiert sie', async () => {
+  const db = makeDb();
+  const ins = db.prepare("INSERT INTO cards (id, name, set_code, rarity, price, cm_product_id) VALUES (?, ?, ?, ?, ?, ?)");
+  ins.run('89631139', 'Blue-Eyes White Dragon', 'LOB-DE001', 'Ultra Rare', 5, 600002); // echte IDs, je 3. Version
+  ins.run('74677422', 'Red-Eyes Black Dragon', 'LOB-DE070', 'Ultra Rare', 5, 600012);
+  const lobVersions = (base, name) => [0, 1, 2, 3].map(k => ({ idProduct: base + k, name, idExpansion: 1064 }));
+  const f = { ...files,
+    singles: [...files.singles, ...lobVersions(600000, 'Blue-Eyes White Dragon'), ...lobVersions(600010, 'Red-Eyes Black Dragon')],
+    guide: [...files.guide, { idProduct: 578096, trend: 7.77 }] };
+  const res = await runBulkRefresh(db, { userDataPath: null, files: f, raritiesOf: async () => ['Common', 'Rare', 'Super Rare', 'Ultra Rare'] });
+  assert.equal(res.derived, 1);
+  const lob = db.prepare("SELECT price, cm_product_id, cm_product_derived FROM cards WHERE set_code = 'LOB-DE005'").get();
+  assert.deepEqual(lob, { price: 7.77, cm_product_id: 578096, cm_product_derived: 1 }); // 3. Version von Dark Magician
+  assert.equal(db.prepare("SELECT cm_product_derived FROM cards WHERE set_code = 'MRD-DE001'").get().cm_product_derived, 0);
+});
+
+test('abgeleitete IDs zaehlen nicht als Vorbild', async () => {
+  const db = makeDb();
+  const ins = db.prepare("INSERT INTO cards (id, name, set_code, rarity, price, cm_product_id, cm_product_derived) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  ins.run('89631139', 'Blue-Eyes White Dragon', 'LOB-DE001', 'Ultra Rare', 5, 600003, 1);
+  ins.run('74677422', 'Red-Eyes Black Dragon', 'LOB-DE070', 'Ultra Rare', 5, 600013, 1);
+  const lobVersions = (base, name) => [0, 1, 2, 3].map(k => ({ idProduct: base + k, name, idExpansion: 1064 }));
+  const f = { ...files, singles: [...files.singles, ...lobVersions(600000, 'Blue-Eyes White Dragon'), ...lobVersions(600010, 'Red-Eyes Black Dragon')] };
+  const res = await runBulkRefresh(db, { userDataPath: null, files: f, raritiesOf: async () => ['Common', 'Rare', 'Super Rare', 'Ultra Rare'] });
+  assert.equal(res.derived, 0);
+  assert.equal(db.prepare("SELECT cm_product_id FROM cards WHERE set_code = 'LOB-DE005'").get().cm_product_id, null);
+});
+
+test('Deck-Set (eine Seltenheit mehrfach) wird nicht abgeleitet', async () => {
+  const db = makeDb();
+  const ins = db.prepare("INSERT INTO cards (id, name, set_code, rarity, price, cm_product_id) VALUES (?, ?, ?, ?, ?, ?)");
+  ins.run('89631139', 'Blue-Eyes White Dragon', 'LOB-DE001', 'Ultra Rare', 5, 600002);
+  ins.run('74677422', 'Red-Eyes Black Dragon', 'LOB-DE070', 'Ultra Rare', 5, 600012);
+  const lobVersions = (base, name) => [0, 1, 2, 3].map(k => ({ idProduct: base + k, name, idExpansion: 1064 }));
+  const f = { ...files, singles: [...files.singles, ...lobVersions(600000, 'Blue-Eyes White Dragon'), ...lobVersions(600010, 'Red-Eyes Black Dragon')] };
+  const res = await runBulkRefresh(db, { userDataPath: null, files: f, raritiesOf: async () => ['Ultra Rare', 'Ultra Rare', 'Common', 'Rare'] });
+  assert.equal(res.derived, 0);
 });

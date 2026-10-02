@@ -111,15 +111,18 @@ function resolveUrl(name) {
   return slug ? `${BASE}/en/YuGiOh/Cards/${slug}/Versions` : null;
 }
 
-async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity, headless = false, force = false } = {}) {
+// `deriver` (cardmarket-bulk makeDeriver, optional): orders the cards so each set/rarity group gets its
+// real example ids first, and after every found id derives the siblings, which then drop out of the run.
+async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity, headless = false, force = false, deriver = null } = {}) {
   // Distinct owned cards (one page scrape covers all their printings). Oldest-scraped first so the
   // background poller (which passes a small maxCards) works through the collection round-robin.
-  const cards = db.prepare(
-    "SELECT c.id, c.name FROM cards c WHERE c.deleted = 0 AND c.quantity > 0 AND c.cm_product_id IS NULL " +
+  let cards = db.prepare(
+    "SELECT c.id, c.name FROM cards c WHERE c.deleted = 0 AND c.quantity > 0 AND c.cm_product_id IS NULL AND c.language != 'KR' " +
     "AND COALESCE(c.price_locked, 0) != 2 GROUP BY c.id ORDER BY MIN(COALESCE(c.cm_updated_at, '1970-01-01')) ASC"
   ).all();
+  if (deriver) cards = await deriver.order(cards);
   const now = Date.now();
-  let updated = 0, noMatch = 0, errors = 0, scraped = 0, idMissed = 0;
+  let updated = 0, noMatch = 0, errors = 0, scraped = 0, idMissed = 0, derived = 0;
   const noMatchList = []; // card names/set codes that couldn't be matched -> user sets them manually
   const zaehler = { pruefungen: 0 };
   const win = await makeWindow();
@@ -129,7 +132,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
       if (scraped >= maxCards) break; // background poller: stop after a small batch per tick
       onProgress && onProgress({ current: i + 1, total: cards.length, name: cards[i].name });
       const printings = db.prepare(
-        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id, cm_lang_factor FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL " +
+        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id, cm_lang_factor FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND language != 'KR' " +
         "AND COALESCE(price_locked, 0) != 2"
       ).all(String(cards[i].id));
       // Only printings at/above the chosen rarity threshold, and not priced recently. Cards with no
@@ -149,6 +152,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
         if (!(await loadPage(win, url, onChallenge, headless, zaehler))) { errors++; continue; }
         scraped++; // a page was actually loaded — counts toward the poller's per-tick budget
         const rows = await win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []);
+        let foundId = false;
         for (const p of stale) {
           // Match primarily by set-code prefix ↔ Cardmarket expansion symbol (e.g. "25LP-DE085" ->
           // "25LP") + rarity — far more reliable than the expansion name. Some expansions list the
@@ -157,7 +161,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
           const hit = await selectVersionRow(rows, p, () => setNameFor(cards[i].id, p.set_code));
           if (hit && hit.trend != null) {
             const pid = idProductFromImageUrl(hit.imgSrc);
-            if (!pid) { if (idMissed === 0) console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc); idMissed++; }
+            if (!pid) { if (idMissed === 0) console.warn('[cardmarket] no idProduct in image URL:', hit.imgSrc); idMissed++; } else foundId = true;
             const price = applyLangFactor(hit.trend, p.cm_lang_factor);
             db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_product_id = COALESCE(?, cm_product_id), cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
               .run(price, url, pid, String(cards[i].id), p.set_code, p.language, p.rarity);
@@ -170,13 +174,17 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
             if (noMatchList.length < 100) noMatchList.push(`${cards[i].name} — ${p.set_code} (${p.rarity})`);
           }
         }
+        if (deriver && foundId) {
+          try { derived += await deriver.derive(); } catch (e) { console.error('[cardmarket] ableiten:', e.message); }
+        }
       } catch (e) { errors++; }
       const { lo, hi } = pauseNachPruefungen(zaehler.pruefungen);
       await sleep(lo + Math.random() * (hi - lo));
     }
   } finally { win.destroy(); }
   if (zaehler.pruefungen > 0) console.log(`[cardmarket] ${zaehler.pruefungen} Pruefung(en) bei ${scraped} Seiten`);
-  return { updated, noMatch, errors, noMatchList, idMissed, pruefungen: zaehler.pruefungen, seiten: scraped };
+  if (derived > 0) console.log(`[cardmarket] ${derived} Druck(e) aus dem Set abgeleitet`);
+  return { updated, noMatch, errors, noMatchList, idMissed, derived, pruefungen: zaehler.pruefungen, seiten: scraped };
 }
 
 // Spec G4 §4 — Kandidaten des 1st-Ed-Durchgangs: Printings mit mindestens einem lebenden Exemplar edition = 'first',

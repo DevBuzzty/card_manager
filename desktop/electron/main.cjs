@@ -10,7 +10,8 @@ const { belongsToCard, resolveSetCode } = require('./setcode-resolve.cjs');
 const { startSync, ebayStatusReply } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape, runFirstEdPass } = require('./cardmarket-scraper.cjs');
-const { runBulkRefresh, getBulkStatus } = require('./cardmarket-bulk.cjs');
+const { runBulkRefresh, getBulkStatus, makeDeriver } = require('./cardmarket-bulk.cjs');
+const { refreshKrPrices } = require('./kr-prices.cjs');
 const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = require('./catalog-builder.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { computeMovers, addDays } = require('./movers.cjs');
@@ -157,6 +158,7 @@ function startSocketServer() {
 let priceUpdateInterval;
 let cmPollInterval;
 let cmBulkInterval;
+let krPriceInterval;
 let catalogInterval;
 let catalogRunning = false;
 let sync;   // { ensureClient } handle from startSync, for cloud deal handlers
@@ -174,6 +176,7 @@ app.whenReady().then(() => {
   startPricePoller();
   startCardmarketPoller();
   startCardmarketBulkScheduler();
+  startKrPriceScheduler();
   sync = startSync(db, () => mainWindow, { onPriceAlerts: showPriceAlertNotification, onSaleNotices: showSaleNoticeNotification });
   startCatalogScheduler();
   // Deals now live in Supabase (the cloud Edge Function scrapes, shared with the phone).
@@ -1248,6 +1251,8 @@ ipcMain.handle('reveal-cm-window', () => {
   try { if (cmWin && !cmWin.isDestroyed()) { cmWin.show(); cmWin.focus(); } } catch (e) {}
   return { success: true };
 });
+// Abgeleitete IDs (01.10.2026): ohne Cardmarket-Dateien laeuft der Scraper wie bisher, nur ohne Ableitung.
+const cmDeriver = () => makeDeriver(db, userDataPath).catch(e => { console.warn('[cardmarket] ohne Ableitung:', e.message); return null; });
 ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
   if (cmRunning) return { updated: 0, noMatch: 0, errors: 0, noMatchList: [], busy: true };
   cmAbort = false; cmRunning = true;
@@ -1260,6 +1265,7 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
       onProgress: (p) => send({ current: p.current, total: p.total }),
       shouldAbort: () => cmAbort,
       onChallenge,
+      deriver: await cmDeriver(),
     });
     // Spec G4 §4: 1st-Ed-Durchgang nach dem Basis-Durchgang, im selben cmRunning-Schutz, ohne Grenze.
     // Eigener try/catch: ein Ausfall hier laesst das Basis-Ergebnis unberuehrt.
@@ -1275,7 +1281,7 @@ ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
         });
       } catch (e) { console.error('[cardmarket] 1st-Ed-Durchgang:', e); }
     }
-    if ((res && res.updated > 0) || firstEd.updated > 0) recordPortfolioValue(db);
+    if ((res && (res.updated > 0 || res.derived > 0)) || firstEd.updated > 0) recordPortfolioValue(db);
     send({ current: 1, total: 1 }); // clears the bar
     return { ...res, firstEd };
   } finally { cmRunning = false; cmWin = null; }
@@ -1298,6 +1304,7 @@ function startCardmarketPoller() {
         maxCards: 4,      // small polite batch per tick
         headless: true,   // never surface a window; skip challenged cards silently, retry next tick
         shouldAbort: () => cmAbort,
+        deriver: await cmDeriver(),
       });
       // Spec G4 §4: danach hoechstens 2 Kandidaten der Ersten Auflage; eigener try/catch.
       let firstEdUpdated = 0;
@@ -1307,7 +1314,7 @@ function startCardmarketPoller() {
           firstEdUpdated = fe.updated;
         } catch (e) { console.error('Cardmarket 1st-Ed poller error:', e); }
       }
-      if (res.updated > 0 || firstEdUpdated > 0) {
+      if (res.updated > 0 || res.derived > 0 || firstEdUpdated > 0) {
         recordPortfolioValue(db);
         if (mainWindow) {
           const stats = { totalValue: portfolioTotals(db).total };
@@ -1348,6 +1355,27 @@ function startCardmarketBulkScheduler() {
   setTimeout(tick, 30 * 1000);
   if (cmBulkInterval) clearInterval(cmBulkInterval);
   cmBulkInterval = setInterval(tick, 60 * 60 * 1000);
+}
+
+// KR-Preise aus k-tcg.com (kr-prices.cjs): 45 s nach dem Start, dann stuendlich; abgefragt werden nur
+// KR-Drucke, deren letzter Abruf aelter als 24 h ist -- neu gescannte also spaetestens nach einer Stunde.
+let krRunning = false;
+function startKrPriceScheduler() {
+  const tick = async () => {
+    if (!mainWindow || krRunning) return;
+    krRunning = true;
+    try {
+      const res = await refreshKrPrices(db);
+      if (res.priced > 0 || res.noMatch > 0) {
+        recordPortfolioValue(db);
+        if (mainWindow) mainWindow.webContents.send('price-update', { updates: [], totalValue: portfolioTotals(db).total || 0 });
+      }
+    } catch (e) { console.error('KR-Preise:', e); }
+    finally { krRunning = false; }
+  };
+  setTimeout(tick, 45 * 1000);
+  if (krPriceInterval) clearInterval(krPriceInterval);
+  krPriceInterval = setInterval(tick, 60 * 60 * 1000);
 }
 
 ipcMain.handle('cardmarket-bulk-refresh', async () => {

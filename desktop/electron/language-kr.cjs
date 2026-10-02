@@ -76,7 +76,7 @@ function setKrFactor(db, value) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('kr_price_factor', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
       .run(String(factor));
     const rows = db.prepare(
-      "SELECT id, set_code, language, rarity FROM cards WHERE language = 'KR' AND deleted = 0 AND COALESCE(price_locked, 0) != 2 AND cm_lang_factor IS NOT ?"
+      "SELECT id, set_code, language, rarity FROM cards WHERE language = 'KR' AND deleted = 0 AND COALESCE(price_locked, 0) != 2 AND kr_updated_at IS NULL AND cm_lang_factor IS NOT ?"
     ).all(factor);
     for (const r of rows) { rescaleKrRow(db, r, factor); changed++; }
   })();
