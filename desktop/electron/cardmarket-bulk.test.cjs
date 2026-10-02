@@ -165,13 +165,13 @@ test('Schritt C: wirft applySealedPrices, laufen A/B trotzdem durch und cm_bulk_
   assert.ok(getBulkStatus(db).lastRun, 'cm_bulk_last_run wird trotz gescheitertem Sealed-Schritt gestempelt');
 });
 
-test('applyPrices: KR-Zeile bekommt Trend x cm_lang_factor', async () => {
+test('applyPrices: KR-Zeilen laesst der Cardmarket-Lauf aus (Preis kommt aus kr-prices.cjs)', async () => {
   const db = makeDb();
-  db.prepare("INSERT INTO cards (id, name, set_code, language, rarity, price, cm_product_id, cm_lang_factor) VALUES ('00102380','Lava Golem','RA01-KR001','KR','Secret Rare',0,741145,0.5)").run();
+  db.prepare("INSERT INTO cards (id, name, set_code, language, rarity, price, cm_product_id, cm_lang_factor) VALUES ('00102380','Lava Golem','RA01-KR001','KR','Secret Rare',3.5,741145,0.5)").run();
   await runBulkRefresh(db, { files });
   const kr = db.prepare("SELECT price FROM cards WHERE set_code='RA01-KR001'").get();
   const de = db.prepare("SELECT price FROM cards WHERE set_code='RA01-DE001'").get();
-  assert.strictEqual(kr.price, 6.25);
+  assert.strictEqual(kr.price, 3.5);
   assert.strictEqual(de.price, 12.5);
 });
 

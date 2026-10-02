@@ -11,6 +11,7 @@ const { startSync, ebayStatusReply } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape, runFirstEdPass } = require('./cardmarket-scraper.cjs');
 const { runBulkRefresh, getBulkStatus, makeDeriver } = require('./cardmarket-bulk.cjs');
+const { refreshKrPrices } = require('./kr-prices.cjs');
 const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = require('./catalog-builder.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { computeMovers, addDays } = require('./movers.cjs');
@@ -157,6 +158,7 @@ function startSocketServer() {
 let priceUpdateInterval;
 let cmPollInterval;
 let cmBulkInterval;
+let krPriceInterval;
 let catalogInterval;
 let catalogRunning = false;
 let sync;   // { ensureClient } handle from startSync, for cloud deal handlers
@@ -174,6 +176,7 @@ app.whenReady().then(() => {
   startPricePoller();
   startCardmarketPoller();
   startCardmarketBulkScheduler();
+  startKrPriceScheduler();
   sync = startSync(db, () => mainWindow, { onPriceAlerts: showPriceAlertNotification, onSaleNotices: showSaleNoticeNotification });
   startCatalogScheduler();
   // Deals now live in Supabase (the cloud Edge Function scrapes, shared with the phone).
@@ -1352,6 +1355,27 @@ function startCardmarketBulkScheduler() {
   setTimeout(tick, 30 * 1000);
   if (cmBulkInterval) clearInterval(cmBulkInterval);
   cmBulkInterval = setInterval(tick, 60 * 60 * 1000);
+}
+
+// KR-Preise aus k-tcg.com (kr-prices.cjs): 45 s nach dem Start, dann stuendlich; abgefragt werden nur
+// KR-Drucke, deren letzter Abruf aelter als 24 h ist -- neu gescannte also spaetestens nach einer Stunde.
+let krRunning = false;
+function startKrPriceScheduler() {
+  const tick = async () => {
+    if (!mainWindow || krRunning) return;
+    krRunning = true;
+    try {
+      const res = await refreshKrPrices(db);
+      if (res.priced > 0 || res.noMatch > 0) {
+        recordPortfolioValue(db);
+        if (mainWindow) mainWindow.webContents.send('price-update', { updates: [], totalValue: portfolioTotals(db).total || 0 });
+      }
+    } catch (e) { console.error('KR-Preise:', e); }
+    finally { krRunning = false; }
+  };
+  setTimeout(tick, 45 * 1000);
+  if (krPriceInterval) clearInterval(krPriceInterval);
+  krPriceInterval = setInterval(tick, 60 * 60 * 1000);
 }
 
 ipcMain.handle('cardmarket-bulk-refresh', async () => {

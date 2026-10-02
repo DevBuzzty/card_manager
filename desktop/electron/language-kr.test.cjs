@@ -35,7 +35,7 @@ test('konamiTitleName laut Fixture', () => {
 function makeDb() {
   const db = new Database(':memory:');
   db.exec(`CREATE TABLE cards (id TEXT, set_code TEXT, language TEXT, rarity TEXT, price REAL,
-             price_locked INTEGER DEFAULT 0, cm_lang_factor REAL, deleted INTEGER DEFAULT 0,
+             price_locked INTEGER DEFAULT 0, cm_lang_factor REAL, kr_updated_at DATETIME, deleted INTEGER DEFAULT 0,
              PRIMARY KEY (id, set_code, language, rarity));
            CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
            CREATE TABLE price_history (card_id TEXT NOT NULL, set_code TEXT NOT NULL, language TEXT NOT NULL,
@@ -60,7 +60,7 @@ test('krPriceFields: KR wird multipliziert, andere Sprachen nicht', () => {
 
 test('rescaleKrRow rechnet vom alten auf den neuen Faktor um', () => {
   const db = makeDb();
-  db.prepare("INSERT INTO cards VALUES ('1','CORI-KR001','KR','Common',5,0,0.5,0)").run();
+  db.prepare("INSERT INTO cards (id, set_code, language, rarity, price, price_locked, cm_lang_factor, deleted) VALUES ('1','CORI-KR001','KR','Common',5,0,0.5,0)").run();
   kr.rescaleKrRow(db, { id: '1', set_code: 'CORI-KR001', language: 'KR', rarity: 'Common' }, 0.6);
   const r = db.prepare("SELECT price, cm_lang_factor FROM cards WHERE id='1'").get();
   assert.deepStrictEqual(r, { price: 6, cm_lang_factor: 0.6 });
@@ -68,9 +68,9 @@ test('rescaleKrRow rechnet vom alten auf den neuen Faktor um', () => {
 
 test('setKrFactor: 50 -> 60 -> 50 % landet wieder beim Ausgangspreis, gesperrte Preise bleiben', () => {
   const db = makeDb();
-  db.prepare("INSERT INTO cards VALUES ('1','CORI-KR001','KR','Common',5,1,0.5,0)").run();
-  db.prepare("INSERT INTO cards VALUES ('2','CORI-KR002','KR','Common',9.99,2,null,0)").run();
-  db.prepare("INSERT INTO cards VALUES ('3','CORI-DE001','DE','Common',4,1,null,0)").run();
+  db.prepare("INSERT INTO cards (id, set_code, language, rarity, price, price_locked, cm_lang_factor, deleted) VALUES ('1','CORI-KR001','KR','Common',5,1,0.5,0)").run();
+  db.prepare("INSERT INTO cards (id, set_code, language, rarity, price, price_locked, cm_lang_factor, deleted) VALUES ('2','CORI-KR002','KR','Common',9.99,2,null,0)").run();
+  db.prepare("INSERT INTO cards (id, set_code, language, rarity, price, price_locked, cm_lang_factor, deleted) VALUES ('3','CORI-DE001','DE','Common',4,1,null,0)").run();
   assert.deepStrictEqual(kr.setKrFactor(db, 0.6), { factor: 0.6, changed: 1 });
   assert.deepStrictEqual(kr.setKrFactor(db, 0.5), { factor: 0.5, changed: 1 });
   const rows = db.prepare('SELECT id, price, cm_lang_factor FROM cards ORDER BY id').all();
@@ -84,7 +84,7 @@ test('setKrFactor: 50 -> 60 -> 50 % landet wieder beim Ausgangspreis, gesperrte 
 
 test('setKrFactor schreibt den umgerechneten Preis in den Preisverlauf', () => {
   const db = makeDb();
-  db.prepare("INSERT INTO cards VALUES ('1','CORI-KR001','KR','Common',5,1,0.5,0)").run();
+  db.prepare("INSERT INTO cards (id, set_code, language, rarity, price, price_locked, cm_lang_factor, deleted) VALUES ('1','CORI-KR001','KR','Common',5,1,0.5,0)").run();
   kr.setKrFactor(db, 0.6);
   const h = db.prepare('SELECT card_id, set_code, language, rarity, variant, price, source FROM price_history').all();
   assert.deepStrictEqual(h, [
@@ -103,4 +103,11 @@ test('setsBelongTo: kr nimmt nur KR-Codes, de nur deutsche, jp keine fremden TCG
   assert.deepStrictEqual(['SYE-KR001', 'LOB-K005', 'DOOD-EN001', 'LOB-DE005'].filter(kr), ['SYE-KR001', 'LOB-K005']);
   assert.deepStrictEqual(['LOB-DE005', 'TP1-G015', 'SYE-KR001'].filter(setsBelongTo('de')), ['LOB-DE005', 'TP1-G015']);
   assert.deepStrictEqual(['B3-17', 'SYE-KR001'].filter(setsBelongTo('jp')), ['B3-17']);
+});
+
+test('setKrFactor rechnet Drucke mit k-tcg-Preis nicht um', () => {
+  const db = makeDb();
+  db.prepare("INSERT INTO cards (id, set_code, language, rarity, price, cm_lang_factor, kr_updated_at) VALUES ('9','CORI-KR027','KR','Ultra Rare',5,0.5,'2026-10-02 08:00:00')").run();
+  kr.setKrFactor(db, 0.8);
+  assert.strictEqual(db.prepare("SELECT price FROM cards WHERE id='9'").get().price, 5);
 });

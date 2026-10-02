@@ -306,9 +306,15 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   <span className="text-xs text-muted border border-line px-1 rounded">{variant.rarity}</span>
                               </div>
                               <span className="text-xs text-text">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
-                              {variant.language === 'KR' && variant.cm_lang_factor != null && (
+                              {variant.language === 'KR' && (variant.kr_updated_at ? (
+                                  variant.kr_ktcg_usd == null
+                                    ? <span className="text-xs text-warn" title="k-tcg.com führt diesen Druck nicht">kein KR-Preis</span>
+                                    : variant.kr_ktcg_usd <= 1
+                                      ? <span className="text-xs text-muted" title="k-tcg.com verkauft nichts unter 1 USD; gerechnet wird mit 0,10 €">unter 1 € · k-tcg</span>
+                                      : <span className="text-xs text-muted" title="Ladenpreis von k-tcg.com, kein Marktpreis">k-tcg {variant.kr_ktcg_usd.toFixed(2)} USD (Ladenpreis)</span>
+                              ) : variant.cm_lang_factor != null && (
                                   <span className="text-xs text-muted">KR-Faktor {Math.round(variant.cm_lang_factor * 100)} %</span>
-                              )}
+                              ))}
                           </div>
                           <div className="flex flex-col items-end gap-2">
                               <input type="number" step="0.01" min="0" defaultValue={variant.price ?? 0}

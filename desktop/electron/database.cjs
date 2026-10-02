@@ -274,7 +274,9 @@ function runMigrations() {
         // cm_product_id: Cardmarket idProduct of this exact printing (NULL = not yet resolved);
         // lets the daily bulk price refresh work from the free price-guide download without scraping.
         // cm_product_derived = 1: cm_product_id was derived from the set's version order, not found exactly.
-        const priceLockCols = { cm_url: 'TEXT', cm_updated_at: 'DATETIME', price_locked: 'INTEGER DEFAULT 0', cm_product_id: 'INTEGER', cm_product_derived: 'INTEGER DEFAULT 0' };
+        // kr_ktcg_usd / kr_updated_at: KR price from k-tcg.com (kr-prices.cjs); usd NULL + stamp = no match.
+        const priceLockCols = { cm_url: 'TEXT', cm_updated_at: 'DATETIME', price_locked: 'INTEGER DEFAULT 0', cm_product_id: 'INTEGER', cm_product_derived: 'INTEGER DEFAULT 0',
+          kr_ktcg_usd: 'REAL', kr_updated_at: 'DATETIME' };
         const existingCols = db.prepare("PRAGMA table_info(cards)").all().map(c => c.name);
         for (const [name, type] of Object.entries(priceLockCols)) {
             if (!existingCols.includes(name)) db.exec(`ALTER TABLE cards ADD COLUMN ${name} ${type}`);

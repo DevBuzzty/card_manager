@@ -117,7 +117,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
   // Distinct owned cards (one page scrape covers all their printings). Oldest-scraped first so the
   // background poller (which passes a small maxCards) works through the collection round-robin.
   let cards = db.prepare(
-    "SELECT c.id, c.name FROM cards c WHERE c.deleted = 0 AND c.quantity > 0 AND c.cm_product_id IS NULL " +
+    "SELECT c.id, c.name FROM cards c WHERE c.deleted = 0 AND c.quantity > 0 AND c.cm_product_id IS NULL AND c.language != 'KR' " +
     "AND COALESCE(c.price_locked, 0) != 2 GROUP BY c.id ORDER BY MIN(COALESCE(c.cm_updated_at, '1970-01-01')) ASC"
   ).all();
   if (deriver) cards = await deriver.order(cards);
@@ -132,7 +132,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
       if (scraped >= maxCards) break; // background poller: stop after a small batch per tick
       onProgress && onProgress({ current: i + 1, total: cards.length, name: cards[i].name });
       const printings = db.prepare(
-        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id, cm_lang_factor FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL " +
+        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id, cm_lang_factor FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND language != 'KR' " +
         "AND COALESCE(price_locked, 0) != 2"
       ).all(String(cards[i].id));
       // Only printings at/above the chosen rarity threshold, and not priced recently. Cards with no

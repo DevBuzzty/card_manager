@@ -79,11 +79,12 @@ async function loadAll(userDataPath, force) {
   return { guide, singles, nonsingles, cardsets };
 }
 
+// KR-Drucke laufen nicht ueber Cardmarket (kein Koreanisch dort), sondern ueber kr-prices.cjs.
 function countUnresolved(db) {
-  return db.prepare("SELECT COUNT(*) AS n FROM cards WHERE deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND set_code != 'Unknown'").get().n;
+  return db.prepare("SELECT COUNT(*) AS n FROM cards WHERE deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND set_code != 'Unknown' AND language != 'KR'").get().n;
 }
 
-const UNRESOLVED_SQL = "SELECT id, name, set_code, language, rarity FROM cards WHERE deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND set_code != 'Unknown'";
+const UNRESOLVED_SQL = "SELECT id, name, set_code, language, rarity FROM cards WHERE deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND set_code != 'Unknown' AND language != 'KR'";
 const prefixOf = (setCode) => String(setCode || '').split('-')[0].toUpperCase();
 
 // Lookup structures shared by Step A, Step A2 and the scraper's deriver. null without cardsets.
@@ -177,7 +178,7 @@ function applyPrices(db, guide) {
   const trendById = new Map();
   for (const g of guide) if (g && g.trend != null && g.trend > 0) trendById.set(Number(g.idProduct), Number(g.trend));
   const rows = db.prepare(
-    "SELECT id, set_code, language, rarity, cm_product_id, cm_lang_factor FROM cards WHERE deleted = 0 AND cm_product_id IS NOT NULL AND COALESCE(price_locked, 0) != 2"
+    "SELECT id, set_code, language, rarity, cm_product_id, cm_lang_factor FROM cards WHERE deleted = 0 AND cm_product_id IS NOT NULL AND COALESCE(price_locked, 0) != 2 AND language != 'KR'"
   ).all();
   // Only writes (and only counts as "priced") when the price actually changes, so an unchanged
   // day's refresh doesn't touch `updated_at` on every resolved row (which would trigger a full
@@ -233,7 +234,7 @@ async function runBulkRefresh(db, { userDataPath, force = false, files = null, r
 function getBulkStatus(db) {
   const last = db.prepare("SELECT value FROM settings WHERE key = 'cm_bulk_last_run'").get();
   const c = db.prepare(
-    "SELECT SUM(cm_product_id IS NOT NULL) AS r, SUM(cm_product_id IS NULL AND set_code != 'Unknown') AS u FROM cards WHERE deleted = 0 AND quantity > 0"
+    "SELECT SUM(cm_product_id IS NOT NULL) AS r, SUM(cm_product_id IS NULL AND set_code != 'Unknown') AS u FROM cards WHERE deleted = 0 AND quantity > 0 AND language != 'KR'"
   ).get();
   return { lastRun: last ? last.value : null, resolvedCount: c.r || 0, unresolvedCount: c.u || 0 };
 }
