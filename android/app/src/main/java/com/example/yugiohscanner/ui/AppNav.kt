@@ -193,6 +193,10 @@ fun AppNav(onThemeChange: (String) -> Unit) {
         CatalogSync.checkAndUpdate(context)
         ModelStore.checkAndUpdate(context)
     }
+    // Eigener Effekt: die kleine Preisdatei soll nicht hinter mehrere MB grossen Modell-Downloads warten.
+    LaunchedEffect(Unit) {
+        com.example.yugiohscanner.cloud.CmPriceFile.aktualisieren(context)
+    }
 
     // Spec §3.4: solange die App sichtbar ist, alle 10 s ein Abgleich; im Hintergrund keiner.
     // repeatOnLifecycle startet den Block beim Zurueckkommen neu -- das ist der sofortige Abgleich.

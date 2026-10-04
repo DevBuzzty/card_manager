@@ -20,9 +20,10 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
         /**
          * Spec G3 §3: v2 bringt `sealed_products`. Spec E1 §5: v3 bringt `cards.cm_price`.
          * Spec E3 §3: v4 bringt `cards.ban_tcg`/`ban_ocg` und `card_aliases` (Artwork-Passcode -> Haupt-Passcode).
-         * onUpgrade verwirft den alten Katalog, CatalogSync laedt neu (ein Katalog v5 ohne cm_price bleibt lesbar).
+         * Spec 2026-10-04 §3.2: v5 bringt `printings.cm` (Cardmarket-Produkt-ID(s), kommagetrennt).
+         * onUpgrade verwirft den alten Katalog, CatalogSync laedt neu (ein Katalog ohne `cm`/cm_price bleibt lesbar).
          */
-        const val VERSION = 4
+        const val VERSION = 5
 
         /** Schema als Liste, damit ohne Geraet pruefbar ist, dass onUpgrade jede angelegte Tabelle verwirft. */
         internal val CREATE_STATEMENTS = listOf(
@@ -35,7 +36,7 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
             """
             CREATE TABLE printings (
               card_id TEXT NOT NULL, code TEXT NOT NULL, rarity TEXT NOT NULL,
-              lang TEXT, verified INTEGER NOT NULL DEFAULT 0, ord INTEGER NOT NULL)
+              lang TEXT, verified INTEGER NOT NULL DEFAULT 0, ord INTEGER NOT NULL, cm TEXT)
             """.trimIndent(),
             "CREATE INDEX printings_card_idx ON printings(card_id)",
             "CREATE INDEX cards_name_de_idx ON cards(name_de)",
@@ -119,6 +120,7 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
                     printingValues.put("lang", printing.lang)
                     printingValues.put("verified", if (printing.verified) 1 else 0)
                     printingValues.put("ord", index)
+                    if (printing.cm.isEmpty()) printingValues.putNull("cm") else printingValues.put("cm", printing.cm.joinToString(","))
                     db.insertOrThrow("printings", null, printingValues)
                 }
             }

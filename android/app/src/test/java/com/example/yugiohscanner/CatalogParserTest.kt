@@ -135,10 +135,19 @@ class CatalogParserTest {
         assertEquals(listOf("46986414"), legArgs.toList())
     }
 
+    @Test fun `cm je Druck - Zahl, Array oder fehlt`() {
+        val o1 = org.json.JSONObject("""{"code":"A-EN001","rarity":"Common","cm":123}""")
+        val o2 = org.json.JSONObject("""{"code":"A-EN001","rarity":"Common","cm":[5,7]}""")
+        val o3 = org.json.JSONObject("""{"code":"A-EN001","rarity":"Common"}""")
+        assertEquals(listOf(123), CatalogParser.cmOf(o1))
+        assertEquals(listOf(5, 7), CatalogParser.cmOf(o2))
+        assertEquals(emptyList<Int>(), CatalogParser.cmOf(o3))   // alter Katalog: kein Absturz
+    }
+
     // Spec E3 §9: v4 verwirft beim Upgrade den alten Katalog. Jede angelegte Tabelle muss in onUpgrade verworfen werden,
     // sonst scheitert onCreate beim naechsten Upgrade an "table already exists".
-    @Test fun `CatalogDb v4 legt Ban-Spalten und card_aliases an und verwirft beim Upgrade jede Tabelle`() {
-        assertEquals(4, CatalogDb.VERSION)
+    @Test fun `CatalogDb v5 legt Ban-Spalten, card_aliases und printings-cm an und verwirft beim Upgrade jede Tabelle`() {
+        assertEquals(5, CatalogDb.VERSION)
         val created = CatalogDb.CREATE_STATEMENTS.mapNotNull { Regex("^CREATE TABLE (\\w+)").find(it)?.groupValues?.get(1) }.toSet()
         val dropped = CatalogDb.DROP_STATEMENTS.mapNotNull { Regex("^DROP TABLE IF EXISTS (\\w+)$").find(it)?.groupValues?.get(1) }.toSet()
         assertEquals(setOf("cards", "printings", "meta", "sealed_products", "card_aliases"), created)

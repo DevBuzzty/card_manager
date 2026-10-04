@@ -12,6 +12,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { pickTrends } from "./prices.ts";
 import { pickSealedUpdates, type SealedRow } from "./sealed.ts";
+import { buildPriceFile, gzipJson } from "./price_file.ts";
 
 const GUIDE_URL = "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_3.json";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) YuGiOhCardManager/1.0";
@@ -74,17 +75,34 @@ Deno.serve(async (req) => {
   }
   const sealedBody = (updated: number) => (sealedError ? { error: sealedError } : { needed: sealedRows.length, updated });
 
-  if (ids.size === 0 && sealedRows.length === 0) {
-    return json({ needed: 0, found: 0, updated: 0, sealed: sealedBody(0) });
-  }
-
-  // 2. Today's price guide (≈17 MB; parses in well under the 2 s CPU limit).
+  // 2. Price guide (immer -- auch ohne eigene Karten braucht das Handy die Tages-Preisdatei).
   let res: Response;
   try { res = await fetch(GUIDE_URL, { headers: { "User-Agent": UA } }); }
   catch (e) { return json({ error: `guide fetch: ${(e as Error).message}` }, 502); }
   if (!res.ok) return json({ error: `guide HTTP ${res.status}` }, 502);
   let guide: unknown;
   try { guide = await res.json(); } catch (e) { return json({ error: `guide parse: ${(e as Error).message}` }, 502); }
+
+  // 2b. Spec 2026-10-04 §3.1: Tages-Preisdatei fuers Handy. Nie fatal fuer die Sammlungspreise --
+  // laeuft deshalb ERST nach den Sammlungs-Updates (ein CPU-Limit-Abbruch hier kostet sie nicht).
+  const buildPriceFileStep = async (): Promise<{ entries: number } | { error: string }> => {
+    try {
+      const file = buildPriceFile(guide, new Date().toISOString().slice(0, 10));
+      const gz = await gzipJson(file);
+      const { error } = await supabase.storage.from("catalog")
+        .upload("cm-prices.json.gz", gz, { contentType: "application/gzip", upsert: true, cacheControl: "3600" });
+      if (error) throw new Error(error.message);
+      return { entries: Object.keys(file.p).length };
+    } catch (e) {
+      const msg = (e as Error).message;
+      console.error("[refresh-cardmarket-prices] price file skipped:", msg);
+      return { error: msg };
+    }
+  };
+
+  if (ids.size === 0 && sealedRows.length === 0) {
+    return json({ needed: 0, found: 0, updated: 0, sealed: sealedBody(0), priceFile: await buildPriceFileStep() });
+  }
 
   // 3. Cards: one UPDATE for everything; only rows whose price actually changes are touched.
   const prices = pickTrends(guide, ids);
@@ -110,7 +128,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  const body = { needed: ids.size, found: prices.length, updated, sealed: sealedBody(sealedUpdated) };
+  const priceFile = await buildPriceFileStep();
+  const body = { needed: ids.size, found: prices.length, updated, sealed: sealedBody(sealedUpdated), priceFile };
   console.log("[refresh-cardmarket-prices]", JSON.stringify(body));
   return json(body);
 });

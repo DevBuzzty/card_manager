@@ -379,23 +379,47 @@ class ScanCapture(
     }
 
     /**
-     * Einstieg fuer den FOTOMODUS (Modus "einzeln" seit 21.09.2026): ein Knopfdruck ist eine
-     * bewusste Aktion, also eine Karte -- anders als [onCapture] im Modus "einzeln" wird eine
-     * Wiederholung NICHT verworfen, sondern zusammengefasst wie im Stapel (Nutzerentscheid: jedes
-     * Foto zaehlt +1). Auf der Leitung heisst das Modus "foto", den der PC (scanAggregate.js)
-     * genauso zusammenfasst wie "stapel".
+     * Spec 2026-10-04 §4: "In Sammlung +" der Ergebnis-Seite. Ein Einzelfoto wird NICHT mehr
+     * automatisch uebernommen -- erst hier, mit genau dem markierten Druck und der gewaehlten
+     * Auflage, ohne erneutes Aufloesen. Mit PC wie bisher Modus "foto" (scanAggregate.js fasst
+     * zusammen), ohne PC ins Handy-Staging; derselbe Druck mit derselben Auflage zaehlt +1.
      */
-    fun onFoto(pc: String, evidence: List<String>, frames: List<String>, editionTexts: List<String>) {
-        val isRepeat = !seen.add(pc)
-        if (connected()) {
-            sendScan(pc, evidence, frames, editionTexts, isRepeat, modus = "foto")
-        } else if (isRepeat && stagingCards.any { it.passcode == pc }) {
-            aggregateRepeat(pc, evidence, frames, editionTexts)
-        } else {
-            // Kein Eintrag, obwohl schon gesehen: die fruehere Kopie ging an den PC, als der noch
-            // verbunden war. Dann wird diese hier ein eigener Eintrag, statt still zu verschwinden.
-            stageScan(pc, evidence, frames, editionTexts)
+    fun uebernehmeFoto(r: ResolvedScan) {
+        val pc = r.base.id
+        seen.add(pc)
+        val s = socket()
+        if (s != null && connected()) {
+            sendScanToDesktop(s, pc, r, "foto")
+            gesendeteAufloesung[pc] = r
+            sentCount++
+            lastLight = r.confidence.light
+            blink(0.8f)
+            scope.launch { snackbar.showSnackbar("${r.base.name ?: pc} an den PC") }
+            return
         }
+        // Feste Scan-Sprache auch ohne lesbaren Set-Code, wie in stageScan.
+        val gesetzt = r.match.selected
+            ?: com.example.yugiohscanner.ml.ScanSprache.ersatzDruck(com.example.yugiohscanner.ml.ScanSprache.fest, r.knownSets)
+        val vorhanden = stagingCards.firstOrNull {
+            it.passcode == pc && !it.loading && it.selectedSet == gesetzt && it.edition == r.confidence.effectiveEdition
+        }
+        if (vorhanden != null) {
+            vorhanden.quantity++
+        } else {
+            stagingCards.add(ScanStagingEntry(System.nanoTime(), pc).apply {
+                condition = com.example.yugiohscanner.Prefs.defaultCondition(context)
+                base = r.base
+                knownSets = r.knownSets
+                codeMatch = r.match
+                selectedSet = gesetzt
+                confidence = r.confidence
+                edition = r.confidence.effectiveEdition
+                userTouched = true
+                loading = false
+            })
+        }
+        blink(0.8f)
+        scope.launch { snackbar.showSnackbar("${r.base.name ?: pc} vorgemerkt – „Prüfen“ zum Übernehmen") }
     }
 
     // Der einzige Einstieg fuer eine erfasste Karte -- autonome Erkennung wie manuelle Eingabe.

@@ -6,7 +6,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { cachedFetch } = require('./api-handler.cjs');
 const { UNBEKANNT, repariereQuellcode } = require('./rarity-sources.cjs');
-const { mergeCards, buildAliases, attachVerified, packCatalog } = require('./catalog-build.cjs');
+const { mergeCards, buildAliases, attachVerified, attachCm, packCatalog } = require('./catalog-build.cjs');
+const { makeCmLookup } = require('./cardmarket-bulk.cjs');
 const { sealedProductsForCatalog } = require('./sealed-products.cjs');
 const { saveCatalogFile } = require('./catalog-prices.cjs');
 
@@ -196,6 +197,13 @@ async function runCatalogBuild(db, { ensureClient, force = false, userDataPath =
 
     const verifiedByPasscode = readVerified(db);
     const cards = attachVerified(mergeCards(dumps.en, dumps.de), verifiedByPasscode);
+    // Spec 2026-10-04 §3.2: Cardmarket-Produkt je Druck. Ohne Dateien/Netz wird ohne `cm` gebaut.
+    try {
+      const cmLookup = userDataPath ? await makeCmLookup(db, userDataPath) : null;
+      if (cmLookup) attachCm(cards, cmLookup);
+    } catch (e) {
+      console.warn('[catalog-builder] ohne Cardmarket-Zuordnung:', e.message);
+    }
 
     const localVersion = Number(getSetting(db, 'catalog_version')) || 0;
     const version = (await seedVersion(client, 'catalog', localVersion)) + 1;

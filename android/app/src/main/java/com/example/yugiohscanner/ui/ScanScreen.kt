@@ -1,6 +1,5 @@
 package com.example.yugiohscanner.ui
 
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import android.Manifest
@@ -49,7 +48,6 @@ import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Euro
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -482,9 +480,8 @@ fun ScanScreen(onClose: () -> Unit) {
     val kamera = remember { KameraTeile() }
     val fotoAufnahme = remember { com.example.yugiohscanner.ml.FotoAufnahme(pipeline) }
     var fotoLaeuft by remember { mutableStateOf(false) }
-    // Karten-Info (21.09.2026): die zuletzt fotografierte Karte -- nur im Einzel-Modus.
-    var letzteFotoKarte by remember { mutableStateOf<String?>(null) }
-    var zeigeKartenInfo by remember { mutableStateOf(false) }
+    // Spec 2026-10-04 §4: das Ergebnis des letzten Einzelfotos -- solange gesetzt, liegt die Ergebnis-Seite ueber der Kamera.
+    var ergebnis by remember { mutableStateOf<ResolvedScan?>(null) }
 
     fun binde(modus: String) {
         val provider = kamera.provider ?: return
@@ -528,10 +525,17 @@ fun ScanScreen(onClose: () -> Unit) {
                     if (erg == null) {
                         snackbar.showSnackbar("Keine Karte erkannt")
                     } else {
-                        capture.onFoto(erg.passcode.toString(), erg.evidence, erg.frames, erg.editionTexts)
-                        letzteFotoKarte = erg.passcode.toString()
-                        tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
-                        vibrator?.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                        val r = ScanResolver.resolve(
+                            erg.passcode.toString(), erg.evidence, erg.frames, erg.editionTexts,
+                            com.example.yugiohscanner.Prefs.defaultEdition(context),
+                        )
+                        if (r == null) {
+                            snackbar.showSnackbar("Karte ${erg.passcode} nicht gefunden")
+                        } else {
+                            ergebnis = r
+                            tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
+                            vibrator?.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                        }
                     }
                 } catch (e: OutOfMemoryError) {
                     com.example.yugiohscanner.ml.ScanLog.line("Foto", "Speicher reicht nicht: ${e.message}")
@@ -797,30 +801,6 @@ fun ScanScreen(onClose: () -> Unit) {
                 } else {
                     Icon(Icons.Default.PhotoCamera, contentDescription = "Foto aufnehmen", modifier = Modifier.size(40.dp))
                 }
-            }
-        }
-
-        // Karten-Info der zuletzt fotografierten Karte -- rechts unten, auf Hoehe des Auslösers.
-        if (scanMode != "stapel" && letzteFotoKarte != null) {
-            // Ruhig statt voller Akzentflaeche neben dem Ausloeser (Spec §6.2 Regel 5: eine
-            // Hauptaktion je Bildschirm); gefuellt statt outlined, damit die Flaeche auf dem
-            // wechselnd hellen Kamerabild sichtbar bleibt. Eigene runde Flaeche statt
-            // FilledTonalIconButton: dessen Inhalt sitzt in einer festen 40-dp-Box, bei 48 dp
-            // stand das Symbol deshalb nicht mittig (Abnahme I1).
-            Box(
-                Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
-                    .padding(end = 24.dp, bottom = 146.dp).size(48.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable(role = Role.Button, onClickLabel = "Karten-Info und Preise") { zeigeKartenInfo = true },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.Euro, contentDescription = "Karten-Info und Preise", tint = MaterialTheme.colorScheme.onSurface)
-            }
-        }
-        if (zeigeKartenInfo) {
-            letzteFotoKarte?.let { pc ->
-                ModalBottomSheet(onDismissRequest = { zeigeKartenInfo = false }) { KartenInfoSheet(pc) }
             }
         }
 
@@ -1095,6 +1075,17 @@ fun ScanScreen(onClose: () -> Unit) {
             hostState = snackbar,
             modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp),
         )
+
+        // Spec 2026-10-04 §4: Ergebnis-Seite des Einzelfotos, liegt ueber Kamera und Bedienelementen.
+        ergebnis?.let { r ->
+            Surface(Modifier.fillMaxSize()) {
+                ScanErgebnisScreen(
+                    r = r,
+                    onWeiter = { ergebnis = null },
+                    onUebernehmen = { neu -> capture.uebernehmeFoto(neu); ergebnis = null },
+                )
+            }
+        }
     }
 }
 
