@@ -84,13 +84,11 @@ object CardLayout {
         Layout.SKILL, Layout.LEGACY -> standardZones()
     }
 
-    // EDITION for PENDULUM is intentionally omitted from pendulumZones() below: it had only 36
-    // candidates in ml/ocr_bench/labels.csv (28 after outlier rejection) against the MIN_SAMPLES=40
-    // floor. Unlike PENDULUM's own PASSCODE/SET_CODE zones (also measured below MIN_SAMPLES, but
-    // from a separate photo set, justified by a tight std AND a demonstrably wrong alternative),
-    // there is no second measurement here to argue tightness from and no evidence the STANDARD
-    // placeholder would even be wrong -- see ml/zones_measured.json's `_meta_edition`. Emitting a
-    // number anyway would be a guess, not a measurement.
+    // EDITION for PENDULUM: until 2026-10-04 deliberately omitted (36 candidates, 28 after outlier
+    // rejection, below MIN_SAMPLES=40). Now measured from 51 raw samples (41 from the eBay pool,
+    // 10 from the user's own photos), 43 after the same outlier filter -- see pendulumZones() and
+    // ml/zones_measured.json. Only "1. Auflage"/"1st Edition" is backed by samples; a LIMITED marker
+    // on a Pendulum card is wider and was not measured.
     //
     // SKILL and LEGACY still get a (provisional) EDITION rect below, same as they already get for
     // PASSCODE/SET_CODE -- both fall back to standardZones() wholesale in [zones] above, and that
@@ -140,6 +138,9 @@ object CardLayout {
         Zone.PASSCODE to rect(-0.0873f, 0.6269f, 0.1746f, 0.815f),
         // n=17, std x1=0.0123 y1=0.0173 x2=0.0181 y2=0.0159
         Zone.SET_CODE to rect(-0.0202f, 0.5782f, 0.2765f, 0.728f),
+        // Measured 2026-10-04: n=43 (51 raw), std x1=0.0115 y1=0.0244 x2=0.0074 y2=0.0273. Same line as
+        // the PASSCODE, just to its right -- like STANDARD, where the marker sits beside the passcode.
+        Zone.EDITION to rect(0.1499f, 0.6847f, 0.3526f, 0.8693f),
     )
 
     private fun linkZones() = mapOf(

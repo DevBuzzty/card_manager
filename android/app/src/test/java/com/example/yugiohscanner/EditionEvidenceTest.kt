@@ -189,7 +189,7 @@ class EditionEvidenceTest {
         assertEquals("unknown", ev.result().edition)
     }
 
-    @Test fun `a layout with no measured EDITION zone, like PENDULUM -- add is never called -- unknown`() {
+    @Test fun `a layout with no measured EDITION zone -- add is never called -- unknown`() {
         // The caller (HybridPipeline / CardLayout) simply never calls add() when
         // CardLayout.zones(layout) has no Zone.EDITION entry -- there is no crop to read. An
         // instance nothing was ever recorded on must answer unknown, not fabricate "unlimited".

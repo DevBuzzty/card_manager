@@ -117,7 +117,15 @@
         "y2": 0.0159
       }
     },
-    "EDITION": "insufficient data"
+    "EDITION": {
+      "x": [0.1499, 0.3526],
+      "y": [0.6847, 0.8693],
+      "n": 43,
+      "n_raw": 51,
+      "measured": "2026-10-04",
+      "median": {"x1": 0.1841, "y1": 0.7296, "x2": 0.3224, "y2": 0.7963},
+      "std": {"x1": 0.0115, "y1": 0.0244, "x2": 0.0074, "y2": 0.0273}
+    }
   },
   "LINK": {
     "PASSCODE": {
@@ -276,6 +284,7 @@
     "source": "ml/measure_zones.py --edition ueber die 'first'/'limited'-Zeilen aus ml/ocr_bench/labels.csv (940 Fotos neu vermessen, 2140 s): STANDARD/SPELL_TRAP je 400 von 3167/904 verfuegbaren Kandidaten (Cap wie bei PASSCODE/SET_CODE), LINK und PENDULUM vollstaendig (101 bzw. 39 verfuegbar).",
     "convention": "Wie oben, gleiche Box-relative Konvention. Marker-Text sitzt auf derselben Zeile wie PASSCODE, aber rechts davon versetzt -- siehe find_edition_span() in measure_zones.py.",
     "note": "labels.csv-Zeilen mit edition=unlimited haben keinen Marker (per Definition) und wurden nicht als Kandidaten gezogen; edition-Zeilen ohne aufloesbares layout ('') wurden uebersprungen.",
-    "gaps": "PENDULUM blieb unter der 40er-Schwelle (36 Kandidaten in labels.csv, 28 nach Ausreisser-Filter) -- bewusst unvermessen gelassen, kein Zone.EDITION fuer PENDULUM. SKILL hat 0 Editions-Zeilen in labels.csv ueberhaupt, ebenfalls unvermessen."
+    "gaps": "SKILL hat 0 Editions-Zeilen in labels.csv ueberhaupt, unvermessen. Ein LIMITED-Marker auf Pendel-Karten ist breiter und nicht vermessen.",
+    "pendulum_2026_10_04": "PENDULUM nachgemessen: 41 Rohproben aus dem eBay-Pool (ml/data/harvest/pool, Pfade per ml/data/pendel_work/path_mapping_pendulum43.csv) + 10 aus 12 eigenen Fotos des Nutzers (ml/data/pendel_work/eigene), gleicher Ausreisser-Filter, n=43 >= 40. Gemessen mit dem v3-Detektor (android/app/src/main/assets/detector.onnx), weil detector_fp32_backup.onnx fehlte -- daher nicht 1:1 mit der Septembermessung vergleichbar."
   }
 }
