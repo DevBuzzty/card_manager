@@ -63,11 +63,12 @@ fun ScanErgebnisScreen(r: ResolvedScan, onWeiter: () -> Unit, onUebernehmen: (Re
     }
     var auflage by remember(r) { mutableStateOf(r.confidence.effectiveEdition) }
     var gewaehlt by remember(r) { mutableStateOf(false) }
+    var auflageGewaehlt by remember(r) { mutableStateOf(false) }
     var auflageOffen by remember { mutableStateOf(false) }
     var grossesBild by remember { mutableStateOf(false) }
 
     val sicher = gewaehlt || r.confidence.light == ScanConfidence.Light.GREEN
-    val auflageUnsicher = !gewaehlt && (r.confidence.editionConfidence == EditionEvidence.Confidence.LOW || auflage == "unknown")
+    val auflageUnsicher = !auflageGewaehlt && (r.confidence.editionConfidence == EditionEvidence.Confidence.LOW || auflage == "unknown")
     val markiert = drucke.firstOrNull { ScanErgebnis.key(it.setCode, it.rarity, it.language) == auswahl }
     val kopf = ScanErgebnis.kopfPreis(drucke, auswahl, sicher, r.match.candidates)
     val bild = katalog?.image?.takeIf { it.isNotBlank() } ?: r.base.imageUrl
@@ -84,10 +85,9 @@ fun ScanErgebnisScreen(r: ResolvedScan, onWeiter: () -> Unit, onUebernehmen: (Re
                             r.knownSets.firstOrNull { ScanErgebnis.key(it.setCode, it.rarity, it.language) == auswahl }
                                 ?: SetOption(m.setCode, m.rarity, 0.0, m.language)
                         }
-                        val conf = if (gewaehlt) r.confidence.copy(
-                            light = ScanConfidence.Light.GREEN, reason = null,
-                            effectiveEdition = auflage, editionConfidence = EditionEvidence.Confidence.HIGH,
-                        ) else r.confidence.copy(effectiveEdition = auflage)
+                        var conf = r.confidence.copy(effectiveEdition = auflage)
+                        if (gewaehlt) conf = conf.copy(light = ScanConfidence.Light.GREEN, reason = null)
+                        if (auflageGewaehlt) conf = conf.copy(editionConfidence = EditionEvidence.Confidence.HIGH)
                         onUebernehmen(ResolvedScan(r.base, r.knownSets, r.match.copy(selected = druck ?: r.match.selected), conf, r.readSetCode))
                     }, modifier = Modifier.weight(1f)) { Text("In Sammlung +") }
                 }
@@ -128,7 +128,7 @@ fun ScanErgebnisScreen(r: ResolvedScan, onWeiter: () -> Unit, onUebernehmen: (Re
                             DropdownMenu(expanded = auflageOffen, onDismissRequest = { auflageOffen = false }) {
                                 Valuation.EDITIONS.forEach { e ->
                                     DropdownMenuItem(text = { Text(Valuation.EDITION_LABELS[e] ?: e) },
-                                        onClick = { auflage = e; gewaehlt = true; auflageOffen = false })
+                                        onClick = { auflage = e; auflageGewaehlt = true; auflageOffen = false })
                                 }
                             }
                         }
