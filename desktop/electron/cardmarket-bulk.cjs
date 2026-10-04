@@ -7,10 +7,11 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const { cachedFetch, fetchCardData } = require('./api-handler.cjs');
-const { buildExpansionIndex, buildSinglesIndex, resolveProduct, buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning, idFromVersionRow } = require('./cardmarket-bulk-parse.cjs');
+const { buildExpansionIndex, buildSinglesIndex, resolveProduct, buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning, idFromVersionRow, cmForPrinting } = require('./cardmarket-bulk-parse.cjs');
+const { normName } = require('./cardmarket-parse.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { applySealedPrices } = require('./sealed-items.cjs');
-const { applyLangFactor } = require('./language-kr.cjs');
+const { applyLangFactor, isKoreanCode } = require('./language-kr.cjs');
 
 const H = 3600 * 1000;
 const FILES = {
@@ -280,4 +281,27 @@ async function makeDeriver(db, userDataPath) {
   };
 }
 
-module.exports = { runBulkRefresh, getBulkStatus, makeDeriver };
+// Spec 2026-10-04 §3.2 — Zuordnung fuer den Katalog-Bau. Echte IDs aus der Sammlung (nicht abgeleitet)
+// haben Vorrang. KR-Drucke bekommen nie eine Nummer (Cardmarket fuehrt kein Koreanisch).
+// null, wenn die Cardmarket-Dateien oder YGOPRODecks Set-Liste fehlen -- der Katalog wird dann ohne `cm` gebaut.
+async function makeCmLookup(db, userDataPath) {
+  const data = await loadAll(userDataPath, false);
+  const ix = buildIndexes(data);
+  if (!ix) return null;
+  const learned = learnedFrom(db, ix);
+  const real = new Map();
+  const rows = db.prepare(
+    "SELECT name, set_code, rarity, cm_product_id FROM cards WHERE cm_product_id IS NOT NULL AND COALESCE(cm_product_derived, 0) = 0 AND language != 'KR'"
+  ).all();
+  for (const r of rows) real.set(`${prefixOf(r.set_code)}|${normName(r.name)}|${r.rarity}`, r.cm_product_id);
+  return (nameEn, code, rarity, printingRarities) => {
+    if (isKoreanCode(code)) return null;
+    const prefix = prefixOf(code);
+    return cmForPrinting({
+      cardName: nameEn, setNames: ix.setsByPrefix.get(prefix) || [], rarity, printingRarities,
+      realId: real.get(`${prefix}|${normName(nameEn)}|${rarity}`),
+    }, { ...ix, learned });
+  };
+}
+
+module.exports = { runBulkRefresh, getBulkStatus, makeDeriver, makeCmLookup };

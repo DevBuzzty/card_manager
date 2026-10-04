@@ -223,3 +223,25 @@ test('packCatalog schreibt aliases, ohne Angabe leer', () => {
   const withAliases = JSON.parse(zlib.gunzipSync(packCatalog(mergeCards(EN, DE), 15, [], { 46986415: '46986414' }).buffer).toString('utf8'));
   assert.deepEqual(withAliases.aliases, { 46986415: '46986414' });
 });
+
+const { attachCm } = require('./catalog-build.cjs');
+
+test('attachCm setzt cm an printings und printings_verified, uebergibt die Seltenheiten des Set-Kuerzels', () => {
+  const cards = [{
+    id: '1', name_en: 'Toadally Awesome',
+    printings: [{ code: 'RA03-EN040', rarity: 'Super Rare' }, { code: 'RA03-EN040', rarity: 'Ultra Rare' }, { code: 'SHVI-EN032', rarity: 'Secret Rare' }],
+    printings_verified: [{ code: 'RA03-DE040', rarity: 'Ultra Rare', lang: 'DE' }],
+  }];
+  const calls = [];
+  const lookup = (name, code, rarity, rars) => {
+    calls.push([name, code, rarity, rars]);
+    if (code.startsWith('SHVI')) return null;
+    return rarity === 'Ultra Rare' ? 30 : [20, 30];
+  };
+  attachCm(cards, lookup);
+  assert.deepEqual(cards[0].printings[0].cm, [20, 30]);
+  assert.equal(cards[0].printings[1].cm, 30);
+  assert.equal('cm' in cards[0].printings[2], false);           // null -> Feld fehlt
+  assert.equal(cards[0].printings_verified[0].cm, 30);
+  assert.deepEqual(calls[3], ['Toadally Awesome', 'RA03-DE040', 'Ultra Rare', ['Super Rare', 'Ultra Rare']]);
+});

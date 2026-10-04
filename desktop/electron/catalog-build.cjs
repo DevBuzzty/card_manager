@@ -137,10 +137,25 @@ function buildSealedProducts(nonsingles, priceGuides) {
 
 // Spec E3 §3: `aliases` steht immer im Katalog (auch leer) -- sein Fehlen kennzeichnet einen Katalog von vor E3
 // ("Katalog fehlt – Banlist unbekannt").
+// Spec 2026-10-04 §3.2 — `cm` je Druck fuer die Euro-Preise auf dem Handy: Zahl (eindeutig),
+// Array (mehrdeutig, Handy zeigt Spanne) oder fehlt. Cardmarket-Produkte sind sprachneutral, also
+// bekommen DE- und EN-Druck desselben Sets/derselben Seltenheit dieselbe Nummer.
+function attachCm(cards, lookup) {
+  const prefixOf = (code) => String(code || '').split('-')[0].toUpperCase();
+  for (const c of cards) {
+    const rarities = (prefix) => (c.printings || []).filter(p => prefixOf(p.code) === prefix).map(p => p.rarity);
+    for (const p of [...(c.printings || []), ...(c.printings_verified || [])]) {
+      const cm = lookup(c.name_en, p.code, p.rarity, rarities(prefixOf(p.code)));
+      if (cm != null) p.cm = cm;
+    }
+  }
+  return cards;
+}
+
 function packCatalog(cards, version, sealedProducts = [], aliases = {}) {
   const json = JSON.stringify({ version, built_at: new Date().toISOString(), cards, sealed_products: sealedProducts, aliases });
   const buffer = zlib.gzipSync(Buffer.from(json, 'utf8'), { level: 9 });
   return { buffer, json, bytes: buffer.length };
 }
 
-module.exports = { cmPriceOf, banOf, mergeCards, buildAliases, attachVerified, sealedKindOf, buildSealedProducts, packCatalog };
+module.exports = { cmPriceOf, banOf, mergeCards, buildAliases, attachVerified, attachCm, sealedKindOf, buildSealedProducts, packCatalog };
