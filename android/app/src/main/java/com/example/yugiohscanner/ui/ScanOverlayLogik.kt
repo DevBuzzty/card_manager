@@ -32,4 +32,10 @@ object ScanOverlayLogik {
 
     /** Beim Oeffnen des Scanners automatisch verbinden -- nur mit gespeicherter IP und nicht nach bewusstem "Trennen". */
     fun autoVerbinden(ip: String, getrennt: Boolean) = ip.isNotBlank() && !getrennt
+
+    /**
+     * "Karte nachlesen" im Stapel-Modus: offene Einwuerfe der Lichtschranke werden eingeloest (sie gehoeren
+     * zu genau dieser Karte); hat die Lichtschranke nichts gesehen, zaehlt der Knopfdruck selbst als eine Karte.
+     */
+    fun nachlesenBuchungen(offeneEinwuerfe: Int) = maxOf(offeneEinwuerfe, 1)
 }

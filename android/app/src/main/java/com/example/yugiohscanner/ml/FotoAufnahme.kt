@@ -42,13 +42,21 @@ class FotoAufnahme(private val pipeline: CardPipeline) {
      * Jedes Foto wird sofort ausgewertet und freigegeben, bevor das naechste kommt -- ein Foto in
      * voller Aufloesung ist als Bild rund 50 MB.
      */
-    suspend fun serie(capture: ImageCapture, executor: Executor, anzahl: Int = 3): Ergebnis? {
+    suspend fun serie(capture: ImageCapture, executor: Executor, anzahl: Int = 3): Ergebnis? =
+        serieAus(anzahl) { aufnehmen(capture, executor) }
+
+    /**
+     * Wie [serie], aber die Bilder liefert [holen] -- im Stapel-Modus ("Karte nachlesen") die laufenden
+     * Analysebilder, weil dort keine Foto-Aufnahme an die Kamera gebunden ist. [holen] muss jedes Mal ein
+     * eigenes, frisches Bitmap liefern (es wird hier freigegeben); `null` ueberspringt den Durchgang.
+     */
+    suspend fun serieAus(anzahl: Int = 3, holen: suspend () -> Bitmap?): Ergebnis? {
         val t0 = System.currentTimeMillis()
         val jeFoto = ArrayList<Pair<FotoAuswahl.Kandidat?, Detection?>>(anzahl)
         var groesse = "-"
         var ersterRahmen: Bitmap? = null
         for (i in 0 until anzahl) {
-            val bild = aufnehmen(capture, executor)
+            val bild = holen() ?: continue
             groesse = "${bild.width}x${bild.height}"
             val dets = withContext(Dispatchers.Default) {
                 // Dieselbe Pipeline wie der Live-Scan. Im Fotomodus ist die Live-Analyse zwar gar
@@ -60,7 +68,7 @@ class FotoAufnahme(private val pipeline: CardPipeline) {
                 .map { d -> d to FotoAuswahl.Kandidat(d.passcode, (d.box.x2 - d.box.x1) * (d.box.y2 - d.box.y1)) }
                 .let { paare -> FotoAuswahl.groesste(paare.map { it.second })?.let { g -> paare.first { it.second == g } } }
             jeFoto.add(gewaehlt?.second to gewaehlt?.first)
-            if (i == 0) ersterRahmen = bild else bild.recycle()
+            if (ersterRahmen == null) ersterRahmen = bild else bild.recycle()
         }
 
         val sieger = FotoAuswahl.sieger(jeFoto.map { it.first })

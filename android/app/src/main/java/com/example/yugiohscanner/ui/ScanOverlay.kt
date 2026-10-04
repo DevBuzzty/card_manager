@@ -141,6 +141,23 @@ fun StapelZaehler(n: Int) {
     }
 }
 
+/** Stapel-Modus: die Karte, die gerade im Bild liegt, noch einmal lesen und zaehlen (falls der Einwurf nicht erkannt wurde). */
+@Composable
+fun NachlesenKnopf(laeuft: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick, enabled = !laeuft, shape = RoundedCornerShape(50), color = ScanFarben.scrim,
+        border = BorderStroke(1.dp, ScanFarben.akzent),
+        modifier = Modifier.semantics { contentDescription = "Karte im Bild nachlesen" },
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (laeuft) CircularProgressIndicator(color = ScanFarben.schrift, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+            else Text("↻", color = ScanFarben.schrift, style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.width(6.dp))
+            Text("Nachlesen", color = ScanFarben.schrift, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
 @Composable
 fun Ausloeser(laeuft: Boolean, onClick: () -> Unit) {
     Button(

@@ -328,7 +328,7 @@ fun ScanScreen(onClose: () -> Unit) {
             if (scanMode == "stapel" && einwuerfe > 0) {
                 // Noch wartende Karten sofort senden -- rearm unten verwirft ihre Belege.
                 for ((pc, n) in pendingSends.flushAll()) sendConfirmed(pc, n)
-                stackCounter.einwurf(einwuerfe, now)
+                synchronized(stackCounter) { stackCounter.einwurf(einwuerfe, now) }
                 // Die eingeworfene Karte hat denselben Passcode wie die liegende: ALLE bestaetigten
                 // erneut bestaetigungsfaehig machen -- im Einwurf-Bild ist oft keine erkannt (siehe
                 // BoxTracker.rearmAll). Erst nach Einwurfbeginn bestaetigte bleiben unberuehrt. Alte
@@ -350,7 +350,7 @@ fun ScanScreen(onClose: () -> Unit) {
             }
             if (scanMode == "stapel") {
                 val w = schwacherStoss.getAndSet(0L)
-                if (w != 0L) stackCounter.schwach(w)
+                if (w != 0L) synchronized(stackCounter) { stackCounter.schwach(w) }
             }
             // Pool each visible card's bottom-band OCR text (set-code voting across frames).
             for (d in dets) setEvidence.record(d.passcode, d.zoneTexts, d.legacyText)
@@ -361,7 +361,7 @@ fun ScanScreen(onClose: () -> Unit) {
                 // Modus "stapel": so oft buchen, wie Einwuerfe offen sind; ohne Einwurf gar nicht.
                 // Rueckmeldung sofort, Senden erst mit Set-Code (PendingSends, unten).
                 if (scanMode == "stapel") {
-                    val times = stackCounter.claim(now, d.passcode)
+                    val times = synchronized(stackCounter) { stackCounter.claim(now, d.passcode) }
                     com.example.yugiohscanner.ml.ScanLog.line("Gebucht", "${d.passcode} x$times")
                     if (times > 0) {
                         einwurfOffenSeit.set(0L)
@@ -467,6 +467,8 @@ fun ScanScreen(onClose: () -> Unit) {
     val kamera = remember { KameraTeile() }
     val fotoAufnahme = remember { com.example.yugiohscanner.ml.FotoAufnahme(pipeline) }
     var fotoLaeuft by remember { mutableStateOf(false) }
+    // Stapel-Modus, "Nachlesen": die Karte im Bild noch einmal lesen, falls der Einwurf nicht erkannt wurde.
+    var nachlesenLaeuft by remember { mutableStateOf(false) }
     // Spec 2026-10-04 §4: das Ergebnis des letzten Einzelfotos -- solange gesetzt, liegt die Ergebnis-Seite ueber der Kamera.
     var ergebnis by remember { mutableStateOf<ResolvedScan?>(null) }
 
@@ -835,7 +837,45 @@ fun ScanScreen(onClose: () -> Unit) {
                 onCode = { showManualEntry = true },
             )
             // Stapel-Zaehler gross an der Stelle des Ausloesers, damit ein fehlendes +1 sofort auffaellt.
-            if (scanMode == "stapel") StapelZaehler(stapelCount) else Ausloeser(fotoLaeuft, fotoAusloesen)
+            if (scanMode == "stapel") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    NachlesenKnopf(nachlesenLaeuft) {
+                        if (nachlesenLaeuft) return@NachlesenKnopf
+                        nachlesenLaeuft = true
+                        scope.launch {
+                            try {
+                                // Drei aufeinanderfolgende Analysebilder (Kopien -- der Analyzer verwaltet seine eigenen).
+                                val erg = fotoAufnahme.serieAus(3) {
+                                    kotlinx.coroutines.delay(120)
+                                    letztesBild.get()?.let { b -> try { b.copy(android.graphics.Bitmap.Config.ARGB_8888, false) } catch (_: Exception) { null } }
+                                }
+                                if (erg == null) {
+                                    snackbar.showSnackbar("Keine Karte erkannt – Karte ruhig ins Bild legen")
+                                } else {
+                                    val now = System.currentTimeMillis()
+                                    val offen = synchronized(stackCounter) { stackCounter.claim(now, erg.passcode) }
+                                    val times = ScanOverlayLogik.nachlesenBuchungen(offen)
+                                    com.example.yugiohscanner.ml.ScanLog.line("Nachlesen", "${erg.passcode} offen=$offen gebucht=$times")
+                                    einwurfOffenSeit.set(0L)
+                                    letzteBuchung.set(now)
+                                    stapelCount += times
+                                    capture.blink()
+                                    tone?.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 120)
+                                    vibrator?.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                                    repeat(times) { onConfirmed.value(erg.passcode, erg.evidence, erg.frames, erg.editionTexts) }
+                                }
+                            } catch (e: Exception) {
+                                snackbar.showSnackbar("Nachlesen fehlgeschlagen: ${e.message}")
+                            } finally {
+                                nachlesenLaeuft = false
+                            }
+                        }
+                    }
+                    StapelZaehler(stapelCount)
+                }
+            } else {
+                Ausloeser(fotoLaeuft, fotoAusloesen)
+            }
             // Spec D4 §3: Einzeln = Foto per Ausloeser; Stapel = Wiederholungen zaehlen. Gemerkt in scanner_prefs.
             ModusReiter(scanMode) { neu ->
                 if (neu != scanMode) {

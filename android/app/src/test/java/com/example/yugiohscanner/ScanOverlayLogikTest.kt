@@ -61,4 +61,10 @@ class ScanOverlayLogikTest {
         assertFalse(ScanOverlayLogik.autoVerbinden("192.168.0.20", getrennt = true))
         assertFalse(ScanOverlayLogik.autoVerbinden("", getrennt = false))
     }
+
+    @Test fun `nachlesenBuchungen - offene Einwuerfe einloesen, sonst genau eine Karte`() {
+        assertEquals(1, ScanOverlayLogik.nachlesenBuchungen(0))   // Lichtschranke hat nichts gesehen
+        assertEquals(1, ScanOverlayLogik.nachlesenBuchungen(1))   // ein offener Einwurf ohne Erkennung
+        assertEquals(2, ScanOverlayLogik.nachlesenBuchungen(2))   // zwei Karten zugleich eingeworfen
+    }
 }
