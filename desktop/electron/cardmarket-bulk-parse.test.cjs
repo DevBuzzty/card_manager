@@ -202,3 +202,31 @@ test('idFromVersionRow: V.n ist die n-te idProduct der Karte im Set (Log 02.10.2
   assert.equal(idFromVersionRow({ cardName: 'Solo Card', expansion: exp, alt: 'Solo Card' }, ix), 700000);              // einzige Version
   assert.equal(idFromVersionRow({ cardName: 'Armed Ninja', expansion: 'Unbekanntes Set', alt: 'Armed Ninja (V.1 - Rare)' }, ix), null);
 });
+
+const { cmForPrinting } = require('./cardmarket-bulk-parse.cjs');
+
+test('cmForPrinting: echte ID > eindeutig > abgeleitet > Kandidaten > null', () => {
+  const singles = [
+    { idProduct: 10, name: 'Solo Card', idExpansion: 7 },
+    { idProduct: 30, name: 'Toadally Awesome', idExpansion: 7 },
+    { idProduct: 20, name: 'Toadally Awesome', idExpansion: 7 },
+  ];
+  const base = {
+    expansionIndex: buildExpansionIndex([{ name: 'Some Set Booster', idExpansion: 7 }]),
+    singlesIndex: buildSinglesIndex(singles),
+    versionIndex: buildVersionIndex(singles),
+  };
+  const set = ['Some Set'];
+  const keinModell = { ...base, learned: new Map() };
+  // echte ID aus der Sammlung gewinnt immer
+  assert.equal(cmForPrinting({ cardName: 'Toadally Awesome', setNames: set, rarity: 'Ultra Rare', printingRarities: [], realId: 99 }, keinModell), 99);
+  // eindeutig in den Dateien
+  assert.equal(cmForPrinting({ cardName: 'Solo Card', setNames: set, rarity: 'Common', printingRarities: ['Common'] }, keinModell), 10);
+  // mehrdeutig, kein Modell -> alle Kandidaten aufsteigend
+  assert.deepEqual(cmForPrinting({ cardName: 'Toadally Awesome', setNames: set, rarity: 'Ultra Rare', printingRarities: ['Super Rare', 'Ultra Rare'] }, keinModell), [20, 30]);
+  // mehrdeutig, Modell mit 2 Vorbildern auf Position 1 -> abgeleitet
+  const learned = new Map([['7|2|Ultra Rare', new Map([[1, 2]])]]);
+  assert.equal(cmForPrinting({ cardName: 'Toadally Awesome', setNames: set, rarity: 'Ultra Rare', printingRarities: ['Super Rare', 'Ultra Rare'] }, { ...base, learned }), 30);
+  // Set unbekannt -> null
+  assert.equal(cmForPrinting({ cardName: 'Solo Card', setNames: ['Gibt Es Nicht'], rarity: 'Common', printingRarities: [] }, keinModell), null);
+});

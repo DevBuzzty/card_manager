@@ -182,6 +182,23 @@ function orderForLearning(items, keysOf, startCount = () => 0, need = 2) {
   return ranked.sort((a, b) => (a.later - b.later) || (a.i - b.i)).map(x => x.it);
 }
 
+// Spec 2026-10-04 §3.2 — Cardmarket-Produkt(e) eines Katalog-Drucks fuer die Preise auf dem Handy.
+// Reihenfolge: echte ID aus der Sammlung > eindeutig in den Dateien > aus der Set-Reihenfolge abgeleitet
+// > alle Versionen der Karte im Set (aufsteigend; das Handy zeigt daraus eine Spanne) > null.
+function cmForPrinting({ cardName, setNames, rarity, printingRarities, realId }, ix) {
+  if (realId) return Number(realId);
+  const r = resolveProduct({ cardName, setNames }, ix);
+  if (r.idProduct) return r.idProduct;
+  if (r.reason !== 'ambiguous') return null;
+  const d = deriveProduct({ cardName, setNames, rarity, printingRarities: printingRarities || [] }, ix);
+  if (d.idProduct) return d.idProduct;
+  const ids = [];
+  for (const e of expansionIdsFor(setNames, ix.expansionIndex)) {
+    for (const id of ix.versionIndex.byKey.get(normName(cardName) + '|' + e) || []) ids.push(id);
+  }
+  return ids.length ? ids.sort((a, b) => a - b) : null;
+}
+
 // Cardmarket nummeriert die Versionen einer Karte je Set ("Armed Ninja (V.1 - Rare)") in der Reihenfolge,
 // in der es sie angelegt hat -- also nach idProduct. Damit liefert eine Versionszeile die idProduct auch
 // dann, wenn ihr Bild (verzoegert geladen) keine Adresse traegt. Ohne "V.n" hat die Karte im Set nur
@@ -208,5 +225,5 @@ function idProductFromImageUrl(url) {
 module.exports = {
   expansionNameFromProduct, buildExpansionIndex, buildSinglesIndex, resolveProduct, idProductFromImageUrl,
   expansionNameVariants, decodeEntities, tokenKey,
-  buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning, idFromVersionRow,
+  buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning, cmForPrinting, idFromVersionRow,
 };
