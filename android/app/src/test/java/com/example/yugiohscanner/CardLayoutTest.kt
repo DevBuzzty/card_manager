@@ -135,11 +135,13 @@ class CardLayoutTest {
     }
 
     @Test
-    fun `PENDULUM und SKILL-eigene Geometrie haben keine eigene EDITION -- unter der Messschwelle`() {
-        // PENDULUM: 36 Kandidaten (28 nach Ausreisser-Filter) gegen MIN_SAMPLES=40 -- bewusst
-        // unvermessen, siehe der Kommentar ueber standardZones(). pendulumZones() traegt daher
-        // keinen Zone.EDITION-Eintrag.
-        assertTrue(!CardLayout.zones(Layout.PENDULUM).containsKey(Zone.EDITION))
+    fun `PENDULUM-EDITION ist seit 04_10_2026 gemessen -- n=43 auf der Passcode-Zeile`() {
+        // 51 Rohproben (41 eBay-Pool + 10 eigene Fotos), 43 nach Ausreisser-Filter >= MIN_SAMPLES=40.
+        val p = CardLayout.zones(Layout.PENDULUM).getValue(Zone.EDITION)
+        assertEquals(0.1499f, p.left, 0f)
+        assertEquals(0.6847f, p.top, 0f)
+        assertEquals(0.3526f, p.right, 0f)
+        assertEquals(0.8693f, p.bottom, 0f)
     }
 
     @Test

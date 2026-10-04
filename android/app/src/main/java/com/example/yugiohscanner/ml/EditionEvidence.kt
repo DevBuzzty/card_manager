@@ -8,9 +8,8 @@ import java.text.Normalizer
  * frame's EDITION-zone crop OCR'd to, already cropped and read by someone else (HybridPipeline,
  * not built here).
  *
- * A layout with no measured EDITION zone (PENDULUM -- see [CardLayout]'s class doc: only 28
- * candidates after outlier rejection, below the 40-sample floor, and no second measurement to
- * argue tightness from) has no crop to read at all. The caller must then never call [add] for
+ * A layout with no measured EDITION zone (today only SKILL's own geometry; PENDULUM was in this
+ * group until its zone was measured on 2026-10-04) has no crop to read at all. The caller must then never call [add] for
  * that card; an instance nothing was ever recorded on answers `unknown` from [result] below, which
  * is the correct, disclosed answer -- not a gap papered over with a guess.
  *
