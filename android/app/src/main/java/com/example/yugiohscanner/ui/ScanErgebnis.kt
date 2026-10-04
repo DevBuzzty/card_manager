@@ -16,6 +16,15 @@ object ScanErgebnis {
     fun key(setCode: String, rarity: String, language: String) =
         "${setCode.uppercase()}|${rarity.lowercase()}|${language.uppercase()}"
 
+    private val setCodeRegex = Regex("^([A-Z0-9]{2,6})-([A-Z]{1,2})([A-Z]?\\d{1,4})$")
+    private val europaeisch = setOf("DE", "EN", "FR", "IT", "ES", "PT")
+
+    /** Set-Praefix + Nummer ohne Region und ohne fuehrende Nullen; leitet nur die Produkt-ID her, nie einen Set-Code. */
+    private fun ohneRegion(code: String): String? {
+        val m = setCodeRegex.matchEntire(code.uppercase()) ?: return null
+        return m.groupValues[1] + "-" + m.groupValues[3].trimStart('0')
+    }
+
     /** Alle Drucke der Karte: erst die bekannten (Katalog-Reihenfolge), dann eigene, die fehlen. KR nie mit Cardmarket. */
     fun drucke(known: List<SetOption>, katalog: List<CatalogPrinting>, besitz: List<CardRow>, trend: (Int) -> Double?): List<Druck> {
         val out = LinkedHashMap<String, Druck>()
@@ -23,10 +32,15 @@ object ScanErgebnis {
             val k = key(code, rarity, lang)
             if (k in out) return
             val eigen = besitz.filter {
-                it.setCode.equals(code, true) && (it.rarity ?: "").equals(rarity, true) && it.language.equals(lang, true)
+                it.setCode.equals(code, true) && (it.rarity ?: "Unknown").equals(rarity, true) && it.language.equals(lang, true)
             }
+            // DE und EN desselben Sets + Seltenheit sind EIN Cardmarket-Produkt (Spec §3.2).
+            fun treffer(passt: (CatalogPrinting) -> Boolean) =
+                katalog.firstOrNull { passt(it) && it.rarity.equals(rarity, true) && it.cm.isNotEmpty() }?.cm
             val cm = if (lang.equals("KR", true)) emptyList() else
-                katalog.firstOrNull { it.code.equals(code, true) && it.rarity.equals(rarity, true) && it.cm.isNotEmpty() }?.cm ?: emptyList()
+                (treffer { it.code.equals(code, true) }
+                    ?: (if (lang.uppercase() in europaeisch) ohneRegion(code)?.let { o -> treffer { ohneRegion(it.code) == o } } else null)
+                    ?: emptyList())
             val mitPreis = eigen.firstOrNull { (it.price ?: 0.0) > 0 }
             out[k] = Druck(code, rarity, lang, cm, eigen.sumOf { it.quantity }, DruckPreis.fuer(mitPreis?.price, cm, trend), mitPreis ?: eigen.firstOrNull())
         }

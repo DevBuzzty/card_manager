@@ -397,8 +397,11 @@ class ScanCapture(
             scope.launch { snackbar.showSnackbar("${r.base.name ?: pc} an den PC") }
             return
         }
+        // Feste Scan-Sprache auch ohne lesbaren Set-Code, wie in stageScan.
+        val gesetzt = r.match.selected
+            ?: com.example.yugiohscanner.ml.ScanSprache.ersatzDruck(com.example.yugiohscanner.ml.ScanSprache.fest, r.knownSets)
         val vorhanden = stagingCards.firstOrNull {
-            it.passcode == pc && !it.loading && it.selectedSet == r.match.selected && it.edition == r.confidence.effectiveEdition
+            it.passcode == pc && !it.loading && it.selectedSet == gesetzt && it.edition == r.confidence.effectiveEdition
         }
         if (vorhanden != null) {
             vorhanden.quantity++
@@ -408,7 +411,7 @@ class ScanCapture(
                 base = r.base
                 knownSets = r.knownSets
                 codeMatch = r.match
-                selectedSet = r.match.selected
+                selectedSet = gesetzt
                 confidence = r.confidence
                 edition = r.confidence.effectiveEdition
                 userTouched = true

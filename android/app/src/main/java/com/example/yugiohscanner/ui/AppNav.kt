@@ -192,6 +192,9 @@ fun AppNav(onThemeChange: (String) -> Unit) {
     LaunchedEffect(Unit) {
         CatalogSync.checkAndUpdate(context)
         ModelStore.checkAndUpdate(context)
+    }
+    // Eigener Effekt: die kleine Preisdatei soll nicht hinter mehrere MB grossen Modell-Downloads warten.
+    LaunchedEffect(Unit) {
         com.example.yugiohscanner.cloud.CmPriceFile.aktualisieren(context)
     }
 

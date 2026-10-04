@@ -21,7 +21,7 @@ class CatalogDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
          * Spec G3 §3: v2 bringt `sealed_products`. Spec E1 §5: v3 bringt `cards.cm_price`.
          * Spec E3 §3: v4 bringt `cards.ban_tcg`/`ban_ocg` und `card_aliases` (Artwork-Passcode -> Haupt-Passcode).
          * Spec 2026-10-04 §3.2: v5 bringt `printings.cm` (Cardmarket-Produkt-ID(s), kommagetrennt).
-         * onUpgrade verwirft den alten Katalog, CatalogSync laedt neu (ein Katalog v5 ohne cm_price bleibt lesbar).
+         * onUpgrade verwirft den alten Katalog, CatalogSync laedt neu (ein Katalog ohne `cm`/cm_price bleibt lesbar).
          */
         const val VERSION = 5
 

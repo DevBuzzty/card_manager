@@ -154,7 +154,7 @@ fun ScanErgebnisScreen(r: ResolvedScan, onWeiter: () -> Unit, onUebernehmen: (Re
                     Text(DruckPreis.text(kopf), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     val low = markiert?.cm?.singleOrNull()?.let { preise?.low?.get(it) }
                     val zeile = buildList {
-                        add(if (kopf is DruckPreis.Fest && kopf.ausSammlung) "dein Sammlungspreis" else "Cardmarket-Trend")
+                        if (kopf !is DruckPreis.Keiner) add(if (kopf is DruckPreis.Fest && kopf.ausSammlung) "dein Sammlungspreis" else "Cardmarket-Trend")
                         if (sicher && low != null) add("ab ${DruckPreis.text(DruckPreis.Fest(low, false))}")
                         ScanErgebnis.standText(preise?.datum, LocalDate.now())?.let { add(it) }
                         if (preise == null) add("Preise werden beim nächsten Netz geladen")

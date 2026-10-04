@@ -44,6 +44,41 @@ class ScanErgebnisTest {
         assertEquals(DruckPreis.Keiner, d[0].preis)
     }
 
+    private fun cmFuer(known: SetOption, kat: CatalogPrinting) =
+        ScanErgebnis.drucke(listOf(known), listOf(kat), emptyList()) { 7.5 }[0].preis
+
+    @Test
+    fun `drucke - DE-Druck findet EN-Katalogprodukt desselben Sets`() {
+        val p = cmFuer(SetOption("MAMO-DE072", "Ultra Rare", 0.0, "DE"), CatalogPrinting("MAMO-EN072", "Ultra Rare", null, false, cm = listOf(1)))
+        assertEquals(DruckPreis.Fest(7.5, false), p)
+    }
+
+    @Test
+    fun `drucke - alte G-Infix-Codes passen zu EN`() {
+        val p = cmFuer(SetOption("LOB-G005", "Ultra Rare", 0.0, "DE"), CatalogPrinting("LOB-EN005", "Ultra Rare", null, false, cm = listOf(1)))
+        assertEquals(DruckPreis.Fest(7.5, false), p)
+    }
+
+    @Test
+    fun `drucke - JP faellt nie auf EN zurueck`() {
+        val p = cmFuer(SetOption("XYZ-JP001", "Ultra Rare", 0.0, "JP"), CatalogPrinting("XYZ-EN001", "Ultra Rare", null, false, cm = listOf(1)))
+        assertEquals(DruckPreis.Keiner, p)
+    }
+
+    @Test
+    fun `drucke - andere Seltenheit faellt nicht zurueck`() {
+        val p = cmFuer(SetOption("MAMO-DE072", "Secret Rare", 0.0, "DE"), CatalogPrinting("MAMO-EN072", "Ultra Rare", null, false, cm = listOf(1)))
+        assertEquals(DruckPreis.Keiner, p)
+    }
+
+    @Test
+    fun `drucke - Besitz ohne Seltenheit wird gezaehlt`() {
+        val r = CardRow(id = "1", setCode = "LOB-DE005", language = "DE", name = "X", imageUrl = null, rarity = null, quantity = 2, price = 3.0)
+        val d = ScanErgebnis.drucke(emptyList(), emptyList(), listOf(r)) { null }
+        assertEquals(2, d[0].anzahl)
+        assertEquals(DruckPreis.Fest(3.0, true), d[0].preis)
+    }
+
     @Test
     fun `startAuswahl - erkannter Druck, sonst Ersatz, Unknown nie`() {
         assertEquals("RA05-DE038|ultra rare|DE", ScanErgebnis.startAuswahl(known[0], null))

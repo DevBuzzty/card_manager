@@ -83,7 +83,7 @@ object CmPriceFile {
                 _stand.value = runCatching { parse(datei.readBytes()) }.getOrNull()
             }
             val prefs = context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE)
-            if (!force && !faellig(prefs.getLong(KEY_LAST, 0L), System.currentTimeMillis(), datei.exists())) return@withContext
+            if (!force && !faellig(prefs.getLong(KEY_LAST, 0L), System.currentTimeMillis(), datei.exists() && _stand.value != null)) return@withContext
             val bytes = SupabaseCloud.http().newCall(Request.Builder().url(url(context)).build()).execute().use { r ->
                 if (!r.isSuccessful) return@withContext
                 r.body?.bytes() ?: return@withContext
