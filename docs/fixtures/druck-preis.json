@@ -1,0 +1,13 @@
+{
+  "_doc": "Spec 2026-10-04 §3.3 -- Preis je Druck. Gelesen von DruckPreisTest.kt. Reihenfolge: eigener Preis > eindeutiger Trend > Spanne > keiner.",
+  "cases": [
+    { "name": "eigener Preis gewinnt", "eigenerPreis": 7.5, "cm": [1], "trends": { "1": 3.0 }, "art": "fest", "eur": 7.5, "text": "7,50 €" },
+    { "name": "eigener Preis 0 zaehlt nicht", "eigenerPreis": 0, "cm": [1], "trends": { "1": 3.0 }, "art": "fest", "eur": 3.0, "text": "3,00 €" },
+    { "name": "eindeutig mit Trend", "eigenerPreis": null, "cm": [1], "trends": { "1": 12.4 }, "art": "fest", "eur": 12.4, "text": "12,40 €" },
+    { "name": "eindeutig ohne Trend", "eigenerPreis": null, "cm": [1], "trends": {}, "art": "keiner", "text": "–" },
+    { "name": "mehrdeutig -> Spanne", "eigenerPreis": null, "cm": [1, 2, 3], "trends": { "1": 5.0, "2": 3.1, "3": 48.0 }, "art": "spanne", "min": 3.1, "max": 48.0, "text": "ca. 3,10–48,00 €" },
+    { "name": "mehrdeutig, nur ein Wert", "eigenerPreis": null, "cm": [1, 2], "trends": { "2": 4.2 }, "art": "fest", "eur": 4.2, "text": "4,20 €" },
+    { "name": "mehrdeutig, gleiche Werte", "eigenerPreis": null, "cm": [1, 2], "trends": { "1": 4.2, "2": 4.2 }, "art": "fest", "eur": 4.2, "text": "4,20 €" },
+    { "name": "keine Zuordnung", "eigenerPreis": null, "cm": [], "trends": { "1": 9.0 }, "art": "keiner", "text": "–" }
+  ]
+}
