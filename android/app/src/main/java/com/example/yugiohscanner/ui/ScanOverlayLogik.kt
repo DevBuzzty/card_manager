@@ -29,4 +29,7 @@ object ScanOverlayLogik {
 
     /** Ampelpunkt der Vorgemerkt-Leiste: die letzte bekannte Ampel (noch ladende Eintraege haben keine). */
     fun letzteAmpel(ampeln: List<ScanConfidence.Light?>): ScanConfidence.Light? = ampeln.lastOrNull { it != null }
+
+    /** Beim Oeffnen des Scanners automatisch verbinden -- nur mit gespeicherter IP und nicht nach bewusstem "Trennen". */
+    fun autoVerbinden(ip: String, getrennt: Boolean) = ip.isNotBlank() && !getrennt
 }

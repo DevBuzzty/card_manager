@@ -164,7 +164,8 @@ fun ScanScreen(onClose: () -> Unit) {
     // reach the desktop staging area when it's running), but never gate the camera on it.
     LaunchedEffect(Unit) {
         val savedIp = prefs.getString("ip_address", "") ?: ""
-        if (savedIp.isNotBlank() && socket == null) connectSocket(savedIp)
+        // "Trennen" im PC-Dialog gilt, bis wieder "Verbinden" gewaehlt wird (pc_getrennt).
+        if (ScanOverlayLogik.autoVerbinden(savedIp, prefs.getBoolean("pc_getrennt", false)) && socket == null) connectSocket(savedIp)
     }
 
     if (!hasCameraPermission) {
@@ -851,12 +852,14 @@ fun ScanScreen(onClose: () -> Unit) {
                 onVerbinden = { ip ->
                     // Gespeichert wird erst beim erfolgreichen Verbinden (connectSocket, EVENT_CONNECT) --
                     // ein Tippfehler darf die funktionierende Adresse nicht ueberschreiben.
+                    prefs.edit().putBoolean("pc_getrennt", false).apply()
                     socket?.disconnect()
                     socket = null
-                    connectSocket(ip)
+                    connectSocket(ip.trim())
                     zeigePcDialog = false
                 },
                 onTrennen = {
+                    prefs.edit().putBoolean("pc_getrennt", true).apply()
                     socket?.disconnect()
                     socket = null
                     isConnected = false

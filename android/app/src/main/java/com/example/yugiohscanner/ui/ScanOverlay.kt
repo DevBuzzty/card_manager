@@ -5,7 +5,8 @@ package com.example.yugiohscanner.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.yugiohscanner.ml.ScanConfidence
@@ -88,9 +92,10 @@ fun ModusEtikett(modus: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun WerkzeugChip(text: String, aktiv: Boolean, onClick: () -> Unit) {
+private fun WerkzeugChip(text: String, beschreibung: String, aktiv: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick, shape = RoundedCornerShape(50), color = ScanFarben.scrim,
+        modifier = Modifier.semantics { contentDescription = beschreibung },
         border = BorderStroke(1.dp, if (aktiv) ScanFarben.akzent else ScanFarben.gedimmt),
     ) {
         Text(text, color = ScanFarben.schrift, style = MaterialTheme.typography.labelLarge, maxLines = 1,
@@ -101,9 +106,9 @@ private fun WerkzeugChip(text: String, aktiv: Boolean, onClick: () -> Unit) {
 @Composable
 fun WerkzeugChips(sprache: String?, fokusFest: Boolean, onSprache: () -> Unit, onFokus: () -> Unit, onCode: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        WerkzeugChip(ScanOverlayLogik.sprachText(sprache), aktiv = sprache != null, onClick = onSprache)
-        WerkzeugChip(ScanOverlayLogik.fokusText(fokusFest), aktiv = fokusFest, onClick = onFokus)
-        WerkzeugChip("⌨ Code", aktiv = false, onClick = onCode)
+        WerkzeugChip(ScanOverlayLogik.sprachText(sprache), "Scan-Sprache: ${sprache ?: "Auto"}", aktiv = sprache != null, onClick = onSprache)
+        WerkzeugChip(ScanOverlayLogik.fokusText(fokusFest), if (fokusFest) "Fokus fest, antippen zum Lösen" else "Fokus", aktiv = fokusFest, onClick = onFokus)
+        WerkzeugChip("⌨ Code", "Passcode eingeben", aktiv = false, onClick = onCode)
     }
 }
 
@@ -151,7 +156,7 @@ fun Ausloeser(laeuft: Boolean, onClick: () -> Unit) {
 
 @Composable
 fun ModusReiter(modus: String, onWahl: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.selectableGroup()) {
         listOf("einzeln" to "EINZELN", "stapel" to "STAPEL").forEach { (wert, text) ->
             val aktiv = (modus == "stapel") == (wert == "stapel")
             Text(
@@ -159,7 +164,10 @@ fun ModusReiter(modus: String, onWahl: (String) -> Unit) {
                 color = if (aktiv) ScanFarben.akzent else ScanFarben.gedimmt,
                 fontWeight = if (aktiv) FontWeight.Bold else FontWeight.Normal,
                 style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.clip(RoundedCornerShape(50)).clickable { onWahl(wert) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                // Reiter fuer Bildschirmleser (Rolle + ausgewaehlt) und mindestens 48 dp Trefferflaeche.
+                modifier = Modifier.minimumInteractiveComponentSize().clip(RoundedCornerShape(50))
+                    .selectable(selected = aktiv, role = Role.Tab, onClick = { onWahl(wert) })
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }
     }
@@ -176,11 +184,11 @@ fun PcVerbindungDialog(verbunden: Boolean, ipStart: String, onVerbinden: (String
             Column {
                 Text(if (verbunden) "Verbunden mit $ipStart" else "Nicht verbunden", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(value = ip, onValueChange = { ip = it.trim() }, label = { Text("IP-Adresse") }, singleLine = true)
+                OutlinedTextField(value = ip, onValueChange = { ip = it }, label = { Text("IP-Adresse") }, singleLine = true)
             }
         },
         confirmButton = {
-            TextButton(onClick = { onVerbinden(ip) }, enabled = ScanOverlayLogik.ipGueltig(ip)) { Text("Verbinden") }
+            TextButton(onClick = { onVerbinden(ip.trim()) }, enabled = ScanOverlayLogik.ipGueltig(ip)) { Text("Verbinden") }
         },
         dismissButton = {
             Row {

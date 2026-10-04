@@ -55,4 +55,10 @@ class ScanOverlayLogikTest {
         assertNull(ScanOverlayLogik.letzteAmpel(listOf(null)))
         assertNull(ScanOverlayLogik.letzteAmpel(emptyList()))
     }
+
+    @Test fun `autoVerbinden - nur mit IP und nicht nach bewusstem Trennen`() {
+        assertTrue(ScanOverlayLogik.autoVerbinden("192.168.0.20", getrennt = false))
+        assertFalse(ScanOverlayLogik.autoVerbinden("192.168.0.20", getrennt = true))
+        assertFalse(ScanOverlayLogik.autoVerbinden("", getrennt = false))
+    }
 }
