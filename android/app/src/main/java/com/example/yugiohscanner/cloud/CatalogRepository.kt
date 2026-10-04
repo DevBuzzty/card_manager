@@ -46,7 +46,7 @@ object CatalogRepository {
         val result = mutableListOf<CatalogPrinting>()
         database.query(
             "printings",
-            arrayOf("code", "rarity", "lang", "verified"),
+            arrayOf("code", "rarity", "lang", "verified", "cm"),
             "card_id = ?",
             arrayOf(passcode),
             null, null, "ord"
@@ -57,7 +57,8 @@ object CatalogRepository {
                         code = c.getString(0),
                         rarity = c.getString(1),
                         lang = if (c.isNull(2)) null else c.getString(2),
-                        verified = c.getInt(3) != 0
+                        verified = c.getInt(3) != 0,
+                        cm = if (c.isNull(4)) emptyList() else c.getString(4).split(',').mapNotNull { it.trim().toIntOrNull() },
                     )
                 )
             }

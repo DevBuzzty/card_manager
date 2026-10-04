@@ -1,6 +1,7 @@
 package com.example.yugiohscanner.cloud
 
 import com.example.yugiohscanner.ml.SealedValue
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.util.zip.GZIPInputStream
@@ -30,7 +31,9 @@ data class CatalogPrinting(
     val code: String,
     val rarity: String,
     val lang: String?,
-    val verified: Boolean
+    val verified: Boolean,
+    // Spec 2026-10-04 §3.2: Cardmarket-Produkt-ID(s) dieses Drucks; leer = unbekannt, mehrere = mehrdeutig.
+    val cm: List<Int> = emptyList(),
 )
 
 /** Spec G3 §3 -- ein Sealed-Produkt aus `sealed_products` im Katalog; `trend` ist der Cardmarket-Trend beim Bau oder null. */
@@ -119,7 +122,7 @@ object CatalogParser {
                         val rarity = printingJson.getString("rarity")
                         val lang = if (printingJson.has("lang") && !printingJson.isNull("lang"))
                             printingJson.getString("lang") else null
-                        printings.add(CatalogPrinting(code, rarity, lang, verified = true))
+                        printings.add(CatalogPrinting(code, rarity, lang, verified = true, cm = cmOf(printingJson)))
                     }
                 }
 
@@ -130,7 +133,7 @@ object CatalogParser {
                         val printingJson = unverifiedArray.getJSONObject(j)
                         val code = printingJson.getString("code")
                         val rarity = printingJson.getString("rarity")
-                        printings.add(CatalogPrinting(code, rarity, lang = null, verified = false))
+                        printings.add(CatalogPrinting(code, rarity, lang = null, verified = false, cm = cmOf(printingJson)))
                     }
                 }
 
@@ -168,6 +171,13 @@ object CatalogParser {
             aliases = parseAliases(aliasesJson, cards.mapTo(HashSet()) { it.id }),
             hasLegality = aliasesJson != null,
         )
+    }
+
+    /** Spec 2026-10-04 §3.2: `cm` ist eine Zahl (eindeutig), ein Array (mehrdeutig) oder fehlt (alter Katalog). */
+    internal fun cmOf(o: JSONObject): List<Int> = when (val v = o.opt("cm")) {
+        is Number -> listOf(v.toInt()).filter { it > 0 }
+        is JSONArray -> (0 until v.length()).map { v.optInt(it, 0) }.filter { it > 0 }
+        else -> emptyList()
     }
 
     private val BAN_LEVELS = setOf("forbidden", "limited", "semi")
