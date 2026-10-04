@@ -48,6 +48,26 @@ object CmPriceFile {
     internal fun faellig(lastMs: Long, nowMs: Long, dateiDa: Boolean): Boolean =
         !dateiDa || nowMs - lastMs >= INTERVAL_MS
 
+    /**
+     * Schreibt bytes ueber tmp nach ziel. Rename schlaegt fehl -> ziel loeschen, nochmal; schlaegt auch das
+     * fehl -> bytes direkt nach ziel schreiben. Nach Rueckkehr fehlt ziel nie: true = neue Bytes liegen dort,
+     * false = Schreiben ging schief (dann nur, wenn auch vorher nichts da war oder die alte Datei erhalten blieb).
+     */
+    internal fun ersetzen(tmp: File, ziel: File, bytes: ByteArray): Boolean {
+        return try {
+            tmp.writeBytes(bytes)
+            if (tmp.renameTo(ziel)) return true
+            ziel.delete()
+            if (tmp.renameTo(ziel)) return true
+            ziel.writeBytes(bytes)
+            tmp.delete()
+            true
+        } catch (_: Exception) {
+            tmp.delete()
+            false
+        }
+    }
+
     private fun url(context: Context): String {
         val prefs = context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE)
         val base = (prefs.getString("supabase_url", "")?.takeIf { it.isNotBlank() } ?: BuildConfig.SUPABASE_URL)
@@ -70,16 +90,7 @@ object CmPriceFile {
             }
             val neu = runCatching { parse(bytes) }.getOrNull() ?: return@withContext   // kaputt: alte behalten
             val tmp = File(context.filesDir, "$DATEI.tmp")
-            tmp.writeBytes(bytes)
-            // Umbenennen robust: schlaegt es fehl, Ziel loeschen und einmal wiederholen;
-            // klappt auch das nicht, bleibt die alte Datei und KEY_LAST ungesetzt (naechster Start versucht es erneut).
-            if (!tmp.renameTo(datei)) {
-                datei.delete()
-                if (!tmp.renameTo(datei)) {
-                    tmp.delete()
-                    return@withContext
-                }
-            }
+            if (!ersetzen(tmp, datei, bytes)) return@withContext   // alte Datei bleibt, KEY_LAST ungesetzt
             prefs.edit().putLong(KEY_LAST, System.currentTimeMillis()).apply()
             _stand.value = neu
         } catch (_: Exception) {

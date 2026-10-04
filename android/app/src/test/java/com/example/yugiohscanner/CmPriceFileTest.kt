@@ -26,6 +26,34 @@ class CmPriceFileTest {
     }
 
     @Test
+    fun `ersetzen legt Ziel neu an und raeumt tmp weg`() {
+        val dir = java.nio.file.Files.createTempDirectory("cm").toFile()
+        val ziel = java.io.File(dir, "z.gz"); val tmp = java.io.File(dir, "z.gz.tmp")
+        assertTrue(CmPriceFile.ersetzen(tmp, ziel, byteArrayOf(1, 2)))
+        assertEquals(listOf<Byte>(1, 2), ziel.readBytes().toList())
+        assertEquals(false, tmp.exists())
+    }
+
+    @Test
+    fun `ersetzen ersetzt vorhandenes Ziel`() {
+        val dir = java.nio.file.Files.createTempDirectory("cm").toFile()
+        val ziel = java.io.File(dir, "z.gz"); val tmp = java.io.File(dir, "z.gz.tmp")
+        ziel.writeBytes(byteArrayOf(9))
+        assertTrue(CmPriceFile.ersetzen(tmp, ziel, byteArrayOf(3, 4)))
+        assertEquals(listOf<Byte>(3, 4), ziel.readBytes().toList())
+    }
+
+    @Test
+    fun `ersetzen laesst Ziel bei Fehler nicht verschwinden`() {
+        val dir = java.nio.file.Files.createTempDirectory("cm").toFile()
+        val ziel = java.io.File(dir, "z.gz"); val tmp = java.io.File(dir, "z.gz.tmp")
+        ziel.writeBytes(byteArrayOf(9))
+        tmp.mkdir()   // tmp ist ein Verzeichnis -> writeBytes wirft -> alte Datei muss bleiben
+        assertEquals(false, CmPriceFile.ersetzen(tmp, ziel, byteArrayOf(3, 4)))
+        assertEquals(listOf<Byte>(9), ziel.readBytes().toList())
+    }
+
+    @Test
     fun `faellig - ohne Datei sofort, sonst nach 24 h`() {
         val h = 3_600_000L
         assertTrue(CmPriceFile.faellig(lastMs = 0, nowMs = 1000, dateiDa = false))
