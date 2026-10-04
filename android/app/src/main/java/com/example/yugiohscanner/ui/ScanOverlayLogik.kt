@@ -1,5 +1,6 @@
 package com.example.yugiohscanner.ui
 
+import com.example.yugiohscanner.ml.ScanConfidence
 import com.example.yugiohscanner.ml.ScanSprache
 
 /** Spec 2026-10-04 Kamera-Bildschirm -- Texte und Umschaltlogik der Bedienelemente (Compose-frei, getestet). */
@@ -25,4 +26,7 @@ object ScanOverlayLogik {
     fun zaehlerText(n: Int) = "+$n"
 
     fun ipGueltig(ip: String) = ip.isNotBlank()
+
+    /** Ampelpunkt der Vorgemerkt-Leiste: die letzte bekannte Ampel (noch ladende Eintraege haben keine). */
+    fun letzteAmpel(ampeln: List<ScanConfidence.Light?>): ScanConfidence.Light? = ampeln.lastOrNull { it != null }
 }

@@ -1,7 +1,5 @@
 package com.example.yugiohscanner.ui
 
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -33,9 +31,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -62,8 +58,6 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.PrintingRepository
 import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
-import com.example.yugiohscanner.ui.theme.AppColors
-import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.google.mlkit.vision.common.InputImage
@@ -484,6 +478,8 @@ fun ScanScreen(onClose: () -> Unit) {
             val camera = provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, zweiter)
             cameraControl = camera.cameraControl
             cameraInfo = camera.cameraInfo
+            // unbindAll schaltet die Lampe aus -- nach dem Moduswechsel wieder einschalten, sonst zeigt das Menue "an".
+            if (isFlashOn) camera.cameraControl.enableTorch(true)
             // Gemerkten Zoom wiederherstellen (Prefs.zoom). Der Halter steht fest, die Karte liegt
             // immer gleich weit weg -- einmal eingestellt soll das bleiben, statt vor jedem Stapel
             // neu gekniffen zu werden. Gilt im Fotomodus genauso.
@@ -803,7 +799,8 @@ fun ScanScreen(onClose: () -> Unit) {
             }
             if (capture.stagingCards.isNotEmpty()) {
                 ScanLeiste(
-                    ScanOverlayLogik.vorgemerktText(capture.stagingCards.size), null,
+                    ScanOverlayLogik.vorgemerktText(capture.stagingCards.size),
+                    ScanOverlayLogik.letzteAmpel(capture.stagingCards.map { it.confidence?.light }),
                     knopf = "Prüfen (${capture.stagingCards.size})", onKnopf = { showSheet = true },
                 )
             }
@@ -843,7 +840,8 @@ fun ScanScreen(onClose: () -> Unit) {
                 verbunden = isConnected,
                 ipStart = prefs.getString("ip_address", "") ?: "",
                 onVerbinden = { ip ->
-                    prefs.edit().putString("ip_address", ip).apply()
+                    // Gespeichert wird erst beim erfolgreichen Verbinden (connectSocket, EVENT_CONNECT) --
+                    // ein Tippfehler darf die funktionierende Adresse nicht ueberschreiben.
                     socket?.disconnect()
                     socket = null
                     connectSocket(ip)

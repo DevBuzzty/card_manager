@@ -47,4 +47,12 @@ class ScanOverlayLogikTest {
         assertFalse(ScanOverlayLogik.ipGueltig("   "))
         assertTrue(ScanOverlayLogik.ipGueltig("192.168.0.20"))
     }
+
+    @Test fun `letzteAmpel - letzte bekannte Ampel der Vorgemerkten, sonst null`() {
+        val g = com.example.yugiohscanner.ml.ScanConfidence.Light.GREEN
+        val y = com.example.yugiohscanner.ml.ScanConfidence.Light.YELLOW
+        assertEquals(y, ScanOverlayLogik.letzteAmpel(listOf(g, y, null)))
+        assertNull(ScanOverlayLogik.letzteAmpel(listOf(null)))
+        assertNull(ScanOverlayLogik.letzteAmpel(emptyList()))
+    }
 }
