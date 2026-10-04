@@ -1,7 +1,5 @@
 package com.example.yugiohscanner.ui
 
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -33,28 +31,15 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CenterFocusStrong
-import androidx.compose.material.icons.filled.CenterFocusWeak
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.FlashOff
-import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material.icons.filled.LooksOne
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
@@ -73,8 +58,6 @@ import com.example.yugiohscanner.cloud.CollectionStore
 import com.example.yugiohscanner.cloud.PrintingRepository
 import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
-import com.example.yugiohscanner.ui.theme.AppColors
-import com.example.yugiohscanner.ui.theme.Good
 import com.example.yugiohscanner.ui.theme.Muted
 import com.example.yugiohscanner.ui.theme.OnSurface
 import com.google.mlkit.vision.common.InputImage
@@ -214,6 +197,9 @@ fun ScanScreen(onClose: () -> Unit) {
     val triggerFeedback = remember { {} }
 
     var showSheet by remember { mutableStateOf(false) }
+    // Spec 2026-10-04 Kamera-Bildschirm: Sprach-Chip (Speicher wie bisher in ScanSprache) und PC-Dialog.
+    var scanSprache by remember { mutableStateOf(com.example.yugiohscanner.ml.ScanSprache.fest) }
+    var zeigePcDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // [frames] is [evidence]'s per-frame breakdown (see ScanCapture.stageScan's own doc) — a
@@ -492,6 +478,8 @@ fun ScanScreen(onClose: () -> Unit) {
             val camera = provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, zweiter)
             cameraControl = camera.cameraControl
             cameraInfo = camera.cameraInfo
+            // unbindAll schaltet die Lampe aus -- nach dem Moduswechsel wieder einschalten, sonst zeigt das Menue "an".
+            if (isFlashOn) camera.cameraControl.enableTorch(true)
             // Gemerkten Zoom wiederherstellen (Prefs.zoom). Der Halter steht fest, die Karte liegt
             // immer gleich weit weg -- einmal eingestellt soll das bleiben, statt vor jedem Stapel
             // neu gekniffen zu werden. Gilt im Fotomodus genauso.
@@ -737,7 +725,7 @@ fun ScanScreen(onClose: () -> Unit) {
                     val r = (d.box.x2 + bw * 0.06f) * sc + offX
                     val b = (d.box.y2 + bh * 0.75f) * sc + offY
                     drawRect(
-                        color = Color(0xFF00FF66),
+                        color = ScanFarben.gut,
                         topLeft = Offset(l, t),
                         size = androidx.compose.ui.geometry.Size(r - l, b - t),
                         style = Stroke(width = 4f)
@@ -747,7 +735,7 @@ fun ScanScreen(onClose: () -> Unit) {
                         if (d.passcode >= 0) "%08d".format(d.passcode) else "…",
                         l, (t - 10f).coerceAtLeast(30f),
                         android.graphics.Paint().apply {
-                            color = android.graphics.Color.rgb(0, 255, 102)
+                            color = ScanFarben.gut.toArgb()
                             textSize = 34f
                             isFakeBoldText = true
                         }
@@ -773,191 +761,109 @@ fun ScanScreen(onClose: () -> Unit) {
             )
         }
 
-        // Stapel-Zaehler: gross, damit ein fehlendes +1 beim Einwerfen sofort auffaellt.
-        if (scanMode == "stapel") {
-            Text(
-                "+$stapelCount",
-                color = Color.Yellow,
-                style = MaterialTheme.typography.displayMedium,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 96.dp)
-                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-            )
-        }
-
-        // Auslöser des Fotomodus -- nur im Einzel-Modus sichtbar, und damit zugleich die Anzeige,
-        // in welchem Modus der Scanner steht. Ueber der Fusszeile, damit er sie nicht verdeckt.
-        if (scanMode != "stapel") {
-            Button(
-                onClick = fotoAusloesen,
-                enabled = !fotoLaeuft,
-                shape = CircleShape,
-                contentPadding = PaddingValues(0.dp),
-                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
-                    .padding(bottom = 128.dp).size(84.dp),
-            ) {
-                if (fotoLaeuft) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
-                } else {
-                    Icon(Icons.Default.PhotoCamera, contentDescription = "Foto aufnehmen", modifier = Modifier.size(40.dp))
-                }
-            }
-        }
-
-        // Header: close, title, desktop-status dot, flash, focus, keyboard.
-        Row(
-            Modifier.fillMaxWidth().align(Alignment.TopCenter)
-                .background(Color.Black.copy(alpha = 0.35f)).statusBarsPadding()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onClose) { Icon(Icons.Default.Close, "Schließen", tint = Color.White) }
-            Text("Scannen", color = Color.White, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.width(8.dp))
-            // Desktop status: green = mirroring scans to the PC, grey = phone only.
-            Box(
-                Modifier.size(9.dp).clip(CircleShape)
-                    .background(if (isConnected) Good else Muted)
-                    .clickable {
-                        scope.launch {
-                            snackbar.showSnackbar(
-                                if (isConnected) "Desktop verbunden – Scans gehen zusätzlich an den PC."
-                                else "Kein Desktop – Scans bleiben am Handy."
-                            )
-                        }
+        // Spec 2026-10-04 Kamera-Bildschirm, Layout C: oben nur ✕ · PC · ⋯.
+        ScanTopBar(
+            verbunden = isConnected,
+            onClose = onClose,
+            onPcTippen = { zeigePcDialog = true },
+            menue = {
+                MehrMenue(
+                    lampeAn = isFlashOn,
+                    onLampe = { isFlashOn = !isFlashOn; cameraControl?.enableTorch(isFlashOn) },
+                    onFehlerMelden = {
+                        // "Fehler melden": Markierung + aktuelles Bild ins Scan-Protokoll.
+                        val bild = letztesBild.get()
+                        val foto = bild?.let { com.example.yugiohscanner.ml.ScanLog.photo(it, "meldung-${System.currentTimeMillis()}") }
+                        com.example.yugiohscanner.ml.ScanLog.line("MELDUNG", "Nutzer meldet Fehler, zaehler=$stapelCount foto=$foto")
+                        Toast.makeText(context, "Fehler vermerkt", Toast.LENGTH_SHORT).show()
                     },
-            )
-            Spacer(Modifier.weight(1f))
-            // Sprach-Schalter (Spec koreanische Karten §3.2): Auto -> DE -> EN -> KR -> JP -> Auto.
-            // Nur im Speicher (ScanSprache), nach App-Neustart wieder Auto. Feste Sprache = gelb hervorgehoben.
-            var scanSprache by remember { mutableStateOf(com.example.yugiohscanner.ml.ScanSprache.fest) }
-            TextButton(
-                onClick = {
-                    val o = com.example.yugiohscanner.ml.ScanSprache.OPTIONEN
-                    val next = o[(o.indexOf(scanSprache) + 1) % o.size]
+                    onPcVerbindung = { zeigePcDialog = true },
+                )
+            },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
+
+        // Oben unter der Kopfzeile: Modus-Etikett, die Leisten und die Meldungen. Die Leisten standen erst
+        // unten und ragten dort in den Kartenrahmen (Abnahme 04.10.2026) -- der Rahmen selbst bleibt fest,
+        // weil die Lichtschranke an ihm misst.
+        Column(
+            Modifier.fillMaxWidth().align(Alignment.TopCenter).statusBarsPadding().padding(top = 60.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ModusEtikett(scanMode)
+            // Gesendet (mit PC) und Vorgemerkt (Handy) sind unabhaengig und koennen beide stehen (Spec D4 §6.3) --
+            // sonst verschwindet der Pruefen-Knopf, sobald der PC waehrend eines Handy-Staging-Stapels verbindet.
+            if (isConnected && capture.sentCount > 0) {
+                ScanLeiste(ScanOverlayLogik.gesendetText(capture.sentCount), capture.lastLight, knopf = null, onKnopf = {})
+            }
+            if (capture.stagingCards.isNotEmpty()) {
+                ScanLeiste(
+                    ScanOverlayLogik.vorgemerktText(capture.stagingCards.size),
+                    ScanOverlayLogik.letzteAmpel(capture.stagingCards.map { it.confidence?.light }),
+                    knopf = "Prüfen (${capture.stagingCards.size})", onKnopf = { showSheet = true },
+                )
+            }
+            SnackbarHost(hostState = snackbar)
+        }
+
+        // Unten, in Daumenreichweite und unterhalb des Rahmens: Werkzeuge, Ausloeser bzw. Stapel-Zaehler, Modus-Reiter.
+        Column(
+            Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            WerkzeugChips(
+                sprache = scanSprache,
+                fokusFest = isFocusLocked,
+                onSprache = {
+                    // Spec koreanische Karten §3.2: Auto -> DE -> EN -> KR -> JP -> Auto, nur im Speicher.
+                    val next = ScanOverlayLogik.naechsteSprache(scanSprache)
                     com.example.yugiohscanner.ml.ScanSprache.fest = next
                     scanSprache = next
                 },
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
-                    .defaultMinSize(minWidth = 1.dp)
-                    .heightIn(min = 32.dp)
-                    .semantics { contentDescription = "Scan-Sprache: ${scanSprache ?: "Auto"}" },
-            ) {
-                Text(
-                    scanSprache?.let { "${langFlag(it)} $it" } ?: "🌐 Auto",
-                    color = if (scanSprache != null) Color.Yellow else Color.White,
-                    maxLines = 1,
-                    softWrap = false,
-                )
-            }
-            // Spec D4 §3: Einzeln = jede Karte einmal pro Stapel. Stapel = ein erneutes Erkennen
-            // erhoeht die Menge. Gemerkt in scanner_prefs, damit der Modus einen Neustart ueberlebt.
-            IconButton(
-                onClick = {
-                    scanMode = if (scanMode == "stapel") "einzeln" else "stapel"
-                    com.example.yugiohscanner.Prefs.setScanMode(context, scanMode)
-                    Toast.makeText(
-                        context,
-                        if (scanMode == "stapel") "Stapel: Wiederholungen zählen"
-                        else "Einzeln: Karte hinhalten, Auslöser drücken",
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                },
-                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50)),
-            ) {
-                Icon(
-                    imageVector = if (scanMode == "stapel") Icons.Default.Layers else Icons.Default.LooksOne,
-                    contentDescription = "Scan-Modus",
-                    tint = if (scanMode == "stapel") Color.Yellow else Color.White,
-                )
-            }
-            // "Fehler melden": Markierung + aktuelles Bild ins Scan-Protokoll.
-            IconButton(
-                onClick = {
-                    val bild = letztesBild.get()
-                    val foto = bild?.let { com.example.yugiohscanner.ml.ScanLog.photo(it, "meldung-${System.currentTimeMillis()}") }
-                    com.example.yugiohscanner.ml.ScanLog.line("MELDUNG", "Nutzer meldet Fehler, zaehler=$stapelCount foto=$foto")
-                    Toast.makeText(context, "Fehler vermerkt", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50)),
-            ) {
-                Icon(Icons.Default.Flag, contentDescription = "Fehler melden", tint = Color(0xFFFF8A65))
-            }
-            // Auto Focus Reset
-            IconButton(
-                onClick = {
+                onFokus = {
+                    cameraControl?.cancelFocusAndMetering()
                     if (isFocusLocked) {
-                        cameraControl?.cancelFocusAndMetering()
                         isFocusLocked = false
                         Toast.makeText(context, "Dauer-Autofokus", Toast.LENGTH_SHORT).show()
                     } else {
-                         cameraControl?.cancelFocusAndMetering()
-                         Toast.makeText(context, "Fokussiere…", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Fokussiere…", Toast.LENGTH_SHORT).show()
                     }
                 },
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
-            ) {
-                Icon(
-                    imageVector = if (isFocusLocked) Icons.Default.CenterFocusStrong else Icons.Default.CenterFocusWeak,
-                    contentDescription = "Fokus",
-                    tint = if (isFocusLocked) Color.Red else Color.White
-                )
+                onCode = { showManualEntry = true },
+            )
+            // Stapel-Zaehler gross an der Stelle des Ausloesers, damit ein fehlendes +1 sofort auffaellt.
+            if (scanMode == "stapel") StapelZaehler(stapelCount) else Ausloeser(fotoLaeuft, fotoAusloesen)
+            // Spec D4 §3: Einzeln = Foto per Ausloeser; Stapel = Wiederholungen zaehlen. Gemerkt in scanner_prefs.
+            ModusReiter(scanMode) { neu ->
+                if (neu != scanMode) {
+                    scanMode = neu
+                    com.example.yugiohscanner.Prefs.setScanMode(context, neu)
+                }
             }
-            // Flashlight Toggle
-            IconButton(
-                onClick = {
-                    isFlashOn = !isFlashOn
-                    cameraControl?.enableTorch(isFlashOn)
-                },
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
-            ) {
-                Icon(
-                    imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                    contentDescription = "Blitz",
-                    tint = if (isFlashOn) Color.Yellow else Color.White
-                )
-            }
-            IconButton(onClick = { showManualEntry = true }) { Icon(Icons.Default.Keyboard, "Passcode eingeben", tint = Color.White) }
         }
 
-        // Fusszeile: die Fortschrittsanzeige (Spec D4 §6.3) und die Staging-Zeile sind zwei
-        // unabhaengige Sachverhalte und erscheinen unabhaengig voneinander -- kein "else if"
-        // mehr, sonst verschwindet der Pruefen-Knopf (einziger Zugang zum Pruefen-Blatt),
-        // sobald der PC waehrend eines laufenden Handy-Staging-Stapels verbindet.
-        if ((isConnected && capture.sentCount > 0) || capture.stagingCards.isNotEmpty()) {
-            Column(
-                Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding()
-            ) {
-                if (isConnected && capture.sentCount > 0) {
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .background(Color.Black.copy(alpha = 0.55f))
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("${capture.sentCount} an den PC gesendet", color = Color.White, modifier = Modifier.weight(1f))
-                        // Dieselben drei Ampelfarben wie im Staging-Sheet -- keine neuen Farben.
-                        // Liegt auf dem immer dunklen Kamera-Scrim (Fixrunde 2, Punkt B) -- fest
-                        // AppColors.dark statt der laufenden Rollen.
-                        Box(Modifier.size(10.dp).clip(CircleShape).background(ScanStagingLogic.dotColor(capture.lastLight, AppColors.dark)))
-                    }
-                }
-                if (capture.stagingCards.isNotEmpty()) {
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .background(Color.Black.copy(alpha = 0.55f))
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("${capture.stagingCards.size} Karten erkannt", color = Color.White, modifier = Modifier.weight(1f))
-                        Button(onClick = { showSheet = true }) { Text("Prüfen (${capture.stagingCards.size})") }
-                    }
-                }
-            }
+        if (zeigePcDialog) {
+            PcVerbindungDialog(
+                verbunden = isConnected,
+                ipStart = prefs.getString("ip_address", "") ?: "",
+                onVerbinden = { ip ->
+                    // Gespeichert wird erst beim erfolgreichen Verbinden (connectSocket, EVENT_CONNECT) --
+                    // ein Tippfehler darf die funktionierende Adresse nicht ueberschreiben.
+                    socket?.disconnect()
+                    socket = null
+                    connectSocket(ip)
+                    zeigePcDialog = false
+                },
+                onTrennen = {
+                    socket?.disconnect()
+                    socket = null
+                    isConnected = false
+                    zeigePcDialog = false
+                },
+                onSchliessen = { zeigePcDialog = false },
+            )
         }
         if (showSheet) {
             ModalBottomSheet(onDismissRequest = { showSheet = false }, sheetState = sheetState) {
@@ -994,7 +900,7 @@ fun ScanScreen(onClose: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.9f))
+                    .background(ScanFarben.scrimStark)
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -1068,13 +974,9 @@ fun ScanScreen(onClose: () -> Unit) {
 
         // Capture flash — a quick white blink over the whole screen on each recognition.
         if (flash.value > 0.01f) {
-            Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = flash.value)))
+            Box(Modifier.fillMaxSize().background(ScanFarben.blitz.copy(alpha = flash.value)))
         }
 
-        SnackbarHost(
-            hostState = snackbar,
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 72.dp),
-        )
 
         // Spec 2026-10-04 §4: Ergebnis-Seite des Einzelfotos, liegt ueber Kamera und Bedienelementen.
         ergebnis?.let { r ->
