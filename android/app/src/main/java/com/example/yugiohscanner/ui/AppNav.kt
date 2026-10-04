@@ -192,6 +192,7 @@ fun AppNav(onThemeChange: (String) -> Unit) {
     LaunchedEffect(Unit) {
         CatalogSync.checkAndUpdate(context)
         ModelStore.checkAndUpdate(context)
+        com.example.yugiohscanner.cloud.CmPriceFile.aktualisieren(context)
     }
 
     // Spec §3.4: solange die App sichtbar ist, alle 10 s ein Abgleich; im Hintergrund keiner.
