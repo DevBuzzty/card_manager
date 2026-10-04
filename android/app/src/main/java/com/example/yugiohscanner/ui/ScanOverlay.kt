@@ -142,10 +142,10 @@ fun Ausloeser(laeuft: Boolean, onClick: () -> Unit) {
         onClick = onClick, enabled = !laeuft, shape = CircleShape, contentPadding = PaddingValues(0.dp),
         colors = ButtonDefaults.buttonColors(containerColor = ScanFarben.akzent, contentColor = ScanFarben.akzentText),
         border = BorderStroke(4.dp, ScanFarben.schrift),
-        modifier = Modifier.size(84.dp),
+        modifier = Modifier.size(72.dp),   // 72 statt 84 dp: die untere Spalte bleibt unterhalb des Kartenrahmens
     ) {
-        if (laeuft) CircularProgressIndicator(color = ScanFarben.schrift, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
-        else Icon(Icons.Default.PhotoCamera, contentDescription = "Foto aufnehmen", modifier = Modifier.size(40.dp))
+        if (laeuft) CircularProgressIndicator(color = ScanFarben.schrift, strokeWidth = 3.dp, modifier = Modifier.size(30.dp))
+        else Icon(Icons.Default.PhotoCamera, contentDescription = "Foto aufnehmen", modifier = Modifier.size(34.dp))
     }
 }
 

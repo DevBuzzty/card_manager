@@ -783,15 +783,15 @@ fun ScanScreen(onClose: () -> Unit) {
             modifier = Modifier.align(Alignment.TopCenter),
         )
 
-        // Grosses Modus-Etikett ueber dem Kartenrahmen.
-        ModusEtikett(scanMode, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 64.dp))
-
-        // Unten, alles in Daumenreichweite: Leiste, Werkzeuge, Ausloeser bzw. Stapel-Zaehler, Modus-Reiter.
+        // Oben unter der Kopfzeile: Modus-Etikett, die Leisten und die Meldungen. Die Leisten standen erst
+        // unten und ragten dort in den Kartenrahmen (Abnahme 04.10.2026) -- der Rahmen selbst bleibt fest,
+        // weil die Lichtschranke an ihm misst.
         Column(
-            Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 8.dp),
+            Modifier.fillMaxWidth().align(Alignment.TopCenter).statusBarsPadding().padding(top = 60.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            ModusEtikett(scanMode)
             // Gesendet (mit PC) und Vorgemerkt (Handy) sind unabhaengig und koennen beide stehen (Spec D4 §6.3) --
             // sonst verschwindet der Pruefen-Knopf, sobald der PC waehrend eines Handy-Staging-Stapels verbindet.
             if (isConnected && capture.sentCount > 0) {
@@ -804,6 +804,15 @@ fun ScanScreen(onClose: () -> Unit) {
                     knopf = "Prüfen (${capture.stagingCards.size})", onKnopf = { showSheet = true },
                 )
             }
+            SnackbarHost(hostState = snackbar)
+        }
+
+        // Unten, in Daumenreichweite und unterhalb des Rahmens: Werkzeuge, Ausloeser bzw. Stapel-Zaehler, Modus-Reiter.
+        Column(
+            Modifier.fillMaxWidth().align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             WerkzeugChips(
                 sprache = scanSprache,
                 fokusFest = isFocusLocked,
@@ -968,11 +977,6 @@ fun ScanScreen(onClose: () -> Unit) {
             Box(Modifier.fillMaxSize().background(ScanFarben.blitz.copy(alpha = flash.value)))
         }
 
-        SnackbarHost(
-            hostState = snackbar,
-            // Oben unter der Kopfzeile, damit sie die untere Bedienspalte nicht verdeckt.
-            modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 104.dp),
-        )
 
         // Spec 2026-10-04 §4: Ergebnis-Seite des Einzelfotos, liegt ueber Kamera und Bedienelementen.
         ergebnis?.let { r ->
