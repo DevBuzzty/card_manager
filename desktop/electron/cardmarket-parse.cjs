@@ -94,29 +94,11 @@ function productUrl(href) {
   return `${u.origin}${u.pathname}`;
 }
 
-const firstEdUrl = (url) => `${url}?isFirstEd=Y`;
-
 // "58 €" / "58,00 €" / "1.234 €" / "1.234,56 €" -> Zahl; Cent-Teil optional (asymmetrisches Risiko: fehlt er
 // nur auf der gefilterten Seite, wuerde sonst der Faktor NULL geschrieben); alles andere -> null.
 function parseEuro(text) {
   const m = String(text || '').replace(/\s/g, '').match(/(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{2}))?/);
   return m ? Number(`${m[1].replace(/\./g, '')}${m[2] ? '.' + m[2] : ''}`) : null;
-}
-
-// Ab-Preis aus den dt/dd-Paaren des Infokastens (.info-list-container); Label "From" (en) oder "Ab" (de).
-function parseFromPrice(pairs) {
-  for (const p of pairs || []) {
-    if (p && /^(from|ab):?$/i.test(String(p.label || '').trim())) return parseEuro(p.value);
-  }
-  return null;
-}
-
-// Spec G4 §3: factor = max(1, round4(fromFirst / fromAll)). fromAll fehlt/0 -> nichts schreiben;
-// fromFirst fehlt/0 -> Faktor NULL schreiben (kein Angebot mit Filter).
-function firstEdFactor(fromAll, fromFirst) {
-  if (!(Number(fromAll) > 0)) return { write: false, factor: null };
-  if (!(Number(fromFirst) > 0)) return { write: true, factor: null };
-  return { write: true, factor: Math.max(1, Math.round((Number(fromFirst) / Number(fromAll)) * 10000) / 10000) };
 }
 
 // Spec G4b §4: Sprache des Printings -> Cardmarket-Sprachfilter (?language=<id>) und Bezeichnungen, wie sie in
@@ -185,5 +167,5 @@ function robustFactor(base, first) {
   return { factor: Math.min(FIRST_ED_FACTOR_MAX, Math.max(1, raw)), capped: raw > FIRST_ED_FACTOR_MAX, raw };
 }
 
-module.exports = { normRarity, normName, rarityKey, rarityRank, RARITY_SYNONYMS, matchRow, selectVersionRow, productUrl, firstEdUrl, parseFromPrice,
-  firstEdFactor, CM_LANGUAGES, GOOD_CONDITIONS, FIRST_ED_FACTOR_MAX, offersUrl, parseOffers, robustLow, robustFactor };
+module.exports = { normRarity, normName, rarityKey, rarityRank, RARITY_SYNONYMS, matchRow, selectVersionRow, productUrl,
+  CM_LANGUAGES, GOOD_CONDITIONS, FIRST_ED_FACTOR_MAX, offersUrl, parseOffers, robustLow, robustFactor };

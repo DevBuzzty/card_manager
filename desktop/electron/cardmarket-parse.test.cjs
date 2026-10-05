@@ -1,7 +1,7 @@
 // desktop/electron/cardmarket-parse.test.cjs
 const test = require('node:test');
 const assert = require('node:assert');
-const { normRarity, normName, matchRow, selectVersionRow, productUrl, firstEdUrl, parseFromPrice, firstEdFactor,
+const { normRarity, normName, matchRow, selectVersionRow, productUrl,
   CM_LANGUAGES, offersUrl, parseOffers, robustLow, robustFactor, FIRST_ED_FACTOR_MAX } = require('./cardmarket-parse.cjs');
 const path = require('path');
 const fixture = (name) => require(path.join(__dirname, 'fixtures', name));
@@ -82,29 +82,6 @@ test('productUrl: relativ -> absolut ohne Query, fremde oder fehlende Links -> n
   assert.equal(productUrl('/en/YuGiOh/Cards/Y/Versions'), null);
   assert.equal(productUrl('https://example.com/Products/Singles/X/Y'), null);
   assert.equal(productUrl(null), null);
-  assert.equal(firstEdUrl('https://www.cardmarket.com/en/YuGiOh/Products/Singles/X/Y'), 'https://www.cardmarket.com/en/YuGiOh/Products/Singles/X/Y?isFirstEd=Y');
-});
-
-test('parseFromPrice: From/Ab, Tausenderpunkt, fehlend, andere Labels ignoriert', () => {
-  assert.equal(parseFromPrice([{ label: 'Available items', value: '50' }, { label: 'From', value: '58,00 €' }, { label: 'Price Trend', value: '72,33 €' }]), 58);
-  assert.equal(parseFromPrice([{ label: 'Ab', value: '1.234,56 €' }]), 1234.56);
-  assert.equal(parseFromPrice([{ label: 'Ab:', value: '0,15 €' }]), 0.15);
-  assert.equal(parseFromPrice([{ label: 'From', value: '58 €' }]), 58);
-  assert.equal(parseFromPrice([{ label: 'From', value: '1.234 €' }]), 1234);
-  assert.equal(parseFromPrice([{ label: 'Price Trend', value: '72,33 €' }]), null);
-  assert.equal(parseFromPrice([{ label: 'From', value: 'N/A' }]), null);
-  assert.equal(parseFromPrice([]), null);
-  assert.equal(parseFromPrice(null), null);
-});
-
-test('firstEdFactor: Untergrenze 1, 4 Stellen, fromAll 0/NULL, fromFirst NULL', () => {
-  assert.deepStrictEqual(firstEdFactor(55, 58), { write: true, factor: 1.0545 });
-  assert.deepStrictEqual(firstEdFactor(3, 4), { write: true, factor: 1.3333 });
-  assert.deepStrictEqual(firstEdFactor(58, 55), { write: true, factor: 1 }, 'Ausreisser nach unten wird auf 1 begrenzt');
-  assert.deepStrictEqual(firstEdFactor(0, 58), { write: false, factor: null });
-  assert.deepStrictEqual(firstEdFactor(null, 58), { write: false, factor: null });
-  assert.deepStrictEqual(firstEdFactor(55, null), { write: true, factor: null }, 'kein Angebot mit Filter');
-  assert.deepStrictEqual(firstEdFactor(55, 0), { write: true, factor: null });
 });
 
 test('robustFactor (G4b): Untergrenze 1, Obergrenze 10, 4 Stellen, fehlende Seite -> NULL', () => {

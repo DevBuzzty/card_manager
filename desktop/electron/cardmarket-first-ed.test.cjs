@@ -17,10 +17,10 @@ function freshDb() {
   return db;
 }
 
-function printing(db, { id, set_code, rarity, name = 'Test Card', price = 10, locked = 0, pid = null, ts = null }, copies) {
+function printing(db, { id, set_code, rarity, name = 'Test Card', price = 10, locked = 0, pid = null, ts = null, language = 'DE' }, copies) {
   db.prepare(`INSERT INTO cards (id, name, set_code, language, rarity, price, price_locked, cm_product_id, cm_first_ed_updated_at)
-              VALUES (?, ?, ?, 'DE', ?, ?, ?, ?, ?)`).run(id, name, set_code, rarity, price, locked, pid, ts);
-  const P = { id, set_code, language: 'DE', rarity };
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, name, set_code, language, rarity, price, locked, pid, ts);
+  const P = { id, set_code, language, rarity };
   for (const c of copies) addCopies(db, P, { edition: c.edition, condition: 'NM', count: 1 });
   return P;
 }
@@ -64,11 +64,23 @@ test('Kandidaten: set_code Unknown ist nie Kandidat', () => {
   assert.deepEqual(ids(firstEdCandidates(db, { minRank: 1, nowMs: NOW })), ['1', '5', '7']);
 });
 
-// --- Durchgang mit gestubbtem Fenster ---
+test('Kandidaten (G4b): Sprachen ohne Cardmarket-Filter (KR, JP) sind keine Kandidaten', () => {
+  const db = candidateDb();
+  printing(db, { id: '9', set_code: 'RC04-KR001', rarity: 'Ultra Rare', language: 'KR' }, [{ edition: 'first' }]);
+  printing(db, { id: '10', set_code: 'LOB-JP001', rarity: 'Ultra Rare', language: 'JP' }, [{ edition: 'first' }]);
+  printing(db, { id: '11', set_code: 'LOB-EN001', rarity: 'Ultra Rare', language: 'EN' }, [{ edition: 'first' }]);
+  assert.deepEqual(ids(firstEdCandidates(db, { minRank: 4, nowMs: NOW })), ['1', '11', '7']);
+});
+
+// --- Durchgang mit gestubbtem Fenster (Spec G4b: Angebotslisten N/Y statt Ab-Preis) ---
+const { offersUrl } = require('./cardmarket-parse.cjs');
 const VERSIONS = 'https://www.cardmarket.com/en/YuGiOh/Cards/Test-Card/Versions';
 const PRODUCT = 'https://www.cardmarket.com/en/YuGiOh/Products/Singles/Maze-of-Memories/Test-Card-V1-Ultra-Rare';
-const FIRST = `${PRODUCT}?isFirstEd=Y`;
+const PAGE_N = offersUrl(PRODUCT, false, 'DE');
+const PAGE_Y = offersUrl(PRODUCT, true, 'DE');
 const ROWS = [{ expansion: 'Maze of Memories', code: 'MAMO', rarity: '', trend: 55, imgSrc: '', href: '/en/YuGiOh/Products/Singles/Maze-of-Memories/Test-Card-V1-Ultra-Rare' }];
+const offer = (eur, condition = 'NM', lang = 'German') => ({ priceText: `${eur.toFixed(2).replace('.', ',')} €`, condition, labels: [lang] });
+const table = (...eurs) => ({ found: true, rows: eurs.map((e) => offer(e)) });
 
 function stub(pages, { challenge = [] } = {}) {
   const visited = [];
@@ -78,7 +90,7 @@ function stub(pages, { challenge = [] } = {}) {
       makeWindow: async () => ({ url: null, destroy() {} }),
       loadPage: async (win, url) => { visited.push(url); win.url = url; return !challenge.includes(url); },
       readRows: async (win) => (pages[win.url] && pages[win.url].rows) || [],
-      readInfoPairs: async (win) => (pages[win.url] && pages[win.url].pairs) || [],
+      readOffers: async (win) => (pages[win.url] && pages[win.url].offers) || { found: false, rows: [] },
       sleep: async () => {},
       setNameFor: async () => null,
       cardName: async (c) => c.name,
@@ -92,61 +104,89 @@ const mamoDb = () => {
   return db;
 };
 
-test('Durchgang: Treffer schreibt Faktor und Zeitstempel, Trigger setzt price_first_ed, keine price_history', async () => {
+test('Durchgang: Median der guenstigsten N/Y -> Faktor, Trigger setzt price_first_ed, keine price_history', async () => {
   const db = mamoDb();
   const s = stub({
     [VERSIONS]: { rows: ROWS },
-    [PRODUCT]: { pairs: [{ label: 'From', value: '55,00 €' }, { label: 'Price Trend', value: '72,33 €' }] },
-    [FIRST]: { pairs: [{ label: 'From', value: '58,00 €' }] },
+    [PAGE_N]: { offers: table(20, 54, 55, 56, 57, 90) },   // Median der 5 guenstigsten = 55; Billig-Ausreisser 20 egal
+    [PAGE_Y]: { offers: table(57, 58, 59, 300) },          // 4 Angebote -> Mittel aus 58 und 59 = 58,5
   });
   const out = await runFirstEdPass(db, { force: true, deps: s.deps });
-  assert.deepEqual(s.visited, [VERSIONS, PRODUCT, FIRST]);
+  assert.deepEqual(s.visited, [VERSIONS, PAGE_N, PAGE_Y]);
   assert.deepEqual({ updated: out.updated, noOffers: out.noOffers, skipped: out.skipped, errors: out.errors }, { updated: 1, noOffers: 0, skipped: 0, errors: 0 });
   const r = MAMO(db);
-  assert.equal(r.f, 1.0545);
-  assert.equal(r.pfe, 77.87);
-  assert.ok(r.ts, 'cm_first_ed_updated_at gesetzt');
+  assert.equal(r.f, 1.0636);
+  assert.equal(r.pfe, 78.55);
+  assert.ok(r.ts);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM price_history').get().n, 0);
 });
 
-test('Durchgang: kein Angebot mit Filter -> Faktor NULL, price_first_ed NULL, Zeitstempel gesetzt', async () => {
+test('Durchgang: weniger als 3 passende 1st-Ed-Angebote -> Faktor NULL, Zeitstempel gesetzt', async () => {
   const db = mamoDb();
   db.prepare("UPDATE cards SET cm_first_ed_factor = 1.2 WHERE id = 'm'").run();
-  assert.equal(MAMO(db).pfe, 88.62);
   const s = stub({
     [VERSIONS]: { rows: ROWS },
-    [PRODUCT]: { pairs: [{ label: 'From', value: '55,00 €' }] },
-    [FIRST]: { pairs: [{ label: 'From', value: 'N/A' }] },
+    [PAGE_N]: { offers: table(54, 55, 56) },
+    [PAGE_Y]: { offers: { found: true, rows: [offer(500), offer(510), offer(1, 'PO'), offer(2, 'NM', 'English')] } },
   });
   const out = await runFirstEdPass(db, { force: true, deps: s.deps });
   assert.equal(out.updated, 1);
   assert.equal(out.noOffers, 1);
-  const r = MAMO(db);
-  assert.equal(r.f, null);
-  assert.equal(r.pfe, null);
-  assert.ok(r.ts);
+  assert.deepEqual({ f: MAMO(db).f, pfe: MAMO(db).pfe }, { f: null, pfe: null });
+  assert.ok(MAMO(db).ts);
 });
 
-test('Durchgang: Cloudflare-Pruefung auf der Produktseite -> nichts geschrieben', async () => {
+test('Durchgang: Tabelle vorhanden, aber leer (seltener Druck) -> Faktor NULL + Zeitstempel, kein Fehler', async () => {
   const db = mamoDb();
-  const s = stub({ [VERSIONS]: { rows: ROWS } }, { challenge: [PRODUCT] });
+  const s = stub({ [VERSIONS]: { rows: ROWS }, [PAGE_N]: { offers: { found: true, rows: [] } }, [PAGE_Y]: { offers: { found: true, rows: [] } } });
   const out = await runFirstEdPass(db, { force: true, deps: s.deps });
-  assert.deepEqual(s.visited, [VERSIONS, PRODUCT]);
-  assert.equal(out.updated, 0);
-  assert.equal(out.skipped, 1);
+  assert.deepEqual({ updated: out.updated, noOffers: out.noOffers, errors: out.errors }, { updated: 1, noOffers: 1, errors: 0 });
+  assert.equal(MAMO(db).f, null);
+  assert.ok(MAMO(db).ts);
+});
+
+test('Durchgang: Angebotstabelle fehlt (Markup geaendert) -> Faktor bleibt, nur Zeitstempel, errors++', async () => {
+  for (const missing of ['N', 'Y']) {
+    const db = mamoDb();
+    db.prepare("UPDATE cards SET cm_first_ed_factor = 1.2 WHERE id = 'm'").run();
+    const s = stub({
+      [VERSIONS]: { rows: ROWS },
+      [PAGE_N]: { offers: missing === 'N' ? { found: false, rows: [] } : table(54, 55, 56) },
+      [PAGE_Y]: { offers: missing === 'Y' ? { found: false, rows: [] } : table(57, 58, 59) },
+    });
+    const out = await runFirstEdPass(db, { force: true, deps: s.deps });
+    assert.deepEqual({ updated: out.updated, errors: out.errors }, { updated: 0, errors: 1 }, missing);
+    const r = MAMO(db);
+    assert.equal(r.f, 1.2, `${missing}: Faktor unveraendert`);
+    assert.equal(r.pfe, 88.62);
+    assert.ok(r.ts, `${missing}: Zeitstempel gesetzt, Kandidat blockiert den Poller nicht`);
+  }
+});
+
+test('Durchgang: Verhaeltnis ueber 10 wird auf 10 gekappt', async () => {
+  const db = mamoDb();
+  const s = stub({ [VERSIONS]: { rows: ROWS }, [PAGE_N]: { offers: table(1, 1, 1) }, [PAGE_Y]: { offers: table(50, 50, 50) } });
+  await runFirstEdPass(db, { force: true, deps: s.deps });
+  assert.equal(MAMO(db).f, 10);
+  assert.equal(MAMO(db).pfe, 738.5);
+});
+
+test('Durchgang: Cloudflare-Pruefung auf Seite N -> nichts geschrieben, Y nicht geladen', async () => {
+  const db = mamoDb();
+  const s = stub({ [VERSIONS]: { rows: ROWS } }, { challenge: [PAGE_N] });
+  const out = await runFirstEdPass(db, { force: true, deps: s.deps });
+  assert.deepEqual(s.visited, [VERSIONS, PAGE_N]);
+  assert.deepEqual({ updated: out.updated, skipped: out.skipped }, { updated: 0, skipped: 1 });
   assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });
 });
 
-test('Durchgang: fromAll fehlt -> gefilterte Seite nicht geladen, nur Zeitstempel gesetzt', async () => {
+test('Durchgang: Cloudflare-Pruefung auf Seite Y -> nichts geschrieben', async () => {
   const db = mamoDb();
-  const s = stub({ [VERSIONS]: { rows: ROWS }, [PRODUCT]: { pairs: [] } });
+  const s = stub({ [VERSIONS]: { rows: ROWS }, [PAGE_N]: { offers: table(54, 55, 56) } }, { challenge: [PAGE_Y] });
   const out = await runFirstEdPass(db, { force: true, deps: s.deps });
-  assert.deepEqual(s.visited, [VERSIONS, PRODUCT]);
+  assert.deepEqual(s.visited, [VERSIONS, PAGE_N, PAGE_Y]);
   assert.equal(out.skipped, 1);
-  const r = MAMO(db);
-  assert.equal(r.pfe, null);
-  assert.equal(r.f, null);
-  assert.ok(r.ts, 'cm_first_ed_updated_at gesetzt, wie der Basis-Durchgang bei "kein Treffer"');
+  assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });
 });
 
 test('Durchgang: kein Produkt-Link oder keine Zeile -> nur Zeitstempel gesetzt', async () => {
@@ -156,9 +196,19 @@ test('Durchgang: kein Produkt-Link oder keine Zeile -> nur Zeitstempel gesetzt',
   assert.deepEqual(s.visited, [VERSIONS]);
   assert.equal(out.skipped, 1);
   const r = MAMO(db);
-  assert.equal(r.pfe, null);
   assert.equal(r.f, null);
-  assert.ok(r.ts, 'cm_first_ed_updated_at gesetzt, wie der Basis-Durchgang bei "kein Treffer"');
+  assert.ok(r.ts);
+});
+
+test('Durchgang: englisches Printing filtert mit language=EN', async () => {
+  const db = freshDb();
+  printing(db, { id: 'e', set_code: 'MAMO-EN020', rarity: 'Ultra Rare', price: 50, language: 'EN' }, [{ edition: 'first' }]);
+  const N = offersUrl(PRODUCT, false, 'EN'), Y = offersUrl(PRODUCT, true, 'EN');
+  const en = (...eurs) => ({ found: true, rows: eurs.map((e) => offer(e, 'NM', 'English')) });
+  const s = stub({ [VERSIONS]: { rows: ROWS }, [N]: { offers: en(40, 40, 40) }, [Y]: { offers: en(60, 60, 60) } });
+  await runFirstEdPass(db, { force: true, deps: s.deps });
+  assert.deepEqual(s.visited, [VERSIONS, N, Y]);
+  assert.equal(db.prepare("SELECT cm_first_ed_factor AS f FROM cards WHERE id = 'e'").get().f, 1.5);
 });
 
 test('Durchgang: maxCards begrenzt die Kandidaten (Poller 2)', async () => {
@@ -172,11 +222,11 @@ test('Durchgang: maxCards begrenzt die Kandidaten (Poller 2)', async () => {
 
 test('Durchgang: bereits abgebrochen vor der Schleife -> kein Fenster, nichts besucht, nichts geschrieben', async () => {
   const db = mamoDb();
-  const s = stub({ [VERSIONS]: { rows: ROWS }, [PRODUCT]: { pairs: [{ label: 'From', value: '55,00 €' }] }, [FIRST]: { pairs: [{ label: 'From', value: '58,00 €' }] } });
+  const s = stub({ [VERSIONS]: { rows: ROWS } });
   let makeWindowCalls = 0;
   const deps = { ...s.deps, makeWindow: async () => { makeWindowCalls++; return { url: null, destroy() {} }; } };
   const out = await runFirstEdPass(db, { force: true, shouldAbort: () => true, deps });
-  assert.equal(makeWindowCalls, 0, 'makeWindow wird bei bereits gesetztem Abbruch nicht gerufen');
+  assert.equal(makeWindowCalls, 0);
   assert.deepEqual(s.visited, []);
   assert.equal(out.updated, 0);
   assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });

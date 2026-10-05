@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { app, BrowserWindow, session } = require('electron');
-const { rarityRank, selectVersionRow, productUrl, firstEdUrl, parseFromPrice, firstEdFactor } = require('./cardmarket-parse.cjs');
+const { rarityRank, selectVersionRow, productUrl, CM_LANGUAGES, offersUrl, parseOffers, robustLow, robustFactor } = require('./cardmarket-parse.cjs');
 const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 const { recordPrice } = require('./price-history.cjs');
@@ -63,15 +63,22 @@ const EXTRACT_JS = `(() => {
   return rows;
 })()`;
 
-// Spec G4 §4 — dt/dd-Paare des Infokastens einer Produktseite; die Auswertung (Label "From"/"Ab") macht
-// der reine Parser parseFromPrice in cardmarket-parse.cjs.
-const INFO_PAIRS_JS = `(() => {
-  const out = [];
-  document.querySelectorAll('.info-list-container dt').forEach(dt => {
-    const dd = dt.nextElementSibling;
-    if (dd && dd.tagName === 'DD') out.push({ label: (dt.textContent || '').trim(), value: (dd.textContent || '').trim() });
+// Spec G4b §5: Angebotstabelle der Produktseite (gemessen 2026-10-05, siehe Ledger messung.md). Reine Extraktion
+// ohne Logik: je Zeile Preis-Text, Zustand, Attribut-Labels (Sprache, Erste Auflage …). `found` sagt, ob der
+// Behaelter der Angebotsliste im DOM steht (auch bei 0 Treffern) — fehlt er, hat Cardmarket das Markup geaendert.
+// Die Auswertung macht der reine Parser parseOffers/robustLow in cardmarket-parse.cjs.
+const OFFERS_JS = `(() => {
+  const table = document.querySelector('.article-table, #table .table-body, #table');
+  const rows = [];
+  if (table) table.querySelectorAll('.article-row').forEach(r => {
+    const priceEl = r.querySelector('.price-container .color-primary, .price-container span, .price-container');
+    const condEl = r.querySelector('.article-condition .badge, .article-condition');
+    const labels = [...r.querySelectorAll('.product-attributes [aria-label], .product-attributes [data-bs-original-title], .product-attributes [data-original-title], .product-attributes [title]')]
+      .map(e => e.getAttribute('aria-label') || e.getAttribute('data-bs-original-title') || e.getAttribute('data-original-title') || e.getAttribute('title') || '')
+      .filter(l => l && !l.includes('<'));
+    rows.push({ priceText: (priceEl && priceEl.textContent || '').trim(), condition: (condEl && condEl.textContent || '').trim(), labels });
   });
-  return out;
+  return { found: !!table, rows };
 })()`;
 
 function looksLikeChallenge(html, title) {
@@ -218,35 +225,38 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
 // unabhaengig von cm_product_id (Bulk-Printings zaehlen). set_code 'Unknown' ausgeschlossen: dieser Sammelposten
 // findet nie eine Versionszeile, bleibt daher ohne Zeitstempel und wuerde sonst dauerhaft (rarityRank 99, aeltester
 // Stand) die Poller-Plaetze belegen. Aeltester Stand zuerst.
+// Spec G4b: nur Sprachen mit Cardmarket-Filter (CM_LANGUAGES); z. B. KR-Preise kommen aus k-tcg.
 function firstEdCandidates(db, { minRank = 1, force = false, nowMs = Date.now(), limit = Infinity } = {}) {
   const rows = db.prepare(`
     SELECT c.id, c.name, c.set_code, c.language, c.rarity, c.cm_first_ed_updated_at
       FROM cards c
      WHERE c.deleted = 0 AND COALESCE(c.price_locked, 0) != 2 AND c.set_code <> 'Unknown'
+       AND c.language IN (${Object.keys(CM_LANGUAGES).map(() => '?').join(', ')})
        AND EXISTS (SELECT 1 FROM card_copies cp
                     WHERE cp.card_id = c.id AND cp.set_code = c.set_code AND cp.language = c.language
                       AND cp.rarity = c.rarity AND cp.deleted = 0 AND cp.edition = 'first')
-     ORDER BY COALESCE(c.cm_first_ed_updated_at, '1970-01-01') ASC, c.id, c.set_code, c.language, c.rarity`).all();
+     ORDER BY COALESCE(c.cm_first_ed_updated_at, '1970-01-01') ASC, c.id, c.set_code, c.language, c.rarity`).all(...Object.keys(CM_LANGUAGES));
   return rows
     .filter(r => rarityRank(r.rarity) >= minRank
       && (force || !r.cm_first_ed_updated_at || (nowMs - new Date(r.cm_first_ed_updated_at + 'Z').getTime()) > FRESH_MS))
     .slice(0, limit);
 }
 
-// Spec G4 §4 — zweiter Durchgang: je Kandidat Versions-Seite (Zeile + Produkt-Link), Produktseite ohne Filter
-// (fromAll) und mit ?isFirstEd=Y (fromFirst). Schreibt nur cm_first_ed_factor + cm_first_ed_updated_at;
-// price_first_ed setzt der Trigger (copies-schema.cjs). Keine price_history-Zeile. Ruling des Controllers:
-// bei den deterministischen Fehlschlaegen "keine Versionszeile", "kein Produkt-Link" und "fromAll fehlt" wird
-// NUR der Zeitstempel gesetzt (Faktor unveraendert) — wie der Basis-Durchgang bei "kein Treffer" cm_updated_at
-// stempelt; sonst bliebe so ein Kandidat fuer immer der aelteste und wuerde die Poller-Plaetze dauerhaft belegen.
-// Bei Cloudflare-Pruefung (loadPage false) und bei Exceptions wird weiterhin nichts geschrieben, der naechste
-// Lauf versucht es wieder. `deps` ersetzt im Test Fenster, Netz und Pausen.
+// Spec G4b §5 — zweiter Durchgang: je Kandidat Versions-Seite (Zeile + Produkt-Link), dann die Angebotslisten
+// "nicht 1. Auflage" (N) und "1. Auflage" (Y), beide gefiltert auf die Sprache des Printings und Zustand EX+.
+// Faktor = Median der guenstigsten passenden Angebote Y ÷ N (robustLow/robustFactor); zu wenige Angebote -> NULL.
+// Schreibt nur cm_first_ed_factor + cm_first_ed_updated_at; price_first_ed setzt der Trigger (copies-schema.cjs).
+// Keine price_history-Zeile. Bei den deterministischen Fehlschlaegen "keine Versionszeile", "kein Produkt-Link" und
+// "Angebotstabelle fehlt" wird NUR der Zeitstempel gesetzt (Faktor unveraendert) — sonst bliebe so ein Kandidat fuer
+// immer der aelteste und wuerde die Poller-Plaetze belegen; ein Markup-Bruch setzt so nie still Faktoren auf NULL.
+// Bei Cloudflare-Pruefung (loadPage false) und bei Exceptions wird nichts geschrieben, der naechste Lauf versucht es
+// wieder. `deps` ersetzt im Test Fenster, Netz und Pausen.
 async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infinity, headless = false, onChallenge, shouldAbort, onProgress, deps = {} } = {}) {
   const d = {
     makeWindow,
     loadPage,
     readRows: (win) => win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []),
-    readInfoPairs: (win) => win.webContents.executeJavaScript(INFO_PAIRS_JS).catch(() => []),
+    readOffers: (win) => win.webContents.executeJavaScript(OFFERS_JS).catch(() => ({ found: false, rows: [] })),
     sleep: () => sleep(DELAY_MIN_MS + Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS)),
     setNameFor,
     cardName: async (c) => c.name || (await fetchCardData(c.id))?.data?.[0]?.name,
@@ -264,6 +274,7 @@ async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infin
     for (let i = 0; i < list.length; i++) {
       if (shouldAbort && shouldAbort()) break;
       const p = list[i];
+      const key = [String(p.id), p.set_code, p.language, p.rarity];
       onProgress && onProgress({ current: i + 1, total: list.length, name: p.name });
       try {
         const name = await d.cardName(p);
@@ -271,16 +282,24 @@ async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infin
         if (!versionsUrl || !(await d.loadPage(win, versionsUrl, onChallenge, headless))) { out.skipped++; continue; }
         const hit = await selectVersionRow(await d.readRows(win), p, () => d.setNameFor(p.id, p.set_code));
         const product = hit ? productUrl(hit.href) : null;
-        if (!product) { stamp.run(String(p.id), p.set_code, p.language, p.rarity); out.skipped++; continue; }
+        if (!product) { stamp.run(...key); out.skipped++; continue; }
         await d.sleep();
-        if (!(await d.loadPage(win, product, onChallenge, headless))) { out.skipped++; continue; }
-        const fromAll = parseFromPrice(await d.readInfoPairs(win));
-        if (!(fromAll > 0)) { stamp.run(String(p.id), p.set_code, p.language, p.rarity); out.skipped++; continue; }
+        if (!(await d.loadPage(win, offersUrl(product, false, p.language), onChallenge, headless))) { out.skipped++; continue; }
+        const pageN = await d.readOffers(win);
         await d.sleep();
-        if (!(await d.loadPage(win, firstEdUrl(product), onChallenge, headless))) { out.skipped++; continue; }
-        const { write: ok, factor } = firstEdFactor(fromAll, parseFromPrice(await d.readInfoPairs(win)));
-        if (!ok) { out.skipped++; continue; }
-        write.run(factor, String(p.id), p.set_code, p.language, p.rarity);
+        if (!(await d.loadPage(win, offersUrl(product, true, p.language), onChallenge, headless))) { out.skipped++; continue; }
+        const pageY = await d.readOffers(win);
+        if (!pageN.found || !pageY.found) {
+          stamp.run(...key);
+          out.errors++;
+          console.warn('[cardmarket] 1st Ed: Angebotstabelle nicht gefunden', p.set_code, p.rarity, { N: pageN.found, Y: pageY.found });
+          continue;
+        }
+        const base = robustLow(parseOffers(pageN.rows), { language: p.language });
+        const first = robustLow(parseOffers(pageY.rows), { language: p.language });
+        const { factor, capped, raw } = robustFactor(base, first);
+        if (capped) console.warn('[cardmarket] 1st Ed: Faktor gekappt', p.set_code, p.rarity, { base, first, raw });
+        write.run(factor, ...key);
         out.updated++;
         if (factor == null) out.noOffers++;
       } catch (e) {
