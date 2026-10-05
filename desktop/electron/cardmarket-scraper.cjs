@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { app, BrowserWindow, session } = require('electron');
-const { rarityRank, selectVersionRow, productUrl, CM_LANGUAGES, offersUrl, parseOffers, robustLow, robustFactor } = require('./cardmarket-parse.cjs');
+const { rarityRank, selectVersionRow, productUrl, CM_LANGUAGES, offersUrl, parseOffers, offersPageBroken, robustLow, robustFactor } = require('./cardmarket-parse.cjs');
 const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 const { recordPrice } = require('./price-history.cjs');
@@ -65,7 +65,8 @@ const EXTRACT_JS = `(() => {
 
 // Spec G4b §5: Angebotstabelle der Produktseite (gemessen 2026-10-05, siehe Ledger messung.md). Reine Extraktion
 // ohne Logik: je Zeile Preis-Text, Zustand, Attribut-Labels (Sprache, Erste Auflage …). `found` sagt, ob der
-// Behaelter der Angebotsliste im DOM steht (auch bei 0 Treffern) — fehlt er, hat Cardmarket das Markup geaendert.
+// Behaelter der Angebotsliste im DOM steht (auch bei 0 Treffern), `empty` die Leer-Meldung .noResults — die
+// Unterscheidung "leer" vs. "Markup geaendert" trifft offersPageBroken in cardmarket-parse.cjs.
 // Die Auswertung macht der reine Parser parseOffers/robustLow in cardmarket-parse.cjs.
 const OFFERS_JS = `(() => {
   const table = document.querySelector('.article-table, #table .table-body, #table');
@@ -78,7 +79,7 @@ const OFFERS_JS = `(() => {
       .filter(l => l && !l.includes('<'));
     rows.push({ priceText: (priceEl && priceEl.textContent || '').trim(), condition: (condEl && condEl.textContent || '').trim(), labels });
   });
-  return { found: !!table, rows };
+  return { found: !!table, empty: !!document.querySelector('.noResults'), rows };
 })()`;
 
 function looksLikeChallenge(html, title) {
@@ -289,10 +290,11 @@ async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infin
         await d.sleep();
         if (!(await d.loadPage(win, offersUrl(product, true, p.language), onChallenge, headless))) { out.skipped++; continue; }
         const pageY = await d.readOffers(win);
-        if (!pageN.found || !pageY.found) {
+        if (offersPageBroken(pageN) || offersPageBroken(pageY)) {
           stamp.run(...key);
           out.errors++;
-          console.warn('[cardmarket] 1st Ed: Angebotstabelle nicht gefunden', p.set_code, p.rarity, { N: pageN.found, Y: pageY.found });
+          console.warn('[cardmarket] 1st Ed: Angebotsliste unlesbar (Markup?)', p.set_code, p.rarity,
+            { N: { found: pageN.found, empty: pageN.empty, rows: (pageN.rows || []).length }, Y: { found: pageY.found, empty: pageY.empty, rows: (pageY.rows || []).length } });
           continue;
         }
         const base = robustLow(parseOffers(pageN.rows), { language: p.language });

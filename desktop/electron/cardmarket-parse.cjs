@@ -146,6 +146,17 @@ function parseOffers(rows) {
   return out;
 }
 
+// Spec G4b §6 (Review): Ist eine Angebotsseite unbrauchbar, weil Cardmarket das Markup geaendert hat? Intakt ist sie
+// nur, wenn sie lesbare Angebote (Preis + bekannte Sprache) hat oder ausdruecklich leer ist (.noResults, gemessen
+// 05.10.). Sonst — Tabelle fehlt, Zeilen fehlen ohne Leer-Meldung, Preise/Sprachen nicht lesbar — wird kein Faktor
+// geschrieben, damit ein Markup-Bruch nie still Faktoren auf NULL setzt.
+function offersPageBroken(page) {
+  if (!page || !page.found) return true;
+  const rows = page.rows || [];
+  if (rows.length === 0) return !page.empty;
+  return !parseOffers(rows).some(o => o.language !== null);
+}
+
 // Spec G4b §4: Median der bis zu `take` guenstigsten passenden Angebote (Sprache, Zustand EX+); unter
 // `minCount` passenden Angeboten null. Ein einzelner Ausreisser nach unten oder oben verschiebt den Wert nicht.
 function robustLow(offers, { language, minCount = 3, take = 5 } = {}) {
@@ -168,4 +179,4 @@ function robustFactor(base, first) {
 }
 
 module.exports = { normRarity, normName, rarityKey, rarityRank, RARITY_SYNONYMS, matchRow, selectVersionRow, productUrl,
-  CM_LANGUAGES, GOOD_CONDITIONS, FIRST_ED_FACTOR_MAX, offersUrl, parseOffers, robustLow, robustFactor };
+  CM_LANGUAGES, GOOD_CONDITIONS, FIRST_ED_FACTOR_MAX, offersUrl, parseOffers, offersPageBroken, robustLow, robustFactor };

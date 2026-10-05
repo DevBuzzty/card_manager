@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { normRarity, normName, matchRow, selectVersionRow, productUrl,
-  CM_LANGUAGES, offersUrl, parseOffers, robustLow, robustFactor, FIRST_ED_FACTOR_MAX } = require('./cardmarket-parse.cjs');
+  CM_LANGUAGES, offersUrl, parseOffers, robustLow, robustFactor, FIRST_ED_FACTOR_MAX, offersPageBroken } = require('./cardmarket-parse.cjs');
 const path = require('path');
 const fixture = (name) => require(path.join(__dirname, 'fixtures', name));
 
@@ -185,4 +185,16 @@ test('Mess-Fixtures: Werte wie von Hand in messung.md ausgerechnet; SDJ-G001 fae
   assert.equal(r('cm-offers-mamo-de020-Y.json'), MAMO_Y);
   assert.equal(robustFactor(SDJ_N, SDJ_Y).factor, 1);
   assert.equal(robustFactor(MAMO_N, MAMO_Y).factor, 1);
+});
+
+test('offersPageBroken (Review G4b): nur echte Leere (.noResults) oder lesbare Zeilen gelten als intakt', () => {
+  const ok = { priceText: '5,00 €', condition: 'EX', labels: ['Excellent', 'German'] };
+  assert.equal(offersPageBroken({ found: true, empty: false, rows: [ok] }), false);
+  assert.equal(offersPageBroken(fixture('cm-offers-leer.json')), false, 'gemessene leere Seite');
+  assert.equal(offersPageBroken(fixture('cm-offers-sdj-g001-N.json')), false);
+  assert.equal(offersPageBroken({ found: false, empty: false, rows: [] }), true, 'Tabelle fehlt');
+  assert.equal(offersPageBroken({ found: true, empty: false, rows: [] }), true, 'Zeilenklasse umbenannt: keine Zeilen, aber auch keine Leer-Meldung');
+  assert.equal(offersPageBroken({ found: true, empty: false, rows: [{ ...ok, labels: [] }] }), true, 'Sprach-Labels nicht mehr lesbar');
+  assert.equal(offersPageBroken({ found: true, empty: false, rows: [{ ...ok, priceText: '' }] }), true, 'Preise nicht mehr lesbar');
+  assert.equal(offersPageBroken(null), true);
 });

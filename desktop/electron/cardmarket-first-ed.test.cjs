@@ -138,7 +138,7 @@ test('Durchgang: weniger als 3 passende 1st-Ed-Angebote -> Faktor NULL, Zeitstem
 
 test('Durchgang: Tabelle vorhanden, aber leer (seltener Druck) -> Faktor NULL + Zeitstempel, kein Fehler', async () => {
   const db = mamoDb();
-  const s = stub({ [VERSIONS]: { rows: ROWS }, [PAGE_N]: { offers: { found: true, rows: [] } }, [PAGE_Y]: { offers: { found: true, rows: [] } } });
+  const s = stub({ [VERSIONS]: { rows: ROWS }, [PAGE_N]: { offers: { found: true, empty: true, rows: [] } }, [PAGE_Y]: { offers: { found: true, empty: true, rows: [] } } });
   const out = await runFirstEdPass(db, { force: true, deps: s.deps });
   assert.deepEqual({ updated: out.updated, noOffers: out.noOffers, errors: out.errors }, { updated: 1, noOffers: 1, errors: 0 });
   assert.equal(MAMO(db).f, null);
@@ -230,4 +230,20 @@ test('Durchgang: bereits abgebrochen vor der Schleife -> kein Fenster, nichts be
   assert.deepEqual(s.visited, []);
   assert.equal(out.updated, 0);
   assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });
+});
+
+test('Durchgang (Review G4b): teilweiser Markup-Bruch -> Faktor bleibt, nur Zeitstempel, errors++', async () => {
+  const broken = [
+    { found: true, empty: false, rows: [] },                                                            // .article-row umbenannt
+    { found: true, empty: false, rows: [offer(54), offer(55), offer(56)].map((r) => ({ ...r, labels: [] })) }, // Sprach-Labels weg
+  ];
+  for (const bad of broken) {
+    const db = mamoDb();
+    db.prepare("UPDATE cards SET cm_first_ed_factor = 1.2 WHERE id = 'm'").run();
+    const s = stub({ [VERSIONS]: { rows: ROWS }, [PAGE_N]: { offers: table(54, 55, 56) }, [PAGE_Y]: { offers: bad } });
+    const out = await runFirstEdPass(db, { force: true, deps: s.deps });
+    assert.deepEqual({ updated: out.updated, noOffers: out.noOffers, errors: out.errors }, { updated: 0, noOffers: 0, errors: 1 });
+    assert.equal(MAMO(db).f, 1.2, 'Faktor unveraendert');
+    assert.ok(MAMO(db).ts);
+  }
 });
