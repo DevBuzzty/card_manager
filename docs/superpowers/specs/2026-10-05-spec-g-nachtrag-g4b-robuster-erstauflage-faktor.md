@@ -30,7 +30,7 @@ Der G4-Faktor ist `Ab-Preis mit isFirstEd=Y ÷ Ab-Preis ohne Filter` — zwei **
 
 Im Scraper-Fenster der Desktop-App (kommt durch Cloudflare; der eingebaute Browser der Entwicklungsumgebung nicht), ohne zu schreiben, an **SDJ-G001 Ultra Rare** und **MAMO-DE020 Ultra Rare** (`cm_product_id` 904608):
 
-1. Produktseite mit `?isFirstEd=N` und `?isFirstEd=Y` laden; HTML als Fixture unter `desktop/electron/fixtures/cm-offers-*.html` speichern (gekürzt auf die Angebotsliste, keine Verkäufernamen nötig — Namen werden entfernt).
+1. Produktseite mit `?isFirstEd=N` und `?isFirstEd=Y` laden; das rohe HTML nur ins (nicht eingecheckte) Ledger, die Ausgabe von `OFFERS_JS` als JSON-Fixture nach `desktop/electron/fixtures/cm-offers-*.json` (enthält keine Verkäufernamen).
 2. Klären und im Ledger festhalten:
    - Selektoren der Angebotszeilen und je Zeile: Preis, Zustand, Sprache, Erste-Auflage-Markierung.
    - Ob die URL-Parameter `language=<id>` und `minCondition=<n>` serverseitig filtern, und die Zuordnung Sprach-Code → Cardmarket-Id (mindestens DE, EN, FR, IT, ES, PT) und Zustand → Zahl (MT 1 … PO 7 erwartet).
@@ -77,7 +77,7 @@ price_first_ed = Trigger, unverändert: factor != null && price != null ? round2
 - `runFirstEdPass`: Versions-Seite wie bisher → Produktseite **N** → `robustLow` → Produktseite **Y** → `robustLow` → `firstEdFactor` → schreiben. Pausen wie bisher.
 - `firstEdCandidates`: zusätzlich `language` mit Cardmarket-Gegenstück.
 
-**`copies-schema.cjs` (additive, einmalige Migration):** `UPDATE cards SET cm_first_ed_updated_at = NULL WHERE cm_first_ed_updated_at IS NOT NULL`, abgesichert über einen Merker in `settings` (`first_ed_factor_v2_reset = 1`), damit sie genau einmal läuft. Die alten Faktoren bleiben bis zur Neuberechnung stehen (keine Lücke im Gesamtwert); der Poller rechnet 2 pro Lauf nach, der Knopf „Cardmarket" alle auf einmal.
+**`copies-schema.cjs` (einmalige Migration, neue Funktion `resetFirstEdFactorsOnce(db)`, aufgerufen in `database.cjs` nach `reconcileCopies`, wo `settings` sicher existiert):** `UPDATE cards SET cm_first_ed_updated_at = NULL WHERE cm_first_ed_updated_at IS NOT NULL`, abgesichert über einen Merker in `settings` (`first_ed_factor_v2_reset = 1`), damit sie genau einmal läuft. Die alten Faktoren bleiben bis zur Neuberechnung stehen (keine Lücke im Gesamtwert); der Poller rechnet 2 pro Lauf nach, der Knopf „Cardmarket" alle auf einmal.
 
 ## 6. Fehlerfälle
 
@@ -86,7 +86,8 @@ price_first_ed = Trigger, unverändert: factor != null && price != null ? round2
 | Cloudflare-Prüfung, Exception | nichts; nächster Lauf |
 | keine Versionszeile / kein Produkt-Link | nur Zeitstempel (wie G4-Ruling) |
 | Seite N oder Y geladen, aber < 3 passende Angebote | `factor = NULL` + Zeitstempel → Basispreis, 7 Tage Ruhe |
-| Angebotsliste nicht gefunden (0 Zeilen auf **beiden** Seiten, Markup geändert?) | nichts schreiben, `errors++` und Log-Zeile — damit ein Markup-Bruch nicht still alle Faktoren auf NULL setzt |
+| Angebotstabelle auf einer der beiden Seiten **nicht vorhanden** (Markup geändert?) | Faktor **unverändert**, nur Zeitstempel (wie G4-Ruling, sonst belegt der Kandidat dauerhaft die Poller-Plätze), `errors++` und Log-Zeile — ein Markup-Bruch setzt so nie still Faktoren auf NULL |
+| Tabelle vorhanden, aber leer (es gibt schlicht keine passenden Angebote) | gilt als „< 3 Angebote" → `factor = NULL` + Zeitstempel |
 | Verhältnis > 10 | Faktor 10 + Log-Zeile mit beiden Werten (Beobachtung) |
 | Sprache ohne Cardmarket-Gegenstück | kein Kandidat |
 
@@ -96,7 +97,7 @@ price_first_ed = Trigger, unverändert: factor != null && price != null ? round2
 - `robustLow`: 0/2 Angebote → null; genau 3; gerade Anzahl (4) → Mittel; > 5 nimmt nur die 5 günstigsten; Ausreißer unten/oben verschiebt nicht; Sprach- und Zustandsfilter.
 - `firstEdFactor`: Untergrenze 1, Obergrenze 10, Rundung 4 Stellen, Nenner/Zähler null.
 - `offersUrl`: Y/N, mit/ohne Sprachparameter (je nach Messergebnis).
-- `OFFERS_JS` gegen die gespeicherten HTML-Fixtures (jsdom oder Electron-Test, wie es die bestehenden Scraper-Tests tun).
+- `parseOffers` gegen die beim Messversuch im echten Fenster erzeugte `OFFERS_JS`-Ausgabe (JSON-Fixtures; die Tests laufen mit `ELECTRON_RUN_AS_NODE`, also ohne DOM — `OFFERS_JS` selbst bleibt reine Extraktion ohne Logik und wird im Messversuch und in der Abnahme live geprüft).
 - `runFirstEdPass` mit gestubbtem Fenster (bestehende `cardmarket-first-ed.test.cjs` anpassen): Treffer, zu wenige Angebote → NULL + Stempel, beide Listen leer → nichts geschrieben, Challenge, Obergrenze.
 - `firstEdCandidates`: KR fällt heraus.
 - Migration: setzt Zeitstempel einmal zurück, zweiter Start lässt sie stehen; Faktoren bleiben.
