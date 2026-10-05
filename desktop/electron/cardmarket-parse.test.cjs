@@ -1,7 +1,10 @@
 // desktop/electron/cardmarket-parse.test.cjs
 const test = require('node:test');
 const assert = require('node:assert');
-const { normRarity, normName, matchRow, selectVersionRow, productUrl, firstEdUrl, parseFromPrice, firstEdFactor } = require('./cardmarket-parse.cjs');
+const { normRarity, normName, matchRow, selectVersionRow, productUrl, firstEdUrl, parseFromPrice, firstEdFactor,
+  CM_LANGUAGES, offersUrl, parseOffers, robustLow, robustFactor, FIRST_ED_FACTOR_MAX } = require('./cardmarket-parse.cjs');
+const path = require('path');
+const fixture = (name) => require(path.join(__dirname, 'fixtures', name));
 
 test('normRarity strips non-letters and lowercases', () => {
   assert.equal(normRarity('Ultra Rare'), 'ultrarare');
@@ -104,6 +107,18 @@ test('firstEdFactor: Untergrenze 1, 4 Stellen, fromAll 0/NULL, fromFirst NULL', 
   assert.deepStrictEqual(firstEdFactor(55, 0), { write: true, factor: null });
 });
 
+test('robustFactor (G4b): Untergrenze 1, Obergrenze 10, 4 Stellen, fehlende Seite -> NULL', () => {
+  assert.deepStrictEqual(robustFactor(55, 58), { factor: 1.0545, capped: false, raw: 1.0545 });
+  assert.deepStrictEqual(robustFactor(3, 4), { factor: 1.3333, capped: false, raw: 1.3333 });
+  assert.deepStrictEqual(robustFactor(58, 55), { factor: 1, capped: false, raw: 0.9483 }, 'Ausreisser nach unten -> 1');
+  assert.deepStrictEqual(robustFactor(8, 80), { factor: 10, capped: false, raw: 10 }, 'genau 10 ist nicht gekappt');
+  assert.deepStrictEqual(robustFactor(8.09, 76.86), { factor: 9.5006, capped: false, raw: 9.5006 });
+  assert.deepStrictEqual(robustFactor(2, 50), { factor: FIRST_ED_FACTOR_MAX, capped: true, raw: 25 });
+  assert.deepStrictEqual(robustFactor(null, 58), { factor: null, capped: false, raw: null });
+  assert.deepStrictEqual(robustFactor(0, 58), { factor: null, capped: false, raw: null });
+  assert.deepStrictEqual(robustFactor(55, null), { factor: null, capped: false, raw: null });
+});
+
 test('selectVersionRow: Cardmarket "Shatterfoil" trifft "Shatterfoil Rare" (Toy Vendor SP15, Log 02.10.2026)', async () => {
   const { selectVersionRow } = require('./cardmarket-parse.cjs');
   const rows = [
@@ -112,4 +127,85 @@ test('selectVersionRow: Cardmarket "Shatterfoil" trifft "Shatterfoil Rare" (Toy 
   ];
   const hit = await selectVersionRow(rows, { set_code: 'SP15-DE043', rarity: 'Shatterfoil Rare' }, async () => null);
   assert.equal(hit, rows[0]);
+});
+
+test('offersUrl: isFirstEd Y/N, Sprache und Mindestzustand EX', () => {
+  const P = 'https://www.cardmarket.com/en/YuGiOh/Products/Singles/X/Y';
+  assert.equal(offersUrl(P, true, 'DE'), `${P}?isFirstEd=Y&language=3&minCondition=3`);
+  assert.equal(offersUrl(P, false, 'EN'), `${P}?isFirstEd=N&language=1&minCondition=3`);
+  assert.equal(offersUrl(P, false, 'KR'), `${P}?isFirstEd=N&minCondition=3`, 'Sprache ohne Cardmarket-Id -> kein Sprachparameter');
+  assert.equal(CM_LANGUAGES.KR, undefined);
+});
+
+test('parseOffers: Preisformate, Zustand normalisiert, Sprache aus den Labels, unlesbarer Preis faellt weg', () => {
+  const rows = [
+    { priceText: '1.234,56 €', condition: 'nm', labels: ['Near Mint', 'German'] },
+    { priceText: '0,15 €', condition: 'EX', labels: ['Deutsch', 'First Edition'] },
+    { priceText: '58 €', condition: 'MT', labels: ['English'] },
+    { priceText: 'N/A', condition: 'NM', labels: ['German'] },
+    { priceText: '3,00 €', condition: 'NM', labels: ['Klingon'] },
+    { priceText: '2,00 €', condition: 'NM', labels: ['Französisch'] },
+  ];
+  assert.deepStrictEqual(parseOffers(rows), [
+    { price: 1234.56, condition: 'NM', language: 'DE' },
+    { price: 0.15, condition: 'EX', language: 'DE' },
+    { price: 58, condition: 'MT', language: 'EN' },
+    { price: 3, condition: 'NM', language: null },
+    { price: 2, condition: 'NM', language: 'FR' },
+  ]);
+  assert.deepStrictEqual(parseOffers(null), []);
+});
+
+test('parseOffers: veraenderte oder signierte Karten zaehlen nicht (Messung: Altered unter den guenstigsten)', () => {
+  const rows = [
+    { priceText: '5,00 €', condition: 'EX', labels: ['Excellent', 'German', 'First Edition', 'Altered'] },
+    { priceText: '6,00 €', condition: 'EX', labels: ['Excellent', 'German', 'Signed'] },
+    { priceText: '7,00 €', condition: 'EX', labels: ['Excellent', 'German'] },
+  ];
+  assert.deepStrictEqual(parseOffers(rows), [{ price: 7, condition: 'EX', language: 'DE' }]);
+});
+
+const de = (price, condition = 'NM') => ({ price, condition, language: 'DE' });
+
+test('robustLow: unter 3 Angeboten null, genau 3, gerade Anzahl, nur die 5 guenstigsten', () => {
+  assert.equal(robustLow([], { language: 'DE' }), null);
+  assert.equal(robustLow([de(1), de(2)], { language: 'DE' }), null);
+  assert.equal(robustLow([de(3), de(1), de(2)], { language: 'DE' }), 2);
+  assert.equal(robustLow([de(4), de(1), de(2), de(3)], { language: 'DE' }), 2.5);
+  assert.equal(robustLow([de(1), de(2), de(3), de(4), de(5), de(100), de(200)], { language: 'DE' }), 3);
+});
+
+test('robustLow: Ausreisser unten/oben verschieben den Wert nicht', () => {
+  assert.equal(robustLow([de(0.5), de(8), de(8.5), de(9), de(9.5)], { language: 'DE' }), 8.5);
+  assert.equal(robustLow([de(8), de(8.5), de(9), de(9.5), de(500)], { language: 'DE' }), 9);
+});
+
+test('robustLow: filtert Sprache und Zustand selbst (falls Cardmarket den URL-Filter ignoriert)', () => {
+  const offers = [de(1, 'PO'), de(1, 'LP'), de(2, 'GD'), { price: 1, condition: 'NM', language: 'EN' },
+    { price: 1, condition: 'NM', language: null }, de(5), de(6, 'EX'), de(7, 'MT')];
+  assert.equal(robustLow(offers, { language: 'DE' }), 6);
+  assert.equal(robustLow(offers, { language: 'EN' }), null);
+});
+
+test('robustLow + robustFactor auf den Mess-Fixtures: plausibel und nie ueber 10', () => {
+  for (const card of ['sdj-g001', 'mamo-de020']) {
+    const n = robustLow(parseOffers(fixture(`cm-offers-${card}-N.json`).rows), { language: 'DE' });
+    const y = robustLow(parseOffers(fixture(`cm-offers-${card}-Y.json`).rows), { language: 'DE' });
+    const { factor } = robustFactor(n, y);
+    assert.ok(factor === null || (factor >= 1 && factor <= 10), `${card}: ${factor}`);
+  }
+  assert.equal(fixture('cm-offers-leer.json').found, true, 'leere Liste: Tabelle steht trotzdem im DOM');
+  assert.equal(robustLow(parseOffers(fixture('cm-offers-leer.json').rows), { language: 'DE' }), null);
+});
+
+// Von Hand ausgerechnet im Ledger messung.md (05.10.2026): DE, MT/NM/EX, ohne Altered, Median der 5 guenstigsten.
+const SDJ_N = 6, SDJ_Y = 5, MAMO_N = 65, MAMO_Y = 56.61;
+test('Mess-Fixtures: Werte wie von Hand in messung.md ausgerechnet; SDJ-G001 faellt von x9,50 auf x1', () => {
+  const r = (f) => robustLow(parseOffers(fixture(f).rows), { language: 'DE' });
+  assert.equal(r('cm-offers-sdj-g001-N.json'), SDJ_N);
+  assert.equal(r('cm-offers-sdj-g001-Y.json'), SDJ_Y);
+  assert.equal(r('cm-offers-mamo-de020-N.json'), MAMO_N);
+  assert.equal(r('cm-offers-mamo-de020-Y.json'), MAMO_Y);
+  assert.equal(robustFactor(SDJ_N, SDJ_Y).factor, 1);
+  assert.equal(robustFactor(MAMO_N, MAMO_Y).factor, 1);
 });
