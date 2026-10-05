@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const Database = require('better-sqlite3');
-const { ensureCopiesSchema, backfillCopies, reconcileCopies } = require('./copies-schema.cjs');
+const { ensureCopiesSchema, backfillCopies, reconcileCopies, resetFirstEdFactorsOnce } = require('./copies-schema.cjs');
 const fs = require('fs');
 const path = require('path');
 // Spec G4 §5 — Abschnitt `trigger` der gemeinsamen Fixture. ZWILLING der Cloud-Fassung supabase/cards_first_ed_factor.sql.
@@ -184,4 +184,26 @@ test('ensureCopiesSchema rechnet price_first_ed beim Start nach und legt die Tri
   assert.strictEqual(firstEd(db).pfe, 77.87, 'Nachrechnen beim Start');
   db.prepare(`UPDATE cards SET price = 80 WHERE ${KEY}`).run();
   assert.strictEqual(firstEd(db).pfe, 84.36, 'Trigger ist wieder da');
+});
+
+test('G4b: resetFirstEdFactorsOnce setzt die 1st-Ed-Zeitstempel genau einmal zurueck, Faktoren bleiben', () => {
+  const db = new Database(':memory:');
+  db.exec(`CREATE TABLE cards (id TEXT, name TEXT, quantity INTEGER DEFAULT 0, rarity TEXT, set_code TEXT, price REAL,
+             language TEXT DEFAULT 'DE', price_locked INTEGER DEFAULT 0, cm_product_id INTEGER,
+             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, deleted INTEGER DEFAULT 0,
+             PRIMARY KEY (id, set_code, language, rarity));
+           CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+           CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY AUTOINCREMENT, total_value REAL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);`);
+  ensureCopiesSchema(db);
+  db.prepare(`INSERT INTO cards (id, set_code, rarity, price, cm_first_ed_factor, cm_first_ed_updated_at)
+              VALUES ('1', 'SDJ-G001', 'Ultra Rare', 8.09, 9.5, '2026-10-04 10:00:00'),
+                     ('2', 'MAMO-DE020', 'Ultra Rare', 73.85, NULL, NULL)`).run();
+
+  assert.deepEqual(resetFirstEdFactorsOnce(db), { reset: 1, skipped: false });
+  const r = db.prepare("SELECT cm_first_ed_factor AS f, cm_first_ed_updated_at AS ts, price_first_ed AS pfe FROM cards WHERE id = '1'").get();
+  assert.deepEqual(r, { f: 9.5, ts: null, pfe: 76.86 }, 'Faktor und 1st-Ed-Preis bleiben bis zur Neuberechnung');
+
+  db.prepare("UPDATE cards SET cm_first_ed_updated_at = '2026-10-05 10:00:00' WHERE id = '1'").run();
+  assert.deepEqual(resetFirstEdFactorsOnce(db), { reset: 0, skipped: true });
+  assert.equal(db.prepare("SELECT cm_first_ed_updated_at AS ts FROM cards WHERE id = '1'").get().ts, '2026-10-05 10:00:00');
 });

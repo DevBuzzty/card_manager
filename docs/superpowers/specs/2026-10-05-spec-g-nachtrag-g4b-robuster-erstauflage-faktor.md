@@ -87,7 +87,8 @@ price_first_ed = Trigger, unverändert: factor != null && price != null ? round2
 | keine Versionszeile / kein Produkt-Link | nur Zeitstempel (wie G4-Ruling) |
 | Seite N oder Y geladen, aber < 3 passende Angebote | `factor = NULL` + Zeitstempel → Basispreis, 7 Tage Ruhe |
 | Angebotstabelle auf einer der beiden Seiten **nicht vorhanden** (Markup geändert?) | Faktor **unverändert**, nur Zeitstempel (wie G4-Ruling, sonst belegt der Kandidat dauerhaft die Poller-Plätze), `errors++` und Log-Zeile — ein Markup-Bruch setzt so nie still Faktoren auf NULL |
-| Tabelle vorhanden, aber leer (es gibt schlicht keine passenden Angebote) | gilt als „< 3 Angebote" → `factor = NULL` + Zeitstempel |
+| Tabelle vorhanden, aber leer **mit** Leer-Meldung `.noResults` (es gibt schlicht keine passenden Angebote) | gilt als „< 3 Angebote" → `factor = NULL` + Zeitstempel |
+| Teilweiser Markup-Bruch: keine Zeilen **ohne** Leer-Meldung, oder Zeilen ohne lesbaren Preis/bekannte Sprache (Review 05.10.) | wie „Tabelle nicht vorhanden": Faktor unverändert, nur Zeitstempel, `errors++` (`offersPageBroken`) |
 | Verhältnis > 10 | Faktor 10 + Log-Zeile mit beiden Werten (Beobachtung) |
 | Sprache ohne Cardmarket-Gegenstück | kein Kandidat |
 

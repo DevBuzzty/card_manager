@@ -1,0 +1,110 @@
+{
+  "found": true,
+  "empty": false,
+  "rows": [
+    {
+      "priceText": "4,99 €",
+      "condition": "EX",
+      "labels": [
+        "Excellent",
+        "German"
+      ]
+    },
+    {
+      "priceText": "5,00 €",
+      "condition": "EX",
+      "labels": [
+        "Excellent",
+        "German"
+      ]
+    },
+    {
+      "priceText": "6,00 €",
+      "condition": "EX",
+      "labels": [
+        "Excellent",
+        "German"
+      ]
+    },
+    {
+      "priceText": "6,00 €",
+      "condition": "EX",
+      "labels": [
+        "Excellent",
+        "German"
+      ]
+    },
+    {
+      "priceText": "7,00 €",
+      "condition": "EX",
+      "labels": [
+        "Excellent",
+        "German"
+      ]
+    },
+    {
+      "priceText": "10,00 €",
+      "condition": "EX",
+      "labels": [
+        "Excellent",
+        "German"
+      ]
+    },
+    {
+      "priceText": "11,50 €",
+      "condition": "EX",
+      "labels": [
+        "Excellent",
+        "German"
+      ]
+    },
+    {
+      "priceText": "15,00 €",
+      "condition": "NM",
+      "labels": [
+        "Near Mint",
+        "German"
+      ]
+    },
+    {
+      "priceText": "30,00 €",
+      "condition": "NM",
+      "labels": [
+        "Near Mint",
+        "German"
+      ]
+    },
+    {
+      "priceText": "50,00 €",
+      "condition": "EX",
+      "labels": [
+        "Excellent",
+        "German"
+      ]
+    },
+    {
+      "priceText": "62,50 €",
+      "condition": "NM",
+      "labels": [
+        "Near Mint",
+        "German"
+      ]
+    },
+    {
+      "priceText": "70,00 €",
+      "condition": "NM",
+      "labels": [
+        "Near Mint",
+        "German"
+      ]
+    },
+    {
+      "priceText": "70,00 €",
+      "condition": "EX",
+      "labels": [
+        "Excellent",
+        "German"
+      ]
+    }
+  ]
+}

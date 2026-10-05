@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
-const { ensureCopiesSchema, backfillCopies, reconcileCopies } = require('./copies-schema.cjs');
+const { ensureCopiesSchema, backfillCopies, reconcileCopies, resetFirstEdFactorsOnce } = require('./copies-schema.cjs');
 const { ensureContainersSchema } = require('./containers-schema.cjs');
 const { ensureSalesSchema } = require('./sales-schema.cjs');
 const { ensureListingsSchema } = require('./listings-schema.cjs');
@@ -293,6 +293,8 @@ function runMigrations() {
         if (!bf.skipped) console.log(`Copies backfill: created ${bf.created} copies from quantities.`);
         const rc = reconcileCopies(db);
         if (!rc.skipped && rc.created > 0) console.log(`Copies reconcile: created ${rc.created} missing copies across ${rc.printings} printing(s).`);
+        const fe = resetFirstEdFactorsOnce(db); // Spec G4b: robuster 1st-Ed-Faktor -> alle einmal neu berechnen
+        if (!fe.skipped) console.log(`1st-Ed factor reset: ${fe.reset} printing(s) queued for recalculation.`);
         const seed = seedPriceHistory(db);
         if (!seed.skipped) console.log(`Price history seed: ${seed.inserted} start row(s).`);
     } catch (e) {
