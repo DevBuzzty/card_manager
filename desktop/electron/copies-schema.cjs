@@ -114,6 +114,19 @@ function ensureCopiesSchema(db) {
   db.exec(`UPDATE cards SET price_first_ed = ${FIRST_ED_SQL('')} WHERE price_first_ed IS NOT ${FIRST_ED_SQL('')}`);
 }
 
+// Spec G4b §5: einmalig alle 1st-Ed-Zeitstempel zuruecksetzen, damit der robuste Faktor (Angebots-Median statt
+// Ab-Preis) fuer jedes Printing neu berechnet wird. Faktoren bleiben bis dahin stehen (keine Luecke im Gesamtwert).
+// Laeuft nach backfill/reconcile in database.cjs, wo settings sicher existiert. Guarded.
+function resetFirstEdFactorsOnce(db) {
+  if (getSetting(db, 'first_ed_factor_v2_reset') === '1') return { reset: 0, skipped: true };
+  let reset = 0;
+  db.transaction(() => {
+    reset = db.prepare('UPDATE cards SET cm_first_ed_updated_at = NULL WHERE cm_first_ed_updated_at IS NOT NULL').run().changes;
+    setSetting(db, 'first_ed_factor_v2_reset', '1');
+  })();
+  return { reset, skipped: false };
+}
+
 // One-time, desktop-only: `quantity` copies per live printing with the defaults. Guarded.
 function backfillCopies(db) {
   if (getSetting(db, 'copies_migrated') === '1') return { created: 0, skipped: true };
@@ -177,4 +190,4 @@ function reconcileCopies(db) {
   return { created, skipped: false, printings: gaps.length };
 }
 
-module.exports = { ensureCopiesSchema, backfillCopies, reconcileCopies };
+module.exports = { ensureCopiesSchema, backfillCopies, reconcileCopies, resetFirstEdFactorsOnce };
