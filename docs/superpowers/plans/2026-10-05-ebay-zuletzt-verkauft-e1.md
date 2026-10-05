@@ -383,7 +383,7 @@ Deno.test("median3: unter 3 null, ungerade, gerade, auf Cent", () => {
   assertEquals(median3([1, 2]), null);
   assertEquals(median3([3, 1, 2]), 2);
   assertEquals(median3([4, 1, 2, 3]), 2.5);
-  assertEquals(median3([1.111, 2.222, 3.333, 4.444]), 2.78);
+  assertEquals(median3([1.111, 2.221, 3.333, 4.444]), 2.78);
 });
 
 Deno.test("summarizeSales: nur passende EUR-Verkäufe mit Preis, 1. Auflage getrennt, jüngster Verkauf", () => {
@@ -1514,7 +1514,7 @@ export default function EbaySoldRow({ variant }) {
           </button>
         )}
       </div>
-      {error && <span className="text-xs text-danger">{error}</span>}
+      {error && <span className="text-xs text-bad">{error}</span>}
       {open && sales.length > 0 && (
         <ul className="flex flex-col gap-0.5 pl-2 border-l border-line">
           {sales.map((s, i) => (
@@ -1534,7 +1534,7 @@ export default function EbaySoldRow({ variant }) {
 }
 ```
 
-Vor dem Schreiben in `docs/fixtures/design/tokens.json` bzw. `tailwind.config.js` prüfen, dass `text-accent` und `text-danger` existierende Token-Klassen sind; sonst die im Projekt für Links/Fehler verwendeten Token-Klassen nehmen (z. B. aus `CardDetailPanel.jsx` abschauen).
+Farb-Token laut `tailwind.config.js`: `surface line text muted accent accent-fg good warn bad` — nur diese verwenden.
 
 - [ ] **Step 2: In `CardDetailPanel.jsx` einbinden**
 

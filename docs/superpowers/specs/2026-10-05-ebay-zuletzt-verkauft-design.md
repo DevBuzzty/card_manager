@@ -90,7 +90,7 @@ Nie Tokens/Secrets protokollieren (Regel aus `ebay-client.ts`).
 ## 7. Spiegel auf PC und Handy (E1)
 
 - **PC:** Nur-Lese-Strom wie `ebay_listings` — lokale Tabelle `ebay_sold_prices` (in `ebay-schema.cjs` angelegt, `sales` als JSON-Text), Eintrag in `READ_ONLY_STREAMS`/`pullReadOnlyTable` mit Cursor `sync_ebay_sold_last_pull` auf `updated_at`; `ebay_insights_state` wird bei jedem Pull mitgelesen und in `settings` (`ebay_insights_access`) abgelegt. Kein Push.
-- **Handy:** `EbayRepository.kt` liest `ebay_sold_prices` per REST mit Delta (`updated_at`) in den Zwischenspeicher, wie die übrigen Tabellen, plus `ebay_insights_state`.
+- **Handy:** In E1 liest `EbaySoldRepository.kt` die Zeile **eines** Drucks per REST beim Öffnen des Details (plus `ebay_insights_state`) — E1 braucht den Wert nur dort. Der vollständige Delta-Spiegel in den Zwischenspeicher kommt mit E2 (Bewertung). (Präzisiert beim Planen, 05.10.)
 - Neue IPC-Kanäle (`main.cjs` + `preload.cjs`): `ebay-sold-get` (Zeile eines Drucks + Zugangsstatus), `ebay-sold-check` (Einzelabruf über die Edge Function, wie die bestehenden eBay-Aufrufe aus H3b; danach Pull).
 
 ## 8. Anzeige im Karten-Detail (E1)
