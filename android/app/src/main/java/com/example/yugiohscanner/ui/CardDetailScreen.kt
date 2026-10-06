@@ -225,6 +225,8 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                         Valuation.firstEdLine(v)?.let {
                             Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = MonoFontFamily, color = Muted)
                         }
+                        // eBay „zuletzt verkauft" E1 §8 (Gegenstück zu EbaySoldRow.jsx).
+                        EbaySoldRow(v)
                         // Spec koreanische Karten §4: Preis ist Trend x KR-Faktor -- Gegenstueck zu CardDetailPanel.jsx.
                         val krFaktor = v.cmLangFactor
                         if (v.language == "KR" && krFaktor != null) {
