@@ -35,31 +35,40 @@ export async function runSold(d: RunDeps, o: RunOpts): Promise<RunResult> {
     return finish({ ok: false, access: st.access, checked: 0 }, (e as Error).message);
   }
 
-  const list = o.mode === "single" ? [o.printing]
-    : await d.store.candidates(o.minPrice, new Date(d.now().getTime() - FRESH_MS).toISOString(), o.budget);
+  // Fehler beenden den Lauf, damit last_run_at/calls_today/last_error IMMER geschrieben werden (auch bei DB-Fehlern).
+  const endRun = (e: unknown, checked: number) =>
+    e instanceof EbayError && e.scopeMissing
+      ? finish({ ok: false, access: "fehlt", checked }, null)
+      : finish({ ok: false, access: "aktiv", checked }, (e as Error).message);
   let checked = 0, lastRow: SoldRow | undefined;
-  for (const p of list) {
-    let items: SoldItem[];
-    try {
-      calls++;
-      try { items = await searchSold(d.fetch, "production", token, p.set_code, YGO_CATEGORY_ID); }
-      catch (e) {
-        if (!(e instanceof EbayError && e.auth)) throw e;
-        token = await getToken(); // 401: Token einmal erneuern
+  try {
+    const list = o.mode === "single" ? [o.printing]
+      : await d.store.candidates(o.minPrice, new Date(d.now().getTime() - FRESH_MS).toISOString(), o.budget);
+    for (const p of list) {
+      let items: SoldItem[];
+      try {
         calls++;
-        items = await searchSold(d.fetch, "production", token, p.set_code, YGO_CATEGORY_ID);
+        try { items = await searchSold(d.fetch, "production", token, p.set_code, YGO_CATEGORY_ID); }
+        catch (e) {
+          if (!(e instanceof EbayError && e.auth)) throw e;
+          // 401: Token einmal erneuern; scheitert das, endet der Lauf (nicht alle Folgedrucke auf fehler setzen).
+          try { token = await getToken(); } catch (e2) { return await endRun(e2, checked); }
+          calls++;
+          items = await searchSold(d.fetch, "production", token, p.set_code, YGO_CATEGORY_ID);
+        }
+      } catch (e) {
+        if (e instanceof EbayError && (e.scopeMissing || e.transient || e.auth)) return await endRun(e, checked);
+        lastRow = { ...p, median_all: null, n_all: 0, median_first: null, n_first: 0, last_sold_at: null, last_sold_price: null, sales: [], status: "fehler", checked_at: nowIso };
+        await d.store.upsert(lastRow);
+        checked++;
+        continue;
       }
-    } catch (e) {
-      if (e instanceof EbayError && e.scopeMissing) return finish({ ok: false, access: "fehlt", checked }, null);
-      if (e instanceof EbayError && (e.transient || e.auth)) return finish({ ok: false, access: "aktiv", checked }, e.message);
-      lastRow = { ...p, median_all: null, n_all: 0, median_first: null, n_first: 0, last_sold_at: null, last_sold_price: null, sales: [], status: "fehler", checked_at: nowIso };
+      lastRow = { ...p, ...summarizeSales(items, p), checked_at: nowIso };
       await d.store.upsert(lastRow);
       checked++;
-      continue;
     }
-    lastRow = { ...p, ...summarizeSales(items, p), checked_at: nowIso };
-    await d.store.upsert(lastRow);
-    checked++;
+  } catch (e) {
+    return endRun(e, checked);
   }
   return finish({ ok: true, access: "aktiv", checked, ...(o.mode === "single" && lastRow ? { row: lastRow } : {}) }, null);
 }

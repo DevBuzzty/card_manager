@@ -91,3 +91,44 @@ Deno.test("Secrets fehlen: Einrichtungsfehler in last_error, kein Netz", async (
   assertEquals([r.ok, f.calls.length], [false, 0]);
   assertEquals(st.state.last_error?.includes("fehlen"), true);
 });
+
+Deno.test("Fix1: Store-Fehler beim Speichern -> Lauf endet mit last_error, Zähler und last_run_at gesetzt", async () => {
+  const st = fakeSoldStore({ candidates: [P1, P2] });
+  st.store.upsert = () => Promise.reject(new Error("db weg"));
+  const f = fakeFetch({ [`POST ${TOKEN}`]: tokenOk, [`GET ${SOLD}`]: salesFor });
+  const r = await runSold(deps(st, f), { mode: "cron", minPrice: 5, budget: 50 });
+  assertEquals([r.ok, r.access, r.checked], [false, "aktiv", 0]);
+  assertEquals(st.state.last_error?.includes("db weg"), true);
+  assertEquals([st.state.calls_today, st.state.last_run_at], [1, NOW.toISOString()]);
+});
+
+Deno.test("Fix2a: 401 an der Suche, Token-Erneuerung scheitert -> Lauf endet, keine Zeilen, last_error", async () => {
+  const st = fakeSoldStore({ candidates: [P1, P2] });
+  let t = 0;
+  const f = fakeFetch({
+    [`POST ${TOKEN}`]: () => (++t === 1 ? tokenOk : { status: 401, body: { error: "invalid_client" } }),
+    [`GET ${SOLD}`]: { status: 401, body: {} },
+  });
+  const r = await runSold(deps(st, f), { mode: "cron", minPrice: 5, budget: 50 });
+  assertEquals([r.ok, r.access, st.rows.size], [false, "aktiv", 0]);
+  assertEquals(typeof st.state.last_error, "string");
+});
+
+Deno.test("Fix2b: 401 auch nach Erneuerung -> Lauf endet, keine fehler-Zeile", async () => {
+  const st = fakeSoldStore({ candidates: [P1, P2] });
+  const f = fakeFetch({ [`POST ${TOKEN}`]: tokenOk, [`GET ${SOLD}`]: { status: 401, body: {} } });
+  const r = await runSold(deps(st, f), { mode: "cron", minPrice: 5, budget: 50 });
+  assertEquals([r.ok, r.access, st.rows.size], [false, "aktiv", 0]);
+  assertEquals(typeof st.state.last_error, "string");
+});
+
+Deno.test("Fix2c: 401, Erneuerung liefert invalid_scope -> access fehlt", async () => {
+  const st = fakeSoldStore({ candidates: [P1] });
+  let t = 0;
+  const f = fakeFetch({
+    [`POST ${TOKEN}`]: () => (++t === 1 ? tokenOk : { status: 400, body: { error: "invalid_scope" } }),
+    [`GET ${SOLD}`]: { status: 401, body: {} },
+  });
+  const r = await runSold(deps(st, f), { mode: "cron", minPrice: 5, budget: 50 });
+  assertEquals([r.ok, r.access, st.state.access, st.rows.size], [false, "fehlt", "fehlt", 0]);
+});
