@@ -10,7 +10,7 @@ const { nextNoticeNotification } = require('./notice-notify.cjs');
 const { CHANNEL_COLS, SALE_COLS, ITEM_COLS } = require('./sales-schema.cjs');
 const { LISTING_COLS, LISTING_ITEM_COLS } = require('./listings-schema.cjs');
 const { getKrFactor, rescaleKrRow } = require('./language-kr.cjs');
-const { EBAY_LISTING_COLS, LISTING_PHOTO_COLS, EBAY_ORDER_COLS, SALE_NOTICE_COLS } = require('./ebay-schema.cjs');
+const { EBAY_LISTING_COLS, LISTING_PHOTO_COLS, EBAY_ORDER_COLS, SALE_NOTICE_COLS, EBAY_SOLD_COLS } = require('./ebay-schema.cjs');
 
 // Columns mirrored to the cloud (desktop is authoritative for all of them).
 // cm_product_id + price_locked let the cloud's daily Cardmarket refresh (Edge Function) price the
@@ -333,8 +333,11 @@ const READ_ONLY_STREAMS = {
   ebay_orders: { cols: EBAY_ORDER_COLS, key: 'order_id', cursor: 'sync_ebay_orders_last_pull',
     bools: new Set(['fees_final']), nums: new Set(['fees_provisional', 'raw_total']) },
   sale_notices: { cols: SALE_NOTICE_COLS, key: 'notice_id', cursor: 'sync_sale_notices_last_pull', bools: new Set(['dismissed']) },
+  ebay_sold_prices: { cols: EBAY_SOLD_COLS, key: 'card_id', cursor: 'sync_ebay_sold_last_pull',
+    nums: new Set(['median_all', 'median_first', 'last_sold_price']), jsons: new Set(['sales']) },
 };
 function readOnlyValue(s, k, v) {
+  if (s.jsons && s.jsons.has(k)) return v == null ? null : (typeof v === 'string' ? v : JSON.stringify(v));
   if (s.bools && s.bools.has(k)) return v ? 1 : 0;
   if (s.nums && s.nums.has(k)) return v == null || v === '' ? null : Number(v);
   return v ?? null;
@@ -374,6 +377,16 @@ async function pullEbayStatus(c, db) {
   const prev = prevRaw == null ? null : JSON.parse(prevRaw);
   const changed = ebayStatusContentKey(prev) !== ebayStatusContentKey(data ?? null);
   setSetting(db, 'ebay_status_cache', JSON.stringify(data ?? null));
+  return changed;
+}
+
+// eBay „zuletzt verkauft" E1: Zugangsstatus (eine Zeile) -> settings.ebay_insights_state; true bei Änderung.
+async function pullInsightsState(c, db) {
+  const { data, error } = await c.from('ebay_insights_state').select('access,last_error,last_run_at').eq('id', 1).maybeSingle();
+  if (error) throw new Error('Pull ebay_insights_state failed: ' + error.message);
+  const next = JSON.stringify(data ?? null);
+  const changed = getSetting(db, 'ebay_insights_state') !== next;
+  setSetting(db, 'ebay_insights_state', next);
   return changed;
 }
 
@@ -795,6 +808,8 @@ function startSync(db, getWindow, { onPriceAlerts, onSaleNotices } = {}) {
     let changed = false;
     try { changed = (await pullReadOnlyTable(c, db, 'ebay_listings')) > 0; } catch (e) { console.error('[sync] ebay_listings pull:', e.message); }
     try { changed = (await pullEbayStatus(c, db)) || changed; } catch (e) { console.error('[sync] ebay_status pull:', e.message); }
+    try { changed = (await pullReadOnlyTable(c, db, 'ebay_sold_prices')) > 0 || changed; } catch (e) { console.error('[sync] ebay_sold_prices pull:', e.message); }
+    try { changed = (await pullInsightsState(c, db)) || changed; } catch (e) { console.error('[sync] ebay_insights_state pull:', e.message); }
     // H3b2: fehlt ebay_orders_schema.sql noch, protokollieren und weiterlaufen wie bei ebay_listings.
     try { changed = (await pullReadOnlyTable(c, db, 'ebay_orders')) > 0 || changed; } catch (e) { console.error('[sync] ebay_orders pull:', e.message); }
     try {
@@ -1007,7 +1022,7 @@ module.exports = {
   _applyPulledListingPhotos: (db, rows) => applyPulledSalesRows(db, 'listing_photos', rows),
   _recentlyPushedListingPhotos: recentlyPushedSalesByTable.listing_photos,
   // Spec H3b1: Test-Haken der Nur-Lese-Ströme (ebay-sync.test.cjs) und die Liste der geschobenen Tabellen (Wächter).
-  _pullReadOnlyTable: pullReadOnlyTable, _pullEbayStatus: pullEbayStatus,
+  _pullReadOnlyTable: pullReadOnlyTable, _pullInsightsState: pullInsightsState, _pullEbayStatus: pullEbayStatus,
   _READ_ONLY_TABLES: Object.keys(READ_ONLY_STREAMS), _PUSHED_TABLES: Object.keys(SALES_STREAMS),
   // Test-only hooks into the containers echo-lock (see test-sync.cjs): the module-level map and
   // apply function that pullContainers itself uses internally. Not called by production code

@@ -9,6 +9,9 @@ const LISTING_PHOTO_COLS = ['photo_id', 'listing_id', 'path', 'sort', 'created_a
 const EBAY_ORDER_COLS = ['order_id', 'environment', 'sale_id', 'status', 'fees_provisional', 'fees_final', 'raw_total', 'error',
   'created_at', 'updated_at'];
 const SALE_NOTICE_COLS = ['notice_id', 'kind', 'text', 'sale_id', 'listing_id', 'dismissed', 'created_at', 'updated_at'];
+// eBay „zuletzt verkauft" E1: NUR-LESE-Spiegel wie ebay_listings (sync.cjs READ_ONLY_STREAMS); sales = JSON-Text.
+const EBAY_SOLD_COLS = ['card_id', 'set_code', 'language', 'rarity', 'median_all', 'n_all', 'median_first', 'n_first',
+  'last_sold_at', 'last_sold_price', 'sales', 'status', 'checked_at', 'updated_at'];
 
 function ensureEbaySchema(db) {
   db.exec(`
@@ -29,10 +32,15 @@ function ensureEbaySchema(db) {
     CREATE TABLE IF NOT EXISTS sale_notices (
       notice_id TEXT PRIMARY KEY, kind TEXT NOT NULL, text TEXT NOT NULL, sale_id TEXT, listing_id TEXT,
       dismissed INTEGER NOT NULL DEFAULT 0, created_at TEXT, updated_at TEXT);
+    CREATE TABLE IF NOT EXISTS ebay_sold_prices (
+      card_id TEXT NOT NULL, set_code TEXT NOT NULL, language TEXT NOT NULL, rarity TEXT NOT NULL,
+      median_all REAL, n_all INTEGER, median_first REAL, n_first INTEGER, last_sold_at TEXT, last_sold_price REAL,
+      sales TEXT, status TEXT, checked_at TEXT, updated_at TEXT,
+      PRIMARY KEY (card_id, set_code, language, rarity));
     CREATE TRIGGER IF NOT EXISTS trg_listing_photos_updated AFTER UPDATE ON listing_photos FOR EACH ROW
     WHEN NEW.updated_at = OLD.updated_at
     BEGIN UPDATE listing_photos SET updated_at = CURRENT_TIMESTAMP WHERE photo_id = NEW.photo_id; END;
   `);
 }
 
-module.exports = { ensureEbaySchema, EBAY_LISTING_COLS, LISTING_PHOTO_COLS, EBAY_ORDER_COLS, SALE_NOTICE_COLS };
+module.exports = { ensureEbaySchema, EBAY_LISTING_COLS, LISTING_PHOTO_COLS, EBAY_ORDER_COLS, SALE_NOTICE_COLS, EBAY_SOLD_COLS };
