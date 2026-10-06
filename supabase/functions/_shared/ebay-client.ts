@@ -24,9 +24,13 @@ export const USER_SCOPES = [
 ];
 // Befund eBay-Doku 9: Taxonomy verlangt ein Anwendungs-Token (client_credentials) mit dem Basis-Scope.
 export const APP_SCOPE = "https://api.ebay.com/oauth/api_scope";
+// eBay „zuletzt verkauft" (Spec 2026-10-05 §5): Marketplace Insights, Limited Release -- nur nach Freischaltung durch eBay.
+export const INSIGHTS_SCOPE = "https://api.ebay.com/oauth/api_scope/buy.marketplace.insights";
+// Antwortcodes des Token-Endpunkts, wenn der App ein angefragter Scope (noch) nicht gewährt ist (Messung 05.10.).
+const SCOPE_ERRORS = new Set(["invalid_scope"]);
 
 export class EbayError extends Error {
-  constructor(message: string, readonly status: number, readonly transient: boolean, readonly auth: boolean) {
+  constructor(message: string, readonly status: number, readonly transient: boolean, readonly auth: boolean, readonly scopeMissing = false) {
     super(message);
   }
 }
@@ -70,6 +74,9 @@ function toError(body: any, status: number, oauth: boolean): EbayError {
   const code = String(body?.error ?? "").toLowerCase();
   if (oauth && code === "invalid_client") {
     return new EbayError("eBay-Zugangsdaten der App ungültig – Secrets prüfen.", status, false, false);
+  }
+  if (oauth && SCOPE_ERRORS.has(code)) {
+    return new EbayError("eBay hat den Zugang zu den Verkaufsdaten (noch) nicht freigeschaltet.", status, false, false, true);
   }
   const auth = oauth ? (status === 400 || status === 401) && code === "invalid_grant" : status === 401;
   return new EbayError(errorText(body, status), status, transient, auth);
@@ -116,8 +123,8 @@ export async function refreshAccess(fetchFn: Fetch, env: Env, c: Creds, refreshT
   const b = await tokenCall(fetchFn, env, c, { grant_type: "refresh_token", refresh_token: refreshToken, scope: USER_SCOPES.join(" ") });
   return { access_token: String(requireField(b, "access_token")), access_expires_at: isoIn(now, Number(requireField(b, "expires_in"))) };
 }
-export async function appToken(fetchFn: Fetch, env: Env, c: Creds): Promise<string> {
-  const b = await tokenCall(fetchFn, env, c, { grant_type: "client_credentials", scope: APP_SCOPE });
+export async function appToken(fetchFn: Fetch, env: Env, c: Creds, scope = APP_SCOPE): Promise<string> {
+  const b = await tokenCall(fetchFn, env, c, { grant_type: "client_credentials", scope });
   return String(requireField(b, "access_token"));
 }
 
@@ -216,4 +223,28 @@ export async function categoryAspects(fetchFn: Fetch, env: Env, appTok: string, 
   const treeId = String(tree.categoryTreeId);
   const a = await send(fetchFn, `${base}/category_tree/${encodeURIComponent(treeId)}/get_item_aspects_for_category?category_id=${encodeURIComponent(categoryId)}`, h);
   return (a?.aspects ?? []) as AspectDef[];
+}
+
+// eBay „zuletzt verkauft" §4: verkaufte Artikel der letzten 90 Tage zu einem Suchbegriff (Set-Code) in einer Kategorie.
+export type SoldItem = { itemId: string; title: string; price: number | null; currency: string | null; soldAt: string | null; url: string | null; conditionId: string | null };
+export async function searchSold(fetchFn: Fetch, env: Env, token: string, q: string, categoryId: string): Promise<SoldItem[]> {
+  const p = new URLSearchParams({ q, category_ids: categoryId, limit: "200" });
+  let b: any;
+  try {
+    b = await send(fetchFn, `${HOSTS[env].api}/buy/marketplace_insights/v1_beta/item_sales/search?${p.toString()}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "X-EBAY-C-MARKETPLACE-ID": MARKETPLACE },
+    });
+  } catch (e) {
+    // 403: Token gültig, aber die App ist für die API nicht freigeschaltet -> wie fehlender Scope behandeln.
+    if (e instanceof EbayError && e.status === 403) throw new EbayError(e.message, 403, false, false, true);
+    throw e;
+  }
+  const num = (v: unknown) => { const n = Number(v); return v == null || v === "" || !Number.isFinite(n) ? null : n; };
+  const str = (v: unknown) => (v == null || v === "" ? null : String(v));
+  return ((b?.itemSales ?? []) as any[]).map((s) => ({
+    itemId: String(s.itemId ?? ""), title: String(s.title ?? ""),
+    price: num(s.lastSoldPrice?.value), currency: str(s.lastSoldPrice?.currency),
+    soldAt: str(s.lastSoldDate), url: str(s.itemWebUrl), conditionId: str(s.conditionId),
+  }));
 }

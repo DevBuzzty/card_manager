@@ -1,5 +1,7 @@
 package com.example.yugiohscanner.ui
 
+import com.example.yugiohscanner.cloud.EbaySold
+import com.example.yugiohscanner.cloud.EbaySoldRepository
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.text.SpanStyle
@@ -208,6 +210,12 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
             Spacer(Modifier.height(8.dp))
             val ctx = androidx.compose.ui.platform.LocalContext.current
             val byKey = copies.groupBy { it.printingKey() }
+            // eBay-Zugang einmal je Karte; fehlt er, steht die Zeile nur einmal hier statt je Druck (Spec §8).
+            var ebayAccess by remember(cardId) { mutableStateOf("unbekannt") }
+            LaunchedEffect(cardId) { runCatching { EbaySoldRepository.access() }.onSuccess { ebayAccess = it } }
+            if (printings.isNotEmpty() && ebayAccess == "fehlt") {
+                Text(EbaySold.line("fehlt", null), style = MaterialTheme.typography.bodySmall, color = Muted)
+            }
             printings.forEach { v ->
                 val mine = byKey[v.printingKey()] ?: emptyList()
                 val migrated = mine.isNotEmpty() || v.quantity == 0
@@ -225,6 +233,8 @@ fun CardDetailScreen(cardId: String, onClose: () -> Unit) {
                         Valuation.firstEdLine(v)?.let {
                             Text(it, style = MaterialTheme.typography.bodySmall, fontFamily = MonoFontFamily, color = Muted)
                         }
+                        // eBay „zuletzt verkauft" E1 §8 (Gegenstück zu EbaySoldRow.jsx).
+                        if (ebayAccess != "fehlt") EbaySoldRow(v, ebayAccess)
                         // Spec koreanische Karten §4: Preis ist Trend x KR-Faktor -- Gegenstueck zu CardDetailPanel.jsx.
                         val krFaktor = v.cmLangFactor
                         if (v.language == "KR" && krFaktor != null) {

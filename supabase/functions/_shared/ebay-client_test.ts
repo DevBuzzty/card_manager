@@ -1,8 +1,8 @@
 // Spec H3b §4.3/§9 -- eBay-Client gegen nachgebaute Antworten (kein Netz).
-import { assertEquals, assertRejects } from "jsr:@std/assert@1";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert@1";
 import {
   APP_SCOPE, appToken, CALL_TIMEOUT_MS, categoryAspects, consentUrl, credsFor, EbayError, ebayApi, ensureAccess, exchangeCode,
-  type Fetch, refreshAccess,
+  type Fetch, INSIGHTS_SCOPE, refreshAccess, searchSold,
 } from "./ebay-client.ts";
 import { fakeEbay } from "./fake-ebay.ts";
 import { fakeFetch } from "./fake-fetch.ts";
@@ -210,4 +210,46 @@ Deno.test("Finanzdaten: Host apiz, Marktplatz-Kopf EBAY_DE, Filter orderId + SAL
   const c = e.calls[0];
   assertEquals(c.url, "https://apiz.sandbox.ebay.com/sell/finances/v1/transaction?filter=orderId%3A%7BO-1%7D&filter=transactionType%3A%7BSALE%7D&limit=50");
   assertEquals([c.marketplace, c.auth], ["EBAY_DE", "Bearer AT"]);
+});
+
+// eBay „zuletzt verkauft" E1 -- Insights-Scope, Scope-Erkennung, Verkaufssuche (Produktions-Host, kein Netz).
+const PROD_TOKEN = "https://api.ebay.com/identity/v1/oauth2/token";
+
+Deno.test("appToken mit Insights-Scope sendet genau diesen Scope", async () => {
+  const f = fakeFetch({ [`POST ${PROD_TOKEN}`]: { body: { access_token: "AT", expires_in: 7200 } } });
+  assertEquals(await appToken(f.fetchFn, "production", C, INSIGHTS_SCOPE), "AT");
+  assertEquals(new URLSearchParams(f.calls[0].body!).get("scope"), INSIGHTS_SCOPE);
+});
+
+Deno.test("Scope nicht freigeschaltet (invalid_scope) -> scopeMissing, nicht auth, nicht vorübergehend", async () => {
+  const f = fakeFetch({ [`POST ${PROD_TOKEN}`]: { status: 400, body: { error: "invalid_scope", error_description: "The requested scope is invalid, unknown, malformed, or exceeds the scope granted to the client" } } });
+  const e = await assertRejects(() => appToken(f.fetchFn, "production", C, INSIGHTS_SCOPE), EbayError);
+  assertEquals([e.scopeMissing, e.auth, e.transient], [true, false, false]);
+  assert(!e.message.includes("AT"));
+});
+
+const SOLD = "https://api.ebay.com/buy/marketplace_insights/v1_beta/item_sales/search";
+Deno.test("searchSold: Abfrage mit Set-Code, Kategorie, EBAY_DE; Felder gemappt", async () => {
+  const f = fakeFetch({ [`GET ${SOLD}`]: { body: { itemSales: [
+    { itemId: "v1|1|0", title: "Red-Eyes B. Dragon SDJ-G001 Ultra Rare", lastSoldPrice: { value: "7.50", currency: "EUR" },
+      lastSoldDate: "2026-09-28T14:03:00.000Z", itemWebUrl: "https://www.ebay.de/itm/1", conditionId: "4000" },
+    { itemId: "v1|2|0", title: "ohne Preis" },
+  ] } } });
+  const r = await searchSold(f.fetchFn, "production", "TOK", "SDJ-G001", "183454");
+  const u = new URL(f.calls[0].url);
+  assertEquals([u.searchParams.get("q"), u.searchParams.get("category_ids"), u.searchParams.get("limit")], ["SDJ-G001", "183454", "200"]);
+  assertEquals(f.calls[0].headers["x-ebay-c-marketplace-id"], "EBAY_DE");
+  assertEquals(f.calls[0].headers["authorization"], "Bearer TOK");
+  assertEquals(r, [
+    { itemId: "v1|1|0", title: "Red-Eyes B. Dragon SDJ-G001 Ultra Rare", price: 7.5, currency: "EUR", soldAt: "2026-09-28T14:03:00.000Z", url: "https://www.ebay.de/itm/1", conditionId: "4000" },
+    { itemId: "v1|2|0", title: "ohne Preis", price: null, currency: null, soldAt: null, url: null, conditionId: null },
+  ]);
+});
+
+Deno.test("searchSold: keine Treffer -> leere Liste; 403 -> scopeMissing; 429 -> vorübergehend", async () => {
+  assertEquals(await searchSold(fakeFetch({ [`GET ${SOLD}`]: { body: { total: 0 } } }).fetchFn, "production", "T", "X-DE001", "1"), []);
+  const e403 = await assertRejects(() => searchSold(fakeFetch({ [`GET ${SOLD}`]: { status: 403, body: { errors: [{ message: "Insufficient permissions" }] } } }).fetchFn, "production", "T", "X", "1"), EbayError);
+  assertEquals(e403.scopeMissing, true);
+  const e429 = await assertRejects(() => searchSold(fakeFetch({ [`GET ${SOLD}`]: { status: 429, body: {} } }).fetchFn, "production", "T", "X", "1"), EbayError);
+  assertEquals([e429.transient, e429.scopeMissing], [true, false]);
 });

@@ -1,0 +1,14 @@
+{
+  "_comment": "eBay 'zuletzt verkauft' E1 §8 -- Anzeigezeile im Karten-Detail. ZWILLING: desktop/src/utils/ebaySold.js (ebaySold.test.mjs) und android/.../cloud/EbaySold.kt (EbaySoldTest.kt). Wer eine Fassung ändert, ändert beide.",
+  "line": [
+    { "name": "Zugang fehlt schlägt alles", "access": "fehlt", "row": { "status": "ok", "median_all": 7.5, "n_all": 12, "median_first": null, "n_first": 0, "last_sold_at": "2026-09-28T14:03:00+00:00" }, "line": "eBay-Verkaufsdaten: Zugang noch nicht freigeschaltet", "canCheck": false },
+    { "name": "noch nie geprüft (aktiv)", "access": "aktiv", "row": null, "line": "eBay: noch nicht geprüft", "canCheck": true },
+    { "name": "noch nie geprüft (unbekannt)", "access": "unbekannt", "row": null, "line": "eBay: noch nicht geprüft", "canCheck": true },
+    { "name": "Wert", "access": "aktiv", "row": { "status": "ok", "median_all": 7.5, "n_all": 12, "median_first": null, "n_first": 0, "last_sold_at": "2026-09-28T14:03:00+00:00" }, "line": "eBay verkauft: 7,50 € · 12 Verkäufe · zuletzt 28.09.", "canCheck": true },
+    { "name": "Wert mit 1. Auflage", "access": "aktiv", "row": { "status": "ok", "median_all": 7.5, "n_all": 12, "median_first": 9, "n_first": 4, "last_sold_at": "2026-09-28T14:03:00Z" }, "line": "eBay verkauft: 7,50 € · 12 Verkäufe · zuletzt 28.09. · 1. Aufl. 9,00 € (4)", "canCheck": true },
+    { "name": "Tausenderpunkt, ohne Datum", "access": "aktiv", "row": { "status": "ok", "median_all": 1234.5, "n_all": 3, "median_first": null, "n_first": 0, "last_sold_at": null }, "line": "eBay verkauft: 1.234,50 € · 3 Verkäufe", "canCheck": true },
+    { "name": "zu wenig", "access": "aktiv", "row": { "status": "zu_wenig", "median_all": null, "n_all": 2, "median_first": null, "n_first": 0, "last_sold_at": "2026-09-28T14:03:00Z" }, "line": "eBay: zu wenig Verkäufe (2)", "canCheck": true },
+    { "name": "keiner", "access": "aktiv", "row": { "status": "zu_wenig", "median_all": null, "n_all": 0, "median_first": null, "n_first": 0, "last_sold_at": null }, "line": "eBay: zu wenig Verkäufe (0)", "canCheck": true },
+    { "name": "fehler", "access": "aktiv", "row": { "status": "fehler", "median_all": null, "n_all": 0, "median_first": null, "n_first": 0, "last_sold_at": null }, "line": "eBay: Abruf fehlgeschlagen", "canCheck": true }
+  ]
+}

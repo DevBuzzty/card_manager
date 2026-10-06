@@ -141,6 +141,9 @@ contextBridge.exposeInMainWorld('api', {
   saleNotices: () => ipcRenderer.invoke('sale-notices'),
   dismissSaleNotice: (noticeId) => ipcRenderer.invoke('sale-notice-dismiss', noticeId),
   ebayOrders: () => ipcRenderer.invoke('ebay-orders'),
+  ebaySoldGet: (printing) => ipcRenderer.invoke('ebay-sold-get', printing),
+  ebaySoldAccess: () => ipcRenderer.invoke('ebay-sold-access'),
+  ebaySoldCheck: (printing) => ipcRenderer.invoke('ebay-sold-check', printing),
   onSaleNoticesChanged: (cb) => { const s = (_e) => cb(); ipcRenderer.on('sale-notices-changed', s); return () => ipcRenderer.removeListener('sale-notices-changed', s); },
   onOpenSaleNotices: (cb) => { const s = (_e) => cb(); ipcRenderer.on('open-sale-notices', s); return () => ipcRenderer.removeListener('open-sale-notices', s); },
 

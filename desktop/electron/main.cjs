@@ -35,6 +35,7 @@ const { createImportSessions, importOpen, importResolve, importRun } = require('
 const { onlineSearch } = require('./online-search.cjs');
 const { buildExport, exportCount, exportResultText } = require('./collection-export.cjs');
 const { navCounts } = require('./nav-counts.cjs');
+const { soldRowFor, insightsAccess, normalizeSoldRow } = require('./ebay-sold.cjs');
 
 // Initialize Database
 const userDataPath = app.getPath('userData');
@@ -1062,6 +1063,19 @@ ipcMain.handle('ebay-listings', () => Object.fromEntries(db.prepare('SELECT * FR
 ipcMain.handle('sale-notices', () => db.prepare('SELECT * FROM sale_notices WHERE dismissed = 0 ORDER BY created_at DESC, notice_id').all());
 ipcMain.handle('ebay-orders', () => Object.fromEntries(db.prepare('SELECT sale_id, status, fees_final FROM ebay_orders WHERE sale_id IS NOT NULL').all()
     .map((r) => [r.sale_id, { status: r.status, fees_final: !!r.fees_final }])));
+// eBay „zuletzt verkauft" E1 §7: Zeile eines Drucks aus dem Nur-Lese-Spiegel; Einzelabruf über die Edge Function.
+const soldPrinting = (p) => ({ card_id: String(p?.card_id ?? p?.id ?? ''), set_code: String(p?.set_code ?? ''), language: String(p?.language || 'DE'), rarity: String(p?.rarity ?? '') });
+ipcMain.handle('ebay-sold-get', (event, p) => ({ row: soldRowFor(db, soldPrinting(p)), access: insightsAccess(db) }));
+ipcMain.handle('ebay-sold-access', () => insightsAccess(db));
+ipcMain.handle('ebay-sold-check', async (event, p) => {
+    try {
+        const printing = soldPrinting(p);
+        const r = await invokeEbay('ebay-sold-prices', { printing });
+        if (sync) await sync.syncNow();
+        // Frische Werte der Funktion bevorzugen; der Spiegel hinkt, bis der Pull nachzieht.
+        return { ...r, row: r.row ? normalizeSoldRow(r.row) : soldRowFor(db, printing), access: r.access ?? insightsAccess(db) };
+    } catch (e) { console.error('[ebay-sold-check]', e.message); return { ok: false, error: 'eBay-Abruf fehlgeschlagen.' }; }
+});
 // Wegtippen schreibt direkt in die Cloud (Plan-Abweichung A5, wie price-alerts-event-dismiss); die lokale Zeile folgt
 // sofort, der nächste Pull bestätigt sie. Ohne Cloud-Verbindung: Fehler statt stillem lokalem Wegtippen.
 ipcMain.handle('sale-notice-dismiss', async (event, noticeId) => {

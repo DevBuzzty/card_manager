@@ -186,3 +186,11 @@ am PC zusätzlich als Windows-Benachrichtigung). Design: `docs/superpowers/plans
   eBays Finanzdaten da sind (in der Sandbox bleiben sie oft leer).
 - Die Finanzdaten kommen vom Host `apiz.ebay.com` (Sandbox vermutlich `apiz.sandbox.ebay.com` — scheitert das,
   steht es in `last_error`, Bestellungen werden trotzdem gebucht).
+
+## eBay „zuletzt verkauft" (Spec 2026-10-05, E1)
+
+1. `supabase/ebay_sold_schema.sql` im SQL-Editor ausführen (Tabellen `ebay_sold_prices`, `ebay_insights_state`, RPC `ebay_sold_candidates`).
+2. `supabase functions deploy ebay-sold-prices --no-verify-jwt --project-ref uirfqwklvavgjklgqpnn` (gleiche Secrets wie `ebay-sync`).
+3. `supabase/ebay_sold_cron.sql` mit eingesetztem `EBAY_CRON_SECRET` ausführen; prüfen: `select jobname, schedule from cron.job;`
+4. Nach dem ersten Lauf: `select * from public.ebay_insights_state;` — vor der Freischaltung durch eBay steht `access = 'fehlt'`.
+   Sobald eBay den Scope `buy.marketplace.insights` freigibt, setzt der nächste tägliche Lauf `aktiv` und füllt die Werte selbst.
