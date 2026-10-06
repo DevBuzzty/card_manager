@@ -13,3 +13,8 @@ android/.idea/
 
 # Supabase-CLI (npx supabase ...)
 supabase/.temp/
+
+# Lokale Build-Ausgaben, Daten und Deno-Lockfile
+desktop/dist-*/
+/data/
+/deno.lock
