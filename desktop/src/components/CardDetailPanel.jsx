@@ -6,6 +6,7 @@ import Flag from './Flag';
 import CopySheet from './CopySheet';
 import PriceHistoryChart from './PriceHistoryChart';
 import PriceAlertTargets from './PriceAlertTargets';
+import EbaySoldRow from './EbaySoldRow';
 import { groupCopies, valueOf, firstEdLine, CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { parseTags } from '../utils/tags';
 import { fmtEUR } from '../utils/format';
@@ -306,6 +307,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   <span className="text-xs text-muted border border-line px-1 rounded">{variant.rarity}</span>
                               </div>
                               <span className="text-xs text-text">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
+                              <EbaySoldRow variant={variant} />
                               {variant.language === 'KR' && (variant.kr_updated_at ? (
                                   variant.kr_ktcg_usd == null
                                     ? <span className="text-xs text-warn" title="k-tcg.com führt diesen Druck nicht">kein KR-Preis</span>
