@@ -46,7 +46,7 @@ const AUSWAHL_CHANNELS = ['relocate-copies', 'restore-copy-locations'];
 const I1_CHANNELS = ['nav-counts'];
 
 // eBay „zuletzt verkauft" E1 (Spec 2026-10-05 §7): Zeile eines Drucks lesen, Einzelabruf.
-const EBAY_SOLD_CHANNELS = ['ebay-sold-get', 'ebay-sold-check'];
+const EBAY_SOLD_CHANNELS = ['ebay-sold-get', 'ebay-sold-check', 'ebay-sold-access'];
 
 for (const ch of [...E1_CHANNELS, ...E2_CHANNELS, ...E3_CHANNELS, ...F1_CHANNELS, ...H1_CHANNELS, ...H2_CHANNELS, ...H3A_CHANNELS, ...H3B1_CHANNELS, ...H3B2_CHANNELS, ...AUSWAHL_CHANNELS, ...I1_CHANNELS, ...EBAY_SOLD_CHANNELS]) {
   test(`Kanal ${ch} steht in main.cjs und preload.cjs`, () => {

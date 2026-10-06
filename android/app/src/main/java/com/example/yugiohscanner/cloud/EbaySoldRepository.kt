@@ -47,12 +47,12 @@ object EbaySoldRepository {
         r.use { if (it.isSuccessful) it.body?.string().orEmpty() else "[]" } // fehlende Tabelle (SQL nicht eingespielt) -> leer
     }
 
-    suspend fun load(card: CardRow): Pair<String, EbaySold.SoldRow?> {
-        val access = parseAccess(get("ebay_insights_state", listOf("select" to "access", "id" to "eq.1")))
-        val row = parseRow(get("ebay_sold_prices", listOf("select" to COLS, "card_id" to "eq.${card.id}", "set_code" to "eq.${card.setCode}",
+    /** Zugang einmal je Karte lesen (Spec §8: „nicht freigeschaltet" nur einmal), nicht je Druck. */
+    suspend fun access(): String = parseAccess(get("ebay_insights_state", listOf("select" to "access", "id" to "eq.1")))
+
+    suspend fun load(card: CardRow): EbaySold.SoldRow? =
+        parseRow(get("ebay_sold_prices", listOf("select" to COLS, "card_id" to "eq.${card.id}", "set_code" to "eq.${card.setCode}",
             "language" to "eq.${card.language}", "rarity" to "eq.${card.rarity ?: ""}")))
-        return access to row
-    }
 
     suspend fun check(card: CardRow): Pair<String, String?> {
         val r = EbayRepository.invoke("ebay-sold-prices", JSONObject().put("printing", JSONObject()

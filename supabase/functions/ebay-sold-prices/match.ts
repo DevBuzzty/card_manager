@@ -38,7 +38,7 @@ function mentionedRarities(title: string): Set<string> {
 
 const EXCLUDE = /\b(psa|bgs|cgc|pgs|aog|gsg|beckett|graded|gegradet|lot|konvolut|sammlung|sammelaufl(ö|oe)sung|restposten|bundle|playset|set|proxy|orica|replica|fan\s*made|custom|altered|signed|signiert|misprint|fehldruck)\b|\b([2-9]|\d{2,})\s*x\b|\bx\s*([2-9]|\d{2,})\b/i;
 const GRADED_CONDITION_IDS = new Set(["2750"]); // gemessen: eBay-Zustand „Graded"
-const FIRST = /\b1\s*\.?\s*aufl|\b1\s*\.?\s*a\b|\b1\s*st\b|\b1\s*ed\b|\berstauflage\b|\bfirst\b|\b1\.(?=\s|$|,)/i;
+const FIRST = /\b1\s*\.?\s*aufl|\b1\s*\.\s*a\b|\b1\s*st\b|\b1\s*ed\b|\berstauflage\b|\bfirst\b|\b1\.(?=\s|$|,)/i;
 const NOT_FIRST = /\bnon[\s-]*(1st|first)\b/i;
 // Beliebiger Set-Code im Titel; mehrere verschiedene = Sammelangebot.
 const ANY_CODE = /\b[A-Z0-9]{2,5}-[A-Z]{0,2}\d{3}\b/gi;

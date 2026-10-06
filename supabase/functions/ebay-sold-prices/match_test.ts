@@ -48,6 +48,9 @@ Deno.test("Auflage aus dem Titel", () => {
     assertEquals(matchSale(t, "4000", p).first, true, t);
   }
   assertEquals(matchSale("SDJ-G001 Unlimitiert", "4000", p).first, false);
+  // "1A" ohne Punkt ist Zustandsangabe, keine 1. Auflage; mit Punkt schon.
+  for (const t of ["SDJ-G001 Ultra Rare 1A Zustand", "SDJ-G001 Top Zustand 1a"]) assertEquals(matchSale(t, "4000", p).first, false, t);
+  for (const t of ["SDJ-G001 Ultra Rare 1.A", "SDJ-G001 Ultra Rare 1. A"]) assertEquals(matchSale(t, "4000", p).first, true, t);
   assertEquals(matchSale("SDJ-G001", "4000", p).first, false);
   assertEquals(matchSale("SDJ-G001 Non 1st Edition", "4000", p).first, false);
   assertEquals(matchSale("SDJ-G001 Non-First", "4000", p).first, false);

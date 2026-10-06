@@ -6,8 +6,8 @@ import { fmtEUR } from '../utils/format';
 
 const printingOf = (v) => ({ card_id: String(v.id), set_code: v.set_code, language: v.language || 'DE', rarity: v.rarity });
 
-export default function EbaySoldRow({ variant }) {
-  const [state, setState] = useState({ row: null, access: 'unbekannt', loaded: false });
+export default function EbaySoldRow({ variant, access = 'unbekannt' }) {
+  const [state, setState] = useState({ row: null, access, loaded: false });
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -18,11 +18,11 @@ export default function EbaySoldRow({ variant }) {
 
   useEffect(() => {
     let alive = true;
-    setState({ row: null, access: 'unbekannt', loaded: false });
+    setState({ row: null, access, loaded: false });
     setOpen(false); setError(null); setBusy(false);
     if (!window.api?.ebaySoldGet) return undefined;
     window.api.ebaySoldGet(printingOf(variant))
-      .then((r) => { if (alive) setState({ row: r?.row ?? null, access: r?.access ?? 'unbekannt', loaded: true }); })
+      .then((r) => { if (alive) setState({ row: r?.row ?? null, access: r?.access ?? access, loaded: true }); })
       .catch(() => { if (alive) setState((s) => ({ ...s, loaded: true })); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

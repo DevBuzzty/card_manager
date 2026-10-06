@@ -7,6 +7,7 @@ import CopySheet from './CopySheet';
 import PriceHistoryChart from './PriceHistoryChart';
 import PriceAlertTargets from './PriceAlertTargets';
 import EbaySoldRow from './EbaySoldRow';
+import { ebaySoldLine } from '../utils/ebaySold';
 import { groupCopies, valueOf, firstEdLine, CONDITIONS, EDITIONS, EDITION_LABELS } from '../utils/valuation';
 import { parseTags } from '../utils/tags';
 import { fmtEUR } from '../utils/format';
@@ -34,6 +35,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
   const [sheetCopy, setSheetCopy] = useState(null); // das im Exemplar-Sheet geoeffnete Exemplar, oder null
   const [sold, setSold] = useState([]); // Spec H2 §7: verkaufte Exemplare dieser Karte
   const soldSeq = useRef(createLatestOnly()); // eine spaete Antwort fuer Karte A landet nie bei Karte B
+  const [ebayAccess, setEbayAccess] = useState('unbekannt'); // eBay-Zugang einmal je Karte (Spec §8: „nicht freigeschaltet“ nur einmal)
   const [offers, setOffers] = useState({}); // Spec H3a §6: copy_id -> aktive Angebote ("angeboten auf …")
   const offersSeq = useRef(createLatestOnly());
   const vKey = (v) => `${v.set_code}|${v.rarity}|${v.language || 'DE'}`;
@@ -66,6 +68,13 @@ export default function CardDetailPanel({ paletteOpen = false }) {
     setCard({ ...primary, variants: rows });
   };
   useEffect(() => { loadCard(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, [params.id]);
+  useEffect(() => {
+    let alive = true;
+    setEbayAccess('unbekannt');
+    if (!window.api?.ebaySoldAccess) return undefined;
+    window.api.ebaySoldAccess().then((a) => { if (alive) setEbayAccess(a ?? 'unbekannt'); }).catch(() => {});
+    return () => { alive = false; };
+  }, [params.id]);
   // Verkauf/Storno/Abgleich an anderer Stelle: „Verkauft" frisch halten.
   // Spec H3a §6: dazu Angebote (Abgleich, 'listings-dirty') fuer "angeboten auf …".
   // Spec I §5.2 Punkt 3/4: auch die Exemplare selbst -- ein Storno ueber die Rueckgaengig-Leiste (oder ein
@@ -298,6 +307,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
 
           <div className="space-y-3 mb-4">
               {localVariants.length === 0 && <p className="text-muted text-sm italic">Noch keine Exemplare.</p>}
+              {localVariants.length > 0 && ebayAccess === 'fehlt' && <p className="text-xs text-muted">{ebaySoldLine('fehlt', null)}</p>}
               {localVariants.map((variant, idx2) => (
                   <div key={idx2} className="flex flex-col gap-2 bg-bg/40 p-2 rounded-lg border border-line">
                       <div className="flex items-start justify-between">
@@ -307,7 +317,7 @@ export default function CardDetailPanel({ paletteOpen = false }) {
                                   <span className="text-xs text-muted border border-line px-1 rounded">{variant.rarity}</span>
                               </div>
                               <span className="text-xs text-text">{firstEdLine(variant) ?? fmtEUR(variant.price || 0)}</span>
-                              <EbaySoldRow variant={variant} />
+                              {ebayAccess !== 'fehlt' && <EbaySoldRow variant={variant} access={ebayAccess} />}
                               {variant.language === 'KR' && (variant.kr_updated_at ? (
                                   variant.kr_ktcg_usd == null
                                     ? <span className="text-xs text-warn" title="k-tcg.com führt diesen Druck nicht">kein KR-Preis</span>

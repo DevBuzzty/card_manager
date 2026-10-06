@@ -30,9 +30,9 @@ import java.util.Locale
 
 /** eBay „zuletzt verkauft" E1 §8 -- Gegenstück zu desktop/src/components/EbaySoldRow.jsx; Text aus EbaySold.line. */
 @Composable
-fun EbaySoldRow(card: CardRow) {
+fun EbaySoldRow(card: CardRow, initialAccess: String) {
     val key = "${card.id}|${card.setCode}|${card.language}|${card.rarity}"
-    var access by remember(key) { mutableStateOf("unbekannt") }
+    var access by remember(key) { mutableStateOf(initialAccess) }
     var row by remember(key) { mutableStateOf<EbaySold.SoldRow?>(null) }
     var loaded by remember(key) { mutableStateOf(false) }
     var open by remember(key) { mutableStateOf(false) }
@@ -41,7 +41,7 @@ fun EbaySoldRow(card: CardRow) {
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
     LaunchedEffect(key) {
-        runCatching { EbaySoldRepository.load(card) }.onSuccess { (a, r) -> access = a; row = r }
+        runCatching { EbaySoldRepository.load(card) }.onSuccess { row = it }
         loaded = true
     }
     if (!loaded) return
@@ -58,7 +58,7 @@ fun EbaySoldRow(card: CardRow) {
                         runCatching { EbaySoldRepository.check(card) }
                             .onSuccess { (a, e) -> access = a; error = e }
                             .onFailure { error = it.message ?: "eBay-Abruf fehlgeschlagen." }
-                        runCatching { EbaySoldRepository.load(card) }.onSuccess { (a, r) -> access = a; row = r }
+                        runCatching { EbaySoldRepository.load(card) }.onSuccess { row = it }
                         busy = false
                     }
                 }) { Text(if (busy) "prüfe …" else "jetzt bei eBay prüfen", style = MaterialTheme.typography.labelSmall) }

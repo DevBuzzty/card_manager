@@ -19,7 +19,10 @@ export async function runSold(d: RunDeps, o: RunOpts): Promise<RunResult> {
   const st = await d.store.state();
   let calls = st.calls_day === today ? st.calls_today : 0;
   const finish = async (r: RunResult, err: string | null) => {
-    await d.store.setState({ access: r.access, last_error: err, last_run_at: nowIso, calls_today: calls, calls_day: today });
+    // Einzelprüfung (Knopf) fasst last_error/last_run_at des Cron-Laufs nie an; nur Zugang und Zähler.
+    await d.store.setState(o.mode === "single"
+      ? { access: r.access, calls_today: calls, calls_day: today }
+      : { access: r.access, last_error: err, last_run_at: nowIso, calls_today: calls, calls_day: today });
     return err ? { ...r, error: err } : r;
   };
 

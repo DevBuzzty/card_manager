@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Database = require('better-sqlite3');
 const { ensureEbaySchema, EBAY_SOLD_COLS } = require('./ebay-schema.cjs');
-const { soldRowFor, insightsAccess } = require('./ebay-sold.cjs');
+const { soldRowFor, insightsAccess, normalizeSoldRow } = require('./ebay-sold.cjs');
 const sync = require('./sync.cjs');
 
 function freshDb() {
@@ -61,4 +61,12 @@ test('Fehlende Cloud-Tabelle: Pull wirft (Aufrufer protokolliert), lokale Abfrag
     range: () => Promise.resolve({ data: null, error: { message: 'relation "public.ebay_sold_prices" does not exist' } }) }) };
   await assert.rejects(() => sync._pullReadOnlyTable(c, db, 'ebay_sold_prices'), /ebay_sold_prices/);
   assert.equal(soldRowFor(db, P), null);
+});
+
+test('normalizeSoldRow: Zahlen-Strings werden Zahlen, sales bleibt Liste, null bleibt null', () => {
+  const n = normalizeSoldRow({ ...CLOUD, sales: undefined });
+  assert.equal(n.median_all, 7.5); assert.equal(n.last_sold_price, 6); assert.equal(n.median_first, null);
+  assert.deepEqual(n.sales, []);
+  assert.deepEqual(normalizeSoldRow(CLOUD).sales, CLOUD.sales);
+  assert.equal(normalizeSoldRow(null), null);
 });

@@ -17,4 +17,13 @@ function insightsAccess(db) {
   } catch { return 'unbekannt'; }
 }
 
-module.exports = { soldRowFor, insightsAccess };
+// Frische Zeile aus der Edge-Function-Antwort (Zahlen evtl. als Text) in die Form des lokalen Spiegels bringen.
+const NUM_COLS = ['median_all', 'median_first', 'last_sold_price'];
+function normalizeSoldRow(row) {
+  if (!row) return null;
+  const out = { ...row, sales: Array.isArray(row.sales) ? row.sales : [] };
+  for (const c of NUM_COLS) if (out[c] != null && out[c] !== '' && !Number.isNaN(Number(out[c]))) out[c] = Number(out[c]);
+  return out;
+}
+
+module.exports = { soldRowFor, insightsAccess, normalizeSoldRow };

@@ -132,3 +132,11 @@ Deno.test("Fix2c: 401, Erneuerung liefert invalid_scope -> access fehlt", async 
   const r = await runSold(deps(st, f), { mode: "cron", minPrice: 5, budget: 50 });
   assertEquals([r.ok, r.access, st.state.access, st.rows.size], [false, "fehlt", "fehlt", 0]);
 });
+
+Deno.test("Einzelprüfung lässt last_error/last_run_at des Cron-Laufs unangetastet", async () => {
+  const st = fakeSoldStore({ state: { access: "aktiv", last_error: "429 alt", last_run_at: "2026-10-05T01:00:00.000Z", calls_day: "2026-10-05", calls_today: 3 } });
+  const f = fakeFetch({ [`POST ${TOKEN}`]: tokenOk, [`GET ${SOLD}`]: salesFor });
+  const r = await runSold(deps(st, f), { mode: "single", printing: P1 });
+  assertEquals(r.ok, true);
+  assertEquals([st.state.last_error, st.state.last_run_at, st.state.calls_today], ["429 alt", "2026-10-05T01:00:00.000Z", 4]);
+});
