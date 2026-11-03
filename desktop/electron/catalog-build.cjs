@@ -104,6 +104,85 @@ function attachVerified(cards, verifiedByPasscode) {
   return cards;
 }
 
+// Deutscher Code: Infix -DE oder -G<Ziffer> (je nach Aera). Dieselbe Regel wie readVerified (catalog-builder.cjs) und
+// api-handler.cjs -- KR-, EN- oder JP-Codes landen nie in printings_verified.
+const isGermanCode = (code) => /-DE/i.test(code) || /-G\d/i.test(code);
+
+// Nachtrag Katalogbau 2026-11-03 — verifizierte DE-Drucke aus dem zuletzt veroeffentlichten Katalog erhalten.
+// Der eigene api_cache kennt nur die Karten, die DIESER Rechner je bei Yugipedia nachgeschlagen hat; ein Bau von einem
+// anderen Rechner (oder nach einem DB-Wechsel) wuerde sonst alle uebrigen echten DE-Codes still vom Handy loeschen.
+// Regeln:
+//  - Kennt der lokale Cache eine Karte (frische Yugipedia-Daten), gilt fuer sie NUR der lokale Stand -- so kann ein
+//    korrigierter Cache alte Fehler und von Yugipedia entfernte Drucke wirklich loswerden. Aus dem Vorgaenger
+//    uebernommen werden nur Karten ohne lokalen Fund.
+//  - Rarity-Angaben werden bereinigt (saubereRarity: Reste von HTML-Kommentaren/Templates aus dem Wiki-Text, in v11
+//    belegt: "Common<!--", "Rare-->", "Ultra Rare-->"). Bleibt keine echte Rarity (kenntRarity), wird sie ehrlich
+//    'Unknown' -- der verifizierte DEUTSCHE Code bleibt erhalten (wie readVerified).
+//  - Je Karte faellt ein code|Unknown weg, sobald derselbe Code eine bekannte Rarity hat (v11: 76948970 ALIN-DE091).
+// Vorgaenger-Eintraege muessen dieselbe Form haben, die attachVerified erzeugt (code: deutscher Code, rarity: nicht leer,
+// lang: 'DE' bzw. fehlend); `cm` wird verworfen, attachCm setzt es neu. Reihenfolge: lokale Karten/Eintraege in ihrer
+// Reihenfolge zuerst, danach die uebernommenen in der Reihenfolge des Vorgaengers -- fuer saubere Eintraege ist der
+// Roundtrip Vorgaenger -> attachVerified -> attachCm also verlustfrei.
+// `local`: Map passcode -> Array<{code,rarity,lang}> (readVerified) oder Map passcode -> Map<"code|rarity", Eintrag>.
+// `previous`: Katalog-Objekt ({ cards }) oder dessen cards-Array; alles andere = kein Vorgaenger.
+// `knownIds`: optional Set der Passcodes (String) im neuen Bau -- Karten, die es nicht mehr gibt, fallen weg.
+function saubereRarity(raw) {
+  let s = String(raw == null ? '' : raw);
+  s = s.replace(/<!--[\s\S]*?-->/g, ' ');   // vollstaendige Kommentare
+  s = s.replace(/<!--|-->/g, ' ');          // abgeschnittene Kommentar-Reste
+  s = s.split(/\{\{|\}\}|\||</)[0];         // Template-/Tabellen-/Tag-Reste abschneiden
+  s = s.replace(/\s+/g, ' ').trim();
+  return kenntRarity(s) ? s : UNBEKANNT;
+}
+
+// Je Code: Platzhalter 'Unknown' nur, wenn es fuer diesen Code keine bekannte Rarity gibt. Reihenfolge bleibt.
+function ohneUnbekannteDubletten(entries) {
+  const bekannt = new Set();
+  for (const e of entries) if (e.rarity !== UNBEKANNT) bekannt.add(e.code);
+  return entries.filter(e => e.rarity !== UNBEKANNT || !bekannt.has(e.code));
+}
+
+function mergeVerified(local, previous, { knownIds = null } = {}) {
+  const keep = (passcode) => !knownIds || knownIds.has(passcode);
+  const out = new Map();
+  for (const [passcode, v] of local instanceof Map ? local : []) {
+    const id = String(passcode);
+    if (!keep(id)) continue;
+    const list = Array.isArray(v) ? v : (v instanceof Map ? Array.from(v.values()) : []);
+    const entries = new Map();
+    for (const e of list) {
+      if (!e || !e.code) continue;
+      const rarity = e.rarity ? saubereRarity(e.rarity) : 'Common';
+      const key = `${e.code}|${rarity}`;
+      if (!entries.has(key)) entries.set(key, { ...e, rarity });
+    }
+    if (entries.size > 0) out.set(id, ohneUnbekannteDubletten(Array.from(entries.values())));
+  }
+
+  let carriedCards = 0;
+  let carriedPrintings = 0;
+  const prevCards = Array.isArray(previous) ? previous : (previous && Array.isArray(previous.cards) ? previous.cards : []);
+  for (const c of prevCards) {
+    if (!c || c.id == null || !Array.isArray(c.printings_verified)) continue;
+    const id = String(c.id);
+    if (!keep(id) || out.has(id)) continue;     // lokaler Fund ersetzt den Vorgaenger fuer diese Karte ganz
+    const entries = new Map();
+    for (const p of c.printings_verified) {
+      if (!p || typeof p.code !== 'string' || !p.code || !isGermanCode(p.code)) continue;
+      if (typeof p.rarity !== 'string' || !p.rarity) continue;
+      const lang = p.lang == null ? 'DE' : p.lang;
+      if (lang !== 'DE') continue;
+      const rarity = saubereRarity(p.rarity);
+      const key = `${p.code}|${rarity}`;
+      if (!entries.has(key)) entries.set(key, { code: p.code, rarity, lang });
+    }
+    const list = ohneUnbekannteDubletten(Array.from(entries.values()));
+    if (list.length > 0) { out.set(id, list); carriedCards++; carriedPrintings += list.length; }
+  }
+
+  return { verified: out, carriedCards, carriedPrintings };
+}
+
 // Spec G3 §3 — Art eines Sealed-Produkts aus der Cardmarket-Kategorie. EINZIGE Stelle dieser Zuordnung;
 // die Werte sind die sechs erlaubten sealed_items.kind (sealed-value.cjs#SEALED_KINDS).
 const SEALED_KIND_BY_CATEGORY = {
@@ -158,4 +237,4 @@ function packCatalog(cards, version, sealedProducts = [], aliases = {}) {
   return { buffer, json, bytes: buffer.length };
 }
 
-module.exports = { cmPriceOf, banOf, mergeCards, buildAliases, attachVerified, attachCm, sealedKindOf, buildSealedProducts, packCatalog };
+module.exports = { cmPriceOf, banOf, mergeCards, buildAliases, attachVerified, mergeVerified, saubereRarity, isGermanCode, attachCm, sealedKindOf, buildSealedProducts, packCatalog };

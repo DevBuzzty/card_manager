@@ -238,7 +238,10 @@ export default function Settings() {
             if (res && res.error) {
                 setCatalogResult({ ok: false, text: res.message });
             } else if (res && res.version !== undefined) {
-                setCatalogResult({ ok: true, text: `Version ${res.version} hochgeladen (${formatBytes(res.bytes)}).` });
+                const carried = res.verifiedCarried && res.verifiedCarried.cards > 0
+                    ? ` Deutsche Drucke für ${res.verifiedCarried.cards} Karten aus Version ${res.verifiedCarried.fromVersion} übernommen.`
+                    : '';
+                setCatalogResult({ ok: true, text: `Version ${res.version} hochgeladen (${formatBytes(res.bytes)}).${carried}` });
                 const status = await window.api.getCatalogStatus();
                 if (status) setCatalogStatus(status);
             }

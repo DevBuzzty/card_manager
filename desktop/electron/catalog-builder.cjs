@@ -6,7 +6,8 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { cachedFetch } = require('./api-handler.cjs');
 const { UNBEKANNT, repariereQuellcode } = require('./rarity-sources.cjs');
-const { mergeCards, buildAliases, attachVerified, attachCm, packCatalog } = require('./catalog-build.cjs');
+const zlib = require('zlib');
+const { mergeCards, buildAliases, attachVerified, mergeVerified, isGermanCode, attachCm, packCatalog } = require('./catalog-build.cjs');
 const { makeCmLookup } = require('./cardmarket-bulk.cjs');
 const { sealedProductsForCatalog } = require('./sealed-products.cjs');
 const { saveCatalogFile } = require('./catalog-prices.cjs');
@@ -29,6 +30,7 @@ const ERROR_MESSAGES = {
   catalog_versions: 'Versionseintrag konnte nicht gespeichert werden.',
   read: 'Datei konnte nicht gelesen werden.',
   'invalid-kind': 'Unbekannte Modellart.',
+  'previous-catalog': 'Vorgänger-Katalog konnte nicht geladen werden – Bau abgebrochen, damit keine verifizierten deutschen Drucke verloren gehen.',
   internal: 'Unerwarteter Fehler.',
 };
 function errResult(code, detail, message) {
@@ -98,7 +100,6 @@ async function seedVersion(client, kind, localVersion) {
 const WIKI_PARSE_KEY_RE = /^wiki_parse:https?:\/\/[^?]+\?action=parse&page=([^&]+)&prop=wikitext&format=json$/;
 const DE_SETS_BLOCK_RE = /\|\s*de_sets\s*=\s*([\s\S]*?)\n\s*(?:\||\}\})/;
 const CARD_TABLE_SET_RE = /\{\{\s*Card table set\s*\|([^}]*)\}\}/i;
-const isGermanCode = (code) => /-DE/i.test(code) || /-G\d/i.test(code);
 
 function readVerified(db) {
   const verified = new Map(); // passcode -> Map<"code|rarity", {code, rarity, lang}>
@@ -175,6 +176,41 @@ function readVerified(db) {
   return out;
 }
 
+// ---- Vorgaenger-Katalog (Nachtrag 2026-11-03: verifizierte Drucke erhalten) ----------------------
+// Liest den zuletzt veroeffentlichten Katalog ueber catalog_versions (kind='catalog'). Ergebnis:
+//   { catalog: null, version: null }  -> es gibt keinen Vorgaenger (keine Zeile) -- ohne Uebernahme weiterbauen
+//   { catalog, version }               -> geladen, gunzip + JSON ok, sha256 (falls eingetragen) passt
+//   { error }                          -> Zeile da (oder unklar), aber nicht ladbar -- der Bau MUSS abbrechen,
+//                                         sonst verliert der neue Katalog still die verifizierten DE-Drucke.
+// Download ueber client.storage (oeffentlicher Bucket, Dateiname = letztes Segment der url).
+async function loadPreviousCatalog(client) {
+  let row;
+  try {
+    const { data, error } = await client.from('catalog_versions').select('version,url,sha256').eq('kind', 'catalog').maybeSingle();
+    if (error) return errResult('previous-catalog', `catalog_versions: ${error.message || error}`);
+    row = data;
+  } catch (e) {
+    return errResult('previous-catalog', `catalog_versions: ${e.message}`);
+  }
+  if (!row) return { catalog: null, version: null };
+
+  try {
+    const fileName = row.url ? decodeURIComponent(String(row.url).split('?')[0].split('/').pop()) : `catalog.v${row.version}.json.gz`;
+    const { data, error } = await client.storage.from(BUCKET).download(fileName);
+    if (error || !data) return errResult('previous-catalog', `download ${fileName}: ${(error && error.message) || 'leer'}`);
+    const buffer = typeof data.arrayBuffer === 'function' ? Buffer.from(await data.arrayBuffer()) : Buffer.from(data);
+    if (row.sha256) {
+      const sha = crypto.createHash('sha256').update(buffer).digest('hex');
+      if (sha !== row.sha256) return errResult('previous-catalog', `sha256 ${sha} != ${row.sha256}`);
+    }
+    const catalog = JSON.parse(zlib.gunzipSync(buffer).toString('utf8'));
+    if (!catalog || !Array.isArray(catalog.cards)) return errResult('previous-catalog', 'cards[] fehlt');
+    return { catalog, version: Number(catalog.version) || Number(row.version) || null };
+  } catch (e) {
+    return errResult('previous-catalog', e.message);
+  }
+}
+
 // ---- Bauen, hochladen, Version verbuchen --------------------------------------------------------
 
 async function runCatalogBuild(db, { ensureClient, force = false, userDataPath = null } = {}) {
@@ -195,8 +231,15 @@ async function runCatalogBuild(db, { ensureClient, force = false, userDataPath =
     const dumps = await loadDumps(db, force);
     if (dumps.error) return dumps;
 
+    // Vorgaenger vor dem teuren Teil laden: scheitert er, wird nichts gepackt oder hochgeladen.
+    const previous = await loadPreviousCatalog(client);
+    if (previous.error) return previous;
+
     const verifiedByPasscode = readVerified(db);
-    const cards = attachVerified(mergeCards(dumps.en, dumps.de), verifiedByPasscode);
+    const merged = mergeCards(dumps.en, dumps.de);
+    const { verified: verifiedAll, carriedCards, carriedPrintings } = mergeVerified(verifiedByPasscode, previous.catalog,
+      { knownIds: new Set(merged.map(c => String(c.id))) });
+    const cards = attachVerified(merged, verifiedAll);
     // Spec 2026-10-04 §3.2: Cardmarket-Produkt je Druck. Ohne Dateien/Netz wird ohne `cm` gebaut.
     try {
       const cmLookup = userDataPath ? await makeCmLookup(db, userDataPath) : null;
@@ -238,7 +281,8 @@ async function runCatalogBuild(db, { ensureClient, force = false, userDataPath =
       catch (e) { console.error('[catalog-builder] Katalogdatei nicht gespeichert:', e.message); }
     }
 
-    return { version, bytes, url, cards: cards.length, verified: verifiedByPasscode.size, sealed: sealedProducts.length };
+    return { version, bytes, url, cards: cards.length, verified: verifiedByPasscode.size, sealed: sealedProducts.length,
+      verifiedCarried: { fromVersion: previous.version, cards: carriedCards, printings: carriedPrintings } };
   } catch (e) {
     console.error('[catalog-builder] runCatalogBuild failed:', e.message);
     return errResult('internal', e.message);
@@ -296,4 +340,4 @@ async function uploadModel(db, { ensureClient, kind, filePath } = {}) {
   }
 }
 
-module.exports = { loadDumps, readVerified, runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS };
+module.exports = { loadDumps, readVerified, loadPreviousCatalog, runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS };

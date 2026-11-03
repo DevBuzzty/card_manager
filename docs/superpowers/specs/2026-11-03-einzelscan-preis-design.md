@@ -1409,3 +1409,29 @@ Damit ist die in §15 beschriebene Lücke „ohne `cm`“ zu etwa 80 % geschloss
 Ohne `cm` bleiben vor allem Sets ohne eindeutige Cardmarket-Expansion, Präfixe ohne cardsets-Eintrag und Namensvarianten einzelner Karten.
 Varianten-Expansionen (Duelist League, WI26-Stempel, YCSW, 2007/2016-Doppelprodukte) liefern Spannen statt Einzel-IDs.
 Wirksam wird das am Handy erst mit dem nächsten Katalogbau am Desktop und dem nächsten `cm-index`-Lauf nach dem Deploy. Beides macht der Nutzer (§11).
+
+## Nachtrag Katalogbau: verifizierte Drucke erhalten
+
+**Grund.** `runCatalogBuild` holte die verifizierten deutschen Drucke (`printings_verified`) bisher nur aus dem eigenen `api_cache` (`readVerified`: `wiki_parse:%` + `ygoprodeck:%`). Der kennt nur Karten, die genau dieser Rechner je bei Yugipedia nachgeschlagen hat. Gemessen am 03.11. an einer Kopie der PC-DB: 26 passende Cache-Zeilen, daraus 12 Karten mit 144 Drucken. Der zuletzt veröffentlichte Katalog v11 (auf einem anderen Rechner gebaut) trägt verifizierte DE-Drucke für 2.515 Karten (9.386 Drucke). Ein Bau von diesem PC hätte am Handy für über 2.500 Karten die echten DE-Codes gelöscht.
+
+**Regel.** `mergeVerified` (`desktop/electron/catalog-build.cjs`) kombiniert die lokalen Funde mit denen des Vorgänger-Katalogs:
+- Kennt der lokale Cache eine Karte, gilt für sie nur der lokale Stand. Er ersetzt den Vorgänger für diese Karte ganz, statt mit ihm vereinigt zu werden. So kann ein korrigierter Cache alte Fehler und von Yugipedia entfernte Drucke wirklich entfernen. Aus dem Vorgänger übernommen werden nur Karten ohne lokalen Fund (der eigentliche Zweck: Karten, die dieser PC nie nachgeschlagen hat).
+- Übernommen werden nur Karten, die im neuen Bau noch vorkommen, und nur Einträge in der Form von `attachVerified`: deutscher Code (`-DE`/`-G<Ziffer>`, wie bei `readVerified`, also nie KR/EN), nicht leere Seltenheit, `lang` = `DE`. `cm` fällt weg, `attachCm` setzt es neu.
+- Seltenheiten werden bereinigt (`saubereRarity`, lokal wie übernommen): Reste von Wiki-Kommentaren und Templates (`<!--`, `-->`, `{{`, `}}`, `|`, `<`) fallen weg. Bleibt keine echte Seltenheit übrig (`kenntRarity`), wird sie `Unknown`. Der verifizierte deutsche Code bleibt dabei erhalten, wie bei `readVerified`.
+- Je Karte fällt ein `code|Unknown` weg, sobald derselbe Code auch eine bekannte Seltenheit hat.
+- Reihenfolge: zuerst die lokalen Karten, danach die übernommenen in der Reihenfolge des Vorgängers. Innerhalb einer Karte bleibt die Reihenfolge der Quelle. Für saubere Einträge ist der Roundtrip verlustfrei. Gegen v11 geprüft: nur die 3 unten genannten Karten ändern sich, eine zweite Runde liefert dasselbe Ergebnis.
+
+**Ablauf.** `loadPreviousCatalog` liest `catalog_versions` (`kind='catalog'`) und lädt die Datei aus dem Bucket `catalog`. Sie prüft `sha256`, falls eingetragen, entpackt sie mit gunzip und parst sie.
+- Fehlt die Zeile, läuft der Bau ohne Übernahme weiter.
+- Ist die Zeile da, aber Download, Prüfsumme oder Parsen scheitern, bricht der Bau mit dem Fehlercode `previous-catalog` ab. Dasselbe passiert, wenn `catalog_versions` nicht lesbar ist. In diesen Fällen wird nichts hochgeladen und keine Version verbucht.
+
+Das Ergebnis meldet zusätzlich `verifiedCarried: { fromVersion, cards, printings }`. Die bestehenden Felder bleiben unverändert, `verified` zählt weiter nur die lokalen Funde. Die Statuszeile in den Einstellungen nennt die übernommenen Karten.
+
+**Erwartung für v12 von diesem PC** (Kopie der PC-DB + v11, neu gerechnet nach der Bereinigung): 2.515 Karten mit 9.390 Drucken. Davon stammen 2.503 Karten mit 9.246 Drucken aus v11, die übrigen 12 Karten mit 144 Drucken sind lokal.
+
+**Bereinigt beim Übernehmen (in v11 belegt):**
+- Polymerization 24094653: `SGX2-DEA12`/`Common<!--` und `JUSH-DE014`/`Rare-->` werden zu `Common` bzw. `Rare` und fallen mit den schon vorhandenen richtigen Einträgen zusammen.
+- Red-Eyes Black Dragon 74677422: `LOB-DE070`/`Ultra Rare-->` wird zu `Ultra Rare`.
+- Mitsurugi no Miko, Wousu 76948970: `ALIN-DE091`/`Unknown` fällt weg, weil `ALIN-DE091`/`Common` existiert.
+
+v11 allein ergibt damit 2.515 Karten mit 9.383 statt 9.386 Drucken, ohne Kommentar-Reste. `readVerified` selbst ist unverändert. Seine Reste werden in `mergeVerified` bereinigt, das jeder Bau durchläuft.

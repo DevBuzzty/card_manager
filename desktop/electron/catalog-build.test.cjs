@@ -245,3 +245,196 @@ test('attachCm setzt cm an printings und printings_verified, uebergibt die Selte
   assert.equal(cards[0].printings_verified[0].cm, 30);
   assert.deepEqual(calls[3], ['Toadally Awesome', 'RA03-DE040', 'Ultra Rare', ['Super Rare', 'Ultra Rare']]);
 });
+
+// ---- Nachtrag Katalogbau 2026-11-03: verifizierte Drucke aus dem Vorgaenger-Katalog erhalten ----
+const { mergeVerified, isGermanCode } = require('./catalog-build.cjs');
+
+// Form wie im veroeffentlichten Katalog v11: Eintraege tragen `cm` (von attachCm), lang 'DE'.
+const PREV = {
+  version: 11,
+  cards: [
+    { id: 46986414, printings_verified: [
+      { code: 'LOB-DE005', rarity: 'Ultra Rare', lang: 'DE', cm: [1, 2] },
+      { code: 'SDY-DE006', rarity: 'Common', lang: 'DE' },
+    ] },
+    { id: 89631139, printings_verified: [
+      { code: 'SDK-G001', rarity: 'Ultra Rare', lang: 'DE', cm: 7 },
+      { code: 'LCKC-DE001', rarity: 'Unknown', lang: 'DE' },
+    ] },
+    { id: 11111111, printings_verified: [] },
+  ],
+};
+
+test('mergeVerified ohne lokale Funde uebernimmt den Vorgaenger verlustfrei (ohne cm, gleiche Reihenfolge)', () => {
+  const { verified, carriedCards, carriedPrintings } = mergeVerified(new Map(), PREV);
+  assert.deepEqual([...verified.keys()], ['46986414', '89631139']);
+  assert.deepEqual(verified.get('46986414'), [
+    { code: 'LOB-DE005', rarity: 'Ultra Rare', lang: 'DE' },
+    { code: 'SDY-DE006', rarity: 'Common', lang: 'DE' },
+  ]);
+  assert.deepEqual(verified.get('89631139'), [
+    { code: 'SDK-G001', rarity: 'Ultra Rare', lang: 'DE' },
+    { code: 'LCKC-DE001', rarity: 'Unknown', lang: 'DE' },
+  ]);
+  assert.equal(carriedCards, 2);
+  assert.equal(carriedPrintings, 4);
+});
+
+test('mergeVerified: kennt der lokale Cache eine Karte, ersetzt er den Vorgaenger fuer diese Karte ganz', () => {
+  const local = new Map([
+    ['46986414', [
+      { code: 'LOB-DE005', rarity: 'Ultra Rare', lang: 'DE' },
+      { code: 'LOB-DE005', rarity: 'Secret Rare', lang: 'DE' },         // neu lokal
+    ]],                                                                    // SDY-DE006 hat Yugipedia nicht mehr
+    ['22222222', [{ code: 'NEU-DE001', rarity: 'Common', lang: 'DE' }]],
+  ]);
+  const { verified, carriedCards, carriedPrintings } = mergeVerified(local, PREV);
+  assert.deepEqual(verified.get('46986414'), [
+    { code: 'LOB-DE005', rarity: 'Ultra Rare', lang: 'DE' },
+    { code: 'LOB-DE005', rarity: 'Secret Rare', lang: 'DE' },
+  ]);
+  assert.deepEqual(verified.get('22222222'), [{ code: 'NEU-DE001', rarity: 'Common', lang: 'DE' }]);
+  assert.equal(verified.get('89631139').length, 2);
+  // uebernommen wird nur fuer Karten ohne lokalen Fund: 89631139 (2 Drucke)
+  assert.equal(carriedCards, 1);
+  assert.equal(carriedPrintings, 2);
+});
+
+test('mergeVerified: ein korrigierter lokaler Cache entfernt alte Fehleintraege des Vorgaengers', () => {
+  const prev = { cards: [{ id: 74677422, printings_verified: [
+    { code: 'LOB-DE070', rarity: 'Ultra Rare-->', lang: 'DE' },
+    { code: 'LOB-DE999', rarity: 'Ultra Rare', lang: 'DE' },            // von Yugipedia inzwischen entfernt
+  ] }] };
+  const local = new Map([['74677422', [{ code: 'LOB-DE070', rarity: 'Ultra Rare', lang: 'DE' }]]]);
+  const { verified, carriedCards } = mergeVerified(local, prev);
+  assert.deepEqual(verified.get('74677422'), [{ code: 'LOB-DE070', rarity: 'Ultra Rare', lang: 'DE' }]);
+  assert.equal(carriedCards, 0);
+});
+
+test('mergeVerified: Kommentar-/Template-Reste in der Rarity werden entfernt (Faelle aus v11)', () => {
+  // Polymerization 24094653 und Red-Eyes 74677422 wie in Katalog v11
+  const prev = { cards: [
+    { id: 24094653, printings_verified: [
+      { code: 'SGX2-DEA12', rarity: 'Common<!--', lang: 'DE' },
+      { code: 'JUSH-DE014', rarity: 'Rare-->', lang: 'DE' },
+      { code: 'SGX2-DEA12', rarity: 'Common', lang: 'DE' },
+      { code: 'JUSH-DE014', rarity: 'Rare', lang: 'DE' },
+      { code: 'ABC-DE001', rarity: '<!-- Secret Rare -->Super Rare', lang: 'DE' },
+      { code: 'ABC-DE002', rarity: 'Rare{{Sup|x}}', lang: 'DE' },
+      { code: 'ABC-DE003', rarity: 'Ultra Rare|egal', lang: 'DE' },
+      { code: 'ABC-DE004', rarity: '<!--', lang: 'DE' },                  // nur Rest -> Code bleibt, Rarity unbekannt
+      { code: 'ABC-DE005', rarity: '3', lang: 'DE' },                     // keine Rarity (kenntRarity)
+    ] },
+    { id: 74677422, printings_verified: [{ code: 'LOB-DE070', rarity: 'Ultra Rare-->', lang: 'DE' }] },
+  ] };
+  const { verified, carriedPrintings } = mergeVerified(new Map(), prev);
+  assert.deepEqual(verified.get('24094653').map(e => `${e.code}|${e.rarity}`), [
+    'SGX2-DEA12|Common', 'JUSH-DE014|Rare', 'ABC-DE001|Super Rare', 'ABC-DE002|Rare',
+    'ABC-DE003|Ultra Rare', 'ABC-DE004|Unknown', 'ABC-DE005|Unknown',
+  ]);
+  assert.deepEqual(verified.get('74677422'), [{ code: 'LOB-DE070', rarity: 'Ultra Rare', lang: 'DE' }]);
+  assert.equal(carriedPrintings, 8);
+});
+
+test('mergeVerified: lokale Rarity-Reste werden ebenso bereinigt', () => {
+  const local = new Map([['1', [
+    { code: 'A-DE001', rarity: 'Common<!--', lang: 'DE' },
+    { code: 'A-DE001', rarity: 'Common', lang: 'DE' },
+  ]]]);
+  assert.deepEqual(mergeVerified(local, null).verified.get('1'), [{ code: 'A-DE001', rarity: 'Common', lang: 'DE' }]);
+});
+
+test('mergeVerified: Unknown faellt weg, sobald derselbe Code eine bekannte Rarity hat (beide Reihenfolgen)', () => {
+  // v11: Mitsurugi no Miko, Wousu 76948970 -- ALIN-DE091 als Common UND als Unknown
+  const prev = { cards: [
+    { id: 76948970, printings_verified: [
+      { code: 'ALIN-DE091', rarity: 'Common', lang: 'DE' },
+      { code: 'L26D-DEM07', rarity: 'Common', lang: 'DE' },
+      { code: 'ALIN-DE091', rarity: 'Unknown', lang: 'DE' },
+    ] },
+    { id: 83994646, printings_verified: [
+      { code: 'PSV-G088', rarity: 'Unknown', lang: 'DE' },
+      { code: 'PSV-G088', rarity: 'Common', lang: 'DE' },
+      { code: 'PSV-G099', rarity: 'Unknown', lang: 'DE' },                // ohne bekannte Rarity -> bleibt
+    ] },
+  ] };
+  const local = new Map([['5', [
+    { code: 'X-DE001', rarity: 'Unknown', lang: 'DE' },
+    { code: 'X-DE001', rarity: 'Rare', lang: 'DE' },
+  ]]]);
+  const { verified, carriedPrintings } = mergeVerified(local, prev);
+  const keys = (id) => verified.get(id).map(e => `${e.code}|${e.rarity}`);
+  assert.deepEqual(keys('76948970'), ['ALIN-DE091|Common', 'L26D-DEM07|Common']);
+  assert.deepEqual(keys('83994646'), ['PSV-G088|Common', 'PSV-G099|Unknown']);
+  assert.deepEqual(keys('5'), ['X-DE001|Rare']);
+  assert.equal(carriedPrintings, 4);
+});
+
+test('mergeVerified nimmt lokal auch Map<code|rarity, Eintrag> an', () => {
+  const local = new Map([['46986414', new Map([['LOB-DE005|Ultra Rare', { code: 'LOB-DE005', rarity: 'Ultra Rare', lang: 'DE' }]])]]);
+  const { verified } = mergeVerified(local, PREV);
+  assert.deepEqual(verified.get('46986414').map(e => `${e.code}|${e.rarity}`), ['LOB-DE005|Ultra Rare']);
+});
+
+test('mergeVerified verwirft Karten, die es im neuen Bau nicht mehr gibt', () => {
+  const { verified, carriedCards } = mergeVerified(new Map(), PREV, { knownIds: new Set(['89631139']) });
+  assert.deepEqual([...verified.keys()], ['89631139']);
+  assert.equal(carriedCards, 1);
+});
+
+test('mergeVerified verwirft kaputte und nicht-deutsche Eintraege aus dem Vorgaenger', () => {
+  const prev = { cards: [
+    { id: 5, printings_verified: [
+      { code: 'ABC-DE001', rarity: 'Rare', lang: 'DE' },
+      { code: 'ABC-KR001', rarity: 'Rare', lang: 'KR' },     // KR gehoert nie in printings_verified
+      { code: 'ABC-EN001', rarity: 'Rare', lang: 'DE' },     // kein deutscher Code
+      { code: 'ABC-DE002', rarity: 'Rare', lang: 'EN' },     // falsche Sprache
+      { code: '', rarity: 'Rare', lang: 'DE' },
+      { code: 'ABC-DE003', rarity: '', lang: 'DE' },
+      { code: 'ABC-DE004', lang: 'DE' },
+      { code: 42, rarity: 'Rare', lang: 'DE' },
+      null,
+      { code: 'ABC-DE001', rarity: 'Rare', lang: 'DE' },     // doppelt
+      { code: 'ABC-DE005', rarity: 'Rare' },                  // lang fehlt -> DE wie attachVerified
+    ] },
+    { id: null, printings_verified: [{ code: 'X-DE001', rarity: 'Rare', lang: 'DE' }] },
+    { id: 6, printings_verified: 'kaputt' },
+    null,
+  ] };
+  const { verified, carriedPrintings } = mergeVerified(new Map(), prev);
+  assert.deepEqual([...verified.keys()], ['5']);
+  assert.deepEqual(verified.get('5'), [
+    { code: 'ABC-DE001', rarity: 'Rare', lang: 'DE' },
+    { code: 'ABC-DE005', rarity: 'Rare', lang: 'DE' },
+  ]);
+  assert.equal(carriedPrintings, 2);
+});
+
+test('mergeVerified ohne Vorgaenger (null) liefert lokal unveraendert', () => {
+  const local = new Map([['1', [{ code: 'A-DE001', rarity: 'Rare', lang: 'DE' }]]]);
+  for (const prev of [null, undefined, {}, { cards: 'x' }]) {
+    const { verified, carriedCards, carriedPrintings } = mergeVerified(local, prev);
+    assert.deepEqual([...verified.entries()], [['1', [{ code: 'A-DE001', rarity: 'Rare', lang: 'DE' }]]]);
+    assert.equal(carriedCards, 0);
+    assert.equal(carriedPrintings, 0);
+  }
+});
+
+test('mergeVerified akzeptiert auch das cards-Array direkt', () => {
+  assert.equal(mergeVerified(new Map(), PREV.cards).carriedPrintings, 4);
+});
+
+test('Roundtrip: Vorgaenger -> mergeVerified -> attachVerified -> attachCm ergibt dieselben printings_verified', () => {
+  const cards = mergeCards(EN, DE);                  // Karte 46986414
+  const { verified } = mergeVerified(new Map(), PREV, { knownIds: new Set(cards.map(c => String(c.id))) });
+  attachVerified(cards, verified);
+  attachCm(cards, (_n, code) => (code === 'LOB-DE005' ? [1, 2] : null));
+  assert.deepEqual(cards[0].printings_verified, PREV.cards[0].printings_verified);
+});
+
+test('isGermanCode: -DE und -G<Ziffer>, sonst nicht', () => {
+  assert.equal(isGermanCode('LOB-DE005'), true);
+  assert.equal(isGermanCode('SDK-G001'), true);
+  assert.equal(isGermanCode('LOB-EN005'), false);
+  assert.equal(isGermanCode('LOB-KR005'), false);
+});
