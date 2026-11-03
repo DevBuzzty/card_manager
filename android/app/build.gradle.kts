@@ -1,3 +1,7 @@
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.temporal.ChronoUnit
 import java.util.Properties
 
 plugins {
@@ -11,6 +15,20 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// Spec 2026-11-03 §8.2 -- Versionsnummer aus Builddatum und Git, damit am Geraet erkennbar ist, welcher Stand laeuft.
+// versionCode steigt mit der Build-Uhrzeit (UTC, minutengenau) und haengt NICHT am Git-Zustand: Zweigwechsel, Squash oder
+// reset --soft am selben Tag ergeben keine kleinere Nummer (sonst INSTALL_FAILED_VERSION_DOWNGRADE). Ohne git: "nogit".
+fun git(vararg a: String): String? = runCatching {
+    providers.exec { commandLine("git", *a); isIgnoreExitValue = true }.standardOutput.asText.get().trim().ifEmpty { null }
+}.getOrNull()
+val buildZeit: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC)
+val buildTag: LocalDate = buildZeit.toLocalDate()
+val tage = ChronoUnit.DAYS.between(LocalDate.of(2026, 1, 1), buildTag).toInt()
+val minuteDesTages = buildZeit.hour * 60 + buildZeit.minute
+val gitCount = git("rev-list", "--count", "HEAD")?.toIntOrNull() ?: 0
+val gitSha = git("rev-parse", "--short=7", "HEAD") ?: "nogit"
+val gitDirty = git("status", "--porcelain", "--untracked-files=no") != null
+
 android {
     namespace = "com.example.yugiohscanner"
     compileSdk = 34
@@ -19,8 +37,8 @@ android {
         applicationId = "com.example.yugiohscanner"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 1_000 + tage * 1_440 + minuteDesTages     // z. B. 442 412 am 03.11.2026 12:52 UTC, > altes 1; Grenze 2,1e9 erst in ~4000 Jahren
+        versionName = "${buildTag.toString().replace("-", ".")}-$gitCount-$gitSha" + if (gitDirty) "+" else ""   // "2026.11.03-1025-d4da262+"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

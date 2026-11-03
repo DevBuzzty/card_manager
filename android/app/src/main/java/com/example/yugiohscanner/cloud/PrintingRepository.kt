@@ -1,6 +1,9 @@
 package com.example.yugiohscanner.cloud
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -12,6 +15,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 // [verified] mirrors CatalogPrinting.verified (Spec D1): true only for a printing the offline
 // catalog's `printings_verified` block actually confirms (a real, curated code for THIS card in
@@ -34,7 +39,8 @@ data class SetOption(
 // Konami is authoritative and catches niche printings (e.g. Speed Duel "SGX3-DEA10") the wikis
 // miss. Mirrors the desktop app.
 object PrintingRepository {
-    private val client = OkHttpClient()
+    // Spec 2026-11-03 §4.1: Gesamtfrist je Aufruf, damit kein Hintergrundjob an einem haengenden Aufruf festsitzt (gilt fuer alle Pfade).
+    internal val client = OkHttpClient.Builder().callTimeout(10, TimeUnit.SECONDS).build()
     private const val UA = "YGOScanner/1.0 (card collection app)"
     private const val KONAMI_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     private const val KONAMI = "https://www.db.yugioh-card.com/yugiohdb/card_search.action"
@@ -60,6 +66,35 @@ object PrintingRepository {
     private const val KR_CACHE = "sets-kr-v1"
     private const val NAME_KO_CACHE = "name-ko-v1"
     private val hintergrund = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+
+    // Spec 2026-11-03 §4.1 -- ein geteilter Abruf je Passcode. Vorher startete ScanResolver nach der Frist einen ZWEITEN
+    // fetchAllSets; jetzt warten alle auf dasselbe Deferred im Hintergrund-Scope. Abgebrochen wird nur das Warten, der
+    // Abruf laeuft weiter und fuellt den ScanCache. Den geteilten Job bricht niemand ab.
+    internal val laufend = ConcurrentHashMap<String, Deferred<List<SetOption>>>()
+    internal var abruf: suspend (String) -> List<SetOption> = { fetchAllSets(it) }      // Naht fuer Tests
+    internal var scope: CoroutineScope = hintergrund                                    // Naht fuer Tests
+    internal var protokoll: (String, String) -> Unit = { t, m -> com.example.yugiohscanner.ml.ScanLog.line(t, m) }   // Naht fuer Tests
+    internal var jetztMs: () -> Long = { System.nanoTime() / 1_000_000 }
+
+    fun fetchAllSetsGeteilt(passcode: String): Deferred<List<SetOption>> {
+        laufend[passcode]?.let { return it }
+        lateinit var neu: Deferred<List<SetOption>>
+        // LAZY: startet erst NACH dem Eintragen, sonst faende remove() im finally bei sofort fertigem Abruf nichts.
+        neu = scope.async(start = CoroutineStart.LAZY) {
+            val t0 = jetztMs()
+            try {
+                val l = try { abruf(passcode) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+                protokoll("Drucke", "pc=$passcode geteilt n=${l.size} dauer=${jetztMs() - t0}ms")
+                l
+            } finally {
+                laufend.remove(passcode, neu)            // zweistellig: entfernt nur den eigenen Eintrag
+            }
+        }
+        val vorhanden = laufend.putIfAbsent(passcode, neu)
+        if (vorhanden != null) { neu.cancel(); return vorhanden }   // nie gestartet, verworfen
+        neu.start()
+        return neu
+    }
 
     suspend fun fetchAllSets(passcode: String): List<SetOption> = coroutineScope {
         // Catalog first (Task 9), but only on CONFIRMED German data: unverified catalog printings

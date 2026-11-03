@@ -516,9 +516,11 @@ fun ScanScreen(onClose: () -> Unit) {
                     if (erg == null) {
                         snackbar.showSnackbar("Keine Karte erkannt")
                     } else {
+                        // Spec 2026-11-03 §4.2: Einzelfoto wartet bis 4 s aufs Netz und rechnet danach nach (Stapel: Vorgaben).
                         val r = ScanResolver.resolve(
                             erg.passcode.toString(), erg.evidence, erg.frames, erg.editionTexts,
                             com.example.yugiohscanner.Prefs.defaultEdition(context),
+                            netzWartenMs = ScanResolver.NETZ_WARTEN_EINZEL_MS, nachrechnen = true,
                         )
                         if (r == null) {
                             snackbar.showSnackbar("Karte ${erg.passcode} nicht gefunden")

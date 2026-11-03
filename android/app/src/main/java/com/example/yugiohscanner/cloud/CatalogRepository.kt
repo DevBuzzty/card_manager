@@ -33,15 +33,33 @@ object CatalogRepository {
     /** Anzahl der Sealed-Produkte im importierten Katalog; 0 ohne Katalog oder mit Katalog von vor G3. */
     fun sealedProductCount(): Int = db?.sealedProductCount() ?: 0
 
-    fun card(passcode: String): CatalogCard? {
-        val database = db?.readableDatabase ?: return null
-        val card = database.query(
-            "cards", null, "id = ?", arrayOf(passcode), null, null, null
-        ).use { c -> if (c.moveToFirst()) readCard(c) else null } ?: return null
-        return card.copy(printings = printings(passcode))
+    /**
+     * Spec 2026-11-03 §8.1 -- Passcode, unter dem die Daten stehen: der angefragte, wenn er eine Karte ist, sonst die
+     * Hauptkarte laut Alias-Tabelle, sonst der angefragte. Rein, damit ohne SQLite testbar.
+     */
+    internal fun kanonisch(passcode: String, istKarte: (String) -> Boolean, alias: (String) -> String?): String =
+        if (istKarte(passcode)) passcode else alias(passcode) ?: passcode
+
+    private fun kanonisch(passcode: String): String {
+        val database = db?.readableDatabase ?: return passcode
+        return kanonisch(passcode,
+            istKarte = { pc -> database.query("cards", arrayOf("id"), "id = ?", arrayOf(pc), null, null, null).use { it.moveToFirst() } },
+            alias = { pc -> runCatching { aliases(listOf(pc))[pc] }.getOrNull() })   // Katalog vor E3: keine Alias-Tabelle
     }
 
-    fun printings(passcode: String): List<CatalogPrinting> {
+    /** Spec 2026-11-03 §8.1: Alias-Passcodes lesen die Daten der Hauptkarte; `id` bleibt der angefragte Passcode. */
+    fun card(passcode: String): CatalogCard? {
+        val database = db?.readableDatabase ?: return null
+        val k = kanonisch(passcode)
+        val card = database.query(
+            "cards", null, "id = ?", arrayOf(k), null, null, null
+        ).use { c -> if (c.moveToFirst()) readCard(c) else null } ?: return null
+        return card.copy(id = passcode, printings = printingsVon(k))
+    }
+
+    fun printings(passcode: String): List<CatalogPrinting> = printingsVon(kanonisch(passcode))
+
+    private fun printingsVon(passcode: String): List<CatalogPrinting> {
         val database = db?.readableDatabase ?: return emptyList()
         val result = mutableListOf<CatalogPrinting>()
         database.query(
@@ -83,7 +101,7 @@ object CatalogRepository {
                 results.add(readCard(c))
             }
         }
-        return results.map { it.copy(printings = printings(it.id)) }
+        return results.map { it.copy(printings = printingsVon(it.id)) }
     }
 
     /** Spec G3 §3: SQL und Argumente der Sealed-Suche -- rein, damit die Escape-Regel ohne SQLite testbar ist. */

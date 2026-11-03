@@ -2,15 +2,22 @@ package com.example.yugiohscanner.ui
 
 import com.example.yugiohscanner.cloud.CardRow
 import com.example.yugiohscanner.cloud.CardSearchRepository
+import com.example.yugiohscanner.cloud.CatalogCard
 import com.example.yugiohscanner.cloud.CatalogRepository
 import com.example.yugiohscanner.cloud.PrintingRepository
 import com.example.yugiohscanner.cloud.RarityQuellen
 import com.example.yugiohscanner.cloud.SetCodeMatch
 import com.example.yugiohscanner.cloud.SetOption
 import com.example.yugiohscanner.ml.ScanConfidence
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Das fertige Urteil ueber einen Scan -- alles, was ein Abnehmer braucht, und nichts davon
  *  an einen Staging-Eintrag gebunden. */
@@ -23,6 +30,9 @@ class ResolvedScan(
      *  auch wenn er zu keinem Druck von [base] gehoert. Genau dann ist er wertvoll: dann hat die
      *  Bilderkennung die falsche Karte gegriffen, und der PC kann es am Code merken. */
     val readSetCode: String? = null,
+    /** Spec 2026-11-03 §4.2: nur bei `nachrechnen` und nach dem Rueckfall auf Katalogdrucke gesetzt. Liefert das
+     *  Ergebnis mit den nachgekommenen Netzdrucken, oder `null`, wenn das Netz nichts Neues brachte. */
+    val verbessert: Deferred<ResolvedScan?>? = null,
 )
 
 /**
@@ -39,22 +49,38 @@ class ResolvedScan(
  */
 object ScanResolver {
 
-    /** @return `null`, wenn zu [pc] ueberhaupt keine Karte gefunden wurde. Netz- und
-     *  Katalogfehler fliegen als Ausnahme zum Aufrufer hoch, genau wie vorher. */
-    private const val NETZ_WARTEN_MS = 1_500L
-    private val hintergrund = kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+    // Spec 2026-11-03 §4.2: Einzelmodus wartet laenger (Preis vor Tempo), Stapel bleibt bei 1,5 s.
+    const val NETZ_WARTEN_STAPEL_MS = 1_500L
+    const val NETZ_WARTEN_EINZEL_MS = 4_000L
 
+    // Naehte fuer Tests (Vorgaben = Verhalten auf dem Geraet), Spec 2026-11-03 §4.2.
+    internal var katalogKarte: (String) -> CatalogCard? = { CatalogRepository.card(it) }
+    internal var sucheKarte: suspend (String) -> CardRow? = { CardSearchRepository.search(it).firstOrNull() }
+    internal var geteilt: (String) -> Deferred<List<SetOption>> = { PrintingRepository.fetchAllSetsGeteilt(it) }
+    internal var krAusCache: (String) -> List<SetOption> = { PrintingRepository.cachedKoreanSets(it) }
+    internal var protokoll: (String, String) -> Unit = { t, m -> com.example.yugiohscanner.ml.ScanLog.line(t, m) }
+    internal var io: CoroutineDispatcher = Dispatchers.IO
+    internal var rechnen: CoroutineDispatcher = Dispatchers.Default
+    internal var hintergrund: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    internal var jetztMs: () -> Long = { System.nanoTime() / 1_000_000 }
+
+    /** @return `null`, wenn zu [pc] ueberhaupt keine Karte gefunden wurde. Netz- und
+     *  Katalogfehler fliegen als Ausnahme zum Aufrufer hoch, genau wie vorher.
+     *  [netzWartenMs]: Frist fuer den Netzabruf der Drucke; [nachrechnen]: nach einem Rueckfall
+     *  [ResolvedScan.verbessert] liefern (nur Einzelmodus, Spec 2026-11-03 §4.2). */
     suspend fun resolve(
         pc: String,
         evidence: List<String>,
         framesEvidence: List<String>,
         editionTexts: List<String>,
         defaultEdition: String,
+        netzWartenMs: Long = NETZ_WARTEN_STAPEL_MS,
+        nachrechnen: Boolean = false,
     ): ResolvedScan? {
         // Katalog zuerst (D1 Task 9): ein lokaler Treffer loest die Basiskarte sofort auf,
         // offline, ohne Netz. Abseits des UI-Threads -- das ist ein SQLite-Lesevorgang.
-        val catalogCard = withContext(Dispatchers.IO) {
-            runCatching { CatalogRepository.card(pc) }.getOrNull()
+        val catalogCard = withContext(io) {
+            runCatching { katalogKarte(pc) }.getOrNull()
         }
         // Die Basiskarte (Name, Werte, Bild) kommt immer aus dem Katalog, wenn sie dort steht --
         // reiner Gewinn. Die DRUCKLISTE nur dann, wenn der Katalog verifizierte (deutsche) Drucke
@@ -64,6 +90,7 @@ object ScanResolver {
 
         val base: CardRow
         val knownSets: List<SetOption>
+        var netzAbruf: Deferred<List<SetOption>>? = null   // nur gesetzt, wenn der Rueckfall griff
         if (catalogCard != null && catalogSets != null) {
             base = catalogCard.toCardRow()
             // Durch RarityQuellen, wie jeder andere Weg auch. Dieser Pfad liest den Katalog DIREKT
@@ -72,36 +99,43 @@ object ScanResolver {
             // KR-Drucke stehen nicht im Katalog: aus dem Zwischenspeicher, sonst im Hintergrund
             // nachgeladen (beim ersten Scan einer Karte wird der KR-Code also noch zusammengesetzt).
             knownSets = RarityQuellen.ohneErfundeneRarity(
-                catalogSets.map { it.toSetOption() } + PrintingRepository.cachedKoreanSets(pc)
+                catalogSets.map { it.toSetOption() } + krAusCache(pc)
             )
         } else {
             base = catalogCard?.toCardRow()
-                ?: CardSearchRepository.search(pc).firstOrNull()
+                ?: sucheKarte(pc)
                 ?: return null
-            // Netz hoechstens NETZ_WARTEN_MS (Scan-Protokoll 19.09.: bis 10 s bis zum PC). Sonst die Drucke aus
-            // dem Katalog nehmen und im Hintergrund weiterladen -- der ScanCache macht die naechste Karte sofort.
-            knownSets = kotlinx.coroutines.withTimeoutOrNull(NETZ_WARTEN_MS) {
-                runCatching { PrintingRepository.fetchAllSets(pc) }.getOrDefault(emptyList())
-            } ?: run {
-                com.example.yugiohscanner.ml.ScanLog.line("Drucke", "pc=$pc Netz > ${NETZ_WARTEN_MS}ms, Katalog-Drucke genutzt")
-                hintergrund.launch { runCatching { PrintingRepository.fetchAllSets(pc) } }
-                RarityQuellen.ohneErfundeneRarity(
-                    (catalogCard?.printings?.map { it.toSetOption() } ?: emptyList()) + PrintingRepository.cachedKoreanSets(pc)
+            // Spec 2026-11-03 §4.2: EIN geteilter Abruf (§4.1), hoechstens netzWartenMs warten. Kein runCatching um
+            // await: es wuerde den Timeout und den Abbruch des Aufrufers (Nutzer verlaesst die Kamera) schlucken. Nach
+            // der Frist laeuft der Abruf weiter und fuellt den ScanCache; einen zweiten Abruf gibt es nicht mehr.
+            val d = geteilt(pc)
+            val t0 = jetztMs()
+            val netz = withTimeoutOrNull(netzWartenMs) {
+                try { d.await() } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            }
+            val dauer = jetztMs() - t0
+            if (!netz.isNullOrEmpty()) {
+                protokoll("Drucke", "pc=$pc Netz ok n=${netz.size} dauer=${dauer}ms")
+                knownSets = netz
+            } else {
+                protokoll("Drucke", if (netz == null) "pc=$pc Netz > ${netzWartenMs}ms dauer=${dauer}ms, Katalog-Drucke genutzt"
+                    else "pc=$pc Netz leer dauer=${dauer}ms, Katalog-Drucke genutzt")
+                // Rueckfall auch bei leerer Antwort (vorher: leere Liste ganz ohne Katalogdrucke).
+                knownSets = RarityQuellen.ohneErfundeneRarity(
+                    (catalogCard?.printings?.map { it.toSetOption() } ?: emptyList()) + krAusCache(pc)
                 )
+                netzAbruf = d
             }
         }
 
         // Abseits des UI-Threads: der Abstandsvergleich waechst mit den gesammelten OCR-Texten und
         // hielt im Stapel-Modus beim Buchen Oberflaeche UND Kamera 1-3 s an (Thread-Stacks,
         // docs/superpowers/ledgers/2026-09-17-stapel-lichtschranke/performance-2-roh.log).
-        val (match, confidence) = withContext(Dispatchers.Default) {
-            val m = SetCodeMatch.best(evidence, knownSets, framesEvidence, com.example.yugiohscanner.ml.ScanSprache.fest)
-            m to ScanConfidence.fromEvidence(m, knownSets, editionTexts, defaultEdition)
-        }
+        val (match, confidence) = withContext(rechnen) { urteil(evidence, knownSets, framesEvidence, editionTexts, defaultEdition) }
         val readSetCode = com.example.yugiohscanner.ml.ReadSetCode.aus(framesEvidence)
-        logScanDecision("erst", pc, match, confidence, knownSets)
-        com.example.yugiohscanner.ml.ScanLog.line("Gelesen", "pc=$pc code=${readSetCode ?: "-"} gewaehlt=${match.selected?.setCode ?: "-"} fest=${com.example.yugiohscanner.ml.ScanSprache.fest ?: "auto"}")
-        com.example.yugiohscanner.ml.ScanLog.line("Sprache", "pc=$pc hinweis=${com.example.yugiohscanner.ml.SprachHinweis.aus(framesEvidence)}")
+        logScanDecision("erst", pc, match, confidence, knownSets, protokoll)
+        protokoll("Gelesen", "pc=$pc code=${readSetCode ?: "-"} gewaehlt=${match.selected?.setCode ?: "-"} fest=${com.example.yugiohscanner.ml.ScanSprache.fest ?: "auto"}")
+        protokoll("Sprache", "pc=$pc hinweis=${com.example.yugiohscanner.ml.SprachHinweis.aus(framesEvidence)}")
         // Ohne diese Zeile laesst sich am Protokoll NICHT unterscheiden, ob eine Auflage GELESEN
         // oder nur aus der Voreinstellung uebernommen wurde: resolveEdition nimmt die Erkennung nur
         // bei HIGH, sonst den Standard -- und beide Wege schreiben am Ende dieselbe "first"-Buchung.
@@ -110,13 +144,31 @@ object ScanResolver {
         // Das ENDE jedes Zonentexts, nicht der Anfang (21.09.): der Auflagen-Marker steht in der
         // untersten Zeile, darueber liegt Kartentext -- mit den ersten 40 Zeichen war er abgeschnitten.
         val lesbar = editionTexts.count { it.isNotBlank() }
-        com.example.yugiohscanner.ml.ScanLog.line(
+        protokoll(
             "Auflage",
             "pc=$pc bilder=${editionTexts.size} lesbar=$lesbar ergebnis=${confidence.effectiveEdition} " +
                 "sicher=${confidence.editionConfidence} standard=$defaultEdition " +
                 "texte='${editionTexts.filter { it.isNotBlank() }.joinToString(" | ") { it.takeLast(60).replace('\n', ' ') }}'",
         )
-        return ResolvedScan(base, knownSets, match, confidence, readSetCode)
+        // Spec 2026-11-03 §4.2: nach dem Rueckfall im Einzelmodus mit den nachkommenden Netzdrucken neu rechnen.
+        // Leere Antwort oder gleiche Schluesselmenge -> null (die Seite laesst dann alles, wie es ist).
+        val verbessert = netzAbruf?.takeIf { nachrechnen }?.let { d ->
+            hintergrund.async {
+                val neu = try { d.await() } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+                fun schluessel(l: List<SetOption>) = l.map { ScanErgebnis.key(it.setCode, it.rarity, it.language) }.toSet()
+                if (neu.isEmpty() || schluessel(neu) == schluessel(knownSets)) return@async null
+                val (m2, c2) = withContext(rechnen) { urteil(evidence, neu, framesEvidence, editionTexts, defaultEdition) }
+                logScanDecision("nach", pc, m2, c2, neu, protokoll)
+                ResolvedScan(base, neu, m2, c2, readSetCode)
+            }
+        }
+        return ResolvedScan(base, knownSets, match, confidence, readSetCode, verbessert)
+    }
+
+    private fun urteil(evidence: List<String>, known: List<SetOption>, framesEvidence: List<String>, editionTexts: List<String>,
+                       defaultEdition: String): Pair<SetCodeMatch.MatchResult, ScanConfidence.Result> {
+        val m = SetCodeMatch.best(evidence, known, framesEvidence, com.example.yugiohscanner.ml.ScanSprache.fest)
+        return m to ScanConfidence.fromEvidence(m, known, editionTexts, defaultEdition)
     }
 }
 
@@ -143,10 +195,11 @@ internal fun logScanDecision(
     match: com.example.yugiohscanner.cloud.SetCodeMatch.MatchResult,
     confidence: com.example.yugiohscanner.ml.ScanConfidence.Result,
     knownSets: List<com.example.yugiohscanner.cloud.SetOption>,
+    protokoll: (String, String) -> Unit = com.example.yugiohscanner.ml.ScanLog::line,   // Spec 2026-11-03 §4.2: Log.i wirft im JVM-Test
 ) {
     val sel = match.selected
     val composed = sel != null && knownSets.none { it.setCode.equals(sel.setCode, ignoreCase = true) }
-    com.example.yugiohscanner.ml.ScanLog.line(
+    protokoll(
         "ScanDecision",
         "stage=$stage pc=$passcode " +
             "code=${sel?.setCode ?: "-"} rarity=${sel?.rarity ?: "-"} lang=${sel?.language ?: "-"} " +
