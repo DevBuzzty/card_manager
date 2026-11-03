@@ -1,0 +1,20 @@
+{
+  "_doc": "Spec 2026-11-03 §3.2 -- CodeKey.of: Praefix + Nummer ohne Region und fuehrende Nullen; null = Code ohne diese Grammatik.",
+  "cases": [
+    { "in": "LOB-DE005",   "key": "LOB-5" },
+    { "in": "LOB-EN005",   "key": "LOB-5" },
+    { "in": "lob-g005",    "key": "LOB-5" },
+    { "in": "LOB-E003",    "key": "LOB-3" },
+    { "in": "LOB-005",     "key": "LOB-5" },
+    { "in": "SGX3-DEA10",  "key": "SGX3-A10" },
+    { "in": "26DE-DEJ02",  "key": "26DE-J02" },
+    { "in": "MAMO-DE072",  "key": "MAMO-72" },
+    { "in": "RA01-DE000",  "key": "RA01-0" },
+    { "in": " ra01-en008 ","key": "RA01-8" },
+    { "in": "SD1-JP001",   "key": "SD1-1" },
+    { "in": "B3-17",       "key": "B3-17" },
+    { "in": "Unknown",     "key": null },
+    { "in": "",            "key": null },
+    { "in": "LOB DE005",   "key": null }
+  ]
+}

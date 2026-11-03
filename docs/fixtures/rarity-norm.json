@@ -1,0 +1,29 @@
+{
+  "_doc": "Spec 2026-11-03 §3.3 -- RarityNorm.key; null = unbekannt. Paare 'gleich' pruefen gleich(a, b).",
+  "keys": [
+    { "in": "Common", "key": "common" }, { "in": "C", "key": "common" }, { "in": "N", "key": "common" },
+    { "in": "Rare", "key": "rare" }, { "in": "SR", "key": "superrare" }, { "in": "UR", "key": "ultrarare" },
+    { "in": "UtR", "key": "ultimaterare" }, { "in": "ScR", "key": "secretrare" }, { "in": "GR", "key": "ghostrare" },
+    { "in": "HR", "key": "ghostrare" }, { "in": "Holographic Rare", "key": "ghostrare" },
+    { "in": "PScR", "key": "prismaticsecretrare" }, { "in": "CR", "key": "collectorsrare" }, { "in": "Cr", "key": "collectorsrare" },
+    { "in": "Collector's Rare", "key": "collectorsrare" }, { "in": "QCSR", "key": "quartercenturysecretrare" },
+    { "in": "Quarter Century Secret Rare", "key": "quartercenturysecretrare" }, { "in": "20thSR", "key": "20thsecretrare" },
+    { "in": "Starfoil", "key": "starfoilrare" }, { "in": "Starfoil Rare", "key": "starfoilrare" },
+    { "in": "Shatterfoil", "key": "shatterfoilrare" }, { "in": "Mosaic", "key": "mosaicrare" },
+    { "in": "Extra Secret", "key": "extrasecretrare" }, { "in": "PLatinum Secret Rare", "key": "platinumsecretrare" },
+    { "in": "Ultra Rare (Pharaoh's Rare)", "key": "ultrararepharaohsrare" }, { "in": "Ghost/Gold Rare", "key": "ghostgoldrare" },
+    { "in": "Duel Terminal Normal Rare Parallel Rare", "key": "duelterminalnormalparallelrare" },
+    { "in": "Common<!--", "key": "common" }, { "in": "Rare-->", "key": "rare" }, { "in": "Short Print", "key": "shortprint" },
+    { "in": "Unknown", "key": null }, { "in": "", "key": null }, { "in": null, "key": null }, { "in": "New", "key": null },
+    { "in": "Reprint", "key": null }, { "in": "New artwork", "key": null }, { "in": "European & Oceanian debut", "key": null },
+    { "in": "force-SMW", "key": null }
+  ],
+  "gleich": [
+    { "a": "Starfoil", "b": "Starfoil Rare", "gleich": true },
+    { "a": "UR", "b": "Ultra Rare", "gleich": true },
+    { "a": "Unknown", "b": "Unknown", "gleich": false },
+    { "a": "Short Print", "b": "Common", "gleich": false },
+    { "a": "Gold Rare", "b": "Gold Secret Rare", "gleich": false },
+    { "a": "Ultra Rare (Pharaoh's Rare)", "b": "Ultra Rare", "gleich": false }
+  ]
+}

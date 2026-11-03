@@ -1,0 +1,38 @@
+{
+  "_doc": "Spec 2026-11-03 §5.2 -- Vertrag resolve-cm-product. 'requests': Deno prueft Status/Code. 'responses': Kotlin parseAntwort.",
+  "requests": [
+    { "name": "gueltig", "body": { "v": 1, "card_id": "89631139", "name_en": "Blue-Eyes White Dragon",
+        "printings": [ { "set_code": "LOB-DE001", "rarity": "Ultra Rare" } ] }, "status": 200 },
+    { "name": "ohne name_en gueltig", "body": { "v": 1, "card_id": "89631139", "printings": [ { "set_code": "LOB-DE001", "rarity": "" } ] }, "status": 200 },
+    { "name": "name_en null gueltig", "body": { "v": 1, "card_id": "89631139", "name_en": null, "printings": [ { "set_code": "LOB-DE001", "rarity": "" } ] }, "status": 200 },
+    { "name": "name_en leer gueltig", "body": { "v": 1, "card_id": "89631139", "name_en": "   ", "printings": [ { "set_code": "LOB-DE001", "rarity": "" } ] }, "status": 200 },
+    { "name": "name_en keine Zeichenkette", "body": { "v": 1, "card_id": "1", "name_en": 5, "printings": [ { "set_code": "LOB-DE001", "rarity": "" } ] }, "status": 400, "code": "bad_request" },
+    { "name": "name_en zu lang", "body": { "v": 1, "card_id": "1", "name_en": { "_len": 201 }, "printings": [ { "set_code": "LOB-DE001", "rarity": "" } ] }, "status": 400, "code": "bad_request" },
+    { "name": "falsche Version", "body": { "v": 2, "card_id": "1", "printings": [ { "set_code": "LOB-DE001", "rarity": "" } ] }, "status": 400, "code": "bad_request" },
+    { "name": "card_id nicht numerisch", "body": { "v": 1, "card_id": "abc", "printings": [ { "set_code": "LOB-DE001", "rarity": "" } ] }, "status": 400, "code": "bad_request" },
+    { "name": "keine Drucke", "body": { "v": 1, "card_id": "1", "printings": [] }, "status": 400, "code": "bad_request" },
+    { "name": "elf Drucke", "body": { "v": 1, "card_id": "1", "printings": "11x" }, "status": 400, "code": "bad_request" },
+    { "name": "Unknown-Code", "body": { "v": 1, "card_id": "1", "printings": [ { "set_code": "Unknown", "rarity": "" } ] }, "status": 400, "code": "bad_request" }
+  ],
+  "responses": [
+    { "name": "ok mit resolved und ambiguous", "body": {
+        "ok": true, "v": 1, "index_date": "2026-11-03", "price_date": "2026-11-03",
+        "card": { "name_en": "Blue-Eyes White Dragon", "ab": 0.09, "ab_products": 41 },
+        "results": [
+          { "set_code": "LOB-DE001", "rarity": "Ultra Rare", "code_key": "LOB-1", "rarity_key": "ultrarare", "status": "resolved", "how": "unique", "reason": null, "cm": [102800], "cached": false },
+          { "set_code": "RA01-DE008", "rarity": "Platinum Secret Rare", "code_key": "RA01-8", "rarity_key": "platinumsecretrare", "status": "ambiguous", "how": null, "reason": "no-model", "cm": [741197, 741198], "cached": true },
+          { "set_code": "XXXX-DE001", "rarity": "", "code_key": "XXXX-1", "rarity_key": "", "status": "not_found", "how": null, "reason": "no-expansion", "cm": [], "cached": false }
+        ],
+        "prices": { "102800": [12.5, 9.0], "741197": [0.89, null] } },
+      "expect": { "ok": true, "ab": 0.09, "priceDate": "2026-11-03",
+        "ergebnisse": { "LOB-1|ultrarare": [102800], "RA01-8|platinumsecretrare": [741197, 741198], "XXXX-1|": [] },
+        "preise": { "102800": [12.5, 9.0], "741197": [0.89, null] } } },
+    { "name": "ohne Preisdatei", "body": { "ok": true, "v": 1, "index_date": "2026-11-03", "price_date": null,
+        "card": { "name_en": null, "ab": null, "ab_products": 0 }, "results": [], "prices": {} },
+      "expect": { "ok": true, "ab": null, "priceDate": null, "ergebnisse": {}, "preise": {} } },
+    { "name": "Fehler", "body": { "ok": false, "code": "no_index", "error": "Cardmarket-Index fehlt." },
+      "expect": { "ok": false, "fehler": "Cardmarket-Index fehlt." } },
+    { "name": "Gateway-401 ohne ok", "body": { "code": 401, "message": "Invalid JWT" }, "expect": null },
+    { "name": "kaputt", "raw": "<html>502</html>", "expect": null }
+  ]
+}
