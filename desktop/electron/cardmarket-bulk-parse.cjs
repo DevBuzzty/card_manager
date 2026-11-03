@@ -71,14 +71,32 @@ function buildSinglesIndex(singles) {
   return idx;
 }
 
+// Set-Namen-Aliase (Spec 2026-11-03, Nachtrag Set-Aliase): YGOPRODeck-Set-Namen, die kein Cardmarket-Sealed-Produkt
+// traegt ("Dark Revelation Volume 1" vs. "Dark Revelation 1 Booster", Duel-Terminal-/Promo-Sets ganz ohne nonsingles),
+// zeigen ueber einen Inhaltsbeleg direkt auf die idExpansion. Daten: cm-set-aliases.json (1:1-Spiegel der Twin-Fixture
+// docs/fixtures/cm-resolve/set-aliases.json -- electron-builder packt docs/ nicht; Gleichheit per Test).
+// normName(decodeEntities(setName)) -> [idExpansion].
+function buildSetAliases(list) {
+  const m = new Map();
+  for (const a of list || []) {
+    const key = normName(decodeEntities(a.setName));
+    if (!key) continue;
+    m.set(key, [...new Set([...(m.get(key) || []), ...(a.idExpansion || []).map(Number)])]);
+  }
+  return m;
+}
+const SET_ALIASES = buildSetAliases(require('./cm-set-aliases.json').aliases);
+
 // Resolve one printing. `setNames` = every YGOPRODeck set_name sharing the printing's set-code
 // prefix (e.g. LOB -> original + 25th Anniversary Edition). Exactly one product for the card in
 // the union of those expansions -> resolved. Anything else -> null, never a guess.
-function expansionIdsFor(setNames, expansionIndex) {
+// Ein Alias greift nur fuer einen set_name, den der Namensabgleich nicht findet (Namens-Treffer haben Vorrang;
+// Sets, die heute schon treffen, bleiben unveraendert).
+function expansionIdsFor(setNames, expansionIndex, aliases = SET_ALIASES) {
   const expIds = new Set();
   for (const sn of setNames || []) {
     const clean = decodeEntities(sn);
-    const ids = expansionIndex.get(normName(clean)) || expansionIndex.get(tokenKey(clean));
+    const ids = expansionIndex.get(normName(clean)) || expansionIndex.get(tokenKey(clean)) || aliases.get(normName(clean));
     if (ids) for (const id of ids) expIds.add(id);
   }
   return expIds;
@@ -225,5 +243,5 @@ function idProductFromImageUrl(url) {
 module.exports = {
   expansionNameFromProduct, buildExpansionIndex, buildSinglesIndex, resolveProduct, idProductFromImageUrl,
   expansionNameVariants, decodeEntities, tokenKey,
-  buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning, cmForPrinting, idFromVersionRow,
+  buildVersionIndex, learnRanks, deriveProduct, versionsAreRarities, orderForLearning, cmForPrinting, idFromVersionRow, expansionIdsFor, buildSetAliases, SET_ALIASES,
 };

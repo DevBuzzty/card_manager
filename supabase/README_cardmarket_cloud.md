@@ -80,3 +80,49 @@ desktop re-run the backfill on next launch. If the cloud already holds copies fo
 collection (e.g. sync had already delivered the Spec A migration before the restore), the next
 pull would double them up. Restore only with sync disabled, and clear `card_copies` in the cloud
 first — or ask for a reconcile before re-enabling sync.
+
+## cm-index und resolve-cm-product (Spec 2026-11-03 §5, §11)
+
+Druckgenaue Cardmarket-Zuordnung auf Abruf für die Ergebnis-Seite des Handys (Einzelmodus). Ein eigener Schritt von
+`refresh-cardmarket-prices` baut täglich einen kompakten Index (`cm-index.json.gz`, privater Bucket `cm-index`); die neue
+Funktion `resolve-cm-product` löst damit Drucke ohne bzw. mit mehrdeutiger `cm` auf und liefert die Trends aus
+`catalog/cm-prices.json.gz` mit. Sie schreibt **nie** in `cards.cm_product_id`; der Desktop bleibt dort der einzige Schreiber.
+Agents deployen nicht und spielen kein SQL ein -- das machst du, in dieser Reihenfolge:
+
+1. **SQL:** SQL-Editor → `supabase/cm_resolve_schema.sql` einfügen → Run (Tabelle `cm_resolve_cache`, Trigger, RLS ohne Policy,
+   privater Bucket `cm-index`). Voraussetzung: `public.set_updated_at()` aus `schema.sql`.
+   Prüfen: `select id, public from storage.buckets where id = 'cm-index';` → `cm-index | false`.
+2. **Index-Bau deployen und einmal von Hand bauen:**
+   ```bash
+   supabase functions deploy refresh-cardmarket-prices --no-verify-jwt --project-ref uirfqwklvavgjklgqpnn
+   ```
+   ```sql
+   select net.http_post(url := 'https://uirfqwklvavgjklgqpnn.supabase.co/functions/v1/refresh-cardmarket-prices',
+     headers := '{"Content-Type": "application/json", "x-cm-secret": "<geheimnis>"}'::jsonb,
+     body := '{"step": "cm-index"}'::jsonb, timeout_milliseconds := 150000);
+   ```
+   (`x-cm-secret` nur, wenn `CM_TRIGGER_SECRET` gesetzt ist; sonst den Eintrag weglassen.)
+   Ergebnis nach ~1 min: `select status_code, content from net._http_response order by created desc limit 1;` →
+   `{"step":"cm-index","cmIndex":{"date":…,"names":≈14600,"prefixes":…,"singles":≈87000,"real":…,"catalog":false,"bytes":…}}`.
+   Prüfen: Storage → Bucket `cm-index` → `cm-index.json.gz` mit heutigem Änderungsdatum; Function-Logs zeigen je Phase eine Zeile
+   `[cm-index] cardsets|nonsingles|singles|real|katalog|upload`. Bei einem Fehler nennt der Body `cmIndex.error` die Phase,
+   und der Index vom Vortag bleibt liegen. **Abnahmepunkt:** Die Phase `cardsets` (YGOPRODeck aus Supabase) muss gelingen --
+   schlägt sie fehl, bitte melden.
+   Der normale 05:00-Lauf (Body `{}`) ist unverändert und baut keinen Index. Ein unbekannter `step` ergibt 400 `unknown step`.
+   Optional: Secret `CM_INDEX_KATALOG=1` nimmt die Einzel-`cm` des Katalogs als zusätzliche Stichproben für die Block-Regel
+   (sonst nur echte IDs der Cloud-Sammlung).
+3. **Funktion deployen:**
+   ```bash
+   supabase functions deploy resolve-cm-product --no-verify-jwt --project-ref uirfqwklvavgjklgqpnn
+   ```
+   Keine neuen Secrets (die Funktion prüft das Nutzer-JWT selbst). Ein neu gebauter Index wird in warmen Instanzen erst nach
+   bis zu 1 h sichtbar (Modulspeicher); zum Testen genügt ein erneuter Deploy. Ohne Index antwortet sie 503 `no_index`
+   („Cardmarket-Index fehlt.“), fehlt nur die Preisdatei, kommt `price_date: null`.
+4. **Zeitplan:** `supabase/cm_index_cron.sql` einspielen (Job `refresh-cardmarket-cm-index`, täglich 05:20 UTC,
+   Platzhalter `<geheimnis>` ersetzen oder die Zeile entfernen). Überwachung über das Änderungsdatum der Storage-Datei bzw.
+   die Function-Logs; `cron.job_run_details` zeigt nur, ob der Aufruf abgeschickt wurde.
+5. **Optional, gelegentlich aufräumen:**
+   `delete from public.cm_resolve_cache where updated_at < now() - interval '90 days';`
+
+Ohne Schritt 1-3 läuft die neue APK trotzdem: Die Live-Suche meldet dann „nicht erreichbar“, alle Offline-Stufen funktionieren.
+Diagnose im SQL-Editor: `select * from cm_resolve_cache order by updated_at desc limit 20;`

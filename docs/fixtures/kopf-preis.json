@@ -1,0 +1,210 @@
+{
+  "_doc": "Spec 2026-11-03 §2.2 -- Kopfpreis der Ergebnis-Seite. Gelesen von KopfPreisTest.kt. sprache (optional) = ScanSprache.fest. key = SETCODE|rarity klein|LANG (ScanErgebnis.key). preis/expect.art: fest | spanne | richtwert | keiner.",
+  "cases": [
+    { "name": "sicher mit Preis",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 12.4, "quelle": "trend" } },
+        { "key": "LOB-DE001|secret rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 40.0, "quelle": "trend" } }
+      ],
+      "auswahl": "LOB-DE001|ultra rare|DE", "sicher": true, "keinTreffer": false, "kandidaten": ["LOB-DE001|ultra rare|DE"],
+      "richtwert": { "eur": 0.09, "ausKatalog": true },
+      "expect": { "art": "fest", "eur": 12.4, "quelle": "trend", "text": "12,40 €" } },
+
+    { "name": "sicher ohne Preis mit Richtwert",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "LOB-DE001|secret rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 40.0, "quelle": "trend" } }
+      ],
+      "auswahl": "LOB-DE001|ultra rare|DE", "sicher": true, "keinTreffer": false, "kandidaten": ["LOB-DE001|ultra rare|DE"],
+      "richtwert": { "eur": 0.09, "ausKatalog": true },
+      "expect": { "art": "richtwert", "eur": 0.09, "ausKatalog": true, "text": "ab 0,09 €" } },
+
+    { "name": "sicher ohne alles",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "LOB-DE001|secret rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 40.0, "quelle": "trend" } }
+      ],
+      "auswahl": "LOB-DE001|ultra rare|DE", "sicher": true, "keinTreffer": false, "kandidaten": ["LOB-DE001|ultra rare|DE"],
+      "richtwert": null,
+      "expect": { "art": "keiner", "text": "–" } },
+
+    { "name": "unsicher a) Spanne der Kandidaten",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 12.4, "quelle": "trend" } },
+        { "key": "LOB-DE001|secret rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 40.0, "quelle": "trend" } },
+        { "key": "MRD-DE001|common|DE", "setCode": "MRD-DE001", "lang": "DE", "rarity": "Common", "preis": { "art": "fest", "eur": 0.1, "quelle": "trend" } }
+      ],
+      "auswahl": "LOB-DE001|ultra rare|DE", "sicher": false, "keinTreffer": false,
+      "kandidaten": ["LOB-DE001|ultra rare|DE", "LOB-DE001|secret rare|DE"], "richtwert": { "eur": 0.09, "ausKatalog": true },
+      "expect": { "art": "spanne", "min": 12.4, "max": 40.0, "quellen": ["trend"], "text": "ca. 12,40–40,00 €" } },
+
+    { "name": "unsicher b) Zwilling gleicher Seltenheit",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "LOB-EN001|ultra rare|EN", "setCode": "LOB-EN001", "lang": "EN", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 10.0, "quelle": "trend" } },
+        { "key": "LOB-EN001|secret rare|EN", "setCode": "LOB-EN001", "lang": "EN", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 50.0, "quelle": "trend" } }
+      ],
+      "auswahl": "LOB-DE001|ultra rare|DE", "sicher": false, "keinTreffer": false, "kandidaten": ["LOB-DE001|ultra rare|DE"],
+      "richtwert": { "eur": 0.09, "ausKatalog": true },
+      "expect": { "art": "fest", "eur": 10.0, "quelle": "trend", "text": "10,00 €" } },
+
+    { "name": "unsicher b) Kandidat mit unbekannter Seltenheit -> alle Zwillinge",
+      "drucke": [
+        { "key": "LOB-DE001|unknown|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Unknown", "preis": { "art": "keiner" } },
+        { "key": "LOB-EN001|ultra rare|EN", "setCode": "LOB-EN001", "lang": "EN", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 10.0, "quelle": "trend" } },
+        { "key": "LOB-EN001|secret rare|EN", "setCode": "LOB-EN001", "lang": "EN", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 50.0, "quelle": "trend" } }
+      ],
+      "auswahl": null, "sicher": false, "keinTreffer": false, "kandidaten": ["LOB-DE001|unknown|DE"],
+      "richtwert": null,
+      "expect": { "art": "spanne", "min": 10.0, "max": 50.0, "quellen": ["trend"], "text": "ca. 10,00–50,00 €" } },
+
+    { "name": "unsicher c) Richtwert",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "MRD-EN001|common|EN", "setCode": "MRD-EN001", "lang": "EN", "rarity": "Common", "preis": { "art": "fest", "eur": 5.0, "quelle": "trend" } }
+      ],
+      "auswahl": "LOB-DE001|ultra rare|DE", "sicher": false, "keinTreffer": false, "kandidaten": ["LOB-DE001|ultra rare|DE"],
+      "richtwert": { "eur": 0.09, "ausKatalog": false },
+      "expect": { "art": "richtwert", "eur": 0.09, "ausKatalog": false, "text": "ab 0,09 €" } },
+
+    { "name": "unsicher d) Spanne ueber alle",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "MRD-EN001|common|EN", "setCode": "MRD-EN001", "lang": "EN", "rarity": "Common", "preis": { "art": "fest", "eur": 5.0, "quelle": "trend" } }
+      ],
+      "auswahl": "LOB-DE001|ultra rare|DE", "sicher": false, "keinTreffer": false, "kandidaten": ["LOB-DE001|ultra rare|DE"],
+      "richtwert": null,
+      "expect": { "art": "fest", "eur": 5.0, "quelle": "trend", "mehrdeutig": true, "text": "ca. 5,00 €" } },
+
+    { "name": "unsicher e) keiner",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "keiner" } }
+      ],
+      "auswahl": null, "sicher": false, "keinTreffer": false, "kandidaten": ["LOB-DE001|ultra rare|DE"],
+      "richtwert": null,
+      "expect": { "art": "keiner", "text": "–" } },
+
+    { "name": "unsicher b) JP-Kandidat mit EN-Zwilling -> faellt auf c)",
+      "drucke": [
+        { "key": "SD1-JP001|ultra rare|JP", "setCode": "SD1-JP001", "lang": "JP", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "SD1-EN001|ultra rare|EN", "setCode": "SD1-EN001", "lang": "EN", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 3.0, "quelle": "trend" } }
+      ],
+      "auswahl": "SD1-JP001|ultra rare|JP", "sicher": false, "keinTreffer": false, "kandidaten": ["SD1-JP001|ultra rare|JP"],
+      "richtwert": { "eur": 0.5, "ausKatalog": true },
+      "expect": { "art": "richtwert", "eur": 0.5, "ausKatalog": true, "text": "ab 0,50 €" } },
+
+    { "name": "keinTreffer ohne Auswahl, mit Preisen",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 12.4, "quelle": "trend" } },
+        { "key": "LOB-DE001|secret rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 40.0, "quelle": "trend" } }
+      ],
+      "auswahl": null, "sicher": false, "keinTreffer": true, "kandidaten": [], "richtwert": { "eur": 0.09, "ausKatalog": true },
+      "expect": { "art": "spanne", "min": 12.4, "max": 40.0, "quellen": ["trend"], "text": "ca. 12,40–40,00 €" } },
+
+    { "name": "keinTreffer ohne Auswahl, ohne Preise",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "keiner" } }
+      ],
+      "auswahl": null, "sicher": false, "keinTreffer": true, "kandidaten": [], "richtwert": { "eur": 0.09, "ausKatalog": true },
+      "expect": { "art": "richtwert", "eur": 0.09, "ausKatalog": true, "text": "ab 0,09 €" } },
+
+    { "name": "keinTreffer mit Ersatz-Auswahl -> trotzdem Spanne ueber alle",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 12.4, "quelle": "trend" } },
+        { "key": "LOB-DE001|secret rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 40.0, "quelle": "trend" } }
+      ],
+      "auswahl": "LOB-DE001|ultra rare|DE", "sicher": false, "keinTreffer": true, "kandidaten": ["LOB-DE001|ultra rare|DE"],
+      "richtwert": null,
+      "expect": { "art": "spanne", "min": 12.4, "max": 40.0, "quellen": ["trend"], "text": "ca. 12,40–40,00 €" } },
+
+    { "name": "Ursache 1: abgeleiteter DE-Druck mit cm vom EN-Zwilling, sicher -> fester Trend",
+      "drucke": [
+        { "key": "MAMO-DE072|ultra rare|DE", "setCode": "MAMO-DE072", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 7.5, "quelle": "trend" } },
+        { "key": "MAMO-EN072|ultra rare|EN", "setCode": "MAMO-EN072", "lang": "EN", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 7.5, "quelle": "trend" } }
+      ],
+      "auswahl": "MAMO-DE072|ultra rare|DE", "sicher": true, "keinTreffer": false, "kandidaten": ["MAMO-DE072|ultra rare|DE"],
+      "richtwert": { "eur": 0.09, "ausKatalog": true },
+      "expect": { "art": "fest", "eur": 7.5, "quelle": "trend", "text": "7,50 €" } },
+
+    { "name": "spanneUeber: einzelner Sammlungspreis -> Fest(sammlung)",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 5.0, "quelle": "sammlung" } },
+        { "key": "LOB-DE001|secret rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "keiner" } }
+      ],
+      "auswahl": null, "sicher": false, "keinTreffer": true, "kandidaten": [], "richtwert": null,
+      "expect": { "art": "fest", "eur": 5.0, "quelle": "sammlung", "mehrdeutig": true, "text": "ca. 5,00 €" } },
+
+    { "name": "spanneUeber: Sammlung + Trend gleich -> Fest(trend)",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 5.0, "quelle": "sammlung" } },
+        { "key": "LOB-DE001|secret rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 5.0, "quelle": "trend" } }
+      ],
+      "auswahl": null, "sicher": false, "keinTreffer": true, "kandidaten": [], "richtwert": null,
+      "expect": { "art": "fest", "eur": 5.0, "quelle": "trend", "text": "5,00 €" } },
+
+    { "name": "spanneUeber: Sammlung + Trend verschieden -> Spanne(sammlung, trend)",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 5.0, "quelle": "sammlung" } },
+        { "key": "LOB-DE001|secret rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 9.0, "quelle": "trend" } }
+      ],
+      "auswahl": null, "sicher": false, "keinTreffer": true, "kandidaten": [], "richtwert": null,
+      "expect": { "art": "spanne", "min": 5.0, "max": 9.0, "quellen": ["sammlung", "trend"], "text": "ca. 5,00–9,00 €" } },
+
+    { "name": "spanneUeber: Trend + Live -> Spanne(trend, live)",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 2.0, "quelle": "trend" } },
+        { "key": "RA01-DE001|platinum secret rare|DE", "setCode": "RA01-DE001", "lang": "DE", "rarity": "Platinum Secret Rare", "preis": { "art": "spanne", "min": 3.0, "max": 30.0, "quellen": ["live"] } }
+      ],
+      "auswahl": null, "sicher": false, "keinTreffer": true, "kandidaten": [], "richtwert": null,
+      "expect": { "art": "spanne", "min": 2.0, "max": 30.0, "quellen": ["trend", "live"], "text": "ca. 2,00–30,00 €" } },
+
+    { "name": "unsicher a) nur ein Kandidat bepreist -> ca. (nicht druckgenau)",
+      "drucke": [
+        { "key": "MAMO-DE072|ultra rare|DE", "setCode": "MAMO-DE072", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "MAMO-DE072|secret rare|DE", "setCode": "MAMO-DE072", "lang": "DE", "rarity": "Secret Rare", "preis": { "art": "fest", "eur": 12.4, "quelle": "trend" } }
+      ],
+      "auswahl": "MAMO-DE072|ultra rare|DE", "sicher": false, "keinTreffer": false,
+      "kandidaten": ["MAMO-DE072|ultra rare|DE", "MAMO-DE072|secret rare|DE"], "richtwert": { "eur": 0.09, "ausKatalog": true },
+      "expect": { "art": "fest", "eur": 12.4, "quelle": "trend", "mehrdeutig": true, "text": "ca. 12,40 €" } },
+
+    { "name": "keinTreffer JP-Scan: EN-Preis nie im Kopf -> Richtwert",
+      "drucke": [
+        { "key": "SD1-JP001|ultra rare|JP", "setCode": "SD1-JP001", "lang": "JP", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "SD1-EN001|ultra rare|EN", "setCode": "SD1-EN001", "lang": "EN", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 3.0, "quelle": "trend" } }
+      ],
+      "auswahl": null, "sprache": "JP", "sicher": false, "keinTreffer": true, "kandidaten": [], "richtwert": { "eur": 0.5, "ausKatalog": true },
+      "expect": { "art": "richtwert", "eur": 0.5, "ausKatalog": true, "text": "ab 0,50 €" } },
+
+    { "name": "keinTreffer JP-Scan ohne Richtwert -> keiner",
+      "drucke": [
+        { "key": "SD1-JP001|ultra rare|JP", "setCode": "SD1-JP001", "lang": "JP", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "SD1-EN001|ultra rare|EN", "setCode": "SD1-EN001", "lang": "EN", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 3.0, "quelle": "trend" } }
+      ],
+      "auswahl": null, "sprache": "JP", "sicher": false, "keinTreffer": true, "kandidaten": [], "richtwert": null,
+      "expect": { "art": "keiner", "text": "–" } },
+
+    { "name": "keinTreffer DE-Scan: JP-Preis zaehlt nicht, europaeische schon",
+      "drucke": [
+        { "key": "SD1-JP001|ultra rare|JP", "setCode": "SD1-JP001", "lang": "JP", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 9.0, "quelle": "sammlung" } },
+        { "key": "SD1-EN001|ultra rare|EN", "setCode": "SD1-EN001", "lang": "EN", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 3.0, "quelle": "trend" } }
+      ],
+      "auswahl": null, "sprache": "DE", "sicher": false, "keinTreffer": true, "kandidaten": [], "richtwert": null,
+      "expect": { "art": "fest", "eur": 3.0, "quelle": "trend", "text": "3,00 €" } },
+
+    { "name": "unsicher d) europaeische Auswahl: JP-Druck zaehlt nicht fuer die Spanne ueber alle",
+      "drucke": [
+        { "key": "LOB-DE001|ultra rare|DE", "setCode": "LOB-DE001", "lang": "DE", "rarity": "Ultra Rare", "preis": { "art": "keiner" } },
+        { "key": "LOB-JP001|ultra rare|JP", "setCode": "LOB-JP001", "lang": "JP", "rarity": "Ultra Rare", "preis": { "art": "fest", "eur": 9.0, "quelle": "trend" } }
+      ],
+      "auswahl": "LOB-DE001|ultra rare|DE", "sicher": false, "keinTreffer": false, "kandidaten": ["LOB-DE001|ultra rare|DE"],
+      "richtwert": null,
+      "expect": { "art": "keiner", "text": "–" } },
+
+    { "name": "unsicher a) mehrdeutiger Kandidat bleibt ca.",
+      "drucke": [
+        { "key": "RA01-DE008|platinum secret rare|DE", "setCode": "RA01-DE008", "lang": "DE", "rarity": "Platinum Secret Rare", "preis": { "art": "fest", "eur": 4.2, "quelle": "trend", "mehrdeutig": true } }
+      ],
+      "auswahl": null, "sicher": false, "keinTreffer": false, "kandidaten": ["RA01-DE008|platinum secret rare|DE"], "richtwert": null,
+      "expect": { "art": "fest", "eur": 4.2, "quelle": "trend", "mehrdeutig": true, "text": "ca. 4,20 €" } }
+  ]
+}

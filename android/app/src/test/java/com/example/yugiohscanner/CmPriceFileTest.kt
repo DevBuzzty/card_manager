@@ -53,6 +53,49 @@ class CmPriceFileTest {
         assertEquals(listOf<Byte>(9), ziel.readBytes().toList())
     }
 
+    // --- Spec 2026-11-03 §3.5: reiner Kern lauf ---
+
+    private val gut = CmPriceFile.Preise("2026-11-03", mapOf(1 to 1.0), emptyMap())
+
+    private fun lauf(
+        ausDatei: Boolean = false, faellig: Boolean = true, download: CmPriceFile.Download = CmPriceFile.Download.Bytes(byteArrayOf(1)),
+        parse: CmPriceFile.Preise? = gut, schreiben: Boolean = true,
+    ): Triple<CmPriceFile.Lauf, String?, List<CmPriceFile.Preise>> {
+        val gesetzt = ArrayList<CmPriceFile.Preise>()
+        var geladen = 0
+        val (l, f) = CmPriceFile.lauf(ausDatei, faellig, { geladen++; download }, { parse }, { schreiben }, { gesetzt += it })
+        if (!faellig) assertEquals("nicht faellig -> kein Download", 0, geladen)
+        return Triple(l, f, gesetzt)
+    }
+
+    @Test
+    fun `lauf - nicht faellig`() {
+        assertEquals(Triple(CmPriceFile.Lauf.AUS_DATEI, null, emptyList<CmPriceFile.Preise>()), lauf(ausDatei = true, faellig = false))
+        assertEquals(Triple(CmPriceFile.Lauf.NICHT_FAELLIG, null, emptyList<CmPriceFile.Preise>()), lauf(ausDatei = false, faellig = false))
+    }
+
+    @Test
+    fun `lauf - Fehlerarten mit Text, nichts gesetzt`() {
+        assertEquals(Triple(CmPriceFile.Lauf.OFFLINE, "offline", emptyList<CmPriceFile.Preise>()), lauf(download = CmPriceFile.Download.Offline))
+        assertEquals(Triple(CmPriceFile.Lauf.HTTP_FEHLER, "HTTP 404", emptyList<CmPriceFile.Preise>()), lauf(download = CmPriceFile.Download.Http(404)))
+        assertEquals(Triple(CmPriceFile.Lauf.KAPUTT, "Datei unlesbar", emptyList<CmPriceFile.Preise>()), lauf(parse = null))
+        assertEquals(Triple(CmPriceFile.Lauf.SCHREIBFEHLER, "Speichern fehlgeschlagen", emptyList<CmPriceFile.Preise>()), lauf(schreiben = false))
+    }
+
+    @Test
+    fun `lauf - geladen setzt die neuen Preise`() {
+        assertEquals(Triple(CmPriceFile.Lauf.GELADEN, null, listOf(gut)), lauf())
+    }
+
+    @Test
+    fun `letzterFehler - Regel je Lauf`() {
+        assertEquals("offline", CmPriceFile.naechsterFehler("alt", CmPriceFile.Lauf.OFFLINE, "offline"))
+        assertEquals(null, CmPriceFile.naechsterFehler("alt", CmPriceFile.Lauf.GELADEN, null))
+        assertEquals(null, CmPriceFile.naechsterFehler("alt", CmPriceFile.Lauf.AUS_DATEI, null))
+        assertEquals(null, CmPriceFile.naechsterFehler("alt", CmPriceFile.Lauf.NICHT_FAELLIG, null))
+        assertEquals("alt", CmPriceFile.naechsterFehler("alt", CmPriceFile.Lauf.BESETZT, null))
+    }
+
     @Test
     fun `faellig - ohne Datei sofort, sonst nach 24 h`() {
         val h = 3_600_000L

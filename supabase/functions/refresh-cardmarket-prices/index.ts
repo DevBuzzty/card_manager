@@ -3,6 +3,8 @@
 // cm_product_id the desktop has mirrored, so the phone stays current without the desktop.
 // Spec G3 §5: zusaetzlich die lebenden sealed_items (Regel in sealed.ts, RPC apply_cardmarket_sealed_prices).
 // Fehlt die Tabelle sealed_items noch, laeuft der Kartendurchgang unveraendert; die Antwort traegt dann sealed.error.
+// Spec 2026-11-03 §5.1: Body { "step": "cm-index" } (eigener Job 05:20 UTC) baut nur den Cardmarket-Index fuer
+// resolve-cm-product (cm_index.ts) und kehrt zurueck, bevor Sammlung oder Preisfuehrer geladen werden. Body {} = Lauf wie bisher.
 // Deploy:  supabase functions deploy refresh-cardmarket-prices --no-verify-jwt --project-ref uirfqwklvavgjklgqpnn
 //   (--no-verify-jwt so pg_cron can call it; optional secret below)
 // Secrets: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.
@@ -13,6 +15,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { pickTrends } from "./prices.ts";
 import { pickSealedUpdates, type SealedRow } from "./sealed.ts";
 import { buildPriceFile, gzipJson } from "./price_file.ts";
+import { type RealRow, routeStep, runCmIndexStep } from "./cm_index.ts";
+import { jsonBody } from "../_shared/http.ts";
 
 const GUIDE_URL = "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_3.json";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) YuGiOhCardManager/1.0";
@@ -30,6 +34,46 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
+
+  // Spec 2026-11-03 §5.1: step-Weiche. Kaputter oder leerer Body = "main" (wie bisher).
+  const route = routeStep(await jsonBody(req));
+  if (route === "unknown") return json({ error: "unknown step" }, 400);
+  if (route === "cm-index") {
+    const r = await runCmIndexStep({
+      fetch,
+      ua: UA,
+      cloudCards: async () => {
+        const rows: RealRow[] = [];
+        for (let from = 0; ; from += PAGE) {
+          const { data, error } = await supabase
+            .from("cards")
+            .select("name,set_code,rarity,cm_product_id")
+            .not("cm_product_id", "is", null)
+            .eq("deleted", false)
+            .neq("language", "KR")
+            .order("id", { ascending: true }).order("set_code").order("language").order("rarity")
+            .range(from, from + PAGE - 1);
+          if (error) throw new Error(`select: ${error.message}`);
+          rows.push(...((data ?? []) as RealRow[]));
+          if (!data || data.length < PAGE) break;
+        }
+        return rows;
+      },
+      katalogUrl: async () => {
+        const { data, error } = await supabase.from("catalog_versions").select("url").eq("kind", "catalog").maybeSingle();
+        if (error) throw new Error(`catalog_versions: ${error.message}`);
+        return (data?.url as string | undefined) ?? null;
+      },
+      upload: async (gz) => {
+        const { error } = await supabase.storage.from("cm-index")
+          .upload("cm-index.json.gz", gz, { contentType: "application/gzip", upsert: true });
+        if (error) throw new Error(`upload: ${error.message}`);
+      },
+      env: (k) => Deno.env.get(k),
+      now: () => new Date(),
+    });
+    return json(r.body, r.status);
+  }
 
   // 1. Every distinct Cardmarket product id we must price (skip deleted rows and manual prices).
   const ids = new Set<number>();

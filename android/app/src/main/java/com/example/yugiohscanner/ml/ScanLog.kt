@@ -44,6 +44,8 @@ object ScanLog {
         photoDir = File(dir, name)
         photos = 0
         writer = try { BufferedWriter(FileWriter(File(dir, "$name.log"))) } catch (e: Exception) { null }
+        // Spec 2026-11-03 §8.2: erste Zeile nennt den App-Stand.
+        line("App", "version=${com.example.yugiohscanner.BuildConfig.VERSION_NAME} code=${com.example.yugiohscanner.BuildConfig.VERSION_CODE}")
         line("Sitzung", "start modus=$mode")
         startWatchdog()
     }

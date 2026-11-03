@@ -2,6 +2,8 @@ package com.example.yugiohscanner.cloud
 
 import android.content.Context
 import com.example.yugiohscanner.BuildConfig
+import com.example.yugiohscanner.ml.ScanLog
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +18,8 @@ import java.util.zip.GZIPInputStream
  * Spec 2026-10-04 §3.3 -- Cardmarket-Tagespreise je Produkt (idProduct -> Trend/Tief) fuer die
  * Ergebnis-Seite. Die Cloud-Funktion refresh-cardmarket-prices legt die Datei taeglich um 05:00 UTC
  * in den oeffentlichen Bucket `catalog`. Geladen wird hoechstens 1x/Tag, danach offline aus filesDir.
- * Eine kaputte Datei ersetzt nie die letzte gute.
+ * Eine kaputte Datei ersetzt nie die letzte gute. Spec 2026-11-03 §3.5: jeder Lauf liefert [Lauf], Fehler stehen in
+ * [letzterFehler] und im ScanLog; die Ergebnis-Seite versucht es beim Oeffnen erneut.
  */
 object CmPriceFile {
     data class Preise(val datum: String, val trend: Map<Int, Double>, val low: Map<Int, Double>)
@@ -75,28 +78,82 @@ object CmPriceFile {
         return "$base/storage/v1/object/public/catalog/$DATEI"
     }
 
-    suspend fun aktualisieren(context: Context, force: Boolean = false) = withContext(Dispatchers.IO) {
-        if (!lock.tryLock()) return@withContext
-        try {
+    // --- Spec 2026-11-03 §3.5: Ergebnis je Lauf, sichtbarer Fehler, Retry beim Oeffnen der Ergebnis-Seite ---
+
+    enum class Lauf { AUS_DATEI, GELADEN, NICHT_FAELLIG, BESETZT, OFFLINE, HTTP_FEHLER, KAPUTT, SCHREIBFEHLER }
+
+    sealed interface Download {
+        class Bytes(val b: ByteArray) : Download
+        data class Http(val code: Int) : Download
+        object Offline : Download
+    }
+
+    private val _letzterFehler = MutableStateFlow<String?>(null)
+    /** Fehlertext des letzten Laufs (offline, HTTP …); null nach Erfolg oder ohne faelligen Download. */
+    val letzterFehler: StateFlow<String?> = _letzterFehler
+
+    /** Reiner Kern eines Laufs (ohne Context/SharedPreferences). Eine kaputte Datei ersetzt nie die letzte gute. */
+    internal fun lauf(ausDateiGeladen: Boolean, faellig: Boolean, download: () -> Download,
+                      parse: (ByteArray) -> Preise?, schreiben: (ByteArray) -> Boolean, setze: (Preise) -> Unit): Pair<Lauf, String?> {
+        if (!faellig) return (if (ausDateiGeladen) Lauf.AUS_DATEI else Lauf.NICHT_FAELLIG) to null
+        val bytes = when (val d = download()) {
+            Download.Offline -> return Lauf.OFFLINE to "offline"
+            is Download.Http -> return Lauf.HTTP_FEHLER to "HTTP ${d.code}"
+            is Download.Bytes -> d.b
+        }
+        val neu = parse(bytes) ?: return Lauf.KAPUTT to "Datei unlesbar"
+        if (!schreiben(bytes)) return Lauf.SCHREIBFEHLER to "Speichern fehlgeschlagen"
+        setze(neu)
+        return Lauf.GELADEN to null
+    }
+
+    /** Fehlertext nach einem Lauf: neuer Text bei Fehlern, null bei Erfolg/nicht faellig, unveraendert bei BESETZT. */
+    internal fun naechsterFehler(alt: String?, lauf: Lauf, fehler: String?): String? = when (lauf) {
+        Lauf.BESETZT -> alt
+        Lauf.GELADEN, Lauf.AUS_DATEI, Lauf.NICHT_FAELLIG -> null
+        else -> fehler
+    }
+
+    suspend fun aktualisieren(context: Context, force: Boolean = false): Lauf = withContext(Dispatchers.IO) {
+        if (!lock.tryLock()) return@withContext Lauf.BESETZT
+        val (lauf, fehler) = try {
             val datei = File(context.filesDir, DATEI)
+            var ausDatei = false
             if (_stand.value == null && datei.exists()) {
                 _stand.value = runCatching { parse(datei.readBytes()) }.getOrNull()
+                ausDatei = _stand.value != null
             }
             val prefs = context.getSharedPreferences("scanner_prefs", Context.MODE_PRIVATE)
-            if (!force && !faellig(prefs.getLong(KEY_LAST, 0L), System.currentTimeMillis(), datei.exists() && _stand.value != null)) return@withContext
-            val bytes = SupabaseCloud.http().newCall(Request.Builder().url(url(context)).build()).execute().use { r ->
-                if (!r.isSuccessful) return@withContext
-                r.body?.bytes() ?: return@withContext
-            }
-            val neu = runCatching { parse(bytes) }.getOrNull() ?: return@withContext   // kaputt: alte behalten
-            val tmp = File(context.filesDir, "$DATEI.tmp")
-            if (!ersetzen(tmp, datei, bytes)) return@withContext   // alte Datei bleibt, KEY_LAST ungesetzt
-            prefs.edit().putLong(KEY_LAST, System.currentTimeMillis()).apply()
-            _stand.value = neu
-        } catch (_: Exception) {
-            // offline o. ae.: naechster Start versucht es wieder
+            val istFaellig = force || faellig(prefs.getLong(KEY_LAST, 0L), System.currentTimeMillis(), datei.exists() && _stand.value != null)
+            val ergebnis = lauf(ausDatei, istFaellig,
+                download = {
+                    try {
+                        SupabaseCloud.http().newCall(Request.Builder().url(url(context)).build()).execute().use { r ->
+                            val b = if (r.isSuccessful) r.body?.bytes() else null
+                            if (b != null) Download.Bytes(b) else Download.Http(r.code)
+                        }
+                    } catch (_: Exception) {
+                        Download.Offline   // IOException u. ae.: naechster Lauf versucht es wieder
+                    }
+                },
+                parse = { runCatching { parse(it) }.getOrNull() },
+                schreiben = { ersetzen(File(context.filesDir, "$DATEI.tmp"), datei, it) },
+                setze = { _stand.value = it },
+            )
+            if (ergebnis.first == Lauf.GELADEN) prefs.edit().putLong(KEY_LAST, System.currentTimeMillis()).apply()
+            ergebnis
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Lauf.OFFLINE to (e.message ?: "offline")   // unerwartet (Dateisystem o. ae.): wie offline, naechster Lauf versucht es
         } finally {
             lock.unlock()
         }
+        _letzterFehler.value = naechsterFehler(_letzterFehler.value, lauf, fehler)
+        if (lauf != Lauf.NICHT_FAELLIG) {
+            runCatching { ScanLog.line("Preise", "lauf=$lauf datum=${_stand.value?.datum ?: "-"} fehler=${fehler ?: "-"}") }
+            if (fehler != null) runCatching { android.util.Log.w("CmPriceFile", "Preisdatei: $lauf $fehler") }
+        }
+        lauf
     }
 }

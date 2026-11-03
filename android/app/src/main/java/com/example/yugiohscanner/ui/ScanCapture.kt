@@ -401,7 +401,7 @@ class ScanCapture(
         val gesetzt = r.match.selected
             ?: com.example.yugiohscanner.ml.ScanSprache.ersatzDruck(com.example.yugiohscanner.ml.ScanSprache.fest, r.knownSets)
         val vorhanden = stagingCards.firstOrNull {
-            it.passcode == pc && !it.loading && it.selectedSet == gesetzt && it.edition == r.confidence.effectiveEdition
+            it.passcode == pc && !it.loading && ScanErgebnis.gleicherDruck(it.selectedSet, gesetzt) && it.edition == r.confidence.effectiveEdition
         }
         if (vorhanden != null) {
             vorhanden.quantity++

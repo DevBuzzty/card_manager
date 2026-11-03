@@ -98,6 +98,9 @@ object SupabaseCloud {
      */
     fun userId(): String? = accessToken?.let(::jwtSubject) ?: offlineAccount
 
+    /** Spec 2026-11-03 §6.1: Live-Suche nur mit gueltiger Sitzung (nicht im Offline-Start). */
+    fun angemeldet(): Boolean = accessToken != null
+
     internal fun jwtSubject(token: String): String? = runCatching {
         val payload = token.split('.')[1]
         val json = String(java.util.Base64.getUrlDecoder().decode(payload.padEnd((payload.length + 3) / 4 * 4, '=')))
