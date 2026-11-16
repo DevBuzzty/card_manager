@@ -8,7 +8,7 @@ const { firstEdCandidates, runFirstEdPass } = require('./cardmarket-scraper.cjs'
 function freshDb() {
   const db = new Database(':memory:');
   db.exec(`CREATE TABLE cards (id TEXT, name TEXT, quantity INTEGER DEFAULT 0, rarity TEXT DEFAULT 'Unknown', set_code TEXT,
-             price REAL, language TEXT DEFAULT 'DE', price_locked INTEGER DEFAULT 0, cm_product_id INTEGER,
+             price REAL, language TEXT DEFAULT 'DE', price_locked INTEGER DEFAULT 0, cm_product_id INTEGER, cm_estimate_max REAL, cm_first_ed_challenge_at DATETIME,
              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, deleted INTEGER DEFAULT 0,
              PRIMARY KEY (id, set_code, language, rarity));
            CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
@@ -34,7 +34,7 @@ function candidateDb() {
   printing(db, { id: '3', set_code: 'LOB-DE003', rarity: 'Ultra Rare' }, [{ edition: 'first' }, { edition: 'unknown' }]);
   db.prepare("UPDATE card_copies SET deleted = 1 WHERE card_id = '3' AND edition = 'first'").run();
   printing(db, { id: '4', set_code: 'LOB-DE004', rarity: 'Ultra Rare', locked: 2 }, [{ edition: 'first' }]);
-  printing(db, { id: '5', set_code: 'LOB-DE005', rarity: 'Common' }, [{ edition: 'first' }]);
+  printing(db, { id: '5', set_code: 'LOB-DE005', rarity: 'Common', price: 2 }, [{ edition: 'first' }]);
   printing(db, { id: '6', set_code: 'LOB-DE006', rarity: 'Ultra Rare', ts: '2026-09-13 12:00:00' }, [{ edition: 'first' }]);
   printing(db, { id: '7', set_code: 'LOB-DE007', rarity: 'Secret Rare', pid: 904608, ts: '2026-09-05 12:00:00' }, [{ edition: 'first' }]);
   return db;
@@ -43,25 +43,41 @@ const ids = (list) => list.map((c) => c.id);
 
 test('Kandidaten: Edition first, Schwelle, price_locked 2, 7-Tage-Frist, Bulk zählt, gelöschte Exemplare nicht, Reihenfolge', () => {
   const db = candidateDb();
-  assert.deepEqual(ids(firstEdCandidates(db, { minRank: 4, nowMs: NOW })), ['1', '7']);
+  assert.deepEqual(ids(firstEdCandidates(db, { minEur: 5, nowMs: NOW })), ['1', '7']);
 });
 
 test('Kandidaten: force ignoriert die Frist', () => {
-  assert.deepEqual(ids(firstEdCandidates(candidateDb(), { minRank: 4, force: true, nowMs: NOW })), ['1', '7', '6']);
+  assert.deepEqual(ids(firstEdCandidates(candidateDb(), { minEur: 5, force: true, nowMs: NOW })), ['1', '7', '6']);
 });
 
 test('Kandidaten: Schwelle 1 nimmt Common mit, gleiche Zeit nach Schlüssel', () => {
-  assert.deepEqual(ids(firstEdCandidates(candidateDb(), { minRank: 1, nowMs: NOW })), ['1', '5', '7']);
+  assert.deepEqual(ids(firstEdCandidates(candidateDb(), { minEur: 0, nowMs: NOW })), ['1', '5', '7']);
+});
+
+test('Kandidaten: Euro-Schwelle mit cm_estimate_max', () => {
+  const db = freshDb();
+  printing(db, { id: 'a', set_code: 'LOB-DE011', rarity: 'Common', price: 2 }, [{ edition: 'first' }]);
+  printing(db, { id: 'b', set_code: 'LOB-DE012', rarity: 'Common', price: 4 }, [{ edition: 'first' }]);
+  db.prepare("UPDATE cards SET cm_estimate_max = 9 WHERE id = 'a'").run();
+  assert.deepEqual(ids(firstEdCandidates(db, { minEur: 5, nowMs: NOW })), ['a']);
+});
+
+test('Kandidaten: Ruhe 3 Tage nach cm_first_ed_challenge_at', () => {
+  const db = candidateDb();
+  db.prepare("UPDATE cards SET cm_first_ed_challenge_at = '2026-09-13 12:00:01' WHERE id = '1'").run(); // < 3 Tage
+  db.prepare("UPDATE cards SET cm_first_ed_challenge_at = '2026-09-12 11:59:59' WHERE id = '7'").run(); // > 3 Tage
+  assert.deepEqual(ids(firstEdCandidates(db, { minEur: 5, nowMs: NOW })), ['7']);
+  assert.deepEqual(ids(firstEdCandidates(db, { minEur: 5, force: true, nowMs: NOW })), ['7', '6']);
 });
 
 test('Kandidaten: limit', () => {
-  assert.deepEqual(ids(firstEdCandidates(candidateDb(), { minRank: 1, nowMs: NOW, limit: 1 })), ['1']);
+  assert.deepEqual(ids(firstEdCandidates(candidateDb(), { minEur: 0, nowMs: NOW, limit: 1 })), ['1']);
 });
 
 test('Kandidaten: set_code Unknown ist nie Kandidat', () => {
   const db = candidateDb();
   printing(db, { id: '8', set_code: 'Unknown', rarity: 'Unknown' }, [{ edition: 'first' }]);
-  assert.deepEqual(ids(firstEdCandidates(db, { minRank: 1, nowMs: NOW })), ['1', '5', '7']);
+  assert.deepEqual(ids(firstEdCandidates(db, { minEur: 0, nowMs: NOW })), ['1', '5', '7']);
 });
 
 test('Kandidaten (G4b): Sprachen ohne Cardmarket-Filter (KR, JP) sind keine Kandidaten', () => {
@@ -69,7 +85,7 @@ test('Kandidaten (G4b): Sprachen ohne Cardmarket-Filter (KR, JP) sind keine Kand
   printing(db, { id: '9', set_code: 'RC04-KR001', rarity: 'Ultra Rare', language: 'KR' }, [{ edition: 'first' }]);
   printing(db, { id: '10', set_code: 'LOB-JP001', rarity: 'Ultra Rare', language: 'JP' }, [{ edition: 'first' }]);
   printing(db, { id: '11', set_code: 'LOB-EN001', rarity: 'Ultra Rare', language: 'EN' }, [{ edition: 'first' }]);
-  assert.deepEqual(ids(firstEdCandidates(db, { minRank: 4, nowMs: NOW })), ['1', '11', '7']);
+  assert.deepEqual(ids(firstEdCandidates(db, { minEur: 5, nowMs: NOW })), ['1', '11', '7']);
 });
 
 // --- Durchgang mit gestubbtem Fenster (Spec G4b: Angebotslisten N/Y statt Ab-Preis) ---
@@ -177,7 +193,9 @@ test('Durchgang: Cloudflare-Pruefung auf Seite N -> nichts geschrieben, Y nicht 
   const out = await runFirstEdPass(db, { force: true, deps: s.deps });
   assert.deepEqual(s.visited, [VERSIONS, PAGE_N]);
   assert.deepEqual({ updated: out.updated, skipped: out.skipped }, { updated: 0, skipped: 1 });
+  assert.equal(out.abgebrochen, true);
   assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });
+  assert.ok(db.prepare("SELECT cm_first_ed_challenge_at AS c FROM cards WHERE id = 'm'").get().c);
 });
 
 test('Durchgang: Cloudflare-Pruefung auf Seite Y -> nichts geschrieben', async () => {
@@ -186,7 +204,20 @@ test('Durchgang: Cloudflare-Pruefung auf Seite Y -> nichts geschrieben', async (
   const out = await runFirstEdPass(db, { force: true, deps: s.deps });
   assert.deepEqual(s.visited, [VERSIONS, PAGE_N, PAGE_Y]);
   assert.equal(out.skipped, 1);
+  assert.equal(out.abgebrochen, true);
   assert.deepEqual(MAMO(db), { pfe: null, f: null, ts: null });
+  assert.ok(db.prepare("SELECT cm_first_ed_challenge_at AS c FROM cards WHERE id = 'm'").get().c);
+});
+
+test('Durchgang: nach gescheiterter Pruefung kein zweiter Kandidat geladen', async () => {
+  const db = freshDb();
+  printing(db, { id: 'm', set_code: 'MAMO-DE020', rarity: 'Ultra Rare', price: 73.85 }, [{ edition: 'first' }]);
+  printing(db, { id: 'n', set_code: 'MAMO-DE021', rarity: 'Ultra Rare', price: 73.85 }, [{ edition: 'first' }]);
+  const s = stub({}, { challenge: [VERSIONS] });
+  const out = await runFirstEdPass(db, { force: true, deps: s.deps });
+  assert.deepEqual(s.visited, [VERSIONS]);
+  assert.equal(out.abgebrochen, true);
+  assert.equal(out.seiten, 0);
 });
 
 test('Durchgang: kein Produkt-Link oder keine Zeile -> nur Zeitstempel gesetzt', async () => {
