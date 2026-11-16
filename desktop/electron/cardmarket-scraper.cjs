@@ -5,15 +5,17 @@
 const fs = require('fs');
 const path = require('path');
 const { app, BrowserWindow, session } = require('electron');
-const { rarityRank, selectVersionRow, productUrl, CM_LANGUAGES, offersUrl, parseOffers, offersPageBroken, robustLow, robustFactor } = require('./cardmarket-parse.cjs');
+const { selectVersionRow, productUrl, CM_LANGUAGES, offersUrl, parseOffers, offersPageBroken, robustLow, robustFactor } = require('./cardmarket-parse.cjs');
 const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { applyLangFactor } = require('./language-kr.cjs');
+const { appendLog } = require('./cardmarket-runlog.cjs');
 
 const BASE = 'https://www.cardmarket.com';
 const DELAY_MIN_MS = 2000, DELAY_MAX_MS = 4000; // jittered polite delay per page
 const FRESH_MS = 7 * 24 * 3600 * 1000; // skip printings priced < 7 days ago
+const REST_MS = 3 * 24 * 3600 * 1000; // Ruhe je Druck nach gescheiterter Pruefung
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -94,22 +96,21 @@ async function makeWindow() {
   return win;
 }
 
-// Navigate; wait for the real page. On a Cloudflare/captcha challenge:
-//  - interactive (manual run): surface the window and give a human up to ~2 min to solve;
-//  - headless (background poller): stay invisible, wait ~10s for a non-interactive auto-clear,
-//    then give up on this card silently and let a later tick / manual run refresh the session.
-async function loadPage(win, url, onChallenge, headless = false, zaehler = null) {
+// Navigate; wait for the real page. Das Fenster bleibt immer unsichtbar. Bei einer Cloudflare-Pruefung
+// wird ~10 s auf eine sich selbst loesende Pruefung gewartet (5 Versuche a 2 s); danach gibt der Aufruf
+// auf (false). Geklickt oder umgangen wird nie etwas.
+// zaehler.gesehen: Pruefung bemerkt; zaehler.gescheitert: sie hat sich nicht geloest.
+async function loadPage(win, url, zaehler = null) {
   await win.loadURL(url);
-  const maxTries = headless ? 5 : 60; // ~10s silent vs ~2 min human-solvable
-  for (let i = 0; i < maxTries; i++) {
+  for (let i = 0; i < 5; i++) {
     const title = win.webContents.getTitle();
     const html = await win.webContents.executeJavaScript('document.documentElement.outerHTML').catch(() => '');
     if (!looksLikeChallenge(html, title)) return true;
-    if (i === 0 && zaehler) zaehler.pruefungen++;
-    if (i === 0 && !headless) { onChallenge && onChallenge(win); } // notify; window is revealed only if the user opts in
+    if (i === 0 && zaehler) zaehler.gesehen++;
     await sleep(2000);
   }
-  return false; // still challenged after timeout (headless: skip quietly, retry next tick)
+  if (zaehler) zaehler.gescheitert++;
+  return false;
 }
 
 // Build the card's "all versions" page URL directly from its English name. The Cardmarket URL slug
@@ -127,62 +128,81 @@ function resolveUrl(name) {
 // `deriver` (cardmarket-bulk makeDeriver, optional): orders the cards so each set/rarity group gets its
 // real example ids first, and after every found id derives the siblings, which then drop out of the run.
 // Diagnose (02.10.2026): 123 Drucke bekamen einen Preis, aber keine idProduct aus der Bild-Adresse, und
-// einige Karten finden nie eine Versionszeile. Jeder Lauf schreibt diese Faelle frisch nach
-// userData/cardmarket-scraper.log (eine JSON-Zeile je Fall), damit man das Seitenformat nachsehen kann.
+// einige Karten finden nie eine Versionszeile. Diese Faelle gehen als JSON-Zeilen (eine je Fall)
+// nach userData/cardmarket-scraper.log, damit man das Seitenformat nachsehen kann; das Log wird angehaengt
+// und rotiert (siehe cardmarket-runlog.cjs).
 function openDiagLog() {
   let file = null;
-  try { file = path.join(app.getPath('userData'), 'cardmarket-scraper.log'); fs.writeFileSync(file, ''); } catch { file = null; }
-  return (entry) => { if (file) try { fs.appendFileSync(file, JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n'); } catch { /* Diagnose ist best-effort */ } };
+  try { file = path.join(app.getPath('userData'), 'cardmarket-scraper.log'); } catch { file = null; }
+  return (entry) => { if (file) appendLog(file, entry); };
 }
 const rowSummary = (r) => ({ code: r.code, rarity: r.rarity, expansion: r.expansion, alt: r.alt, imgSrc: r.imgSrc, imgAttrs: r.imgAttrs, href: r.href });
 
-async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, minRank = 1, maxCards = Infinity, headless = false, force = false, deriver = null } = {}) {
+// Basis-Durchgang: nur Drucke ab minEur (bei Schaetzpreisen zaehlt das Maximum der Spanne), immer still.
+// Nach einer gescheiterten Pruefung ruhen die Drucke der Karte REST_MS lang (cm_challenge_at) und der Lauf
+// bricht ab. `deps` ersetzt im Test Fenster, Seitenaufruf, Pausen und Diagnose-Datei.
+async function runCardmarketScrape(db, { onProgress, shouldAbort, minEur = 5, maxCards = Infinity, deriver = null, nowMs = Date.now(), deps = {} } = {}) {
+  const d = {
+    makeWindow,
+    loadPage,
+    readRows: (win) => win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []),
+    sleep: (lo, hi) => sleep(lo + Math.random() * (hi - lo)),
+    setNameFor,
+    cardName: async (c) => c.name || (await fetchCardData(c.id))?.data?.[0]?.name,
+    diag: null,
+    ...deps,
+  };
+  const ruheBis = new Date(nowMs - REST_MS).toISOString().slice(0, 19).replace('T', ' '); // SQLite: naive UTC
+  const kandidat = "deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND language != 'KR' AND COALESCE(price_locked, 0) != 2 " +
+    "AND COALESCE(cm_estimate_max, price) >= ? AND (cm_challenge_at IS NULL OR cm_challenge_at < ?)";
   // Distinct owned cards (one page scrape covers all their printings). Oldest-scraped first so the
   // background poller (which passes a small maxCards) works through the collection round-robin.
   let cards = db.prepare(
-    "SELECT c.id, c.name FROM cards c WHERE c.deleted = 0 AND c.quantity > 0 AND c.cm_product_id IS NULL AND c.language != 'KR' " +
-    "AND COALESCE(c.price_locked, 0) != 2 GROUP BY c.id ORDER BY MIN(COALESCE(c.cm_updated_at, '1970-01-01')) ASC"
-  ).all();
+    `SELECT id, name FROM cards WHERE ${kandidat} GROUP BY id ORDER BY MIN(COALESCE(cm_updated_at, '1970-01-01')) ASC`
+  ).all(minEur, ruheBis);
   if (deriver) cards = await deriver.order(cards);
-  const now = Date.now();
-  let updated = 0, noMatch = 0, errors = 0, scraped = 0, idMissed = 0, derived = 0;
+  let updated = 0, noMatch = 0, errors = 0, scraped = 0, idMissed = 0, derived = 0, abgebrochen = false;
   const noMatchList = []; // card names/set codes that couldn't be matched -> user sets them manually
-  const zaehler = { pruefungen: 0 };
-  const diag = openDiagLog();
-  const win = await makeWindow();
+  const zaehler = { gesehen: 0, gescheitert: 0 };
+  const diag = d.diag || openDiagLog();
+  const win = await d.makeWindow();
   try {
     for (let i = 0; i < cards.length; i++) {
       if (shouldAbort && shouldAbort()) break;
       if (scraped >= maxCards) break; // background poller: stop after a small batch per tick
       onProgress && onProgress({ current: i + 1, total: cards.length, name: cards[i].name });
       const printings = db.prepare(
-        "SELECT set_code, language, rarity, cm_updated_at, cm_product_id, cm_lang_factor FROM cards WHERE id = ? AND deleted = 0 AND quantity > 0 AND cm_product_id IS NULL AND language != 'KR' " +
-        "AND COALESCE(price_locked, 0) != 2"
-      ).all(String(cards[i].id));
-      // Only printings at/above the chosen rarity threshold, and not priced recently. Cards with no
-      // qualifying printing are skipped entirely (no page load, no delay) — this is what keeps a
-      // large collection fast: e.g. "from Secret Rare up" never touches the cheap Commons.
-      // Printings that already carry a cm_product_id are excluded above — the daily bulk refresh
-      // (cardmarket-bulk.cjs) prices those from the price-guide file; scraping is only for the rest.
-      const stale = printings.filter(p =>
-        rarityRank(p.rarity) >= minRank
-        && (force || !p.cm_updated_at || (now - new Date(p.cm_updated_at + 'Z').getTime()) > FRESH_MS));
+        `SELECT set_code, language, rarity, cm_updated_at, cm_product_id, cm_lang_factor FROM cards WHERE id = ? AND ${kandidat}`
+      ).all(String(cards[i].id), minEur, ruheBis);
+      // Nur Drucke, die nicht kuerzlich bepreist wurden. Karten ohne passenden Druck werden uebersprungen
+      // (kein Seitenaufruf, keine Pause). Drucke mit cm_product_id sind oben ausgeschlossen — die taegliche
+      // Bulk-Aktualisierung (cardmarket-bulk.cjs) bepreist die aus der Preisliste; Scrapen ist nur fuer den Rest.
+      const stale = printings.filter(p => !p.cm_updated_at || (nowMs - new Date(p.cm_updated_at + 'Z').getTime()) > FRESH_MS);
       if (stale.length === 0) continue;
       try {
-        const name = cards[i].name || (await fetchCardData(cards[i].id))?.data?.[0]?.name;
+        const name = await d.cardName(cards[i]);
         if (!name) { noMatch++; continue; }
         const url = resolveUrl(name);
         if (!url) { noMatch++; continue; }
-        if (!(await loadPage(win, url, onChallenge, headless, zaehler))) { errors++; continue; }
+        if (!(await d.loadPage(win, url, zaehler))) {
+          // Pruefung nicht aufgeloest: Drucke der Karte ruhen lassen, Lauf beenden (nie weiterdruecken).
+          for (const p of stale) {
+            db.prepare("UPDATE cards SET cm_challenge_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
+              .run(String(cards[i].id), p.set_code, p.language, p.rarity);
+          }
+          errors++;
+          abgebrochen = true;
+          break;
+        }
         scraped++; // a page was actually loaded — counts toward the poller's per-tick budget
-        const rows = await win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []);
+        const rows = await d.readRows(win);
         let foundId = false;
         for (const p of stale) {
           // Match primarily by set-code prefix ↔ Cardmarket expansion symbol (e.g. "25LP-DE085" ->
           // "25LP") + rarity — far more reliable than the expansion name. Some expansions list the
           // same rarity twice (alt-art versions we can't tell apart from the set code); take the
           // cheapest of those. Fall back to fuzzy expansion-name matching when no code matches.
-          const hit = await selectVersionRow(rows, p, () => setNameFor(cards[i].id, p.set_code));
+          const hit = await selectVersionRow(rows, p, () => d.setNameFor(cards[i].id, p.set_code));
           if (hit && hit.trend != null) {
             let pid = idProductFromImageUrl(hit.imgSrc);
             let pidDerived = 0;
@@ -196,7 +216,7 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
               diag({ kind: 'id-missed', card: cards[i].name, set_code: p.set_code, rarity: p.rarity, url, hit: rowSummary(hit) });
             } else foundId = true;
             const price = applyLangFactor(hit.trend, p.cm_lang_factor);
-            db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_product_id = COALESCE(?, cm_product_id), cm_product_derived = CASE WHEN ? IS NULL THEN cm_product_derived ELSE ? END, cm_updated_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
+            db.prepare("UPDATE cards SET price = ?, price_locked = 1, cm_url = ?, cm_product_id = COALESCE(?, cm_product_id), cm_product_derived = CASE WHEN ? IS NULL THEN cm_product_derived ELSE ? END, cm_updated_at = CURRENT_TIMESTAMP, cm_estimate = 0, cm_estimate_max = NULL, cm_challenge_at = NULL WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
               .run(price, url, pid, pid, pidDerived, String(cards[i].id), p.set_code, p.language, p.rarity);
             recordPrice(db, { id: cards[i].id, set_code: p.set_code, language: p.language, rarity: p.rarity }, price, 'cm_scrape');
             updated++;
@@ -212,33 +232,36 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, onChallenge, m
           try { derived += await deriver.derive(); } catch (e) { console.error('[cardmarket] ableiten:', e.message); }
         }
       } catch (e) { errors++; }
-      const { lo, hi } = pauseNachPruefungen(zaehler.pruefungen);
-      await sleep(lo + Math.random() * (hi - lo));
+      const { lo, hi } = pauseNachPruefungen(zaehler.gesehen);
+      await d.sleep(lo, hi);
     }
   } finally { win.destroy(); }
-  if (zaehler.pruefungen > 0) console.log(`[cardmarket] ${zaehler.pruefungen} Pruefung(en) bei ${scraped} Seiten`);
+  if (zaehler.gesehen > 0) console.log(`[cardmarket] ${zaehler.gesehen} Pruefung(en) gesehen, ${zaehler.gescheitert} nicht geloest, ${scraped} Seiten`);
   if (derived > 0) console.log(`[cardmarket] ${derived} Druck(e) aus dem Set abgeleitet`);
-  return { updated, noMatch, errors, noMatchList, idMissed, derived, pruefungen: zaehler.pruefungen, seiten: scraped };
+  return { updated, noMatch, errors, noMatchList, idMissed, derived, seiten: scraped, pruefungenGesehen: zaehler.gesehen, pruefungenGescheitert: zaehler.gescheitert, abgebrochen };
 }
 
 // Spec G4 §4 — Kandidaten des 1st-Ed-Durchgangs: Printings mit mindestens einem lebenden Exemplar edition = 'first',
-// Rarity ab minRank, nicht manuell gesperrt (price_locked 2), 1st-Ed-Stand aelter als 7 Tage (force ignoriert die Frist),
+// Preis ab minEur (bei Schaetzpreisen zaehlt das Maximum der Spanne), nicht manuell gesperrt (price_locked 2), 1st-Ed-Stand aelter als 7 Tage (force ignoriert die Frist),
 // unabhaengig von cm_product_id (Bulk-Printings zaehlen). set_code 'Unknown' ausgeschlossen: dieser Sammelposten
-// findet nie eine Versionszeile, bleibt daher ohne Zeitstempel und wuerde sonst dauerhaft (rarityRank 99, aeltester
-// Stand) die Poller-Plaetze belegen. Aeltester Stand zuerst.
+// findet nie eine Versionszeile, bleibt daher ohne Zeitstempel und wuerde sonst dauerhaft als aeltester
+// Stand die Poller-Plaetze belegen. Aeltester Stand zuerst.
+// Nach gescheiterter Pruefung ruht der Druck REST_MS lang (cm_first_ed_challenge_at).
 // Spec G4b: nur Sprachen mit Cardmarket-Filter (CM_LANGUAGES); z. B. KR-Preise kommen aus k-tcg.
-function firstEdCandidates(db, { minRank = 1, force = false, nowMs = Date.now(), limit = Infinity } = {}) {
+function firstEdCandidates(db, { minEur = 5, force = false, nowMs = Date.now(), limit = Infinity } = {}) {
   const rows = db.prepare(`
-    SELECT c.id, c.name, c.set_code, c.language, c.rarity, c.cm_first_ed_updated_at
+    SELECT c.id, c.name, c.set_code, c.language, c.rarity, c.cm_first_ed_updated_at, c.cm_first_ed_challenge_at
       FROM cards c
      WHERE c.deleted = 0 AND COALESCE(c.price_locked, 0) != 2 AND c.set_code <> 'Unknown'
+       AND COALESCE(c.cm_estimate_max, c.price) >= ?
        AND c.language IN (${Object.keys(CM_LANGUAGES).map(() => '?').join(', ')})
        AND EXISTS (SELECT 1 FROM card_copies cp
                     WHERE cp.card_id = c.id AND cp.set_code = c.set_code AND cp.language = c.language
                       AND cp.rarity = c.rarity AND cp.deleted = 0 AND cp.edition = 'first')
-     ORDER BY COALESCE(c.cm_first_ed_updated_at, '1970-01-01') ASC, c.id, c.set_code, c.language, c.rarity`).all(...Object.keys(CM_LANGUAGES));
+     ORDER BY COALESCE(c.cm_first_ed_updated_at, '1970-01-01') ASC, c.id, c.set_code, c.language, c.rarity`).all(minEur, ...Object.keys(CM_LANGUAGES));
+  const ruheBis = new Date(nowMs - REST_MS).toISOString().slice(0, 19).replace('T', ' '); // SQLite: naive UTC
   return rows
-    .filter(r => rarityRank(r.rarity) >= minRank
+    .filter(r => (!r.cm_first_ed_challenge_at || r.cm_first_ed_challenge_at < ruheBis)
       && (force || !r.cm_first_ed_updated_at || (nowMs - new Date(r.cm_first_ed_updated_at + 'Z').getTime()) > FRESH_MS))
     .slice(0, limit);
 }
@@ -252,19 +275,30 @@ function firstEdCandidates(db, { minRank = 1, force = false, nowMs = Date.now(),
 // immer der aelteste und wuerde die Poller-Plaetze belegen; ein Markup-Bruch setzt so nie still Faktoren auf NULL.
 // Bei Cloudflare-Pruefung (loadPage false) und bei Exceptions wird nichts geschrieben, der naechste Lauf versucht es
 // wieder. `deps` ersetzt im Test Fenster, Netz und Pausen.
-async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infinity, headless = false, onChallenge, shouldAbort, onProgress, deps = {} } = {}) {
+async function runFirstEdPass(db, { minEur = 5, force = false, maxCards = Infinity, shouldAbort, onProgress, deps = {} } = {}) {
   const d = {
     makeWindow,
     loadPage,
     readRows: (win) => win.webContents.executeJavaScript(EXTRACT_JS).catch(() => []),
     readOffers: (win) => win.webContents.executeJavaScript(OFFERS_JS).catch(() => ({ found: false, rows: [] })),
-    sleep: () => sleep(DELAY_MIN_MS + Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS)),
+    sleep: (lo, hi) => sleep(lo + Math.random() * (hi - lo)),
     setNameFor,
     cardName: async (c) => c.name || (await fetchCardData(c.id))?.data?.[0]?.name,
     ...deps,
   };
-  const list = firstEdCandidates(db, { minRank, force, nowMs: Date.now(), limit: maxCards });
-  const out = { candidates: list.length, updated: 0, noOffers: 0, skipped: 0, errors: 0 };
+  const list = firstEdCandidates(db, { minEur, force, nowMs: Date.now(), limit: maxCards });
+  const out = { candidates: list.length, updated: 0, noOffers: 0, skipped: 0, errors: 0, seiten: 0, pruefungenGesehen: 0, pruefungenGescheitert: 0, abgebrochen: false };
+  const zaehler = { gesehen: 0, gescheitert: 0 };
+  const pause = () => { const { lo, hi } = pauseNachPruefungen(zaehler.gesehen); return d.sleep(lo, hi); };
+  const rest = db.prepare('UPDATE cards SET cm_first_ed_challenge_at = CURRENT_TIMESTAMP WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?');
+  // Seite laden; bei gescheiterter Pruefung Druck ruhen lassen und Lauf beenden (nie weiterdruecken).
+  const load = async (win, url, key) => {
+    if (await d.loadPage(win, url, zaehler)) { out.seiten++; return true; }
+    rest.run(...key);
+    out.skipped++;
+    out.abgebrochen = true;
+    return false;
+  };
   if (list.length === 0) return out;
   // Already aborted before the loop starts — never open the hidden window for a run that won't do anything.
   if (shouldAbort && shouldAbort()) return out;
@@ -280,15 +314,16 @@ async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infin
       try {
         const name = await d.cardName(p);
         const versionsUrl = name ? resolveUrl(name) : null;
-        if (!versionsUrl || !(await d.loadPage(win, versionsUrl, onChallenge, headless))) { out.skipped++; continue; }
+        if (!versionsUrl) { out.skipped++; continue; }
+        if (!(await load(win, versionsUrl, key))) break;
         const hit = await selectVersionRow(await d.readRows(win), p, () => d.setNameFor(p.id, p.set_code));
         const product = hit ? productUrl(hit.href) : null;
         if (!product) { stamp.run(...key); out.skipped++; continue; }
-        await d.sleep();
-        if (!(await d.loadPage(win, offersUrl(product, false, p.language), onChallenge, headless))) { out.skipped++; continue; }
+        await pause();
+        if (!(await load(win, offersUrl(product, false, p.language), key))) break;
         const pageN = await d.readOffers(win);
-        await d.sleep();
-        if (!(await d.loadPage(win, offersUrl(product, true, p.language), onChallenge, headless))) { out.skipped++; continue; }
+        await pause();
+        if (!(await load(win, offersUrl(product, true, p.language), key))) break;
         const pageY = await d.readOffers(win);
         if (offersPageBroken(pageN) || offersPageBroken(pageY)) {
           stamp.run(...key);
@@ -307,10 +342,13 @@ async function runFirstEdPass(db, { minRank = 1, force = false, maxCards = Infin
       } catch (e) {
         out.errors++;
       } finally {
-        await d.sleep();
+        if (!out.abgebrochen) await pause();
       }
     }
   } finally { win.destroy(); }
+  out.pruefungenGesehen = zaehler.gesehen;
+  out.pruefungenGescheitert = zaehler.gescheitert;
+  if (zaehler.gesehen > 0) console.log(`[cardmarket] 1st Ed: ${zaehler.gesehen} Pruefung(en) gesehen, ${zaehler.gescheitert} nicht geloest, ${out.seiten} Seiten`);
   return out;
 }
 
@@ -324,4 +362,4 @@ async function setNameFor(id, setCode) {
   } catch { return null; }
 }
 
-module.exports = { runCardmarketScrape, runFirstEdPass, firstEdCandidates, pauseNachPruefungen };
+module.exports = { runCardmarketScrape, runFirstEdPass, firstEdCandidates, pauseNachPruefungen, loadPage, REST_MS };

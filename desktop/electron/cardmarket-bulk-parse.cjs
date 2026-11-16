@@ -107,7 +107,7 @@ function resolveProduct({ cardName, setNames }, { expansionIndex, singlesIndex }
   if (expIds.size === 0) return { idProduct: null, reason: 'no-expansion' };
   const cands = (singlesIndex.get(normName(cardName)) || []).filter(p => expIds.has(p.idExpansion));
   if (cands.length === 0) return { idProduct: null, reason: 'no-candidate' };
-  if (cands.length > 1) return { idProduct: null, reason: 'ambiguous' };
+  if (cands.length > 1) return { idProduct: null, reason: 'ambiguous', candidates: cands.map(c => c.idProduct) };
   return { idProduct: cands[0].idProduct, reason: 'resolved' };
 }
 

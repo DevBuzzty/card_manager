@@ -10,6 +10,7 @@ const { belongsToCard, resolveSetCode } = require('./setcode-resolve.cjs');
 const { startSync, ebayStatusReply } = require('./sync.cjs');
 const { startDealPoller } = require('./deals/poller.cjs');
 const { runCardmarketScrape, runFirstEdPass } = require('./cardmarket-scraper.cjs');
+const { appendLog, pauseUntilIso, pauseActive } = require('./cardmarket-runlog.cjs');
 const { runBulkRefresh, getBulkStatus, makeDeriver } = require('./cardmarket-bulk.cjs');
 const { refreshKrPrices } = require('./kr-prices.cjs');
 const { runCatalogBuild, getCatalogStatus, uploadModel, ALLOWED_MODEL_KINDS } = require('./catalog-builder.cjs');
@@ -1248,7 +1249,7 @@ ipcMain.handle('update-card-meta', (event, data) => {
 ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price }) => {
   try {
     if (!id || !set_code) return { success: false, error: 'Missing id or set_code' };
-    db.prepare("UPDATE cards SET price = ?, price_locked = 2 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
+    db.prepare("UPDATE cards SET price = ?, price_locked = 2, cm_estimate = 0, cm_estimate_max = NULL WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
       .run(Number(price) || 0, String(id), set_code, language || 'DE', rarity || 'Unknown');
     recordPrice(db, { id, set_code, language, rarity }, Number(price) || 0, 'manual');
     recordPortfolioValue(db);
@@ -1257,54 +1258,61 @@ ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price
 });
 
 let cmAbort = false;
-let cmRunning = false; // guards against manual + background scrape opening two windows at once
-let cmWin = null;      // the in-flight scrape window, revealed only when the user opts to solve a challenge
+let cmRunning = false; // verhindert, dass Knopf, Poller und Bulk gleichzeitig laufen
 ipcMain.handle('abort-cardmarket-scrape', () => { cmAbort = true; return { success: true }; });
-// Reveal the hidden scrape window so the user can solve a Cloudflare challenge (user-triggered only).
-ipcMain.handle('reveal-cm-window', () => {
-  try { if (cmWin && !cmWin.isDestroyed()) { cmWin.show(); cmWin.focus(); } } catch (e) {}
-  return { success: true };
-});
 // Abgeleitete IDs (01.10.2026): ohne Cardmarket-Dateien laeuft der Scraper wie bisher, nur ohne Ableitung.
 const cmDeriver = () => makeDeriver(db, userDataPath).catch(e => { console.warn('[cardmarket] ohne Ableitung:', e.message); return null; });
-ipcMain.handle('scrape-cardmarket-prices', async (event, { minRank } = {}) => {
+
+// Gemeinsamer Ablauf fuer Knopf und Poller (Spec Scraper ohne Pruefbox §3): immer unsichtbar, nie ein
+// Dialog. Scheitert eine Cloudflare-Pruefung (Durchgang abgebrochen), ruht der Scraper 6 Stunden.
+// Die Aufrufer halten cmRunning.
+async function runCmPasses(trigger, { maxBase = Infinity, maxFirstEd = Infinity, onProgress } = {}) {
+  const until = getSetting('cm_pause_until');
+  if (pauseActive(until, Date.now())) return { paused: true, until };
+  const minEur = Number(getSetting('cm_scrape_min_eur')) || 5;
+  const logFile = path.join(userDataPath, 'cardmarket-scraper.log');
+  // pause_until: ISO-Zeit der Pause, die dieser Durchgang ausloest (Abbruch durch Pruefung), sonst null
+  const log = (pass, r, ms) => { try { appendLog(logFile, { type: 'run', trigger, pass, seiten: r.seiten, pruefungen_gesehen: r.pruefungenGesehen, pruefungen_gescheitert: r.pruefungenGescheitert, errors: r.errors, ms, pause_until: r.abgebrochen ? pauseUntilIso(Date.now()) : null }); } catch (e) {} };
+
+  let t0 = Date.now();
+  const base = await runCardmarketScrape(db, {
+    minEur, maxCards: maxBase, onProgress, shouldAbort: () => cmAbort, deriver: await cmDeriver(),
+  });
+  log('base', base, Date.now() - t0);
+
+  // Spec G4 §4: 1st-Ed-Durchgang danach; eigener try/catch, ein Ausfall laesst das Basis-Ergebnis unberuehrt.
+  let firstEd = { candidates: 0, updated: 0, noOffers: 0, skipped: 0, errors: 0, abgebrochen: false };
+  if (!base.abgebrochen && !cmAbort) {
+    try {
+      t0 = Date.now();
+      firstEd = await runFirstEdPass(db, { minEur, maxCards: maxFirstEd, onProgress, shouldAbort: () => cmAbort });
+      log('firstEd', firstEd, Date.now() - t0);
+    } catch (e) { console.error('[cardmarket] 1st-Ed-Durchgang:', e); }
+  }
+
+  let newUntil = null;
+  if (base.abgebrochen || firstEd.abgebrochen) {
+    newUntil = pauseUntilIso(Date.now());
+    db.prepare('INSERT INTO settings (key, value) VALUES (@key, @value) ON CONFLICT(key) DO UPDATE SET value = @value').run({ key: 'cm_pause_until', value: newUntil });
+  }
+  if ((base.updated > 0 || base.derived > 0) || firstEd.updated > 0) recordPortfolioValue(db);
+  return { ...base, firstEd, paused: false, until: newUntil };
+}
+
+ipcMain.handle('scrape-cardmarket-prices', async (event) => {
   if (cmRunning) return { updated: 0, noMatch: 0, errors: 0, noMatchList: [], busy: true };
   cmAbort = false; cmRunning = true;
   const send = (p) => { try { event.sender.send('update-progress', p); } catch (e) {} };
   try {
-    const onChallenge = (win) => { cmWin = win; try { event.sender.send('cm-challenge'); } catch (e) {} };
-    const res = await runCardmarketScrape(db, {
-      minRank: Number(minRank) || 1,
-      // Kein force mehr (02.10.2026): jeder Klick lud alle Drucke ohne idProduct neu (>100 Seiten) und
-      // loeste so laufend Cloudflare-Pruefungen aus. Frisch (< 7 Tage) gescrapte Drucke bleiben liegen.
-      onProgress: (p) => send({ current: p.current, total: p.total }),
-      shouldAbort: () => cmAbort,
-      onChallenge,
-      deriver: await cmDeriver(),
-    });
-    // Spec G4 §4: 1st-Ed-Durchgang nach dem Basis-Durchgang, im selben cmRunning-Schutz, ohne Grenze.
-    // Eigener try/catch: ein Ausfall hier laesst das Basis-Ergebnis unberuehrt.
-    let firstEd = { candidates: 0, updated: 0, noOffers: 0, skipped: 0, errors: 0 };
-    if (!cmAbort) {
-      try {
-        firstEd = await runFirstEdPass(db, {
-          minRank: Number(minRank) || 1,
-          onProgress: (p) => send({ current: p.current, total: p.total }),
-          shouldAbort: () => cmAbort,
-          onChallenge,
-        });
-      } catch (e) { console.error('[cardmarket] 1st-Ed-Durchgang:', e); }
-    }
-    if ((res && (res.updated > 0 || res.derived > 0)) || firstEd.updated > 0) recordPortfolioValue(db);
+    const res = await runCmPasses('button', { onProgress: (p) => send({ current: p.current, total: p.total }) });
     send({ current: 1, total: 1 }); // clears the bar
-    return { ...res, firstEd };
-  } finally { cmRunning = false; cmWin = null; }
+    return res;
+  } finally { cmRunning = false; }
 });
 
-// Background Cardmarket poller: every 10 min, trickle-scrape a few of the stalest qualifying cards
-// (rarity >= cm_auto_min_rank, priced > 7 days ago), so per-rarity prices refresh on their own.
-// Only the desktop can scrape (real browser + residential IP); the fresh prices then sync to Supabase.
-// Spec G4: danach bis zu 2 Printings mit 1st-Ed-Exemplaren (Aufschlagsfaktor, runFirstEdPass).
+// Background Cardmarket poller: alle 10 Min ein paar der aeltesten Drucke ab cm_scrape_min_eur,
+// danach bis zu 2 Printings mit 1st-Ed-Exemplaren. Nur der Desktop kann scrapen (echter Browser +
+// Heim-IP); die frischen Preise gehen danach per Sync zu Supabase. Waehrend der 6-h-Pause ruht er.
 function startCardmarketPoller() {
   if (cmPollInterval) clearInterval(cmPollInterval);
   cmPollInterval = setInterval(async () => {
@@ -1312,28 +1320,10 @@ function startCardmarketPoller() {
     if (getSetting('cm_auto_enabled') !== 'true') return;
     cmAbort = false; cmRunning = true;
     try {
-      const minRank = Number(getSetting('cm_auto_min_rank')) || 5;
-      const res = await runCardmarketScrape(db, {
-        minRank,
-        maxCards: 4,      // small polite batch per tick
-        headless: true,   // never surface a window; skip challenged cards silently, retry next tick
-        shouldAbort: () => cmAbort,
-        deriver: await cmDeriver(),
-      });
-      // Spec G4 §4: danach hoechstens 2 Kandidaten der Ersten Auflage; eigener try/catch.
-      let firstEdUpdated = 0;
-      if (!cmAbort) {
-        try {
-          const fe = await runFirstEdPass(db, { minRank, maxCards: 2, headless: true, shouldAbort: () => cmAbort });
-          firstEdUpdated = fe.updated;
-        } catch (e) { console.error('Cardmarket 1st-Ed poller error:', e); }
-      }
-      if (res.updated > 0 || res.derived > 0 || firstEdUpdated > 0) {
-        recordPortfolioValue(db);
-        if (mainWindow) {
-          const stats = { totalValue: portfolioTotals(db).total };
-          mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
-        }
+      const res = await runCmPasses('poller', { maxBase: 4, maxFirstEd: 2 });
+      if (!res.paused && ((res.updated > 0 || res.derived > 0) || res.firstEd.updated > 0) && mainWindow) {
+        const stats = { totalValue: portfolioTotals(db).total };
+        mainWindow.webContents.send('price-update', { updates: [], totalValue: stats.totalValue || 0 });
       }
     } catch (e) { console.error('Cardmarket poller error:', e); }
     finally { cmRunning = false; }
@@ -1348,7 +1338,7 @@ function bulkDue() {
   return !last || (Date.now() - new Date(last).getTime()) > 24 * 60 * 60 * 1000;
 }
 function notifyBulk(res) {
-  if (res && (res.priced > 0 || res.sealedPriced > 0)) {
+  if (res && (res.priced > 0 || res.estimated > 0 || res.sealedPriced > 0)) {
     recordPortfolioValue(db);
     if (mainWindow) {
       const stats = { totalValue: portfolioTotals(db).total };

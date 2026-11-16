@@ -61,7 +61,7 @@ test('resolveProduct: exactly one candidate -> resolved', () => {
 
 test('resolveProduct: several products in the expansion -> ambiguous, no guess', () => {
   const r = resolveProduct({ cardName: 'Dark Magician', setNames: ['Legend of Blue Eyes White Dragon'] }, idx);
-  assert.deepEqual(r, { idProduct: null, reason: 'ambiguous' });
+  assert.deepEqual(r, { idProduct: null, reason: 'ambiguous', candidates: [102800, 577923, 578096, 578097] });
   const s = resolveProduct({ cardName: 'Lava Golem', setNames: ['25th Anniversary Rarity Collection'] }, idx);
   assert.equal(s.reason, 'ambiguous');
 });
@@ -229,4 +229,11 @@ test('cmForPrinting: echte ID > eindeutig > abgeleitet > Kandidaten > null', () 
   assert.equal(cmForPrinting({ cardName: 'Toadally Awesome', setNames: set, rarity: 'Ultra Rare', printingRarities: ['Super Rare', 'Ultra Rare'] }, { ...base, learned }), 30);
   // Set unbekannt -> null
   assert.equal(cmForPrinting({ cardName: 'Solo Card', setNames: ['Gibt Es Nicht'], rarity: 'Common', printingRarities: [] }, keinModell), null);
+});
+
+test('resolveProduct: ambiguous liefert candidates', () => {
+  const r = resolveProduct({ cardName: 'Dark Magician', setNames: ['Legend of Blue Eyes White Dragon'] }, idx);
+  assert.deepEqual([...r.candidates].sort((a, b) => a - b), [102800, 577923, 578096, 578097]);
+  const ok = resolveProduct({ cardName: 'Dark Magician', setNames: ['Metal Raiders'] }, idx);
+  assert.equal('candidates' in ok, false);
 });

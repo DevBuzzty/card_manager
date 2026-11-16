@@ -276,7 +276,10 @@ function runMigrations() {
         // cm_product_derived = 1: cm_product_id was derived from the set's version order, not found exactly.
         // kr_ktcg_usd / kr_updated_at: KR price from k-tcg.com (kr-prices.cjs); usd NULL + stamp = no match.
         const priceLockCols = { cm_url: 'TEXT', cm_updated_at: 'DATETIME', price_locked: 'INTEGER DEFAULT 0', cm_product_id: 'INTEGER', cm_product_derived: 'INTEGER DEFAULT 0',
-          kr_ktcg_usd: 'REAL', kr_updated_at: 'DATETIME' };
+          kr_ktcg_usd: 'REAL', kr_updated_at: 'DATETIME',
+          // Schaetzpreis (Spec 2026-11-16): cm_estimate = 1 -> price ist der niedrigste Trend der mehrdeutigen Versionen,
+          // cm_estimate_max der hoechste; cm_challenge_at / cm_first_ed_challenge_at = Cloudflare-Pruefung noch offen.
+          cm_estimate: 'INTEGER DEFAULT 0', cm_estimate_max: 'REAL', cm_estimate_at: 'DATETIME', cm_challenge_at: 'DATETIME', cm_first_ed_challenge_at: 'DATETIME' };
         const existingCols = db.prepare("PRAGMA table_info(cards)").all().map(c => c.name);
         for (const [name, type] of Object.entries(priceLockCols)) {
             if (!existingCols.includes(name)) db.exec(`ALTER TABLE cards ADD COLUMN ${name} ${type}`);

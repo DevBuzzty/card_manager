@@ -19,6 +19,7 @@ import { selectionCopies, sellSubtitle } from '../utils/selection';
 import { SelectionBar, MoveDialog } from './CollectionSelection';
 import SellFlowDialog from './SellFlowDialog';
 import { useToast } from './toastContext';
+import { cmRunMessage } from '../utils/cmEstimate';
 
 export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const navigate = useNavigate();
@@ -55,7 +56,6 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   const [pricesOpen, setPricesOpen] = useState(false);
   const [cmRunning, setCmRunning] = useState(false);
   const [cmProgress, setCmProgress] = useState(null);
-  const [cmMinRank, setCmMinRank] = useState(5); // default: from Secret Rare up (skip cheap commons)
   const [cmAuto, setCmAuto] = useState(false); // background auto-refresh toggle
   const [cmBulkBusy, setCmBulkBusy] = useState(false);
   const [cmStatus, setCmStatus] = useState(null); // { lastRun, resolvedCount, unresolvedCount }
@@ -75,35 +75,27 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
 
   useEffect(() => {
     const off = window.api?.onUpdateProgress?.((p) => setCmProgress(p));
-    const offCh = window.api?.onCmChallenge?.(() => {
-      if (confirm('Cardmarket verlangt eine kurze Cloudflare-Prüfung. Prüf-Fenster jetzt öffnen und lösen? (Danach läuft es automatisch weiter.)')) {
-        window.api?.revealCmWindow?.();
-      }
-    });
     (async () => {
       const s = await window.api?.getSettings?.();
       if (s) {
         setCmAuto(s.cm_auto_enabled === 'true');
-        if (s.cm_auto_min_rank) setCmMinRank(Number(s.cm_auto_min_rank));
       }
     })();
-    return () => { off && off(); offCh && offCh(); };
+    return () => { off && off(); };
   }, []);
 
   const toggleCmAuto = async () => {
     const next = !cmAuto;
     setCmAuto(next);
     await window.api?.saveSetting?.({ key: 'cm_auto_enabled', value: next ? 'true' : 'false' });
-    await window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(cmMinRank) });
   };
 
   const runCardmarket = async () => {
     setCmRunning(true);
     try {
-      const r = await window.api.scrapeCardmarketPrices(cmMinRank);
+      const r = await window.api.scrapeCardmarketPrices();
       if (r?.busy) { alert('Cardmarket läuft gerade schon (Scraper oder Update). Bitte kurz warten.'); return; }
-      let msg = `Cardmarket fertig: ${r.updated} aktualisiert, ${r.noMatch} ohne Treffer, ${r.errors} Fehler.`;
-      if (r.derived > 0) msg += ` ${r.derived} aus dem Set abgeleitet.`;
+      let msg = cmRunMessage(r);
       if (r.noMatchList && r.noMatchList.length) {
         msg += `\n\nOhne Treffer (bitte manuell setzen):\n` + r.noMatchList.slice(0, 40).join('\n')
              + (r.noMatchList.length > 40 ? `\n… +${r.noMatchList.length - 40} weitere` : '');
@@ -421,7 +413,7 @@ export default function CollectionList({ isUpdating, setUpdateProgress }) {
   return (
     <div className="max-w-7xl mx-auto h-full flex flex-col">
         <div className="flex flex-col gap-4 mb-4 bg-surface p-4 rounded-xl border border-line shrink-0">
-            <CollectionToolbar t={{ filter, setFilter, sortType, setSortType, setFiltersOpen, filtersOpen, activeFilters, openExport, exportCopyIds, setExportCopyIds, setPricesOpen, pricesOpen, runBulk, cmBulkBusy, cmRunning, cmProgress, runCardmarket, cmAuto, toggleCmAuto, cmMinRank, setCmMinRank, handleUpdate, updating, cmStatus, relTime, containersTagsError, copiesLoadError, count: filtered.length, selectMode, toggleSelectMode: () => (selectMode ? endSelection() : setSelectMode(true)) }} />
+            <CollectionToolbar t={{ filter, setFilter, sortType, setSortType, setFiltersOpen, filtersOpen, activeFilters, openExport, exportCopyIds, setExportCopyIds, setPricesOpen, pricesOpen, runBulk, cmBulkBusy, cmRunning, cmProgress, runCardmarket, cmAuto, toggleCmAuto, handleUpdate, updating, cmStatus, relTime, containersTagsError, copiesLoadError, count: filtered.length, selectMode, toggleSelectMode: () => (selectMode ? endSelection() : setSelectMode(true)) }} />
             <CollectionFilters f={{ filtersOpen, presets, togglePreset, filterType, setFilterType, filterLang, setFilterLang, filterAttribute, setFilterAttribute, attributes, filterRace, setFilterRace, races, filterRarity, setFilterRarity, rarities, filterCondition, setFilterCondition, filterEdition, setFilterEdition, filterSet, setFilterSet, sets, clearFilters, containers, filterContainers, toggleContainerFilter, tagOptions, filterTags, toggleTagFilter, activeFilters }} />
         </div>
 
