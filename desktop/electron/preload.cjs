@@ -48,10 +48,8 @@ contextBridge.exposeInMainWorld('api', {
   updateCardMeta: (data) => ipcRenderer.invoke('update-card-meta', data),
   setCardPrice: (data) => ipcRenderer.invoke('set-card-price', data),
   deleteCard: (data) => ipcRenderer.invoke('delete-card', data),
-  scrapeCardmarketPrices: (minRank) => ipcRenderer.invoke('scrape-cardmarket-prices', { minRank }),
+  scrapeCardmarketPrices: () => ipcRenderer.invoke('scrape-cardmarket-prices'),
   abortCardmarketScrape: () => ipcRenderer.invoke('abort-cardmarket-scrape'),
-  revealCmWindow: () => ipcRenderer.invoke('reveal-cm-window'),
-  onCmChallenge: (cb) => { const l = () => cb(); ipcRenderer.on('cm-challenge', l); return () => ipcRenderer.removeListener('cm-challenge', l); },
   cardmarketBulkRefresh: () => ipcRenderer.invoke('cardmarket-bulk-refresh'),
   cardmarketBulkStatus: () => ipcRenderer.invoke('cardmarket-bulk-status'),
   onUpdateProgress: (callback) => {
