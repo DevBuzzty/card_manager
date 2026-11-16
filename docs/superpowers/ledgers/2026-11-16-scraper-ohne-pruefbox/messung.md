@@ -30,3 +30,30 @@ b) = 50, Schwelle "mehr als 50" **nicht ueberschritten** (Grenzfall, exakt am Ri
 Hinweis: 20 von 50 (LAVD) und 14 (RA05) kommen fast nur ueber teure Schwester-Versionen zustande (Commons mit Spanne bis ~100 EUR,
 niedrigster Trend meist < 0,2 EUR). b und c ueberlappen weitgehend (Basis ~50 + 1st-Ed 47, zusammen ca. 70 verschiedene Drucke).
 Die Eingrenzung der Spanne nach Seltenheit (Spec "Meine Entscheidungen") wuerde b und c fuer LAVD/RA05 deutlich senken.
+
+## Abnahme nach Umsetzung (16.11.2026)
+
+Methode (Ruling 4): Kopie der Desktop-DB (`cards.db`, 1,9 GB) plus `cardmarket/*.json` in ein Scratch-Verzeichnis, die fuenf neuen Spalten per
+`ALTER TABLE` wie `priceLockCols`, dann echtes `runBulkRefresh(db, { userDataPath })` (Cache frisch, kein Download), danach Pruefung auf der Kopie.
+Originale wurden nur gelesen. Branch `feat/scraper-ohne-pruefbox`.
+
+### Schritt 1: Tests
+- `electron/*.test.cjs` (unter Electron): 632 Tests, 632 gruen, 0 rot.
+- `src/utils/*.test.js|mjs` (node): 386 Tests, 386 gruen, 0 rot.
+
+### Abnahme 2: Schaetzpreis (bestanden)
+- Bulk-Lauf: `estimated: 180`, `resolved 0`, `derived 0`, `priced 1`, `skipped 1`, `unchanged 3541`; Gruende `ambiguous 289`, `no-candidate 6`.
+- 186 besessene Nicht-KR-Drucke ohne ID und ohne Scrape-Preis (`cm_url IS NULL`): 180 mit `cm_estimate = 1`, 6 ohne (`no-candidate`, kein Trend) = alle mit Kandidaten-Trend > 0 sind Schaetzpreise.
+- Verletzungen: 0 Zeilen mit `cm_estimate = 1` UND (`cm_product_id` gesetzt ODER `price_locked = 2` ODER echter Scrape-Preis vorher). 0 Zeilen mit geaendertem `cm_updated_at`. Vorher 0 Schaetzpreise, nachher 180.
+
+### Abnahme 1 neu gerechnet (echte Codepfade, Schwelle 5 EUR, nach dem Bulk-Lauf)
+- Basis-Kandidaten (Scraper-SQL, `COALESCE(cm_estimate_max, price) >= 5`): **27** Drucke (25 Karten) – Ausgangsmessung 50.
+- 1st-Ed-Kandidaten (`firstEdCandidates(db, { minEur: 5 })`): **39** – Ausgangsmessung 47.
+- Beides unter der Ausgangsmessung; der Haltepunkt (> 50) ist nicht beruehrt.
+  Abweichung nach unten erklaert sich vermutlich durch den Sprachfaktor auf `cm_estimate_max` (Ausgangsmessung ohne gleiche Anwendung bei 1st-Ed-Zahl, Kandidatenmenge ist die der echten Resolver-Kandidaten).
+
+## Offen: Geraeteabnahme 3 und 4
+
+Nur mit dem Nutzer am Geraet (Installer, Poller ueber 24 h, Lauf-Protokoll `cardmarket-scraper.log` lesen):
+- Abnahme 3: Knopf und Poller laufen still, keine Cloudflare-Pruefbox sichtbar, 6-Stunden-Pause nach Pruefung greift.
+- Abnahme 4: Lauf-Protokoll nach 24 h Poller auswerten (gesehen/gescheitert, Ruhe nach Pruefung).
