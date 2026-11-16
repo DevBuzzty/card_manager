@@ -13,6 +13,7 @@ function makeDb() {
     CREATE TABLE cards (id TEXT, name TEXT, set_code TEXT, language TEXT DEFAULT 'DE', rarity TEXT,
       quantity INTEGER DEFAULT 1, price REAL, price_locked INTEGER DEFAULT 0, cm_url TEXT,
       cm_updated_at DATETIME, cm_product_id INTEGER, cm_product_derived INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0,
+      updated_at DATETIME, cm_estimate INTEGER DEFAULT 0, cm_estimate_max REAL, cm_estimate_at DATETIME, cm_challenge_at DATETIME, cm_first_ed_challenge_at DATETIME,
       PRIMARY KEY (id, set_code, language, rarity));
     CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
     CREATE TABLE portfolio_history (id INTEGER PRIMARY KEY AUTOINCREMENT, total_value REAL);
@@ -212,4 +213,89 @@ test('Deck-Set (eine Seltenheit mehrfach) wird nicht abgeleitet', async () => {
   const f = { ...files, singles: [...files.singles, ...lobVersions(600000, 'Blue-Eyes White Dragon'), ...lobVersions(600010, 'Red-Eyes Black Dragon')] };
   const res = await runBulkRefresh(db, { userDataPath: null, files: f, raritiesOf: async () => ['Ultra Rare', 'Ultra Rare', 'Common', 'Rare'] });
   assert.equal(res.derived, 0);
+});
+
+// --- Schaetzpreis (Spec 2026-11-16 §1): mehrdeutige Drucke bekommen den niedrigsten Trend der Kandidaten ---
+const estGuide = [
+  { idProduct: 102800, trend: 2.0 }, { idProduct: 577923, trend: 3.5 },
+  { idProduct: 578096, trend: 40.0 }, { idProduct: 578097, trend: 0 },
+  { idProduct: 102801, trend: 0.42 }, { idProduct: 741145, trend: 12.5 },
+];
+const estFiles = { ...files, guide: estGuide };
+const LOB = "SELECT price, price_locked, cm_estimate, cm_estimate_max, cm_estimate_at, cm_updated_at, cm_product_id FROM cards WHERE set_code = 'LOB-DE005'";
+
+test('Schaetzung: mehrdeutiger Druck bekommt min-Trend, max, Markierung', async () => {
+  const db = makeDb();
+  const res = await runBulkRefresh(db, { userDataPath: null, files: estFiles });
+  const lob = db.prepare(LOB).get();
+  assert.equal(lob.price, 2.0);
+  assert.equal(lob.cm_estimate, 1);
+  assert.equal(lob.cm_estimate_max, 40.0);
+  assert.equal(lob.price_locked, 1);
+  assert.ok(lob.cm_estimate_at);
+  assert.equal(lob.cm_updated_at, null);
+  assert.equal(lob.cm_product_id, null);
+  assert.equal(res.estimated, 1);
+});
+
+test('Schaetzung: Sprachfaktor wird angewendet', async () => {
+  const db = makeDb();
+  db.prepare("UPDATE cards SET cm_lang_factor = 0.5 WHERE set_code = 'LOB-DE005'").run();
+  await runBulkRefresh(db, { userDataPath: null, files: estFiles });
+  const lob = db.prepare(LOB).get();
+  assert.equal(lob.price, 1.0);
+  assert.equal(lob.cm_estimate_max, 20.0);
+});
+
+test('Schaetzung: Scrape-Preis ohne ID bleibt', async () => {
+  const db = makeDb();
+  db.prepare("UPDATE cards SET cm_url = 'https://www.cardmarket.com/x' WHERE set_code = 'LOB-DE005'").run();
+  await runBulkRefresh(db, { userDataPath: null, files: estFiles });
+  const lob = db.prepare(LOB).get();
+  assert.equal(lob.price, 9.0);
+  assert.equal(lob.cm_estimate, 0);
+});
+
+test('Schaetzung: price_locked 2 und KR bleiben unberuehrt', async () => {
+  const db = makeDb();
+  db.prepare("UPDATE cards SET price_locked = 2 WHERE set_code = 'LOB-DE005'").run();
+  db.prepare("INSERT INTO cards (id, name, set_code, language, rarity, price) VALUES ('46986414', 'Dark Magician', 'LOB-KR005', 'KR', 'Ultra Rare', 7.0)").run();
+  await runBulkRefresh(db, { userDataPath: null, files: estFiles });
+  const lob = db.prepare(LOB).get();
+  assert.equal(lob.price, 9.0);
+  assert.equal(lob.cm_estimate, 0);
+  const kr = db.prepare("SELECT price, cm_estimate FROM cards WHERE language = 'KR'").get();
+  assert.deepEqual(kr, { price: 7.0, cm_estimate: 0 });
+});
+
+test('Schaetzung: alle Trends 0/fehlend -> nichts geschrieben', async () => {
+  const db = makeDb();
+  const f = { ...files, guide: [{ idProduct: 102800, trend: 0 }, { idProduct: 577923, trend: null }] };
+  const res = await runBulkRefresh(db, { userDataPath: null, files: f });
+  const lob = db.prepare(LOB).get();
+  assert.equal(lob.price, 9.0);
+  assert.equal(lob.cm_estimate, 0);
+  assert.equal(res.estimated, 0);
+  const { applyEstimates } = require('./cardmarket-bulk.cjs');
+  assert.equal(typeof applyEstimates, 'function');
+});
+
+test('Schaetzung: zweiter Lauf ohne Aenderung schreibt nicht', async () => {
+  const db = makeDb();
+  await runBulkRefresh(db, { userDataPath: null, files: estFiles });
+  const stamp = () => db.prepare("SELECT updated_at FROM cards WHERE set_code = 'LOB-DE005'").get();
+  const hist = () => db.prepare("SELECT COUNT(*) AS n FROM price_history").get().n;
+  db.prepare("UPDATE cards SET updated_at = '2000-01-01 00:00:00' WHERE set_code = 'LOB-DE005'").run();
+  const before = { s: stamp(), h: hist() };
+  const res = await runBulkRefresh(db, { userDataPath: null, files: estFiles });
+  assert.deepEqual({ s: stamp(), h: hist() }, before);
+  assert.equal(res.estimated, 0);
+});
+
+test('Schaetzung wird zurueckgesetzt, wenn resolveMissing/deriveMissing eine ID vergibt', async () => {
+  const db = makeDb();
+  db.prepare("UPDATE cards SET cm_estimate = 1, cm_estimate_max = 40 WHERE set_code = 'MRD-DE001'").run(); // loest eindeutig auf
+  await runBulkRefresh(db, { userDataPath: null, files: estFiles });
+  const mrd = db.prepare("SELECT cm_estimate, cm_estimate_max, cm_product_id FROM cards WHERE set_code = 'MRD-DE001'").get();
+  assert.deepEqual(mrd, { cm_estimate: 0, cm_estimate_max: null, cm_product_id: 102801 });
 });

@@ -123,7 +123,7 @@ async function resolveMissing(db, ix) {
     reasons[res.reason] = (reasons[res.reason] || 0) + 1;
     if (res.idProduct) pending.push({ ...r, idProduct: res.idProduct });
   }
-  const upd = db.prepare("UPDATE cards SET cm_product_id = ? WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?");
+  const upd = db.prepare("UPDATE cards SET cm_product_id = ?, cm_estimate = 0, cm_estimate_max = NULL WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?");
   db.transaction(() => { for (const p of pending) upd.run(p.idProduct, p.id, p.set_code, p.language, p.rarity); })();
   return { resolved: pending.length, reasons };
 }
@@ -155,7 +155,7 @@ async function deriveMissing(db, ix, raritiesOf = printingRaritiesOf) {
     if (!taken.has(t.idProduct)) taken.set(t.idProduct, new Set());
     taken.get(t.idProduct).add(t.rarity);
   }
-  const upd = db.prepare("UPDATE cards SET cm_product_id = ?, cm_product_derived = 1 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ? AND cm_product_id IS NULL");
+  const upd = db.prepare("UPDATE cards SET cm_product_id = ?, cm_product_derived = 1, cm_estimate = 0, cm_estimate_max = NULL WHERE id = ? AND set_code = ? AND language = ? AND rarity = ? AND cm_product_id IS NULL");
   const pending = [];
   for (const r of db.prepare(UNRESOLVED_SQL).all()) {
     if (!r.name) continue;
@@ -200,6 +200,36 @@ function applyPrices(db, guide) {
   return { priced, skipped, unchanged };
 }
 
+// Step B2 (Spec 2026-11-16 §1): Drucke ohne eindeutige ID bekommen als Schaetzung den niedrigsten Trend
+// (> 0) der Kandidaten-Versionen (x Sprachfaktor), der hoechste steht in cm_estimate_max. Nie fuer
+// price_locked = 2, KR, Drucke mit ID oder mit echtem Scrape-Preis; cm_updated_at wird nie gestempelt.
+function applyEstimates(db, ix, guide) {
+  const out = { estimated: 0, noTrend: 0 };
+  if (!ix) return out;
+  const trendById = new Map();
+  for (const g of guide) if (g && g.trend != null && g.trend > 0) trendById.set(Number(g.idProduct), Number(g.trend));
+  const rows = db.prepare(UNRESOLVED_SQL.replace('SELECT id, name,', 'SELECT id, name, cm_url, cm_estimate, price, cm_estimate_max, price_locked, cm_lang_factor,')).all();
+  const upd = db.prepare(
+    "UPDATE cards SET price = ?, cm_estimate = 1, cm_estimate_max = ?, cm_estimate_at = CURRENT_TIMESTAMP, price_locked = 1 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ? AND cm_product_id IS NULL"
+  );
+  db.transaction(() => {
+    for (const r of rows) {
+      if (r.price_locked === 2) continue;
+      if (r.cm_url != null && !(r.cm_estimate > 0)) continue; // echter Scrape-Preis
+      const res = r.name ? resolveProduct({ cardName: r.name, setNames: ix.setsByPrefix.get(prefixOf(r.set_code)) || [] }, ix) : null;
+      const trends = (res && res.candidates || []).map(id => trendById.get(Number(id))).filter(t => t != null);
+      if (trends.length === 0) { out.noTrend++; continue; }
+      const lo = applyLangFactor(Math.min(...trends), r.cm_lang_factor);
+      const hi = applyLangFactor(Math.max(...trends), r.cm_lang_factor);
+      if (r.price === lo && r.cm_estimate_max === hi && r.cm_estimate === 1) continue; // unveraendert -> nicht schreiben
+      upd.run(lo, hi, r.id, r.set_code, r.language, r.rarity);
+      if (r.price !== lo) recordPrice(db, r, lo, 'cm_estimate');
+      out.estimated++;
+    }
+  })();
+  return out;
+}
+
 // Entry point. `files` (tests only) injects { guide, singles, nonsingles, cardsets } or { error }.
 async function runBulkRefresh(db, { userDataPath, force = false, files = null, raritiesOf } = {}) {
   let data;
@@ -214,6 +244,7 @@ async function runBulkRefresh(db, { userDataPath, force = false, files = null, r
   const a = await resolveMissing(db, ix);
   const derived = await deriveMissing(db, ix, raritiesOf);
   const b = applyPrices(db, data.guide);
+  const est = applyEstimates(db, ix, data.guide);
   // Step C runs isolated: a failure here must not lose the A/B numbers already written, nor skip
   // the cm_bulk_last_run stamp (the bulk run would otherwise look overdue forever).
   let sealedPriced = 0;
@@ -226,7 +257,7 @@ async function runBulkRefresh(db, { userDataPath, force = false, files = null, r
   }
   db.prepare("INSERT INTO settings (key, value) VALUES ('cm_bulk_last_run', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
     .run(new Date().toISOString());
-  const out = { resolved: a.resolved, derived, reasons: a.reasons, priced: b.priced, skipped: b.skipped, unchanged: b.unchanged, sealedPriced, unresolved: countUnresolved(db) };
+  const out = { resolved: a.resolved, derived, reasons: a.reasons, priced: b.priced, skipped: b.skipped, unchanged: b.unchanged, estimated: est.estimated, sealedPriced, unresolved: countUnresolved(db) };
   if (sealedError) out.sealed = { error: sealedError };
   console.log('[cardmarket-bulk]', JSON.stringify(out));
   return out;
@@ -304,4 +335,4 @@ async function makeCmLookup(db, userDataPath) {
   };
 }
 
-module.exports = { runBulkRefresh, getBulkStatus, makeDeriver, makeCmLookup };
+module.exports = { applyEstimates, runBulkRefresh, getBulkStatus, makeDeriver, makeCmLookup };
