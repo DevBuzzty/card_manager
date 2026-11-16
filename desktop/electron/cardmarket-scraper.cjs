@@ -128,8 +128,9 @@ function resolveUrl(name) {
 // `deriver` (cardmarket-bulk makeDeriver, optional): orders the cards so each set/rarity group gets its
 // real example ids first, and after every found id derives the siblings, which then drop out of the run.
 // Diagnose (02.10.2026): 123 Drucke bekamen einen Preis, aber keine idProduct aus der Bild-Adresse, und
-// einige Karten finden nie eine Versionszeile. Jeder Lauf schreibt diese Faelle frisch nach
-// userData/cardmarket-scraper.log (eine JSON-Zeile je Fall), damit man das Seitenformat nachsehen kann.
+// einige Karten finden nie eine Versionszeile. Diese Faelle gehen als JSON-Zeilen (eine je Fall)
+// nach userData/cardmarket-scraper.log, damit man das Seitenformat nachsehen kann; das Log wird angehaengt
+// und rotiert (siehe cardmarket-runlog.cjs).
 function openDiagLog() {
   let file = null;
   try { file = path.join(app.getPath('userData'), 'cardmarket-scraper.log'); } catch { file = null; }
@@ -243,8 +244,8 @@ async function runCardmarketScrape(db, { onProgress, shouldAbort, minEur = 5, ma
 // Spec G4 §4 — Kandidaten des 1st-Ed-Durchgangs: Printings mit mindestens einem lebenden Exemplar edition = 'first',
 // Preis ab minEur (bei Schaetzpreisen zaehlt das Maximum der Spanne), nicht manuell gesperrt (price_locked 2), 1st-Ed-Stand aelter als 7 Tage (force ignoriert die Frist),
 // unabhaengig von cm_product_id (Bulk-Printings zaehlen). set_code 'Unknown' ausgeschlossen: dieser Sammelposten
-// findet nie eine Versionszeile, bleibt daher ohne Zeitstempel und wuerde sonst dauerhaft (rarityRank 99, aeltester
-// Stand) die Poller-Plaetze belegen. Aeltester Stand zuerst.
+// findet nie eine Versionszeile, bleibt daher ohne Zeitstempel und wuerde sonst dauerhaft als aeltester
+// Stand die Poller-Plaetze belegen. Aeltester Stand zuerst.
 // Nach gescheiterter Pruefung ruht der Druck REST_MS lang (cm_first_ed_challenge_at).
 // Spec G4b: nur Sprachen mit Cardmarket-Filter (CM_LANGUAGES); z. B. KR-Preise kommen aus k-tcg.
 function firstEdCandidates(db, { minEur = 5, force = false, nowMs = Date.now(), limit = Infinity } = {}) {

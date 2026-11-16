@@ -1249,7 +1249,7 @@ ipcMain.handle('update-card-meta', (event, data) => {
 ipcMain.handle('set-card-price', (event, { id, set_code, language, rarity, price }) => {
   try {
     if (!id || !set_code) return { success: false, error: 'Missing id or set_code' };
-    db.prepare("UPDATE cards SET price = ?, price_locked = 2 WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
+    db.prepare("UPDATE cards SET price = ?, price_locked = 2, cm_estimate = 0, cm_estimate_max = NULL WHERE id = ? AND set_code = ? AND language = ? AND rarity = ?")
       .run(Number(price) || 0, String(id), set_code, language || 'DE', rarity || 'Unknown');
     recordPrice(db, { id, set_code, language, rarity }, Number(price) || 0, 'manual');
     recordPortfolioValue(db);
@@ -1271,7 +1271,8 @@ async function runCmPasses(trigger, { maxBase = Infinity, maxFirstEd = Infinity,
   if (pauseActive(until, Date.now())) return { paused: true, until };
   const minEur = Number(getSetting('cm_scrape_min_eur')) || 5;
   const logFile = path.join(userDataPath, 'cardmarket-scraper.log');
-  const log = (pass, r, ms) => { try { appendLog(logFile, { type: 'run', trigger, pass, seiten: r.seiten, pruefungen_gesehen: r.pruefungenGesehen, pruefungen_gescheitert: r.pruefungenGescheitert, errors: r.errors, ms }); } catch (e) {} };
+  // pause_until: ISO-Zeit der Pause, die dieser Durchgang ausloest (Abbruch durch Pruefung), sonst null
+  const log = (pass, r, ms) => { try { appendLog(logFile, { type: 'run', trigger, pass, seiten: r.seiten, pruefungen_gesehen: r.pruefungenGesehen, pruefungen_gescheitert: r.pruefungenGescheitert, errors: r.errors, ms, pause_until: r.abgebrochen ? pauseUntilIso(Date.now()) : null }); } catch (e) {} };
 
   let t0 = Date.now();
   const base = await runCardmarketScrape(db, {
@@ -1337,7 +1338,7 @@ function bulkDue() {
   return !last || (Date.now() - new Date(last).getTime()) > 24 * 60 * 60 * 1000;
 }
 function notifyBulk(res) {
-  if (res && (res.priced > 0 || res.sealedPriced > 0)) {
+  if (res && (res.priced > 0 || res.estimated > 0 || res.sealedPriced > 0)) {
     recordPortfolioValue(db);
     if (mainWindow) {
       const stats = { totalValue: portfolioTotals(db).total };
