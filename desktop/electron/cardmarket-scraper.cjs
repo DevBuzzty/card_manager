@@ -10,6 +10,7 @@ const { idProductFromImageUrl } = require('./cardmarket-bulk-parse.cjs');
 const { fetchCardData } = require('./api-handler.cjs');
 const { recordPrice } = require('./price-history.cjs');
 const { applyLangFactor } = require('./language-kr.cjs');
+const { appendLog } = require('./cardmarket-runlog.cjs');
 
 const BASE = 'https://www.cardmarket.com';
 const DELAY_MIN_MS = 2000, DELAY_MAX_MS = 4000; // jittered polite delay per page
@@ -131,8 +132,8 @@ function resolveUrl(name) {
 // userData/cardmarket-scraper.log (eine JSON-Zeile je Fall), damit man das Seitenformat nachsehen kann.
 function openDiagLog() {
   let file = null;
-  try { file = path.join(app.getPath('userData'), 'cardmarket-scraper.log'); fs.writeFileSync(file, ''); } catch { file = null; }
-  return (entry) => { if (file) try { fs.appendFileSync(file, JSON.stringify({ at: new Date().toISOString(), ...entry }) + '\n'); } catch { /* Diagnose ist best-effort */ } };
+  try { file = path.join(app.getPath('userData'), 'cardmarket-scraper.log'); } catch { file = null; }
+  return (entry) => { if (file) appendLog(file, entry); };
 }
 const rowSummary = (r) => ({ code: r.code, rarity: r.rarity, expansion: r.expansion, alt: r.alt, imgSrc: r.imgSrc, imgAttrs: r.imgAttrs, href: r.href });
 
