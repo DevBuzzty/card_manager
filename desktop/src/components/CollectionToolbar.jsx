@@ -7,7 +7,7 @@ import ExportDialog from './ExportDialog';
 // Suche, Sortierung, Filter-Knopf, Export, Preise-Menue) und die Ladefehler-Banner. Zustand und Logik bleiben in
 // CollectionList.jsx und kommen gebuendelt in `t` herein.
 export default function CollectionToolbar({ t }) {
-  const { filter, setFilter, sortType, setSortType, setFiltersOpen, filtersOpen, activeFilters, openExport, exportCopyIds, setExportCopyIds, setPricesOpen, pricesOpen, runBulk, cmBulkBusy, cmRunning, cmProgress, runCardmarket, cmAuto, toggleCmAuto, cmMinRank, setCmMinRank, handleUpdate, updating, cmStatus, relTime, containersTagsError, copiesLoadError, count, selectMode, toggleSelectMode } = t;
+  const { filter, setFilter, sortType, setSortType, setFiltersOpen, filtersOpen, activeFilters, openExport, exportCopyIds, setExportCopyIds, setPricesOpen, pricesOpen, runBulk, cmBulkBusy, cmRunning, cmProgress, runCardmarket, cmAuto, toggleCmAuto, handleUpdate, updating, cmStatus, relTime, containersTagsError, copiesLoadError, count, selectMode, toggleSelectMode } = t;
   return (
     <>
       {/* Row 1: count, search, sort, filter toggle, prices menu */}
@@ -55,20 +55,7 @@ export default function CollectionToolbar({ t }) {
                     <input type="checkbox" checked={cmAuto} onChange={toggleCmAuto} className="accent-accent" />
                     Automatisch im Hintergrund
                   </label>
-                  <div className="px-3">
-                    <div className="text-klein uppercase tracking-wider text-muted mb-1">Ab Rarity</div>
-                    <select value={cmMinRank} onChange={(e) => { const v = Number(e.target.value); setCmMinRank(v); if (cmAuto) window.api?.saveSetting?.({ key: 'cm_auto_min_rank', value: String(v) }); }}
-                            className="w-full px-2 py-1.5 rounded bg-bg border border-line text-text text-sm">
-                      <option value={1}>Alle Rarities</option>
-                      <option value={2}>Ab Rare</option>
-                      <option value={3}>Ab Super Rare</option>
-                      <option value={4}>Ab Ultra Rare</option>
-                      <option value={5}>Ab Secret Rare</option>
-                      <option value={6}>Ab Ultimate Rare</option>
-                      <option value={7}>Ab Ghost / Collector's</option>
-                      <option value={8}>Nur Quarter Century</option>
-                    </select>
-                  </div>
+                  <div className="px-3 text-klein text-muted">Nur Drucke ab 5 € – darunter Schätzpreis aus der Cardmarket-Datei</div>
                   <div className="border-t border-line pt-2 px-3 space-y-1">
                     <button onClick={() => handleUpdate('missing')} disabled={updating} className="text-sm text-muted hover:text-text">Fehlende Daten holen</button>
                     <button onClick={() => handleUpdate('all')} disabled={updating} className="block text-sm text-muted hover:text-text">Alle Karten aktualisieren</button>
